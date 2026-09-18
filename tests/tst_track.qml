@@ -69,32 +69,53 @@ TestCase {
         return track;
     }
 
-    // The groove's painted children, in declaration order: the ring halo,
-    // the fill, then the optional notch (invisible unless `notch` is set).
-    // Filtered on `radius` so the hover tracker (a MouseArea) and the
-    // dither remainder (a Loader, inactive under the stub's shadcn preset)
-    // stay out of the count.
-    function layers(track) {
+    // The groove is a `Box`: what it paints is the rectangles the box draws
+    // (tst_box.qml walks the same shape), the cursor's halo when it carries
+    // one and then the groove fill, while the fill and the notch it holds
+    // are in its content slot, in declaration order. Filtered on `radius` so
+    // the hover tracker (a MouseArea) and the dither remainder (a Loader,
+    // inactive under the stub's shadcn preset) stay out of the count.
+    function rects(item) {
         var out = [];
-        for (var i = 0; i < track.children.length; i++) {
-            var child = track.children[i];
-            if (child.radius !== undefined)
+        for (var i = 0; i < item.children.length; i++) {
+            var child = item.children[i];
+            if (child.radius !== undefined && child.border !== undefined)
                 out.push(child);
         }
-        compare(out.length, 3);
         return out;
     }
 
+    function grooveOf(track) {
+        var all = rects(track);
+        return all[all.length - 2];
+    }
+
     function haloOf(track) {
-        return layers(track)[0];
+        var all = rects(track);
+        return all.length > 2 ? all[0] : null;
+    }
+
+    function layers(track) {
+        var out = rects(track.contentItem);
+        compare(out.length, 2);
+        return out;
     }
 
     function fillOf(track) {
-        return layers(track)[1];
+        return layers(track)[0];
     }
 
     function notchOf(track) {
-        return layers(track)[2];
+        return layers(track)[1];
+    }
+
+    // The groove is one `Box` on the `track.groove` role (M60 T1b), so the
+    // lines that role's entry declares are drawn rather than dropped.
+    function test_the_groove_is_a_box_on_the_track_role() {
+        var track = make({ value: 0.5 });
+        compare(track.role, "track.groove");
+        verify(track.contentItem);
+        verify(Qt.colorEqual(grooveOf(track).color, Theme.box(track.role).fill));
     }
 
     function test_no_notch_unless_one_is_asked_for() {
@@ -116,19 +137,19 @@ TestCase {
     }
 
     function test_groove_is_primary_at_a_fifth() {
-        var track = make({ value: 0.5 });
-        compare(track.color.a, testCase.grooveAlpha);
-        compare(Math.round(track.color.r * 255), 0x11);
-        compare(Math.round(track.color.g * 255), 0x33);
-        compare(Math.round(track.color.b * 255), 0xff);
+        var groove = grooveOf(make({ value: 0.5 }));
+        compare(groove.color.a, testCase.grooveAlpha);
+        compare(Math.round(groove.color.r * 255), 0x11);
+        compare(Math.round(groove.color.g * 255), 0x33);
+        compare(Math.round(groove.color.b * 255), 0xff);
     }
 
     // The groove has to stay visible on a row carrying a `selected` or
     // `active` fill, which is what painting it `muted` cost.
     function test_groove_is_not_a_neutral_step() {
-        var track = make({ value: 0.5 });
-        verify(!Qt.colorEqual(track.color, Theme.color.muted));
-        verify(!Qt.colorEqual(track.color, Theme.color.accent));
+        var groove = grooveOf(make({ value: 0.5 }));
+        verify(!Qt.colorEqual(groove.color, Theme.color.muted));
+        verify(!Qt.colorEqual(groove.color, Theme.color.accent));
     }
 
     function test_fill_is_opaque_primary() {
@@ -141,7 +162,7 @@ TestCase {
     function test_thickness_and_radius_are_tokens() {
         var track = make({ value: 0.5 });
         compare(track.implicitHeight, Theme.space.trackThickness);
-        compare(track.radius, Theme.radiusSm);
+        compare(grooveOf(track).radius, Theme.radiusSm);
         compare(fillOf(track).radius, Theme.radiusSm);
     }
 
@@ -179,14 +200,14 @@ TestCase {
         compare(halo.opacity, 1);
         compare(halo.radius, Theme.radiusSm + Theme.ringWidth);
         compare(halo.width, track.width + Theme.ringWidth * 2);
-        compare(track.border.width, Theme.borderWidth);
-        verify(Qt.colorEqual(track.border.color, Theme.color.ring));
+        compare(grooveOf(track).border.width, Theme.borderWidth);
+        verify(Qt.colorEqual(grooveOf(track).border.color, Theme.color.ring));
     }
 
     function test_no_cursor_draws_no_ring_and_no_border() {
         var track = make({ value: 0.5 });
-        verify(!haloOf(track).visible);
-        compare(track.border.width, 0);
+        compare(haloOf(track), null);
+        compare(grooveOf(track).border.width, 0);
     }
 
     // The halo falls outside the groove's own bounds, so a track in a column

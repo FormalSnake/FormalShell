@@ -7,20 +7,21 @@ import "cursor.js" as Cursor
 // surface is one of these, so what a row looks like is one theme entry
 // rather than a literal in this file.
 //
-// Its four layers stay hand-drawn rather than composed out of a `Box`: the
-// halo belongs to the list when a list owns one, the fill and the border
-// answer different states, and the open-panel mark is a line whose length
-// and edge only the cell knows.
-Item {
+// The box it hands the renderer is composed here rather than read off one
+// state: the fill and the border answer different states, the pointer's
+// wash only paints while it is the top layer, and the cursor's halo is
+// dropped when a list above owns one. The open-panel mark, the pointer
+// target and the content box are the cell's own and stay below.
+Box {
     id: root
 
-    default property alias data: content.data
+    default property alias data: contentBox.data
 
     // --- Pointer (the lit area is the hit area) --------------------------
     //
     // The cell owns the one pointer target that spans it, so no surface
     // builds its own. A MouseArea in the default slot cannot do this job:
-    // that slot forwards into `content`, which is inset by the control
+    // that slot forwards into `contentBox`, which is inset by the control
     // padding, so the area lands short by controlPaddingX either side and
     // controlPaddingY top and bottom, and the cell lights up and reads as
     // clickable across a band that answers nothing. On the bar that band
@@ -54,7 +55,7 @@ Item {
     // `interactive` above, never here. Anchor to `parent` (this layer spans
     // the cell) and not to a content child.
     //
-    // Declared ahead of `content` deliberately: an interactive child inside
+    // Declared ahead of `contentBox` deliberately: an interactive child inside
     // the content box (a slider track, a nested Cell) is then stacked above
     // both this and `pointer`, and keeps its own events.
     property alias hit: hitLayer.data
@@ -64,12 +65,11 @@ Item {
     // which is what makes the cursor findable at a glance.
     property bool cursor: false
 
-    // The concentric rule (spec "Radius"): a cell nested inside another
-    // bordered surface takes the outer radius minus the padding between
-    // them, floored at `radiusSm`. `radiusMd` is the free-standing case
-    // (bar cell, panel row); the calendar's day grid sits one level deeper
-    // and sets `radiusSm`.
-    property int radius: Theme.radiusMd
+    // `radius` is Box's, and the table's own corner stands unless a consumer
+    // states one: the concentric rule (spec "Radius") is geometry, so a cell
+    // nested inside another bordered surface takes the outer radius minus
+    // the padding between them, and the calendar's day grid, one level
+    // deeper again, sets `radiusSm`.
 
     property bool active: false
     property bool destructive: false
@@ -124,23 +124,34 @@ Item {
             ? "warning"
             : root.ghost ? "ghost" : "rest"
 
-    // The cursor takes the border over whatever the state resolved (M59 T6),
-    // and a state that asked for none leaves the cell with none.
-    readonly property var _border: root.cursor
-        ? Theme.box("cursor").border
-        : Theme.box("cell", root._borderState).border
+    role: "cell"
 
-    // A border that is not drawn keeps the resting colour under it, so a
-    // ghost cell taking the cursor travels from `border` to `ring` instead
-    // of fading in out of nothing.
-    readonly property color _borderColor: {
-        if (root._border)
-            return root._border.color;
-        var rest = Theme.box("cell").border;
+    // The whole box: the fill state's own material (its face, its lines and
+    // its casts) under the border state's line, the pointer's wash while it
+    // is the top layer, and the cursor over both (M59 T6), which takes the
+    // border whatever the state resolved and appends its halo unless a list
+    // above draws one.
+    //
+    // A border a state drops is kept at width 0 in the resting colour rather
+    // than removed, so a ghost cell taking the cursor travels from `border`
+    // to `ring` instead of fading in out of nothing.
+    box: {
+        var composed = {};
+        var base = Theme.box(root.role, root._fillState);
+        for (var key in base)
+            composed[key] = base[key];
+        var line = Theme.box(root.role, root._borderState).border;
+        composed.border = line || { color: root._restBorderColor, width: 0 };
+        composed.wash = root._hoverFillActive ? Theme.box(root.role, "hover").wash : null;
+        return Theme.withCursor(composed, root.cursor, !root._haloOwned);
+    }
+
+    readonly property color _restBorderColor: {
+        var rest = Theme.box(root.role).border;
         return rest ? rest.color : "transparent";
     }
 
-    readonly property color _hoverWash: Theme.box("cell", "hover").wash || "transparent"
+    readonly property real _borderWidth: root.box.border ? root.box.border.width : 0
 
     readonly property var _markBox: Theme.box("cell.mark")
 
@@ -169,7 +180,7 @@ Item {
     // per output (Tooltip.qml, reached through TooltipRegistry), so a cell
     // holds no card and no size for one. A tooltip drawn as a child item
     // would widen and heighten every cell it was attached to, since
-    // _measure() below sizes the cell off EVERY direct child of `content`
+    // _measure() below sizes the cell off EVERY direct child of `contentBox`
     // regardless of visibility.
     property string tooltipText: ""
 
@@ -262,7 +273,7 @@ Item {
     readonly property real contentAcross: Math.max(0,
         Theme.space.barCellWidth - Theme.space.controlPaddingY * 2)
 
-    // How big the content wants to be. This used to be `content`'s own
+    // How big the content wants to be. This used to be `contentBox`'s own
     // childrenRect, which closes a cycle, since content is anchored to fill
     // the cell: childrenRect measures a fill-anchored child (a backdrop, an
     // overlay) at exactly the width of the cell the measurement is sizing,
@@ -281,9 +292,9 @@ Item {
     // nothing but the property pair.
     function _measure(downward) {
         var max = 0;
-        for (var i = 0; i < content.children.length; i++) {
-            var child = content.children[i];
-            if (child.anchors.fill === content)
+        for (var i = 0; i < contentBox.children.length; i++) {
+            var child = contentBox.children[i];
+            if (child.anchors.fill === contentBox)
                 continue;
             var extent = downward ? child.height : child.width;
             if (extent > max)
@@ -344,57 +355,6 @@ Item {
     // at the moment `selected` first turns true.
     onSelectedChanged: if (root.selected) Qt.callLater(root._resolveSelectionOwner);
 
-    // The cursor's halo, the one ring layer the table's `cursor` entry
-    // declares, drawn as a larger rounded rectangle behind the body rather
-    // than as a shader, so only the band outside the body's own edge is ever
-    // visible. Filled at the layer's own alpha: the body over it is opaque
-    // where it matters, and a stroked band could not follow the border's arc.
-    Rectangle {
-        anchors.fill: parent
-        anchors.margins: -Theme.ringWidth
-        visible: root.cursor && !root._haloOwned
-        radius: root.radius + Theme.ringWidth
-        color: Theme.cursorRing.color
-    }
-
-    // The body. Its fill and its border cross to their new colour on the
-    // control clock rather than cutting (M53 D3, withdrawing the "fills
-    // snap" contract): a state change on a cell that is already on screen
-    // arrives as a colour travelling, the way the hover layer below already
-    // does. `border.width` is not in on it, since a border that grew from
-    // nothing would be the cell changing shape rather than colour.
-    Rectangle {
-        anchors.fill: parent
-        radius: root.radius
-        color: Theme.box("cell", root._fillState).fill
-        border.width: root._border ? root._border.width : 0
-        border.color: root._borderColor
-
-        Behavior on color {
-            CAnim {}
-        }
-
-        Behavior on border.color {
-            CAnim {}
-        }
-    }
-
-    // The pointer's own layer: the wash the table's `hover` state names,
-    // over whatever the cell resolved to, never an opaque `accent` chip. A
-    // bar cell is a ghost over a strip drawn at `surfaceOpacity`, so an
-    // opaque fill lands at a delta the wallpaper decides and a bright one
-    // cancels it.
-    Rectangle {
-        anchors.fill: parent
-        radius: root.radius
-        color: root._hoverWash
-        opacity: root._hoverFillActive ? 1 : 0
-
-        Behavior on opacity {
-            Anim { kind: "effects" }
-        }
-    }
-
     // The open-panel mark (DESIGN.md §3 Bar), along the edge facing the
     // desktop: the bottom of a cell on a top bar, the top on a bottom bar,
     // the inner side on a vertical one. The end inset keeps the line's ends
@@ -416,7 +376,7 @@ Item {
         readonly property bool _sideways: root.vertical
         // Inside whatever border the cell actually draws, so the line sits
         // on the cell's own edge when there is none.
-        readonly property real _edgeMargin: root._border ? root._border.width : 0
+        readonly property real _edgeMargin: root._borderWidth
         width: panelMark._sideways ? Theme.borderWidth * 2 : root.width - Theme.space.xs * 2
         height: panelMark._sideways ? root.height - Theme.space.xs * 2 : Theme.borderWidth * 2
         x: root.barEdge === "right"
@@ -484,11 +444,11 @@ Item {
     // fill anchors, so the box is the measurement's own size on both axes
     // rather than the cell's on one of them.
     Item {
-        id: content
+        id: contentBox
         width: root.width - (root.vertical ? root._insetAcross : Theme.space.controlPaddingX) * 2
         height: root.height - (root.vertical ? Theme.space.controlPaddingX : root._insetAcross) * 2
-        x: (root.width - content.width) / 2
-        y: (root.height - content.height) / 2
+        x: (root.width - contentBox.width) / 2
+        y: (root.height - contentBox.height) / 2
 
         // Deliberately no implicit size of its own: root._measure() reads
         // the children directly, so nothing ever writes an implicit size

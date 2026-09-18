@@ -64,10 +64,6 @@ PanelWindow {
 
     readonly property bool _visible: group.shown && group.text !== ""
 
-    // The frame's own chrome, off the theme's table: a tooltip is a
-    // `popover`, the smallest of the floating frames.
-    readonly property var _box: Theme.box("popover")
-
     // Captured on the group's commit, not bound: mapToItem is not reactive
     // (quickshell documents that of the whole map* family), and the pointer
     // is parked on the item for as long as this is up anyway.
@@ -190,8 +186,11 @@ PanelWindow {
         edge: root._presenceEdge
     }
 
-    Rectangle {
+    // The frame's own chrome is the theme's answer for a `popover`, the
+    // smallest of the floating frames.
+    Box {
         id: frame
+        role: "popover"
         x: root._place.x
         y: root._place.y
         // Only a card changing hands travels (M53 D10): one arriving at a
@@ -219,10 +218,6 @@ PanelWindow {
         // No Behavior: every card is one elided caption line, so the height
         // only ever changes with the type scale.
         height: frame.implicitHeight
-        radius: root._box.radius
-        color: root._box.fill
-        border.width: root._box.border.width
-        border.color: root._box.border.color
 
         // Enter/exit lives in Presence (DESIGN.md §1 "Motion", M51 D2/D4):
         // fade plus a zoom from the side facing the anchor item, no slide

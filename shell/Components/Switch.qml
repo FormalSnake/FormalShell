@@ -7,9 +7,9 @@ import "cursor.js" as Cursor
 // that slides between its two ends. The cursor is the ring, drawn exactly
 // as Cell draws it.
 //
-// The layers stay hand-drawn rather than composed out of a `Box`: the knob
-// rides the track rather than sitting inside it, and the halo follows the
-// track rather than the control's own square.
+// Track and knob are one `Box` each rather than one box holding the other:
+// the knob rides the track, and the cursor's halo follows the track rather
+// than the control's own square.
 //
 // Controlled, not self-toggling: `checked` is an input the owner binds to
 // whatever it already stores (Center.qml binds NotificationService.dnd), and
@@ -45,14 +45,27 @@ Item {
     // table would carry.
     readonly property real _inset: Theme.borderWidth * 2
 
-    readonly property var _trackBox: Theme.box("switch.track", root.checked ? "on" : "off")
-    readonly property var _knobBox: Theme.box("switch.knob")
+    readonly property var _trackBox: Theme.box(track.role, root.checked ? "on" : "off")
 
     // A filled track has no border of its own, so the cursor's border swap
     // is the only thing that ever gives it one.
     readonly property var _cursorBorder: Theme.box("cursor").border
 
-    readonly property real _trackRadius: Theme.boxRadius(root._trackBox, Theme.space.huge)
+    // The cursor composed onto the track (M59 T6): its border in place of
+    // the track's own, and its halo outside unless a list above draws one.
+    readonly property var _box: {
+        if (root.cursor)
+            return Theme.withCursor(root._trackBox, root.cursor, !root._haloOwned);
+        // Held at the ring's own colour with no width while the cursor is
+        // elsewhere: the track carries no line of its own, so the one it
+        // takes has to arrive as a line rather than as a colour fading up
+        // out of nothing.
+        var rest = {};
+        for (var key in root._trackBox)
+            rest[key] = root._trackBox[key];
+        rest.border = { color: root._cursorBorder.color, width: 0 };
+        return rest;
+    }
 
     // Whether something above this control draws the cursor halo for the
     // whole list it sits in (Panel.qml, M53 D4): one halo that travels
@@ -63,38 +76,23 @@ Item {
 
     onCursorChanged: if (root.cursor) root._haloOwned = Cursor.haloOwned(root);
 
-    Rectangle {
-        anchors.fill: track
-        anchors.margins: -Theme.ringWidth
-        visible: root.cursor && !root._haloOwned
-        radius: root._trackRadius + Theme.ringWidth
-        color: Theme.cursorRing.color
-    }
-
-    Rectangle {
+    Box {
         id: track
+        role: "switch.track"
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         height: Theme.space.huge
-        radius: root._trackRadius
-        color: root._trackBox.fill
-        border.width: root.cursor ? root._cursorBorder.width : 0
-        border.color: root._cursorBorder.color
-
-        Behavior on color {
-            CAnim {}
-        }
+        box: root._box
     }
 
-    Rectangle {
+    Box {
         id: knob
+        role: "switch.knob"
         width: track.height - root._inset * 2
         height: width
-        radius: Theme.boxRadius(root._knobBox, knob.height)
         y: track.y + root._inset
         x: root.checked ? root.width - width - root._inset : root._inset
-        color: root._knobBox.fill
 
         Behavior on x {
             Anim { kind: "spatialFast" }

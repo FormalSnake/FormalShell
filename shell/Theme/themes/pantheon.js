@@ -17,14 +17,15 @@
 // so the handful of places black at 0.05 would vanish outright carry a
 // deeper dark value; each one says so.
 //
-// What a role may carry depends on who draws it. Card, Button, the trough
-// and the chip compose a `Components/Box.qml` and take every layer; Cell,
-// Input, Switch, Track, Tooltip, Bar and FrameRing paint a fill and a
-// border by hand. A role drawn by one of those carries fill, border and
-// radius alone, and its block names what elementary's recipe loses there.
-// Box itself draws no INSET cast and no outside hairline, so
-// `inset-shadow()` arrives as the unblurred line it leaves along the top
-// edge (INSET below) and elementary's lit lower lip is dropped.
+// Every primitive composes a `Components/Box.qml` (M60 T1b), so a role may
+// carry whatever elementary's recipe asks for. FrameRing is the one
+// exception, a Shape that takes the band's fill and the cut-out's hairline
+// as colours. What Box draws of a layer list is the rest of the story: no
+// INSET cast and no hairline outside the box, so `inset-shadow()` arrives
+// as the unblurred line it leaves along the top edge (INSET below) and
+// elementary's lit lower lip is dropped. A layer drawn under the fill is
+// covered wherever something sits on top of it, which is what the scale's
+// own highlight does to its trough in elementary too.
 
 // The two border tokens (`_index.scss`). Literal black rather than the
 // `border` palette role: a rim that is black at an alpha is what makes this
@@ -105,10 +106,13 @@ var STYLE = {
     roles: {
         // wingpanel's translucent-dark band (`wingpanel-interface`'s
         // BackgroundManager): black at 0.3 over whatever is under it, with
-        // its own cast along the lower edge. Bar draws the strip's fill and
-        // the line facing the desktop and nothing else, so the cast waits
-        // for the wingpanel bar (M60 T3) to draw it and the edge stands at
-        // width 0 rather than absent, which is what Bar reads for that line.
+        // its own cast along the lower edge. The strip is a Box, but its
+        // window is exactly the strip's thickness and reserves that same
+        // thickness, so the cast is dropped there (Bar.qml's `_stripBox`)
+        // and waits for the wingpanel bar (M60 T3). The line facing the
+        // desktop stays Bar's own, since it is one-sided and breaks around
+        // a joined card, so the edge stands at width 0 rather than absent,
+        // which is what Bar reads for it.
         "bar": {
             fill: "black",
             fillAlpha: 0.3,
@@ -184,14 +188,12 @@ var STYLE = {
         },
 
         // The tooltip (`widgets/tooltip.scss`): a dark plate at 0.9 on
-        // shadow(1), radius 3, no rim of its own. Tooltip.qml reads
-        // `border.width` unguarded, so the rim elementary leaves off is the
-        // toplevel border at its thinnest rather than nothing.
+        // shadow(1), radius 3, and no rim at all, the cast being what lifts
+        // it off whatever it is over.
         "popover": {
             fill: "popover",
             fillAlpha: 0.9,
             radius: R_CONTROL,
-            border: { color: "black", alpha: BORDERS, width: 1 },
             layers: SHADOW_1
         },
 
@@ -210,10 +212,10 @@ var STYLE = {
         // Every bar cell, list row and chip. elementary's list row carries
         // no chrome at all and answers the pointer with `fg 0.15`, so the
         // resting tile here is the plate a row sits on rather than a raised
-        // button: Cell paints a fill and a border by hand, so a raised cell
-        // would lose its face, its rim lights and its cast and read as a
-        // flat box with a heavier line. `ghost` is the bar's own cells, and
-        // the filled states stay opaque, a fill IS the statement.
+        // button: a panel is a column of these, and rows wearing a button's
+        // material would read as a stack of buttons. `ghost` is the bar's
+        // own cells, and the filled states stay opaque, a fill IS the
+        // statement.
         "cell": {
             rest: {
                 fill: "card",
@@ -313,9 +315,8 @@ var STYLE = {
 
         // The text field (`widgets/entry.scss`): the view fill sunk into
         // the surface, a control rim, radius 3, and the accent border with
-        // its 2px halo on focus. Input paints a fill and a border by hand,
-        // so the sunken line is dropped and the fill carries it: opaque
-        // `background` against a translucent `card` is the well.
+        // its 2px halo on focus. The fill carries the well on top of the
+        // sunken line: opaque `background` against a translucent `card`.
         "input": {
             rest: {
                 fill: "background",
@@ -333,26 +334,38 @@ var STYLE = {
         // `selected_bg_color`, which is the accent.
         "input.selection": { fill: "primary" },
 
-        // The switch (`widgets/switch.scss`): a sunken trough, the accent
-        // when on, radius 16 so it is round at any height. Switch draws the
-        // track's fill alone, no border and no inset line, so the off state
-        // carries the whole reading in its fill and takes a deeper black
-        // than elementary's 0.05 for it.
+        // The switch (`widgets/switch.scss`): a sunken trough under the
+        // accent when on, radius 16 so it is round at any height. The fill
+        // takes a deeper black than elementary's 0.05, which over zinc is
+        // nothing, and the sunken line sits on top of it.
         "switch.track": {
-            off: { fill: "black", fillAlpha: { light: 0.08, dark: 0.4 }, radius: R_TRACK },
+            off: {
+                fill: "black",
+                fillAlpha: { light: 0.08, dark: 0.4 },
+                radius: R_TRACK,
+                layers: INSET
+            },
             on: { fill: "primary" }
         },
 
         // The knob: `bg 0`, a control rim and outset-shadow(3) in
-        // elementary, of which Switch draws the fill. Pill rather than
-        // elementary's 99, which is the same circle by another name.
+        // elementary, whose own alphas are not transcribed here, so the
+        // knob is its fill until they are. Pill rather than elementary's 99,
+        // which is the same circle by another name.
         "switch.knob": { fill: "secondary", radius: "pill" },
 
         // The scale (`widgets/scale.scss`): a sunken trough with the accent
-        // filling it, both round. Track draws fills alone, so the trough's
-        // rim and its inset lines are dropped and the groove's dark carries
-        // it, deepened for the same reason the switch track is.
-        "track.groove": { fill: "black", fillAlpha: { light: 0.08, dark: 0.4 }, radius: "pill" },
+        // filling it, both round. The groove's dark is deepened for the same
+        // reason the switch track's is, and the sunken line runs along
+        // whatever the fill leaves of it. No rim: the fill sits inside the
+        // groove rather than over it, so a line round the trough would be
+        // drawn on one side of the knob and painted over on the other.
+        "track.groove": {
+            fill: "black",
+            fillAlpha: { light: 0.08, dark: 0.4 },
+            radius: "pill",
+            layers: INSET
+        },
         "track.fill": { fill: "primary", radius: "pill" },
 
         // No elementary counterpart: the one mark a Track can carry

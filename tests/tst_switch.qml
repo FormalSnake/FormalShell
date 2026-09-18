@@ -73,30 +73,62 @@ TestCase {
         return control;
     }
 
-    // Declaration order: ring halo, track, knob.
-    function layers(control) {
+    // Declaration order: the track, then the knob riding it, each a `Box`.
+    // What a box paints is the rectangles it draws (tst_box.qml walks the
+    // same shape): the cursor's halo when it carries one, then the fill,
+    // then the pointer's wash. Position is the box's own, colour and corner
+    // its fill's.
+    function boxes(control) {
         var out = [];
         for (var i = 0; i < control.children.length; i++) {
-            var child = control.children[i];
-            if (child.radius !== undefined)
-                out.push(child);
+            if (control.children[i].box !== undefined)
+                out.push(control.children[i]);
         }
         return out;
     }
 
-    function haloOf(control) { return layers(control)[0]; }
-    function trackOf(control) { return layers(control)[1]; }
-    function knobOf(control) { return layers(control)[2]; }
+    function rects(box) {
+        var out = [];
+        for (var i = 0; i < box.children.length; i++) {
+            if (box.children[i].radius !== undefined && box.children[i].border !== undefined)
+                out.push(box.children[i]);
+        }
+        return out;
+    }
 
-    function test_it_paints_three_layers() {
-        compare(layers(make({})).length, 3);
+    function trackItem(control) { return boxes(control)[0]; }
+    function knobItem(control) { return boxes(control)[1]; }
+    function trackOf(control) { var all = rects(trackItem(control)); return all[all.length - 2]; }
+    function knobOf(control) { var all = rects(knobItem(control)); return all[all.length - 2]; }
+
+    function haloOf(control) {
+        var all = rects(trackItem(control));
+        return all.length > 2 ? all[0] : null;
+    }
+
+    // Track and knob are one `Box` each (M60 T1b), on their own roles, so
+    // every layer those entries declare is drawn.
+    function test_the_layers_are_boxes_on_the_switch_roles() {
+        var control = make({});
+        compare(trackItem(control).role, "switch.track");
+        compare(knobItem(control).role, "switch.knob");
+        verify(Qt.colorEqual(knobOf(control).color, Theme.box("switch.knob").fill));
+    }
+
+    function test_it_paints_a_track_and_a_knob() {
+        var control = make({});
+        compare(boxes(control).length, 2);
+        // No cursor, so neither box carries a halo: each is its fill and
+        // the pointer's wash.
+        compare(rects(trackItem(control)).length, 2);
+        compare(rects(knobItem(control)).length, 2);
     }
 
     function test_the_track_is_thirty_two_by_eighteen_in_tokens() {
         var control = make({});
         compare(control.implicitWidth, Theme.space.controlHeight);
         compare(control.implicitHeight, Theme.space.controlHeight);
-        compare(trackOf(control).height, Theme.space.huge);
+        compare(trackItem(control).height, Theme.space.huge);
     }
 
     function test_the_track_radius_is_full() {
@@ -128,8 +160,8 @@ TestCase {
     function test_the_knob_slides_to_the_far_end_when_checked() {
         var off = make({ checked: false });
         var on = make({ checked: true });
-        var offKnob = knobOf(off);
-        var onKnob = knobOf(on);
+        var offKnob = knobItem(off);
+        var onKnob = knobItem(on);
         verify(onKnob.x > offKnob.x);
         // Symmetric: the same inset from either end of the track.
         compare(offKnob.x, on.width - onKnob.x - onKnob.width);
@@ -139,7 +171,7 @@ TestCase {
     // more after `checked` changes rather than on the same tick.
     function test_the_knob_animates_to_the_far_end_when_checked_changes() {
         var control = make({ checked: false });
-        var knob = knobOf(control);
+        var knob = knobItem(control);
         control.checked = true;
         tryCompare(knob, "x", control.width - knob.width - Theme.borderWidth * 2, 1000);
     }
@@ -158,7 +190,7 @@ TestCase {
 
     function test_no_cursor_draws_no_ring_and_no_border() {
         var control = make({});
-        verify(!haloOf(control).visible);
+        compare(haloOf(control), null);
         compare(trackOf(control).border.width, 0);
     }
 

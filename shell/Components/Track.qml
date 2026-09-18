@@ -5,9 +5,8 @@ import "cursor.js" as Cursor
 // The one progress/slider groove (DESIGN.md §2), drawn from the table's
 // `track.groove` and `track.fill` roles, `trackThickness` tall.
 //
-// The layers stay hand-drawn rather than composed out of a `Box`: the fill
-// is a second box living inside the groove, clipped by nothing but its own
-// width, and the halo is sized off the groove while painted outside it.
+// The groove is a `Box` and the fill a second box living inside it, clipped
+// by nothing but its own width.
 //
 // Under `theme.dither` (M49 D3) the remainder carries DitherFill's checker
 // over that colour, the era's own way of drawing "not yet". It is loaded
@@ -16,11 +15,11 @@ import "cursor.js" as Cursor
 // radius too, so there are no rounded corners for it to sit proud of.
 //
 // A track can carry the keyboard cursor itself (MediaPanel's progress and
-// volume), so the ring is drawn here rather than by a Cell wrapped around
-// it: the same halo plus border swap Switch and Cell draw, sized off the
-// groove but painted outside its bounds at `z: -1`, so the geometry a
+// volume), so the ring is composed onto the groove's own box rather than
+// drawn by a Cell wrapped around it: the same halo plus border swap Switch
+// and Cell take, painted outside the groove's bounds, so the geometry a
 // layout sees is identical with and without the ring.
-Rectangle {
+Box {
     id: root
 
     // 0..1. Anything outside that clamps rather than overflowing the groove.
@@ -56,7 +55,9 @@ Rectangle {
 
     readonly property real _fraction: Math.max(0, Math.min(1, root.value))
 
-    readonly property var _grooveBox: Theme.box("track.groove")
+    role: "track.groove"
+
+    readonly property var _grooveBox: Theme.box(root.role)
     readonly property var _fillBox: Theme.box("track.fill")
 
     // A filled groove has no border of its own, so the cursor's border swap
@@ -64,11 +65,21 @@ Rectangle {
     readonly property var _cursorBorder: Theme.box("cursor").border
 
     implicitHeight: Theme.space.trackThickness
-    radius: Theme.boxRadius(root._grooveBox, Theme.space.trackThickness)
-    color: root._grooveBox.fill
-    border.width: root.cursor ? root._cursorBorder.width : 0
-    border.color: root._cursorBorder.color
 
+    // The cursor composed onto the groove (M59 T6): its border in place of
+    // the groove's own, and its halo outside unless a list above draws one.
+    // The border is held at the ring's colour with no width while the cursor
+    // is elsewhere, so a groove taking it draws a line rather than fading
+    // one up out of nothing.
+    box: {
+        if (root.cursor)
+            return Theme.withCursor(root._grooveBox, root.cursor, !root._haloOwned);
+        var rest = {};
+        for (var key in root._grooveBox)
+            rest[key] = root._grooveBox[key];
+        rest.border = { color: root._cursorBorder.color, width: 0 };
+        return rest;
+    }
 
     // Whether something above this control draws the cursor halo for the
     // whole list it sits in (Panel.qml, M53 D4): one halo that travels
@@ -78,17 +89,6 @@ Rectangle {
     property bool _haloOwned: false
 
     onCursorChanged: if (root.cursor) root._haloOwned = Cursor.haloOwned(root);
-
-    Rectangle {
-        anchors.fill: parent
-        anchors.margins: -Theme.ringWidth
-        // Behind the groove's own fill, which is what keeps the halo a ring
-        // rather than a wash over the track.
-        z: -1
-        visible: root.cursor && !root._haloOwned
-        radius: root.radius + Theme.ringWidth
-        color: Theme.cursorRing.color
-    }
 
     Loader {
         anchors.fill: parent

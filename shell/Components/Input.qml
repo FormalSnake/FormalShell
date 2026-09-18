@@ -7,9 +7,9 @@ import "cursor.js" as Cursor
 // a caption under it the field itself owns. `controlHeight` tall, which is
 // geometry rather than chrome.
 //
-// The halo stays hand-drawn rather than composed out of a `Box`: it fades
-// in and out with focus (M51 Task 5), which a ring the renderer
-// instantiates on a state change cannot do.
+// The frame is a `Box`, so the table's own sunken lines draw inside it. Its
+// halo is the one layer kept out: it fades in and out with focus (M51 Task
+// 5), which a ring the renderer instantiates on a state change cannot do.
 //
 // `editing` is what a surrounding KeyCatcher blocks on: while the field has
 // focus the keys are the field's, not the panel's.
@@ -36,11 +36,19 @@ Item {
 
     readonly property bool _showsError: root.error && root.errorText !== ""
 
-    // Which of the role's three states the field is in. Focus, blur and
-    // error all cross on one colour Behavior below, so an error gets no
-    // special case that would read as a different kind of change.
-    readonly property var _box: Theme.box("input",
-        root.error ? "error" : input.activeFocus ? "focus" : "rest")
+    // Which of the role's three states the field is in, less the halo the
+    // focus state hangs on it (drawn below, for the fade). Focus, blur and
+    // error all cross on the frame's own colour Behavior, so an error gets
+    // no special case that would read as a different kind of change.
+    readonly property var _box: {
+        var resolved = Theme.box(frame.role,
+            root.error ? "error" : input.activeFocus ? "focus" : "rest");
+        var out = {};
+        for (var key in resolved)
+            out[key] = resolved[key];
+        out.rings = [];
+        return out;
+    }
 
     // The frame's corner, off the resting box rather than the live one: the
     // halo is drawn around that corner, and a state that moved it would slide
@@ -107,19 +115,15 @@ Item {
         }
     }
 
-    Rectangle {
+    Box {
         id: frame
+        role: "input"
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
         height: Theme.space.controlHeight
         radius: root._radius
-        color: root._box.fill
-        border.width: root._box.border ? root._box.border.width : 0
-        border.color: root._box.border ? root._box.border.color : "transparent"
-        Behavior on border.color {
-            CAnim {}
-        }
+        box: root._box
 
         Text {
             anchors.fill: input

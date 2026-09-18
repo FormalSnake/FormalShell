@@ -55,8 +55,9 @@ TestCase {
         return text;
     }
 
-    // The body layer is Cell's second Rectangle child (tst_cell_states
-    // pins that order); a ghost paints neither its fill nor its border.
+    // The body is the rectangle the hero's own `Box` fills, second from the
+    // end of the ones it draws (tst_cell_states pins that order); a ghost
+    // paints neither its fill nor its border.
     function bodyOf(hero) {
         var rects = [];
         for (var i = 0; i < hero.children.length; i++) {
@@ -64,7 +65,7 @@ TestCase {
             if (child.radius !== undefined && child.border !== undefined)
                 rects.push(child);
         }
-        return rects[1];
+        return rects[rects.length - 2];
     }
 
     function test_the_hero_draws_no_box_at_rest() {

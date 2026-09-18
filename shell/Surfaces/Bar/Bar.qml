@@ -224,6 +224,18 @@ PanelWindow {
     readonly property var _box: Theme.box("bar")
     readonly property var _edge: bar._box.edge
 
+    // The strip as drawn, less any cast the table hangs under the band: this
+    // window is exactly the strip's thickness and `ExclusionMode.Auto`
+    // reserves that same thickness, so the room to blur one into would have
+    // to come out of the reservation.
+    readonly property var _stripBox: {
+        var out = {};
+        for (var key in bar._box)
+            out[key] = bar._box[key];
+        out.casts = [];
+        return out;
+    }
+
     // The strip's own length: what the regions share out, and what a
     // cell's width cap is a fraction of.
     readonly property real _along: bar._vertical ? stripArea.height : stripArea.width
@@ -843,10 +855,10 @@ PanelWindow {
         // Declared before the regions, so it stacks behind every cell. With the
         // screen frame on, the ring below already paints the strip as part of
         // itself, so this fill is off and only the cells draw here.
-        Rectangle {
+        Box {
             anchors.fill: parent
             visible: !bar._framed
-            color: bar._box.fill
+            box: bar._stripBox
 
             // The hairline that separates the strip from the desktop, and the
             // only edge the bar draws: the one facing inward. A `border` on the

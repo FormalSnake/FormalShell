@@ -69,15 +69,38 @@ TestCase {
         return control;
     }
 
-    // Declaration order: the ring halo, the frame, the error caption.
+    // Declaration order: the ring halo, the frame, the error caption. The
+    // frame is a `Box`, so its border is on the rectangle Box draws (the
+    // second from the end of its own, tst_box.qml walks the same shape) and
+    // the field itself sits in the box's content slot.
     function ringOf(control) { return control.children[0]; }
     function frameOf(control) { return control.children[1]; }
     function errorLabelOf(control) { return control.children[2]; }
-    function textInputOf(control) { return frameOf(control).children[1]; }
+
+    function bodyOf(box) {
+        var out = [];
+        for (var i = 0; i < box.children.length; i++) {
+            if (box.children[i].radius !== undefined && box.children[i].border !== undefined)
+                out.push(box.children[i]);
+        }
+        return out[out.length - 2];
+    }
+
+    function frameBodyOf(control) { return bodyOf(frameOf(control)); }
+    function textInputOf(control) { return frameOf(control).contentItem.children[1]; }
+
+    // The frame is one `Box` on the `input` role (M60 T1b), so the sunken
+    // lines that role's entry declares are drawn rather than dropped.
+    function test_the_frame_is_a_box_on_the_input_role() {
+        var control = make({});
+        compare(frameOf(control).role, "input");
+        verify(frameOf(control).contentItem);
+        verify(Qt.colorEqual(frameBodyOf(control).color, Theme.box("input").fill));
+    }
 
     function test_at_rest_the_border_is_input_and_the_ring_is_hidden() {
         var control = make({});
-        verify(Qt.colorEqual(frameOf(control).border.color, Theme.color.input));
+        verify(Qt.colorEqual(frameBodyOf(control).border.color, Theme.color.input));
         compare(ringOf(control).opacity, 0);
         verify(!ringOf(control).visible);
     }
@@ -85,7 +108,7 @@ TestCase {
     function test_focus_swaps_the_border_to_ring_and_shows_the_halo() {
         var control = make({});
         textInputOf(control).forceActiveFocus();
-        tryCompare(frameOf(control).border, "color", Theme.color.ring, 1000);
+        tryCompare(frameBodyOf(control).border, "color", Theme.color.ring, 1000);
         // The halo is the table's own ring layer, filled at that layer's
         // alpha, so what fades is its presence and not its colour.
         tryCompare(ringOf(control), "opacity", 1, 1000);
@@ -97,9 +120,9 @@ TestCase {
         var control = make({});
         var input = textInputOf(control);
         input.forceActiveFocus();
-        tryCompare(frameOf(control).border, "color", Theme.color.ring, 1000);
+        tryCompare(frameBodyOf(control).border, "color", Theme.color.ring, 1000);
         input.focus = false;
-        tryCompare(frameOf(control).border, "color", Theme.color.input, 1000);
+        tryCompare(frameBodyOf(control).border, "color", Theme.color.input, 1000);
         tryCompare(ringOf(control), "opacity", 0, 1000);
     }
 
@@ -108,13 +131,13 @@ TestCase {
     // uses, it just rides a clock short enough to satisfy that.
     function test_error_reaches_destructive_on_the_colour_clock() {
         var control = make({ error: true });
-        tryCompare(frameOf(control).border, "color", Theme.color.destructive, Theme.motion.effectsSlow + 500);
+        tryCompare(frameBodyOf(control).border, "color", Theme.color.destructive, Theme.motion.effectsSlow + 500);
     }
 
     function test_error_wins_over_focus() {
         var control = make({ error: true });
         textInputOf(control).forceActiveFocus();
-        tryCompare(frameOf(control).border, "color", Theme.color.destructive, 1000);
+        tryCompare(frameBodyOf(control).border, "color", Theme.color.destructive, 1000);
     }
 
     function test_error_caption_shows_only_with_error_text() {

@@ -101,10 +101,15 @@ TestCase {
         return null;
     }
 
-    // The halo is the cell's first painted layer, a rounded rectangle at
-    // negative `ringWidth` margins (Cell.qml).
+    // The halo is the first rectangle the cell's own `Box` draws, at
+    // negative `ringWidth` margins under the body (Components/Box.qml).
     function halo(cell) {
-        return cell.children[0];
+        for (var i = 0; i < cell.children.length; i++) {
+            var child = cell.children[i];
+            if (child.radius !== undefined && child.border !== undefined)
+                return child;
+        }
+        return null;
     }
 
     // The halo's own rect in the clipping container's coordinates.
