@@ -9,6 +9,12 @@
 # assert here beyond the frame the other leg takes.
 leg_pantheon_flag="--pantheon"
 leg_pantheon_order=6
+# A rider with no drive or assert of its own must never vote the base
+# fixture window off: dev/smoke.sh's fixture_window_mode is an AND over every
+# active leg, so leaving this unset silently pulled the window (and its
+# focus) out from under whichever leg it rides, on --switcher and
+# --bar-adaptive both.
+leg_pantheon_fixture_window=keep
 
 leg_pantheon_fixture() {
   settings_fragment ', "theme": {"preset": "pantheon"}'
