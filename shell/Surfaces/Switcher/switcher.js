@@ -91,3 +91,27 @@ function rows(count, cols) {
         return 0;
     return Math.ceil(count / cols);
 }
+
+// Which of its app's windows each tile is: `{ n, of }` per key, `n` counting
+// from 1 in row order. An empty key is a window nothing could name, which
+// is never grouped with another, so it reads `{ n: 1, of: 1 }`.
+function ordinals(keys) {
+    var list = keys || [];
+    var totals = {};
+    for (var i = 0; i < list.length; i++) {
+        if (list[i])
+            totals[list[i]] = (totals[list[i]] || 0) + 1;
+    }
+    var seen = {};
+    var out = [];
+    for (var j = 0; j < list.length; j++) {
+        var key = list[j];
+        if (!key) {
+            out.push({ n: 1, of: 1 });
+            continue;
+        }
+        seen[key] = (seen[key] || 0) + 1;
+        out.push({ n: seen[key], of: totals[key] });
+    }
+    return out;
+}

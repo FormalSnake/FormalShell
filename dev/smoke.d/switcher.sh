@@ -28,8 +28,8 @@
 # constant: the fill is the wallpaper's own accent under matugen, and a leg
 # naming a hex would be asserting the palette rather than the cursor.
 #
-# It pins `theme.preset` itself, so it needs no --pantheon (and does not
-# fight one): the switcher is a habit, and no other preset has it.
+# The switcher is on under every theme (`switcher.enabled`, default true), so
+# the leg pins no preset and rides --pantheon or --retro for their material.
 leg_switcher_flag="--switcher"
 leg_switcher_order=102
 leg_switcher_needs="foot jq convert"
@@ -62,23 +62,14 @@ switcher_icon_patches="20x20+862+512 20x20+950+512 20x20+1038+512"
 switcher_margin_patches="4x20+831+512 4x20+919+512 4x20+1007+512"
 
 leg_switcher_fixture() {
-  # --pantheon pins the same preset; two "theme" keys in one settings.json
-  # would be one object silently winning over the other.
-  if ! leg_on pantheon; then
-    settings_fragment ', "theme": {"preset": "pantheon"}'
-  fi
   # The fourth window on workspace 2 is only held out of the card under
   # Gala's list, which is opt-in.
   settings_fragment ', "switcher": {"currentWorkspace": true}'
 }
 
 leg_switcher_validate() {
-  if leg_on retro; then
-    echo "usage: --switcher pins its own theme.preset and cannot combine with --retro" >&2
-    exit 1
-  fi
   if leg_on switcher_off; then
-    echo "usage: --switcher-off runs the same target under a preset without the habit, so it cannot share a session with --switcher" >&2
+    echo "usage: --switcher-off turns the switcher off in settings.json, so it cannot share a session with --switcher" >&2
     exit 1
   fi
 }

@@ -264,10 +264,8 @@ var STYLE = {
         // shadcn's `<Separator>`: one `border` line and nothing under it.
         "separator": { fill: "border" },
 
-        // The window switcher's card (M60 T6). This table's `switcher` habit
-        // is off, so nothing instantiates that surface here and the entry is
-        // the plain card: the role list is one list, and a preset that turned
-        // the habit on would get shadcn's own chrome rather than a hole.
+        // The window switcher's card (M60 T6): shadcn's own card, the same
+        // material every other floating card in this table wears.
         "switcher": {
             fill: "card",
             fillAlpha: "surface",
@@ -310,9 +308,7 @@ var STYLE = {
     // overshoot included, a toast arrives from off screen on the decelerating
     // curve M3 defines for exactly that, and the pile closes up behind it on
     // the spatial family again, as one, with no stagger. The switcher's card
-    // is a plain fade, so it takes the effects family; this table's habit
-    // leaves the surface uninstantiated, and the entry is here for the same
-    // reason its role above is.
+    // is a plain fade, so it takes the effects family.
     motion: {
         emerge: { duration: "spatial", curve: "spatial" },
         arrive: { duration: "spatial", curve: "emphasizedDecel" },
@@ -321,14 +317,13 @@ var STYLE = {
     },
 
     // Omarchy's own habits (T7): the strip along one edge, a card that buds
-    // off the line it came out of, one notification row per card, a list
-    // launcher, and no window switcher.
+    // off the line it came out of, one notification row per card, and a list
+    // launcher.
     habits: {
         bar: "strip",
         emerge: "join",
         notification: "row",
         launcher: "list",
-        switcher: false,
         frame: true,
         paint: "auto"
     }

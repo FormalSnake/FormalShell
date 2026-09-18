@@ -1554,15 +1554,18 @@ binds {
 
 One card in the middle of the output: a row of 64px app icons, one per
 mapped window across every workspace, the most recently focused first, the
-selected one on an accent fill with its title under the row. A window on a
+selected one on an accent fill with its title and app name under the row.
+Several windows of one app carry a small number each. An app with no
+matching desktop entry, no class and no recognisable process draws the
+generic application icon rather than an empty tile. A window on a
 special workspace (the quake console) is not offered, since it is an overlay
 rather than a place. `switcher.currentWorkspace` (default false) narrows the
 row to the focused workspace's windows, which is Gala's own list. A session
 with nothing to switch between says `NO WINDOWS`. More windows than fit one row wrap onto balanced rows.
 
-It only exists under a preset whose `switcher` habit is on, which today is
-`pantheon`; on every other preset the target below answers
-`error: switcher is off under this theme` rather than doing nothing quietly.
+It exists under every theme. `switcher.enabled: false` turns it off, and the
+target below then answers `error: switcher is off (switcher.enabled)` rather
+than doing nothing quietly.
 
 ```sh
 fs switcher next     # open on the window before this one, or walk on

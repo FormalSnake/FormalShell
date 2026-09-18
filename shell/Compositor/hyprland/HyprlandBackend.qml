@@ -68,6 +68,13 @@ Scope {
             // console, the recorder's webcam overlay, silently never found
             // it (2026-08-19).
             appId: (t.wayland && t.wayland.appId) ? t.wayland.appId : (ipc.class ?? ""),
+            // What an app that never sets an app id is still known by
+            // (Compositor/appicon.js). `lastIpcObject` alone carries them, so
+            // they are empty on a window opened since the last
+            // `refreshWindows()` until the next one.
+            initialClass: ipc.initialClass ?? "",
+            initialTitle: ipc.initialTitle ?? "",
+            pid: ipc.pid ?? 0,
             workspaceId: t.workspace ? String(t.workspace.id) : "",
             isFocused: t.activated,
             isFloating: ipc.floating ?? false,

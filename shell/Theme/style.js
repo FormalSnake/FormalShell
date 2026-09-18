@@ -21,8 +21,8 @@
 // `switcher` is the window switcher's card (M60 T6), a role of its own
 // rather than the `card` above because Gala draws it in its own material: a
 // lower alpha over the compositor's blur and one lit stroke inside the rim.
-// A table whose `switcher` habit is off still declares it, so the role list
-// stays one list; nothing instantiates the surface there.
+// Whether the switcher exists at all is `switcher.enabled` in settings.json,
+// not the table's (docs/superpowers/specs/2026-09-18-theme-boundary.md).
 //
 // `switcher.cell` is one icon's own tile inside that card, and not `cell`
 // because Gala marks the selected window with the accent at a QUARTER
@@ -83,7 +83,6 @@ var HABITS = {
     emerge: ["join", "popover"],
     notification: ["row", "bubble"],
     launcher: ["list", "grid"],
-    switcher: [true, false],
     // Whether the theme wears a screen frame at all (owner, 2026-09-18).
     // A table that says no reads `frame.thickness` as 0, ring and
     // reservation both (Core/Theme.qml's `frameHabit`): pantheon's ring is

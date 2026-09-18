@@ -230,6 +230,11 @@ TestCase {
                 verify(Style.HABITS[key].indexOf(style.habits[key]) !== -1,
                     names[t] + " habit " + key + " is " + style.habits[key]);
             }
+            // And none the list does not know: what a surface holds or does
+            // is global (the 2026-09-18 theme boundary), so a key here that
+            // nothing validates is a layout switch hiding in a table.
+            for (var own in style.habits)
+                verify(Style.HABITS[own] !== undefined, names[t] + " carries an unknown habit " + own);
             for (var w = 0; w < Style.WASH_KEYS.length; w++) {
                 var wash = style.wash[Style.WASH_KEYS[w]];
                 verify(!!wash, names[t] + " is missing the wash " + Style.WASH_KEYS[w]);
@@ -608,8 +613,7 @@ TestCase {
         compare(selected.radius, 3);
     }
 
-    // The table on the habit the switcher is off under still carries the
-    // role, so the role list is one list; it is the plain card there.
+    // Metamorphosis draws the switcher in its plain card.
     function test_the_metamorphosis_switcher_is_the_plain_card() {
         var card = Style.resolve(Metamorphosis.STYLE, "switcher", null, ctx("dark"));
         var plain = Style.resolve(Metamorphosis.STYLE, "card", "rest", ctx("dark"));
@@ -617,7 +621,14 @@ TestCase {
         compare(card.radius, plain.radius);
         compare(card.border.color, plain.border.color);
         compare(card.insetRings.length, 0);
-        compare(Metamorphosis.STYLE.habits.switcher, false);
+    }
+
+    // The switcher is `switcher.enabled` in settings.json, on under every
+    // theme, and no table can turn it off.
+    function test_no_table_carries_the_switcher() {
+        compare(Style.HABITS.switcher, undefined);
+        compare(Metamorphosis.STYLE.habits.switcher, undefined);
+        compare(Pantheon.STYLE.habits.switcher, undefined);
     }
 
     // The habits Part 2 names, which the surfaces read from M60 T2 on.
@@ -627,7 +638,6 @@ TestCase {
         compare(habits.emerge, "popover");
         compare(habits.notification, "bubble");
         compare(habits.launcher, "grid");
-        compare(habits.switcher, true);
     }
 
     // The screen frame is a habit, not a settings key alone (M66): under a

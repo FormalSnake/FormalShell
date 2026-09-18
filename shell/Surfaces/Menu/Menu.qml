@@ -822,22 +822,11 @@ PanelWindow {
     })
     readonly property var _nodes: root._tree.nodes
 
-    // Icon-name -> resolved path, memoised for the process. Quickshell's
-    // iconPath is an XDG icon-theme lookup, which means probing the theme
-    // directories on disk, and appsProvider calls it once per installed app
-    // on every tree rebuild. The answer only changes when the system icon
-    // theme does, which does not happen under a running shell.
-    //
-    // Lives here rather than in providers.js because the resolver is this
-    // file's own closure over Quickshell: a cache inside the provider would
-    // be shared across callers passing different resolvers, which is exactly
-    // what its tests do.
-    property var _appIconCache: ({})
-
+    // The resolver the window switcher's tiles take too (AppIconService,
+    // memoised there), handed to the provider rather than imported by it so
+    // its tests keep passing their own.
     function _resolveAppIcon(name) {
-        if (root._appIconCache[name] === undefined)
-            root._appIconCache[name] = Quickshell.iconPath(name, true);
-        return root._appIconCache[name];
+        return AppIconService.source(name);
     }
 
     // True while the current level's own node carries an unsatisfied (or

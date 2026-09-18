@@ -139,4 +139,19 @@ TestCase {
         compare(Switcher.columns(0, 7), 0);
         compare(Switcher.rows(0, 0), 0);
     }
+
+    // Several windows of one app count off in row order; an app with one
+    // window, and a window nothing could name, carry no count at all.
+    function test_windows_of_one_app_count_off_in_row_order() {
+        var marks = Switcher.ordinals(["entry:foot", "entry:mpv", "entry:foot", "", "", "entry:foot"]);
+        compare(marks.length, 6);
+        compare(marks[0].n, 1);
+        compare(marks[0].of, 3);
+        compare(marks[2].n, 2);
+        compare(marks[5].n, 3);
+        compare(marks[1].of, 1);
+        compare(marks[3].of, 1);
+        compare(marks[4].of, 1);
+        compare(Switcher.ordinals(undefined).length, 0);
+    }
 }

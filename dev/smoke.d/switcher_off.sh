@@ -1,16 +1,14 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
-# --switcher-off: the other half of --switcher (M60 T6). The switcher is a
-# habit, and a preset without it never instantiates the surface at all, so
-# the claim here is that the IPC target says so rather than accepting a call
-# and doing nothing. A leg of its own because a preset is read at startup and
-# one session carries one settings.json: the shipped default (metamorphosis)
-# is what this runs on, which is why it pins no fixture.
+# --switcher-off: the other half of --switcher (M60 T6). `switcher.enabled:
+# false` never instantiates the surface at all, so the claim here is that the
+# IPC target says so rather than accepting a call and doing nothing. A leg of
+# its own because one session carries one settings.json. The setting is the
+# user's rather than the theme's, so it rides --pantheon or --retro as well.
 #
 # All five verbs, not just one: `state` returning the error string is what a
-# rig or a keybind sees, and `commit` is bound to the release of a modifier
-# on a pantheon host, so on any other preset it is the verb that would fire
-# most often of all.
+# rig or a keybind sees, and `commit` is bound to the release of a modifier,
+# so with the switcher off it is the verb that would fire most often of all.
 leg_switcher_off_flag="--switcher-off"
 leg_switcher_off_order=103
 leg_switcher_off_needs="jq"
@@ -19,14 +17,8 @@ switcher_off_dir="$shot_dir/switcher-off"
 switcher_off_png="$shot_dir/switcher-off.png"
 switcher_off_layers="$shot_dir/switcher-off-layers.json"
 
-leg_switcher_off_validate() {
-  local other
-  for other in pantheon retro; do
-    if leg_on "$other"; then
-      echo "usage: --switcher-off reads the target under the shipped preset, so it cannot combine with --${other}" >&2
-      exit 1
-    fi
-  done
+leg_switcher_off_fixture() {
+  settings_fragment ', "switcher": {"enabled": false}'
 }
 
 leg_switcher_off_timing() {
@@ -50,7 +42,7 @@ EOS
 }
 
 leg_switcher_off_assert() {
-  local verb reply want="error: switcher is off under this theme"
+  local verb reply want="error: switcher is off (switcher.enabled)"
   for verb in next prev commit cancel state; do
     local path="$switcher_off_dir/$verb.txt"
     [ -s "$path" ] || fail "no reply produced for switcher $verb at $path"
@@ -66,7 +58,7 @@ leg_switcher_off_assert() {
   mapped=$("$jq_bin" -r '[.[] | .levels[] | .[] | select(.namespace == "formalshell:switcher")] | length' \
     "$switcher_off_layers" 2>/dev/null)
   echo "layers: formalshell:switcher=$mapped"
-  [ "${mapped:-0}" -eq 0 ] || fail "a switcher surface is mapped under a theme whose habit is off ($mapped)"
+  [ "${mapped:-0}" -eq 0 ] || fail "a switcher surface is mapped with switcher.enabled false ($mapped)"
 
   echo "SMOKE_SWITCHER_OFF ok five verbs refused"
   echo "SMOKE_SWITCHER_OFF_FRAME $switcher_off_png"

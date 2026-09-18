@@ -1,5 +1,6 @@
 singleton AirpodsService AirpodsService.qml
 singleton AnimatedCoverFrameSource AnimatedCoverFrameSource.qml
+singleton AppIconService AppIconService.qml
 singleton AppleMusicArtService AppleMusicArtService.qml
 singleton AudioService AudioService.qml
 singleton BrightnessService BrightnessService.qml

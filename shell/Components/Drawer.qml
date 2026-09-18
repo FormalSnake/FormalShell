@@ -77,6 +77,11 @@ Item {
     // own size morphs, a handoff's travel.
     property bool moving: false
     property real deformAmount: 0.15
+    // A card in the middle of the output rather than on an edge (the window
+    // switcher, `edge: "center"`): there is no line to join, and the join
+    // recipe's geometry is cut per edge, so it takes the popover's under
+    // every habit, which with no edge to drop from is a fade on `clock`.
+    property bool floating: false
 
     default property alias content: host.data
 
@@ -94,7 +99,7 @@ Item {
     readonly property rect frameRect: recipe.item
         ? recipe.item.frameRect : Qt.rect(0, 0, 0, 0)
 
-    readonly property bool _popover: Theme.habit.emerge === "popover"
+    readonly property bool _popover: root.floating || Theme.habit.emerge === "popover"
 
     // A card that never meets a line: nothing attached, nothing published.
     readonly property QtObject _floating: QtObject {

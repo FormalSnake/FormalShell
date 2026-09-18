@@ -9,22 +9,22 @@ import qs.Core
 // compositor's own binds calling in here
 // (docs/examples/hyprland/formalshell.conf).
 //
-// The switcher is a habit rather than a feature: a theme that has none never
-// instantiates the surface (shell.qml's Loader), and this target says so
-// instead of accepting a call that would do nothing.
+// `switcher.enabled: false` never instantiates the surface (shell.qml's
+// Loader), and this target says so instead of accepting a call that would
+// do nothing.
 IpcHandler {
     id: root
     target: "switcher"
 
-    // Set from shell.qml, the single Switcher instance, or null under a
-    // theme whose `switcher` habit is off (same reasoning as MenuIpc's
-    // `menu` property: one instance, no singleton of its own).
+    // Set from shell.qml, the single Switcher instance, or null while
+    // `switcher.enabled` is false (same reasoning as MenuIpc's `menu`
+    // property: one instance, no singleton of its own).
     property var switcher: null
 
-    readonly property string _off: "error: switcher is off under this theme"
+    readonly property string _off: "error: switcher is off (switcher.enabled)"
 
     function _guard() {
-        if (!Theme.habit.switcher)
+        if (Config.get("switcher.enabled", true) === false)
             return root._off;
         if (!switcher)
             return "error: switcher not ready";
