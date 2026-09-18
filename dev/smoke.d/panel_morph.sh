@@ -75,6 +75,15 @@ panel_morph_body=170
 panel_morph_skirt=16
 # What counts as painted at all: a couple of columns out of the band.
 panel_morph_ink=2
+# And what counts as a pixel differing from the bare desktop. The card is a
+# translucent fill over the rig's own near-black desktop and lifts it by about
+# 5%, so a cut above that leaves the card's body reading as desktop and only
+# its own 1px bottom border clearing `panel_morph_body`. A card resting on a
+# fractional row splits that line across two pixel rows at half strength, the
+# far edge then falls back to a row inside the card, and the card's own
+# contents read as painted outside it: the rows a card covers have to be the
+# thing being measured, not the one line at the bottom of it.
+panel_morph_lift=2%
 # The far edge may pass a rest by this much and no more; see the header.
 panel_morph_overshoot=40
 # And two rests have to differ by at least this much, or the action drove no
@@ -236,7 +245,7 @@ panel_morph_rows() {
   $convert_bin "$1" "$panel_morph_bare_path" -compose difference -composite \
     -colorspace Gray \
     -crop "${panel_morph_band_w}x${panel_morph_band_h}+${panel_morph_band_x}+${panel_morph_band_y}" +repage \
-    -threshold 8% -scale "1x${panel_morph_band_h}!" -depth 8 txt:- 2>/dev/null \
+    -threshold "$panel_morph_lift" -scale "1x${panel_morph_band_h}!" -depth 8 txt:- 2>/dev/null \
     | awk 'NR > 1 { v = $2; gsub(/[()]/, "", v); split(v, c, ","); print c[1] + 0 }'
 }
 
