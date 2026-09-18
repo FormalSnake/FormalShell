@@ -36,10 +36,12 @@
 # and selecting track2 re-arms it; track2 reaches `quality:1` with every
 # line `estimated:true` and its wipe visibly partway in a frame, read off
 # the row's own left/right halves rather than trusted from IPC alone;
-# track3 reaches `none` with the panel narrower, as M55 already proved; and
+# track3 reaches `none` with the panel narrower, as M55 already proved;
 # selecting track1 back grows the panel again across a burst of frames that
-# all land on the same left edge (P13: the now-playing column never moves
-# while the trailing lyrics pane grows in beside it).
+# all share the narrow card's own centre, which is the centre of the bar
+# cell that opened it (the growth travels both edges); and that burst's
+# settled frame carries the lit line broken inside a chunk wider than the
+# pane, read as the brightest ink stopping short of the viewport's clip.
 leg_lyrics_flag="--lyrics"
 leg_lyrics_order=175
 leg_lyrics_needs="mpv ffmpeg convert jq wlrctl"
@@ -72,6 +74,7 @@ lyrics_panel_none_json_path="$shot_dir/lyrics-panel-none.json"
 lyrics_wheel_dispatch_path="$shot_dir/lyrics-wheel-dispatch.txt"
 lyrics_wheel_target_path="$shot_dir/lyrics-wheel-target.txt"
 lyrics_return_rects_path="$shot_dir/lyrics-return-rects.txt"
+lyrics_return_narrow_path="$shot_dir/lyrics-return-narrow.png"
 lyrics_edge_rects_path="$shot_dir/lyrics-edge-rects.txt"
 lyrics_lib_path="$shot_dir/lyrics-lib.sh"
 lyrics_marker_seeded="$shot_dir/lyrics-marker-seeded"
@@ -177,6 +180,9 @@ EOF
   # the active main line at 25s: P5's rule judges a background line on its
   # own timing, so it stays lit into that next main line for effectively the
   # rest of the session, which is what the duet-lit poll below waits for.
+  # Line3 ends on one word longer than the pane is wide, so the lit form has
+  # to break inside a chunk the way the plain one does; the return burst's
+  # own settled frame is where that line is read.
   cat > "$shot_dir/lyrics-track1-cache.json" <<'JSON'
 {"source": "apple", "lines": [
 {"time": 2.0, "end": 15.0, "text": "Paper lantern morning", "parent": null, "background": false, "oppositeTurn": false, "estimated": false, "words": [
@@ -190,10 +196,11 @@ EOF
 {"time": 16.0, "end": 100000.0, "text": "steady now", "parent": 1, "background": true, "oppositeTurn": false, "estimated": false, "words": [
   {"time": 16.0, "text": "stea", "joinsNext": true}, {"time": 16.8, "text": "dy", "joinsNext": false},
   {"time": 17.6, "text": "now", "joinsNext": false}]},
-{"time": 25.0, "end": 100000.0, "text": "Answer from the other shore", "parent": null, "background": false, "oppositeTurn": true, "estimated": false, "words": [
+{"time": 25.0, "end": 100000.0, "text": "Answer from the other shore lanternlightacrossthewholeharbourmouth", "parent": null, "background": false, "oppositeTurn": true, "estimated": false, "words": [
   {"time": 25.0, "text": "Answer", "joinsNext": false}, {"time": 26.2, "text": "from", "joinsNext": false},
   {"time": 27.2, "text": "the", "joinsNext": false}, {"time": 28.2, "text": "other", "joinsNext": false},
-  {"time": 29.2, "text": "shore", "joinsNext": false}]}
+  {"time": 29.2, "text": "shore", "joinsNext": false},
+  {"time": 30.2, "text": "lanternlightacrossthewholeharbourmouth", "joinsNext": false}]}
 ]}
 JSON
 
@@ -443,23 +450,21 @@ sleep 2
 touch "$lyrics_marker_track3"
 EOF
 
-  # P13's own leg: the anchorless "panel open media" every other frame in
-  # this leg uses cannot hold its leading edge at all once its own width
-  # grows (the plan's own Task 3 evidence: 840 wide against a 1920 output
-  # lands at x=1068, close enough to the trailing edge that frameAlong's
-  # far clamp wins over anything else), so this one part closes it and
-  # reopens through `panel toggle media`, which anchors under the bar's own
-  # now-playing cell instead, the same shape Task 3's own probe used to
-  # measure this in the first place. Track3 (none, narrow) is still active
-  # when it reopens, so the arrival is the same key change `follow`'s other
-  # re-arm path already needs to fire on (`LyricsService._resolve()` resets
-  # it on every key change, not only the wheel-scroll leg's own path
-  # above). A burst of frames through it, each read against the same bare
-  # frame `lyrics_pane_rect` used for the width checks (panel close leaves
-  # the desktop exactly as bare as it started): the diff rect's own left
-  # edge is the panel's leading side, held under the now-playing column,
-  # and its width is expected to grow from popupWidthWide (480, the
-  # untimed reopen) toward popupWidthMenuSplit (840) across them.
+  # The centring leg: the anchorless "panel open media" every other frame
+  # in this leg uses rests on the screen's own far padding (840 wide
+  # against a 1920 output wants x=1068, which is the clamp), so it can say
+  # nothing about a cell, and this one part closes it and reopens through
+  # `panel toggle media`, which anchors under the bar's own now-playing
+  # cell. That cell is in the centre region, so both widths clear the
+  # padding at either end and what places the card is the centring alone.
+  # Track3 (none, narrow) is still active when it reopens, so the arrival
+  # is the same key change `follow`'s other re-arm path already needs to
+  # fire on (`LyricsService._resolve()` resets it on every key change, not
+  # only the wheel-scroll leg's own path above). One frame of the narrow
+  # card first, for the cell centre it rests on, then a burst through the
+  # arrival, each read against the same bare frame `lyrics_pane_rect` uses
+  # for the width checks (panel close leaves the desktop exactly as bare as
+  # it started).
   write_script "$return_script" <<EOF
 #!/usr/bin/env bash
 . "$lyrics_lib_path"
@@ -469,6 +474,7 @@ id1=\$(cat "$lyrics_id1_path" 2>/dev/null)
 sleep 1
 "$qs_bin" ipc -p "$shell_path" call panel toggle media > /dev/null 2>&1
 sleep 1
+"$grim_bin" "$lyrics_return_narrow_path" > /dev/null 2>&1
 "$qs_bin" ipc -p "$shell_path" call media select "\$id1" > /dev/null 2>&1
 : > "$lyrics_return_rects_path"
 for delay in 0.1 0.4 0.8 1.2 1.6; do
@@ -713,32 +719,75 @@ leg_lyrics_assert() {
     fail "the untimed panel is not popupWidthWide wide (want ~480, got width=$width_none)"
   fi
 
-  # P13: selecting track1 back re-arms follow (the other half of the wheel
-  # takeover's re-arm claim) and grows the panel back to popupWidthMenuSplit
-  # without ever moving the leading edge the now-playing column sits under.
+  # Selecting track1 back re-arms follow (the other half of the wheel
+  # takeover's re-arm claim) and grows the panel back to
+  # popupWidthMenuSplit around the centre it already had, which is the
+  # centre of the bar cell that opened it: the narrow card's own centre is
+  # that number, since nothing clamps a 480-wide card under a centre-region
+  # cell. The tolerance is the diff rect's own edge antialiasing; the place
+  # this replaces moved the centre by half the growth, 180px.
   if [ ! -s "$lyrics_status_return_path" ]; then
     fail "no media lyrics status produced after returning to the syllable track"
   fi
   if ! "$jq_bin" -e '.follow == true' "$lyrics_status_return_path" > /dev/null 2>&1; then
     fail "selecting the syllable track back did not re-arm follow, got: $(cat "$lyrics_status_return_path")"
   fi
+  [ -f "$lyrics_return_narrow_path" ] || fail "no narrow-card frame taken before the return arrival"
+  local nx ny nw nh cell_centre
+  read -r nx ny nw nh _ < <(lyrics_pane_rect "$lyrics_bare_path" "$lyrics_return_narrow_path" "$convert_bin")
+  if ! awk -v w="${nw:-0}" -v want=480 -v tol=30 'BEGIN { exit !(w > want - tol && w < want + tol) }'; then
+    fail "the reopened card is not popupWidthWide before the pane arrives (want ~480, got width=$nw)"
+  fi
+  cell_centre=$((nx + nw / 2))
   [ -s "$lyrics_return_rects_path" ] || fail "no return-burst rects recorded"
   echo "SMOKE_LYRICS_RETURN_RECTS $lyrics_return_rects_path"
   cat "$lyrics_return_rects_path"
-  local first_x line delay rx ry rw rh last_w
-  first_x=""
+  local delay rx ry rw rh last_w last_x centre off
   while read -r delay rx ry rw rh; do
-    if [ -z "$first_x" ]; then
-      first_x="$rx"
-    elif [ "$rx" != "$first_x" ]; then
-      fail "the panel's leading edge moved during the return arrival: x=$first_x then x=$rx at +${delay}s"
+    centre=$((rx + rw / 2))
+    off=$((centre - cell_centre))
+    if [ "${off#-}" -gt 8 ]; then
+      fail "the card left its cell's centre during the return arrival: cell centre $cell_centre, card centre $centre at +${delay}s (x=$rx w=$rw)"
     fi
     last_w="$rw"
+    last_x="$rx"
   done < "$lyrics_return_rects_path"
-  [ -n "$first_x" ] || fail "no return-burst frame produced a panel rect at all"
+  [ -n "$last_w" ] || fail "no return-burst frame produced a panel rect at all"
   if ! awk -v w="${last_w:-0}" -v want=840 -v tol=30 'BEGIN { exit !(w > want - tol && w < want + tol) }'; then
     fail "the return burst never settled on popupWidthMenuSplit (want ~840, got width=$last_w)"
   fi
-  echo "SMOKE_LYRICS_RETURN left edge held at x=$first_x through the arrival, settled width=$last_w"
+  # And the claim is about the centring rather than a clamp: both ends of
+  # the settled card are clear of the screen's own padding.
+  if [ "$last_x" -le 16 ] || [ $((last_x + last_w)) -ge $((1920 - 16)) ]; then
+    fail "the settled card is against the screen's padding, so its place says nothing about its cell: x=$last_x w=$last_w"
+  fi
+  echo "SMOKE_LYRICS_CENTRE cell centre x=$cell_centre, card centre x=$((last_x + last_w / 2)) with the pane open (narrow width=$nw, settled width=$last_w)"
   [ -f "$shot_dir/lyrics-return-1.6.png" ] && echo "SMOKE_LYRICS_RETURN_SETTLED $shot_dir/lyrics-return-1.6.png"
+
+  # The lit line's own fit (the fixture's line3 ends on one word wider than
+  # the pane): the settled return frame is read for the brightest ink in the
+  # pane below the header, which is the lit line and nothing else, since
+  # every other row is drawn in `mutedForeground` under the depth ramp. A
+  # chunk that could not break would run that ink to the viewport's own clip;
+  # a broken one stops a `controlPaddingX` short of it. The band starts past
+  # the header so the close button's own glyph is not the ink being measured.
+  local sx sy sw sh sbody pane_x pane_w band_y band_h ink iw ih ix iy
+  read -r sx sy sw sh sbody < <(lyrics_pane_rect "$lyrics_bare_path" "$shot_dir/lyrics-return-1.6.png" "$convert_bin")
+  pane_x=$((sx + 480))
+  pane_w=$((sw - 480 - 12))
+  band_y=$((sy + 100))
+  band_h=$((sh - 116))
+  if [ "$pane_w" -lt 200 ] || [ "$band_h" -lt 80 ]; then
+    fail "the settled return frame gave no lyrics pane to read: rect x=$sx y=$sy w=$sw h=$sh"
+  fi
+  ink=$("$convert_bin" "$sbody" -crop "${pane_w}x${band_h}+${pane_x}+${band_y}" +repage     -colorspace Gray -threshold 70% -format '%@' info: 2>/dev/null)
+  [ -n "$ink" ] || fail "no lit line found in the settled return frame's lyrics pane"
+  iw=${ink%%x*}
+  ih=${ink#*x}; ih=${ih%%+*}
+  ix=${ink#*+}; ix=${ix%%+*}
+  iy=${ink##*+}
+  echo "SMOKE_LYRICS_FIT lit ink ends at x=$((ix + iw)) of the pane's own $pane_w, over $ih rows of it (ink ${ink})"
+  if [ $((ix + iw)) -gt $((pane_w - 14)) ]; then
+    fail "the lit line ran to the pane's own clip: ink ends at $((ix + iw)) of $pane_w, so a chunk wider than the pane never broke"
+  fi
 }

@@ -928,17 +928,19 @@ function depthOpacity(distance) {
     return _DEPTH_OPACITY[d];
 }
 
-// The 0..1 fraction of a `height`-tall item starting at `top` that falls
-// inside `[0, viewportHeight]`: 1 fully in, 0 fully out either side, and
-// linear in between (a line sliced by the viewport's own edge fades out
-// rather than reading as a cut-off line under whatever sits above the
-// viewport). `top` is the item's position after the column's own travel,
-// so the caller adds the column's animated `y` to the item's own.
+// The 0..1 fade a `height`-tall row starting at `top` carries for its
+// clearance from the ends of a `viewportHeight`-tall viewport: 1 while it
+// clears both by its own height, ramping to 0 as either end reaches it.
+// The ramp is spent BEFORE the viewport's clip rather than across it: an
+// overlap ramp left the row that the clip cut still painting its visible
+// half, so the pane ended on half a glyph (owner, 2026-09-18). `top` is the
+// item's position after the column's own travel, so the caller adds the
+// column's animated `y` to the item's own.
 function edgeFraction(top, height, viewportHeight) {
     if (!(height > 0))
         return 0;
-    var overlap = Math.min(top + height, viewportHeight) - Math.max(top, 0);
-    return Math.max(0, Math.min(1, overlap / height));
+    var clearance = Math.min(top, viewportHeight - (top + height));
+    return Math.max(0, Math.min(1, clearance / height));
 }
 
 // A line's depth-of-field blur for its distance (in display rows, not

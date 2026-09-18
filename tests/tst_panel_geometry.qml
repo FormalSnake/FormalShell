@@ -70,24 +70,20 @@ TestCase {
         compare(frameX("top", 960, 380) + 380 / 2, 960);
     }
 
-    // M56 P13: a panel growing a second column holds the place its narrow
-    // width gave it, so the column that was already on screen stays put and
-    // the new half opens out of the trailing side.
-    function test_a_held_frame_keeps_the_narrow_width_s_own_place() {
-        var narrow = Geometry.frameX("top", 600, 1920, 480, insets("top"), testCase.barMargin,
-            testCase.screenPadding, 480);
-        var wide = Geometry.frameX("top", 600, 1920, 840, insets("top"), testCase.barMargin,
-            testCase.screenPadding, 480);
-        compare(narrow, 600 - 240);
-        compare(wide, narrow);
+    // A panel growing a second column stays on its cell: both ends travel,
+    // so the centre the card opened on is the centre it settles on.
+    function test_a_frame_growing_a_column_keeps_its_cell_s_centre() {
+        var narrow = frameX("top", 600, 480);
+        var wide = frameX("top", 600, 840);
+        compare(narrow + 480 / 2, 600);
+        compare(wide + 840 / 2, 600);
     }
 
-    // The screen still wins: there is no placement where an 840-wide frame
-    // keeps a 480-wide one's left edge next to the right edge of a 1920
-    // output.
-    function test_a_held_frame_still_gives_way_to_the_far_padding() {
-        compare(Geometry.frameX("top", 1800, 1920, 840, insets("top"), testCase.barMargin,
-            testCase.screenPadding, 480), 1920 - 840 - 12);
+    // Until the far padding takes the centring over: an 840-wide card next
+    // to the right edge of a 1920 output keeps that edge on the padding and
+    // grows the other way instead.
+    function test_a_frame_growing_against_the_edge_keeps_the_far_padding() {
+        compare(frameX("top", 1800, 840), 1920 - 840 - 12);
     }
 
     function test_a_frame_wider_than_the_screen_gives_up_the_right_clamp() {

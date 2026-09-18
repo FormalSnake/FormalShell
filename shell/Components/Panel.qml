@@ -73,12 +73,6 @@ PanelWindow {
     // panel gets for free. Meant for `IconButton`s.
     property alias titleActions: actionsRow.data
     property int panelWidth: Theme.space.popupWidthDefault
-    // The width this frame is placed by while `panelWidth` morphs past it
-    // (M56 P13): a panel that grows a second column sets it to its own
-    // narrow width, and the frame then keeps the place that width gave it
-    // instead of sliding to stay centred on its cell. 0 leaves the frame
-    // centred by whatever it currently measures, which is every other panel.
-    property int panelHoldWidth: 0
     // Set by a popout that measures its own content rather than stating a
     // width (the chevron's second bar and the tray's, both binding
     // `panelWidth` to the rail they hold): the rail is rebuilt on every
@@ -361,7 +355,7 @@ PanelWindow {
 
     readonly property real _frameX: root._screen
         ? Geometry.frameX(Theme.barPosition, root.anchorX, root._screen.width, root._morphWidth,
-            Theme.edgeInset, Theme.space.barMargin, Theme.space.screenPadding, root.panelHoldWidth)
+            Theme.edgeInset, Theme.space.barMargin, Theme.space.screenPadding)
             - root._edge.x * root._ownerShift
         : 0
     readonly property real _frameY: root._screen

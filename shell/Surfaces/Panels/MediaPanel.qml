@@ -14,13 +14,13 @@ import "../../Visualizer/model.js" as Visualizer
 // (`popupWidthMenuSplit`/`popupWidthWide`) and morphs on `spatial` like any
 // other panel resize.
 //
-// The pane trails so that lyrics arriving mid-track add width away from
-// what the eye is already on (owner, 2026-09-17), and `panelHoldWidth` is
-// the other half of that: the frame keeps the place its narrow width gave
-// it rather than sliding left to stay centred on its bar cell, so the
-// column's leading edge does not move while the width morphs. A cell close
-// enough to the screen's trailing edge still gives the hold up, since an
-// 840-wide card has to stay on the display.
+// The pane trails the now-playing column so that lyrics arriving mid-track
+// add their width after what the eye is already reading (owner,
+// 2026-09-17). The card itself stays centred on the bar cell that opened it
+// through the morph, like every other panel: holding the narrow width's own
+// place instead left the wide card visibly off its cell (owner,
+// 2026-09-18). Near either end of the bar the screen's padding takes the
+// centring over and the growth goes the other way.
 //
 // The now-playing column runs horizontal (M55 A2): the cover beside the
 // source, title, artist and album, with a twelve-column spectrum inline at
@@ -74,7 +74,6 @@ Panel {
     panelIcon: "music"
     panelTitle: "Media"
     panelWidth: LyricsService.state === "synced" ? Theme.space.popupWidthMenuSplit : Theme.space.popupWidthWide
-    panelHoldWidth: Theme.space.popupWidthWide
 
     // MPRIS Raise: bring the player's own window up, the one transport verb
     // that isn't about the track. Absent entirely on a player that doesn't

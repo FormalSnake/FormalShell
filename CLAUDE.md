@@ -181,9 +181,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `lyrics.sh` `--lyrics`: three cached tracks, the lit set on a duet and
   background overlap, quality and estimated timing, the estimated wipe read
   off pixels, a real wheel notch taking follow over and a track change
-  re-arming it, the none track's panel narrower, the now-playing column's
-  left edge held through a lyrics arrival, a card resting on the screen's
-  far padding keeping its far edge there through a track change, and lyrics
+  re-arming it, the none track's panel narrower, the card's centre held on
+  its own bar cell's centre through a lyrics arrival, the lit line broken
+  inside a chunk wider than the pane, a card resting on the screen's far
+  padding keeping its far edge there through a track change, and lyrics
   synced before the panel ever opens with the first open landing on the
   split width.
 - `lyrics_blur.sh` `--lyrics-blur`: one real MPRIS player, `media.lyricsBlur`'s

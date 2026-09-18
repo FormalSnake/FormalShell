@@ -853,16 +853,23 @@ TestCase {
 
     // edgeFraction
 
-    function test_edge_fraction_fully_inside_is_one() {
-        compare(Lyrics.edgeFraction(10, 20, 100), 1);
+    function test_edge_fraction_clear_of_both_ends_is_one() {
+        compare(Lyrics.edgeFraction(30, 20, 100), 1);
     }
 
-    function test_edge_fraction_half_out_at_the_top() {
-        compare(Lyrics.edgeFraction(-10, 20, 100), 0.5);
+    function test_edge_fraction_half_a_row_from_the_top_is_half() {
+        compare(Lyrics.edgeFraction(10, 20, 100), 0.5);
     }
 
-    function test_edge_fraction_half_out_at_the_bottom() {
-        compare(Lyrics.edgeFraction(90, 20, 100), 0.5);
+    function test_edge_fraction_half_a_row_from_the_bottom_is_half() {
+        compare(Lyrics.edgeFraction(70, 20, 100), 0.5);
+    }
+
+    // The row the clip would cut is already gone: the ramp runs out as the
+    // end of the viewport reaches the row, not as it crosses it.
+    function test_edge_fraction_touching_an_end_is_zero() {
+        compare(Lyrics.edgeFraction(0, 20, 100), 0);
+        compare(Lyrics.edgeFraction(80, 20, 100), 0);
     }
 
     function test_edge_fraction_fully_out_above_is_zero() {
