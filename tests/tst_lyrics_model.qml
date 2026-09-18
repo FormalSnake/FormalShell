@@ -624,15 +624,72 @@ TestCase {
     // its text as the next line lights, rather than both running at one
     // fixed rate (owner, 2026-09-18).
     function _estimatedWipe(lineTime, nextTime, t) {
-        var lines = Lyrics.synthesiseWords([
+        var lines = Lyrics.synthesiseWords(Lyrics.displayLines([
             _line(lineTime, null, "one two"),
             _line(nextTime)
-        ]);
-        var words = lines[0].words;
+        ]));
+        var words = lines[lineTime > Lyrics.SEAMLESS_GAP_SECONDS ? 1 : 0].words;
         var sum = 0;
         for (var i = 0; i < words.length; i++)
             sum += Lyrics.chunkProgress(words, i, nextTime, t, true);
         return sum / words.length;
+    }
+
+    // The real line-synced path, end to end: a plain lrclib body with no end
+    // stamps and no word tags, parsed by the same `parseLrc` the providers
+    // and the sibling `.lrc` both go through, spliced and synthesised the
+    // way LyricsService publishes it. `_lrcWipe` is the fraction of the whole
+    // line wiped at `t`, off equal-length words so the fraction is the
+    // line's own clock and nothing else.
+    function _lrcLines(body) {
+        return Lyrics.synthesiseWords(Lyrics.displayLines(Lyrics.parseLrc(body)));
+    }
+
+    function _lrcWipe(lines, index, t) {
+        var line = lines[index];
+        var next = lines[index + 1];
+        var lineEnd = (typeof line.end === "number" && isFinite(line.end))
+            ? line.end : (next ? next.time : undefined);
+        var sum = 0;
+        for (var i = 0; i < line.words.length; i++)
+            sum += Lyrics.chunkProgress(line.words, i, lineEnd, t, line.estimated === true);
+        return sum / line.words.length;
+    }
+
+    // A three-second line and a ten-second one, same four words, from one
+    // real-shaped body. Both wipe over their own span: the quarter marks land
+    // at a quarter of each line's own length, and the wipe reaches the end of
+    // the text as the next line lights. The assumed seven seconds used to
+    // stand in for the second line's length, so it finished in seven however
+    // long it was held (owner, 2026-09-18).
+    function test_a_line_synced_wipe_spans_each_line_it_is_held_for() {
+        var lines = _lrcLines("[00:01.00]one two six ten\n[00:04.00]one two six ten\n[00:14.00]last\n");
+        compare(lines.length, 3);
+        compare(lines[0].estimated, true);
+        compare(lines[1].estimated, true);
+
+        fuzzyCompare(_lrcWipe(lines, 0, 1.75), 0.25, 0.02);
+        fuzzyCompare(_lrcWipe(lines, 0, 2.5), 0.5, 0.02);
+        fuzzyCompare(_lrcWipe(lines, 0, 3.25), 0.75, 0.02);
+        compare(_lrcWipe(lines, 0, 4), 1);
+
+        fuzzyCompare(_lrcWipe(lines, 1, 6.5), 0.25, 0.02);
+        fuzzyCompare(_lrcWipe(lines, 1, 9), 0.5, 0.02);
+        fuzzyCompare(_lrcWipe(lines, 1, 11.5), 0.75, 0.02);
+        compare(_lrcWipe(lines, 1, 14), 1);
+    }
+
+    // And where the gap is wide enough to be marked, the line is lit up to
+    // the note and no further, so the wipe still lands as the row changes
+    // hands rather than running on into a stretch nobody is singing.
+    function test_a_line_synced_wipe_ends_where_the_note_takes_over() {
+        var lines = _lrcLines("[00:01.00]one two six ten\n[00:21.00]last\n");
+        compare(lines.length, 3);
+        compare(lines[1].interlude, true);
+        compare(lines[1].time, 1 + Lyrics.LINE_ASSUMED_SECONDS);
+
+        fuzzyCompare(_lrcWipe(lines, 0, 4.5), 0.5, 0.02);
+        compare(_lrcWipe(lines, 0, 8), 1);
     }
 
     function test_an_estimated_wipe_tracks_the_line_it_is_held_for() {
@@ -1024,6 +1081,15 @@ TestCase {
 
     function test_edge_fraction_of_a_zero_height_item_is_zero() {
         compare(Lyrics.edgeFraction(10, 0, 100), 0);
+    }
+
+    // A wrapped line is three rows tall and rests where every other line
+    // rests, so the fade it carries there is one row's worth, not its own.
+    function test_edge_fraction_is_spent_over_the_ramp_it_is_given() {
+        compare(Lyrics.edgeFraction(30, 60, 200, 20), 1);
+        compare(Lyrics.edgeFraction(10, 60, 200, 20), 0.5);
+        compare(Lyrics.edgeFraction(0, 60, 200, 20), 0);
+        compare(Lyrics.edgeFraction(150, 60, 200, 20), 0);
     }
 
     // blurFor

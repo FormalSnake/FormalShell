@@ -155,6 +155,14 @@ Card {
         : 0
     readonly property var _rowSpans: Lyrics.rowSpans(lyricsViewport.height, root._rowPitch)
 
+    // What one row of words costs, which is what the edge fade is spent
+    // over. A measurement rather than the column's own average: the average
+    // is the right unit for how many rows fit, and the wrong one for a fade
+    // that belongs to a row, since one wrapped line in the track would make
+    // every short row fade earlier than it should.
+    readonly property real _edgeRamp: Math.max(Theme.space.controlHeight,
+        mainSpaceMetrics.height + Theme.space.controlPaddingY * 2)
+
     // Where the column rests with row `index` parked at the comfort offset.
     // `itemAt` is a call rather than a dependency, so every caller re-reads
     // `lyricsColumn.height` to re-evaluate once a track change's row count
@@ -327,7 +335,7 @@ Card {
                     // after the column's travel, so the fade tracks it frame
                     // by frame.
                     readonly property real _edgeFraction: Lyrics.edgeFraction(lyricsColumn.y + lineCell.y,
-                        lineCell.height, lyricsViewport.height)
+                        lineCell.height, lyricsViewport.height, root._edgeRamp)
 
                     // The row's place on both depth ramps: its distance from
                     // the anchor, and the room the pane has in that

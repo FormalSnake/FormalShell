@@ -694,13 +694,23 @@ function chunkGlow(words, index, lineEnd, t) {
 
 // A line's own words if it has any (not synthesised), the whole main-line
 // run's span otherwise: from `line.time` to `line.end` when the provider
-// gave one, else to the smaller of the next main line's own start and
-// `time + LINE_ASSUMED_SECONDS` (spec P4). That span is the same number
-// `displayLines` clamps a gap's own start to, which is the instant the line
-// stops being lit, so the last chunk's wipe lands exactly as the next line
-// (or the note over an instrumental) takes over. Skips an interlude and a merged
-// translation line (its text carries a "\n", and synthesising only the
-// first physical line would desync the second's own wipe).
+// gave one, else to the next main line's own start (spec P4).
+//
+// Run this over the DISPLAY set, never over the raw lines: the next main
+// line there is the next thing that takes the row over, which is the note
+// over an instrumental where one was marked and the next line of words
+// where none was, so the span is exactly how long this line stays lit and
+// the wipe lands as it goes dark. Over the raw lines the same call has to
+// guess instead, and `LINE_ASSUMED_SECONDS` was that guess: every line held
+// longer than seven seconds wiped in seven whatever it was held for, which
+// is a fixed rate wearing a proportional one's clothes and is what a real
+// line-synced track (no end stamps, lines held ten and twenty seconds) hit
+// on every long line (owner, 2026-09-18). The assumption is still the
+// answer for the last line of a file, which has nothing after it to end it.
+//
+// Skips an interlude and a merged translation line (its text carries a
+// "\n", and synthesising only the first physical line would desync the
+// second's own wipe).
 function synthesiseWords(lines) {
     if (!lines || lines.length === 0)
         return lines || [];
@@ -724,8 +734,7 @@ function synthesiseWords(lines) {
             spanEnd = line.end;
         } else {
             var nextStart = nextMainLineStart(lines, main, idx);
-            var assumed = line.time + LINE_ASSUMED_SECONDS;
-            spanEnd = (nextStart !== undefined) ? Math.min(nextStart, assumed) : assumed;
+            spanEnd = (nextStart !== undefined) ? nextStart : (line.time + LINE_ASSUMED_SECONDS);
         }
         var span = spanEnd - line.time;
 
@@ -1010,11 +1019,21 @@ function rowSpans(viewportHeight, rowPitch) {
 // half, so the pane ended on half a glyph (owner, 2026-09-18). `top` is the
 // item's position after the column's own travel, so the caller adds the
 // column's animated `y` to the item's own.
-function edgeFraction(top, height, viewportHeight) {
+//
+// `rampHeight` is how much clearance buys a full fade in, one row's pitch
+// rather than the row's own height: a line wrapped over three rows needs
+// three rows of clearance under the old reading, so the one line the pane
+// exists to show sat at half opacity for resting where every other line
+// rests (owner, 2026-09-18). The guarantee the ramp was written for is
+// untouched whatever it is spent over, since it is the clearance reaching 0
+// that puts the row out, and the clip only starts past that.
+function edgeFraction(top, height, viewportHeight, rampHeight) {
     if (!(height > 0))
         return 0;
+    var ramp = (typeof rampHeight === "number" && isFinite(rampHeight) && rampHeight > 0)
+        ? rampHeight : height;
     var clearance = Math.min(top, viewportHeight - (top + height));
-    return Math.max(0, Math.min(1, clearance / height));
+    return Math.max(0, Math.min(1, clearance / ramp));
 }
 
 // A line's depth-of-field blur for its distance (in display rows, not

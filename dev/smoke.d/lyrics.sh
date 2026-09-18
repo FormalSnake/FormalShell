@@ -17,13 +17,15 @@
 # P1/P4/P5): seeding the other two tracks below has no fixed duration (each
 # select waits on the real player's own MPRIS registration), so the overlap
 # the duet-lit poll waits for is built to still be true minutes later rather
-# than sized to a guessed setup time. Track2's
-# cache has line timing only and no `words`, so `LyricsService.lines`
-# synthesises them client-side (P4): the same two-word line repeats every
-# 20s for the length of the file, held alternately for 16s and for 4s, so
-# whichever repeat happens to be active once this leg gets around to
-# selecting it, the fraction of its own span the shell reports is what the
-# polls below read, not a wall-clock guess. Track3
+# than sized to a guessed setup time. Track2 is the real line-synced shape
+# reaching the shell the real way: a sibling `.lrc` of plain `[mm:ss.xx]`
+# stamps with no end stamps and no word tags, through the same `parseLrc`
+# every provider body goes through, so `LyricsService.lines` synthesises its
+# chunks client-side (P4). The same two-word line repeats every 26s for the
+# length of the file, held for 3s, 10s and 7s in turn, so whichever repeat
+# happens to be active once this leg gets around to selecting it, the
+# fraction of its own span the shell reports is what the polls below read,
+# not a wall-clock guess. Track3
 # gets an empty `.miss` marker, the seven-day fresh-miss path, never asked
 # of a provider at all.
 #
@@ -82,18 +84,21 @@
 # ten lines drew four and emptied out under them.
 #
 # The note claim: track2's 4s gaps are past the seamless carry and under
-# kopuz's own instrumental threshold, which is the stretch that used to leave
-# the pane with no lit row and no note at all; its 16s gaps are past both.
-# Both now carry one, `media lyrics` reports the note itself as the active
-# row for the stretch, and three frames show a line of words, then the note
-# alone centred in the column, then the next line with nothing behind it
-# still filled in.
+# kopuz's own instrumental threshold, and a line-synced track carries no end
+# stamps at all, so the stretch it leaves is judged on the assumed tail: the
+# 13s gap in track2's own `.lrc` is marked, `media lyrics` reports the note
+# itself as the active row for it, and three frames show a line of words,
+# then the note alone centred in the column, then the next line with nothing
+# behind it still filled in.
 #
-# The rate claim: the same two words held for 16s and for 4s, each
+# The rate claim: the same two words held for 10s and for 3s, each
 # photographed at the same fraction of its own span, with the sung ink read
-# as a fraction of the row's own ink. A wipe capped at WIPE_MAX_SECONDS a
-# chunk snapped each word and waited, so the long line sat a whole word ahead
-# of its own clock while the short one landed on the beat.
+# as a fraction of the row's own ink. Two things read as one rate for every
+# line. A wipe capped at WIPE_MAX_SECONDS a chunk snapped each word and
+# waited; and the assumed seven-second tail stood in for a line with no end
+# of its own, so every line held longer than that wiped in seven seconds
+# whatever it was held for, which is exactly what a real line-synced track
+# is made of.
 leg_lyrics_flag="--lyrics"
 leg_lyrics_order=175
 leg_lyrics_needs="mpv ffmpeg convert jq wlrctl"
@@ -295,42 +300,35 @@ EOF
 ]}
 JSON
 
-  # Line timing only, no `words`, so LyricsService synthesises them (P4).
-  # The same two-word line ("Amber lantern") repeats every 20s for the length
-  # of the file, alternately held for 16s and for 4s. Two words rather than
-  # four because the wipe's rate is what this track now reads: a chunk capped
-  # at WIPE_MAX_SECONDS is wrong by at most one word's width, so four short
-  # words hide the difference between a wipe spread over the line's own span
-  # and one that snaps each word in 1.2s and waits, while two wide ones put
-  # it at a third of the row.
+  # Track2 is the real line-synced shape, and it reaches the shell the way a
+  # real one does: a sibling `.lrc` next to the file (spec P2.1, the step
+  # before the cache and before any provider), parsed by the same `parseLrc`
+  # an lrclib body goes through. Plain `[mm:ss.xx] text` stamps, no end
+  # stamps, no `<mm:ss.xx>` word tags: the shape every line-synced provider
+  # actually returns, and the one a seeded cache of already-parsed lines with
+  # `end` fields on them cannot stand in for, since an end of its own is
+  # exactly what such a line has not got (owner, 2026-09-18).
   #
-  # The pattern is 26s long and repeats for the length of the file: a line
-  # held 12s, a 4s gap, the same words held 4s, a 6s gap. It gives three
-  # things at once. A long line and a short one carrying identical text, so
-  # the same fraction of each line's own span can be read off the frame at
-  # the same fraction of the row. The 4s gap, which is past the seamless
-  # carry and under kopuz's own instrumental threshold: the stretch that used
-  # to leave the pane with no lit row and no note at all (owner,
-  # 2026-09-18). And the 6s gap, past both thresholds and wide enough to
-  # photograph a note while it is the one being played.
+  # The pattern is 26s long and repeats for the length of the file. A line
+  # held 3s, the same words held 10s, a line held to the note, then a stretch
+  # with nothing in it wide enough past the assumed tail to be marked. Short
+  # against long is the wipe's own rate; the marked stretch is the note on a
+  # track whose provider never said anything about it.
   {
-    printf '{"source": "lrclib", "lines": ['
-    local i sep="" t
-    for i in $(seq 0 14); do
+    local i t offset
+    for i in $(seq 0 12); do
       t=$((4 + i * 26))
-      printf '%s{"time": %s.0, "end": %s.0, "text": "Amber lantern", "parent": null, "background": false, "oppositeTurn": false, "estimated": false, "words": []}' \
-        "$sep" "$t" "$((t + 12))"
-      printf ',{"time": %s.0, "end": %s.0, "text": "Amber lantern", "parent": null, "background": false, "oppositeTurn": false, "estimated": false, "words": []}' \
-        "$((t + 16))" "$((t + 20))"
-      sep=","
+      for offset in 0 3 13; do
+        printf '[%02d:%05.2f]Amber lantern\n' $(((t + offset) / 60)) "$(((t + offset) % 60))"
+      done
     done
-    printf ']}'
-  } > "$shot_dir/lyrics-track2-cache.json"
+  } > "$shot_dir/lyrics-track2.lrc"
 
   # spec P14: LyricsService starts a lookup a second after ANY key change,
   # panel open or closed, so a player selected for longer than that with no
-  # cache file yet would otherwise start a real provider race. Every cache
-  # file this leg needs is therefore written here, before the session (and
+  # cache file yet would otherwise start a real provider race. Track2 answers
+  # that with its sibling `.lrc`, which is the step before the cache and
+  # before any provider; the other two are seeded here, before the session (and
   # every mpv player in it) even exists, off the fixture's own known
   # duration rather than a real player's, so there is never a moment where
   # a key is live and its file is not: `ffmpeg -t 400` reports back within
@@ -340,12 +338,10 @@ JSON
   . "$lyrics_lib_path"
   local cache_dir="$iso_home/.cache/formalshell/lyrics"
   mkdir -p "$cache_dir"
-  local key1 key2 key3
+  local key1 key3
   key1=$(lyrics_cache_key "$lyrics_track1_artist" "$lyrics_track1_title" "$lyrics_track1_album" 400)
-  key2=$(lyrics_cache_key "$lyrics_track2_artist" "$lyrics_track2_title" "$lyrics_track2_album" 400)
   key3=$(lyrics_cache_key "$lyrics_track3_artist" "$lyrics_track3_title" "$lyrics_track3_album" 300)
   cp "$shot_dir/lyrics-track1-cache.json" "$cache_dir/$key1.json"
-  cp "$shot_dir/lyrics-track2-cache.json" "$cache_dir/$key2.json"
   : > "$cache_dir/$key3.miss"
 }
 
@@ -536,8 +532,10 @@ sleep 1
 # Waits for the active line to be a words line of the span this caller wants
 # (long or short), at a fraction of its own span inside [lo, hi], then leaves
 # the dump it stopped on beside the frame: every fraction asserted later is
-# read back out of that dump rather than assumed from a wall clock. The two
-# spans are 16s and 4s, so 10 tells them apart with room either side.
+# read back out of that dump rather than assumed from a wall clock. A real
+# line-synced line carries no end of its own, so the span is measured the way
+# the pane measures it, to whatever takes the row next; the two spans are 10s
+# and 3s, so 5 tells them apart with room either side.
 lyrics_wait_fraction() {
   local out_json="\$1" want_long="\$2" lo="\$3" hi="\$4" timeout="\$5"
   local waited=0 active span
@@ -546,10 +544,10 @@ lyrics_wait_fraction() {
     active=\$("$jq_bin" -r '.active' "\$out_json" 2>/dev/null)
     if [ -n "\$active" ] && [ "\$active" != "-1" ] && [ "\$active" != "null" ]; then
       if "$jq_bin" -e ".lines[\$active].interlude != true" "\$out_json" > /dev/null 2>&1; then
-        if "$jq_bin" -r "[.position, .lines[\$active].time, .lines[\$active].end] | @tsv" "\$out_json" 2>/dev/null \
+        if "$jq_bin" -r "[.position, .lines[\$active].time, (.lines[\$active].end // .lines[\$active + 1].time)] | @tsv" "\$out_json" 2>/dev/null \
           | awk -v want="\$want_long" -v lo="\$lo" -v hi="\$hi" \
             '{ span = \$3 - \$2; f = (\$1 - \$2) / span;
-               long = (span > 10) ? 1 : 0;
+               long = (span > 5) ? 1 : 0;
                exit !(long == want && f >= lo && f <= hi) }'; then
           return 0
         fi
@@ -561,16 +559,16 @@ lyrics_wait_fraction() {
   return 1
 }
 
-# The long line at roughly three quarters of its own 16s span, which is the
+# The long line at roughly three quarters of its own 10s span, which is the
 # frame the estimated-track status claims are read off as well.
 lyrics_wait_fraction "$lyrics_status_estimated_path" 1 0.55 0.82 90
 "$grim_bin" "$lyrics_estimated_png_path" > /dev/null 2>&1
 cp "$lyrics_status_estimated_path" "$lyrics_rate_long_json_path"
 cp "$lyrics_estimated_png_path" "$lyrics_rate_long_png_path"
 
-# The same text held for 4s instead of 16, at the same fraction of its own
-# span. The window is a second of wall clock, so this polls at the same 0.5s
-# resolution over as many repeats as it needs.
+# The same text held for 3s instead of 10, at the same fraction of its own
+# span. The window is under a second of wall clock, so this polls at the same
+# 0.5s resolution over as many turns of the pattern as it needs.
 lyrics_wait_fraction "$lyrics_rate_short_json_path" 0 0.55 0.82 120
 "$grim_bin" "$lyrics_rate_short_png_path" > /dev/null 2>&1
 
@@ -584,7 +582,7 @@ while [ "\$SECONDS" -lt 40 ]; do
   "$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_note_during_json_path" 2>&1
   active=\$("$jq_bin" -r '.active' "$lyrics_note_during_json_path" 2>/dev/null)
   if [ -n "\$active" ] && [ "\$active" != "-1" ] && [ "\$active" != "null" ]; then
-    if "$jq_bin" -e ".lines[\$active].interlude == true and (.lines[\$active].end - .lines[\$active].time) > 5" \
+    if "$jq_bin" -e ".lines[\$active].interlude == true" \
       "$lyrics_note_during_json_path" > /dev/null 2>&1; then
       break
     fi
@@ -847,24 +845,27 @@ lyrics_pane_crop() {
 lyrics_lit_rows() {
   lyrics_row_bands "$1" "$2" | python3 -c '
 import sys
+crop_h = int(sys.argv[1])
 bands = [b.split(":") for b in sys.stdin.read().split() if b]
 if not bands:
     raise SystemExit
 tops = [int(b[0]) for b in bands]
-peaks = [int(b[2]) for b in bands]
-# The brightest row is somewhere inside the lit line, but not necessarily its
-# first: a line whose second row carries more ink than its first peaks there.
-# One line leads its own wrapped rows closer together than the cell pitch
-# between two display rows, which is what tells where the line starts and
-# ends.
-lit = peaks.index(max(peaks))
+# The lit line is the one resting at the comfort offset (model.js
+# COMFORT_OFFSET_FRACTION), not the brightest: a line wrapped over several
+# rows sits low enough in a short pane for the edge fade to take it under a
+# row nearer the middle, and a line whose second row carries more ink than
+# its first peaks there rather than at its own top. One line leads its own
+# wrapped rows closer together than the cell pitch between two display rows,
+# which is what tells where the line ends.
+anchor = crop_h * 0.42
+lit = min(range(len(tops)), key=lambda i: abs(tops[i] - anchor))
 lo = hi = lit
 while lo > 0 and tops[lo] - tops[lo - 1] <= 28:
     lo -= 1
 while hi + 1 < len(tops) and tops[hi + 1] - tops[hi] <= 28:
     hi += 1
 print(" ".join("%s:%s" % (b[0], b[1]) for b in bands[lo:hi + 1]))
-'
+' "$(printf '%s' "${2#*x}" | cut -d+ -f1)"
 }
 
 # The mean gray over a slice of one row's own ink: "0 0.22" is the row's
@@ -881,7 +882,10 @@ lyrics_row_slice_mean() {
   top=${band%%:*}
   bottom=${band#*:}
   bh=$((bottom - top + 1))
-  read -r ax ay aw ah < <(lyrics_ink_box "$body" "${cw}x${bh}+${cx}+$((cy + top))" "35%")
+  # 25%, not the 70% the sung half reads at: this is the row's own extent,
+  # ink and all, and an unsung row draws in `mutedForeground`, which lands
+  # between the card's fill and anything sung.
+  read -r ax ay aw ah < <(lyrics_ink_box "$body" "${cw}x${bh}+${cx}+$((cy + top))" "25%")
   if [ "${aw:-0}" -lt 8 ]; then
     printf '0\n'
     return
@@ -909,7 +913,7 @@ lyrics_wipe_reading() {
   awk -v lx="$lx" -v lw="$lw" -v ax="${ax:-0}" -v aw="${aw:-0}" \
     -v p="$("$jq_bin" -r '.position' "$json" 2>/dev/null)" \
     -v t="$("$jq_bin" -r '.lines[.active].time' "$json" 2>/dev/null)" \
-    -v e="$("$jq_bin" -r '.lines[.active].end' "$json" 2>/dev/null)" \
+    -v e="$("$jq_bin" -r '.lines[.active].end // .lines[.active + 1].time' "$json" 2>/dev/null)" \
     'BEGIN {
        frac = (aw > 0) ? (lx + lw - ax) / aw : -1;
        if (frac > 1) frac = 1;
@@ -1081,10 +1085,10 @@ leg_lyrics_assert() {
   [ -f "$lyrics_rate_long_png_path" ] || fail "no long-line wipe frame produced"
   [ -f "$lyrics_rate_short_png_path" ] || fail "no short-line wipe frame produced"
   if ! awk -v a="${rate_long_fraction:--1}" -v b="${rate_long_f:--1}" 'BEGIN { d = a - b; if (d < 0) d = -d; exit !(a >= 0 && d <= 0.18) }'; then
-    fail "the 16s line's wipe is not where its own clock puts it: $rate_long_fraction of the row at $rate_long_f of the span"
+    fail "the 10s line's wipe is not where its own clock puts it: $rate_long_fraction of the row at $rate_long_f of the span"
   fi
   if ! awk -v a="${rate_short_fraction:--1}" -v b="${rate_short_f:--1}" 'BEGIN { d = a - b; if (d < 0) d = -d; exit !(a >= 0 && d <= 0.18) }'; then
-    fail "the 4s line's wipe is not where its own clock puts it: $rate_short_fraction of the row at $rate_short_f of the span"
+    fail "the 3s line's wipe is not where its own clock puts it: $rate_short_fraction of the row at $rate_short_f of the span"
   fi
   # The same claim across the two: each poll stops on the first frame inside
   # its own window, so the two land at slightly different fractions of their
@@ -1095,7 +1099,7 @@ leg_lyrics_assert() {
   if ! awk -v la="${rate_long_fraction:--1}" -v lf="${rate_long_f:--1}" \
     -v sa="${rate_short_fraction:--1}" -v sf="${rate_short_f:--1}" \
     'BEGIN { d = (la - lf) - (sa - sf); if (d < 0) d = -d; exit !(d <= 0.15) }'; then
-    fail "the same words held for 12s and for 4s do not track their own spans the same way: long=$rate_long_fraction at $rate_long_f, short=$rate_short_fraction at $rate_short_f"
+    fail "the same words held for 10s and for 3s do not track their own spans the same way: long=$rate_long_fraction at $rate_long_f, short=$rate_short_fraction at $rate_short_f"
   fi
 
   # The pane reads as much of the song as it has room for (owner,
@@ -1139,7 +1143,10 @@ print("%d %d" % (lit, len(peaks) - lit - 1))
 ')
   read -r rows_above rows_below < <(printf '%s\n' "$rows_ramp")
   echo "SMOKE_LYRICS_RAMP $rows_above rows over the lit one and $rows_below under it"
-  if [ "${rows_below:-0}" -lt 4 ] || [ "${rows_above:-0}" -lt 2 ]; then
+  local want_above want_below
+  want_above=$(awk -v h="$rows_hh" -v p="$rows_pitch" 'BEGIN { n = int(h * 0.42 / p) - 1; print (n < 1 ? 1 : n) }')
+  want_below=$(awk -v h="$rows_hh" -v p="$rows_pitch" 'BEGIN { n = int(h * 0.58 / p) - 1; print (n < 1 ? 1 : n) }')
+  if [ "${rows_below:-0}" -lt "$want_below" ] || [ "${rows_above:-0}" -lt "$want_above" ]; then
     fail "the pane drew $rows_above rows over the lit one and $rows_below under it, so it empties out inside its own height: bands '$rows_bands'"
   fi
 
@@ -1164,8 +1171,8 @@ print("%d %d" % (lit, len(peaks) - lit - 1))
     || ! "$jq_bin" -e '.lines[.active].interlude != true' "$lyrics_note_after_json_path" > /dev/null 2>&1; then
     fail "a frame either side of the stretch was taken on the note rather than on a line of words"
   fi
-  if ! "$jq_bin" -e 'any(.lines[]; .interlude == true and (.end - .time) < 5)' "$lyrics_note_during_json_path" > /dev/null 2>&1; then
-    fail "the 4s gaps carry no note, so the pane still goes dark between two lines with nothing drawn: $(cat "$lyrics_note_during_json_path")"
+  if ! "$jq_bin" -e 'all(.lines[] | select(.interlude != true); .end == null)' "$lyrics_note_during_json_path" > /dev/null 2>&1; then
+    fail "the line-synced track arrived with end stamps on it, so it is not the shape a real provider returns: $(cat "$lyrics_note_during_json_path")"
   fi
 
   # And what it draws. While the stretch is playing no line of words is sung

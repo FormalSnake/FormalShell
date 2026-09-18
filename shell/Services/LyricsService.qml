@@ -40,10 +40,15 @@ import "../Lyrics/model.js" as Lyrics
 //    paxsenix outage asks again next session rather than freezing on the
 //    weaker answer forever.
 //
-// `lines` is published already through `Lyrics.synthesiseWords`, so the
-// panel's wipe always has chunks to draw; `quality` and `hasWords` are
-// worked out from the PRE-synthesis lines, so a line whose chunks were
-// fabricated here never claims real word timing.
+// `lines` is the display set: `Lyrics.displayLines` first, so an
+// instrumental stretch is a row of its own, then `Lyrics.synthesiseWords`
+// over that, so the panel's wipe always has chunks to draw and each line's
+// fabricated chunks are spread over the span it is actually lit for, up to
+// whatever takes the row next. The order is load-bearing and this is the one
+// place it happens: every consumer takes this array as it is rather than
+// splicing the display set again. `quality` and `hasWords` are worked out
+// from the PRE-synthesis lines, so a line whose chunks were fabricated here
+// never claims real word timing.
 Singleton {
     id: root
 
@@ -104,7 +109,7 @@ Singleton {
     // Pre-synthesis lines, the source of truth for `quality`/`hasWords`;
     // `lines` below is what the panel actually draws.
     property var _rawLines: []
-    readonly property var lines: Lyrics.synthesiseWords(root._rawLines)
+    readonly property var lines: Lyrics.synthesiseWords(Lyrics.displayLines(root._rawLines))
     readonly property int quality: Lyrics.quality(root._rawLines)
     readonly property bool hasWords: {
         for (var i = 0; i < root._rawLines.length; i++) {

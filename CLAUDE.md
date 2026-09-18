@@ -179,7 +179,8 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   Hyprland's own expanded bind table.
 - `lock.sh` `--lock`: the lock round trip over real PAM, wrong password to
   unlocked, typed by a real virtual-keyboard client.
-- `lyrics.sh` `--lyrics`: three cached tracks, the lit set on a duet and
+- `lyrics.sh` `--lyrics`: three tracks (two cached, one a sibling `.lrc` of
+  the shape a line-synced provider really returns), the lit set on a duet and
   background overlap, quality and estimated timing, the estimated wipe read
   off pixels, a real wheel notch taking follow over and a track change
   re-arming it, the none track's panel narrower, the card's centre held on
@@ -194,9 +195,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   the tail of both bursts, the wipe crossing a wrapped line's row break in
   reading order with the rows under it untouched (two frames off a paused
   player), the rows the pane draws counted against the rows its own height
-  holds, the instrumental note over a gap the seamless carry cannot hold and
-  empty again once the song is past it, and the same two words held for 16s
-  and for 4s wiping to the same place at the same fraction of each span.
+  holds, the instrumental note over a gap a track with no end stamps leaves
+  and empty again once the song is past it, and the same two words held for
+  10s and for 3s each wiping to the fraction of the row its own span is
+  through.
 - `lyrics_blur.sh` `--lyrics-blur`: one real MPRIS player, `media.lyricsBlur`'s
   default true against a settings retarget to false, a crop over a far
   unlit row read by edge energy and lower with the blur on, the active

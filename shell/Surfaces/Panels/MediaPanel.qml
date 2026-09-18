@@ -189,10 +189,11 @@ Panel {
     // Section 2, when a provider has synced timing (spec D4/P5): the display
     // set, interludes spliced in beside the lines themselves and `parent`
     // remapped onto it, which is the array both the pane and `media lyrics`
-    // index into. The resync control is the entry after the last line for as
-    // long as the pane shows it.
+    // index into. The service publishes it already spliced, since the wipe's
+    // own span is measured against it. The resync control is the entry after
+    // the last line for as long as the pane shows it.
     readonly property bool _lyricsPresent: LyricsService.state === "synced"
-    readonly property var _lyricsLines: root._lyricsPresent ? Lyrics.displayLines(LyricsService.lines) : []
+    readonly property var _lyricsLines: root._lyricsPresent ? LyricsService.lines : []
     readonly property int _lyricsSection: root._lyricsPresent ? 2 : -1
     readonly property int _lyricsRows: root._lyricsLines.length + (LyricsService.follow ? 0 : 1)
 
@@ -744,14 +745,7 @@ Panel {
         LyricsPane {
             visible: root._lyricsPresent
             width: contentRow._paneWidth
-            // Twelve control heights rather than six: the pane reads as many
-            // lines either side of the one being sung as it has room for, so
-            // the room is what decides how much of the song is on screen
-            // (owner, 2026-09-18). The card is still nowhere near the height
-            // a panel is capped at (Components/Panel.qml's own
-            // `maxFrameHeight`), and the column beside it sets the floor
-            // whenever it is the taller of the two.
-            height: Math.max(nowPlayingColumn.implicitHeight, Theme.space.controlHeight * 12)
+            height: Math.max(nowPlayingColumn.implicitHeight, Theme.space.controlHeight * 6)
             lines: root._lyricsLines
             cursorOn: root.cursorActive && root.cursorSection === root._lyricsSection
             cursorIndex: root.cursorIndex

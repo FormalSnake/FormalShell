@@ -125,16 +125,16 @@ IpcHandler {
     }
 
     // The panel's own read of LyricsService, over IPC for headless
-    // verification (spec P11). `lines` is the DISPLAY set (interludes
-    // spliced in, `parent` remapped), so `active`/`secondary` index the same
-    // array the caller gets back rather than LyricsService's raw one;
-    // both are worked out here, against the same led position the pane
-    // draws against, rather than cached on the service, so they're always
-    // current as of the call.
+    // verification (spec P11). `lines` is the DISPLAY set the service
+    // publishes (interludes spliced in, `parent` remapped), so
+    // `active`/`secondary` index the same array the caller gets back and the
+    // same one the pane draws; they are worked out here, against the same led
+    // position, rather than cached on the service, so they're always current
+    // as of the call.
     // `follow` is the pane's own wheel-takeover state, which lives on
     // LyricsService because this handler can reach no panel.
     function lyrics(): string {
-        const lines = Lyrics.displayLines(LyricsService.lines);
+        const lines = LyricsService.lines;
         const main = Lyrics.mainLineIndices(lines);
         const t = LyricsService.positionSeconds;
         const active = Lyrics.activeMainLineIndex(lines, main, t);
