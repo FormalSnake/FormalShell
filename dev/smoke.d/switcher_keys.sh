@@ -51,6 +51,17 @@ leg_switcher_keys_needs="foot jq wtype"
 # The base run's fixture window is the third of the three and the one the
 # commit lands on, exactly as in --switcher.
 leg_switcher_keys_fixture_window=keep
+#
+# Three fast taps after that (M64 addendum, owner 2026-09-18): "alt+tab
+# doesn't work when i hit it fast, it just glitches, i have to wait for the
+# fade in to finish". Each is one wtype process holding Alt, tapping Tab
+# once and releasing straight back out with no sleep between any of them,
+# which is the one gap `Switcher.qml`'s `_commitPending` exists for: the
+# compositor spawns `switcher next` and `switcher commit` as two
+# independent processes, and nothing orders their arrival at the ipc
+# socket, so a fast enough tap can have the release win that race. The
+# active window has to alternate between the two windows on every one of
+# the three, never repeat or sit still.
 
 switcher_keys_probe_dir="$shot_dir/switcher-keys-probes"
 switcher_keys_binds_path="$shot_dir/switcher-keys-binds.txt"
@@ -65,6 +76,11 @@ switcher_keys_active_json="$shot_dir/switcher-keys-active.json"
 switcher_keys_clients_json="$shot_dir/switcher-keys-clients.json"
 switcher_keys_held_png="$shot_dir/switcher-keys-held.png"
 switcher_keys_closed_png="$shot_dir/switcher-keys-closed.png"
+switcher_keys_fast_before_json="$shot_dir/switcher-keys-fast-before.json"
+switcher_keys_fast_1_json="$shot_dir/switcher-keys-fast-1.json"
+switcher_keys_fast_2_json="$shot_dir/switcher-keys-fast-2.json"
+switcher_keys_fast_3_json="$shot_dir/switcher-keys-fast-3.json"
+switcher_keys_fast_state_json="$shot_dir/switcher-keys-fast-state.json"
 
 leg_switcher_keys_fixture() {
   # --pantheon pins the same preset; two "theme" keys in one settings.json
@@ -85,7 +101,7 @@ leg_switcher_keys_validate() {
 }
 
 leg_switcher_keys_timing() {
-  leg_timing 44 115
+  leg_timing 50 128
 }
 
 leg_switcher_keys_drive() {
@@ -168,6 +184,20 @@ sleep 3
 "$hyprctl_bin" -j activewindow > "$switcher_keys_active_json" 2>&1
 ls -1 "$switcher_keys_probe_dir" > "$switcher_keys_after_path" 2>&1
 "$grim_bin" "$switcher_keys_closed_png" > /dev/null 2>&1
+
+# Three fast taps, no sleep inside any of them: one wtype process per tap
+# presses the Alt key, taps Tab once and releases Alt straight back out.
+"$hyprctl_bin" -j activewindow > "$switcher_keys_fast_before_json" 2>&1
+"$wtype_bin" -M alt -P Alt_L -k Tab -p Alt_L -m alt >> "$switcher_keys_wtype_log" 2>&1
+sleep 1
+"$hyprctl_bin" -j activewindow > "$switcher_keys_fast_1_json" 2>&1
+"$wtype_bin" -M alt -P Alt_L -k Tab -p Alt_L -m alt >> "$switcher_keys_wtype_log" 2>&1
+sleep 1
+"$hyprctl_bin" -j activewindow > "$switcher_keys_fast_2_json" 2>&1
+"$wtype_bin" -M alt -P Alt_L -k Tab -p Alt_L -m alt >> "$switcher_keys_wtype_log" 2>&1
+sleep 1
+"$hyprctl_bin" -j activewindow > "$switcher_keys_fast_3_json" 2>&1
+"$qs_bin" ipc -p "$shell_path" call switcher state > "$switcher_keys_fast_state_json" 2>&1
 EOS
   echo "exec-once = bash $script"
 }
@@ -189,7 +219,10 @@ leg_switcher_keys_assert() {
     "$switcher_keys_control_path" "$switcher_keys_after_path" \
     "$switcher_keys_held_json" "$switcher_keys_closed_json" \
     "$switcher_keys_layers_held" "$switcher_keys_layers_closed" \
-    "$switcher_keys_active_json" "$switcher_keys_clients_json"; do
+    "$switcher_keys_active_json" "$switcher_keys_clients_json" \
+    "$switcher_keys_fast_before_json" "$switcher_keys_fast_1_json" \
+    "$switcher_keys_fast_2_json" "$switcher_keys_fast_3_json" \
+    "$switcher_keys_fast_state_json"; do
     [ -f "$f" ] || fail "no switcher-keys artifact produced at $f"
   done
   for f in "$switcher_keys_held_png" "$switcher_keys_closed_png"; do
@@ -263,6 +296,25 @@ leg_switcher_keys_assert() {
   if grep -qx 'nomods' "$switcher_keys_after_path"; then
     fail "a release bind with no mods fired: the modifier is cleared before Alt_L's release reaches the bind table, so the shipped bind must drop its ALT"
   fi
+
+  # Three fast taps, no sleep inside any of them: focus has to alternate
+  # every time, never repeat or sit still, and the card is never left open.
+  local fast_before fast_1 fast_2 fast_3 fast_open
+  fast_before=$("$jq_bin" -r '.address' "$switcher_keys_fast_before_json")
+  fast_1=$("$jq_bin" -r '.address' "$switcher_keys_fast_1_json")
+  fast_2=$("$jq_bin" -r '.address' "$switcher_keys_fast_2_json")
+  fast_3=$("$jq_bin" -r '.address' "$switcher_keys_fast_3_json")
+  fast_open=$("$jq_bin" -r '.open' "$switcher_keys_fast_state_json")
+  echo "fast taps: before=$fast_before 1=$fast_1 2=$fast_2 3=$fast_3 open=$fast_open"
+  [ -n "$fast_1" ] || fail "no active window after the first fast tap"
+  [ "$fast_1" != "$fast_before" ] \
+    || fail "the first fast tap left focus on $fast_before: a commit that raced ahead of the next that opened the card was lost"
+  [ "$fast_2" = "$fast_before" ] \
+    || fail "the second fast tap landed on $fast_2, not back on $fast_before: focus is not alternating"
+  [ "$fast_3" = "$fast_1" ] \
+    || fail "the third fast tap landed on $fast_3, not back on $fast_1: focus is not alternating"
+  [ "$fast_open" = "false" ] \
+    || fail "the card is still open after three fast taps: $(cat "$switcher_keys_fast_state_json")"
 
   echo "SMOKE_SWITCHER_KEYS ok index=$index count=$count committed=$selected_id"
   echo "SMOKE_SWITCHER_KEYS_HELD $switcher_keys_held_png"

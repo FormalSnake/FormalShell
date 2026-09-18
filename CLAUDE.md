@@ -304,7 +304,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   must not fire (Hyprland shadows a held key's release bind once another
   bind consumes a press) and a no-mods `bindrt` that must not fire either
   (the modifier is still held as far as the bind table is concerned). A bare
-  Alt tap first, which has to leave the plain probe's marker.
+  Alt tap first, which has to leave the plain probe's marker. Three fast
+  taps close it out, each one wtype process with no sleep between the Tab
+  and the Alt release, asserting the active window alternates every time
+  rather than a commit racing ahead of the next that opened the card.
 - `switcher_off.sh` `--switcher-off`: the same target under the shipped
   preset, where the habit is off: all five verbs answering the error string
   and no switcher surface mapped at all.

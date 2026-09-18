@@ -54,6 +54,18 @@ PanelWindow {
 
     property bool _focusPrimed: false
 
+    // Set when a commit arrives with nothing open (M64 addendum, owner
+    // 2026-09-18): the compositor spawns `next` and `commit` as two
+    // independent `qs ipc call` processes, one per bind, with no ordering
+    // guarantee over which reaches the ipc socket first. A fast enough
+    // Alt+Tab can have the release's process win that race, and a commit
+    // that just failed silently would leave `next` to open the card on an
+    // Alt already gone, stuck until Esc or Enter. `_commitRaceTimer`'s
+    // window is far past any ipc scheduling jitter this rig or a real host
+    // has shown and far short of the gap between two distinct gestures, so
+    // it never couples an unrelated bare Alt tap to a later Alt+Tab.
+    property bool _commitPending: false
+
     readonly property var entries: Model.entries(CompositorService.windows,
         root._openHistory, root._openWorkspaceId)
     readonly property int count: root.entries.length
@@ -93,28 +105,69 @@ PanelWindow {
             root.isOpen = true;
             root._beginFocusPrime();
             Qt.callLater(function () { backdrop.forceActiveFocus(); });
+            // The release that opened this got here first (see
+            // `_commitPending`'s header): commit against the row this open
+            // just built instead of leaving the card up with nothing
+            // holding the modifier any more.
+            if (root._commitPending) {
+                root._commitPending = false;
+                _commitRaceTimer.stop();
+                root._commitNow();
+            }
             return;
         }
         root.index = Model.advance(root.index, root.count, direction);
     }
 
+    Timer {
+        id: _commitRaceTimer
+        interval: 80
+        onTriggered: root._commitPending = false
+    }
+
     // The selected window through the backend's own focus verb, on the
     // opaque id the compositor handed over (CLAUDE.md: never parsed, never
     // compared numerically).
-    //
-    // Nothing at all while the card is closed: this is bound to the RELEASE
-    // of a modifier, so it arrives on every tap of that key, and a commit
-    // that ran anyway would move focus to whatever the last switch left the
-    // cursor on.
     function commit() {
-        if (!root.isOpen)
-            return false;
+        if (root.isOpen)
+            return root._commitNow();
+        // Bound to the release of a modifier, so it arrives on every tap of
+        // that key, open or not; a bare tap resolves as the no-op it always
+        // was once `_commitRaceTimer` runs out with no `next`/`prev` to
+        // catch.
+        root._commitPending = true;
+        _commitRaceTimer.restart();
+        return true;
+    }
+
+    function _commitNow() {
         var id = root.selectedId;
+        var primed = root._focusPrimed;
         root.close();
         if (id === "")
             return false;
         CompositorService.focusWindow(id);
+        // A commit inside the prime window lands while this layer still holds
+        // the keyboard exclusively, and Hyprland hands focus back to the
+        // window it came from once the layer lets go, undoing the switch. The
+        // second dispatch runs after that release has been processed.
+        if (!primed) {
+            root._refocusId = id;
+            _refocusTimer.restart();
+        }
         return true;
+    }
+
+    property string _refocusId: ""
+
+    Timer {
+        id: _refocusTimer
+        interval: 120
+        onTriggered: {
+            if (!root.isOpen && root._refocusId !== "")
+                CompositorService.focusWindow(root._refocusId);
+            root._refocusId = "";
+        }
     }
 
     function close() {
