@@ -29,7 +29,14 @@ import "../../Lyrics/model.js" as Lyrics
 // A chunk is the `mutedForeground` word under a `foreground` copy masked by
 // a horizontal gradient sliding across it, the band between the two about a
 // fifth of the chunk wide, so the wipe has a soft edge rather than the hard
-// clip M55 drew. kopuz reads its own unsung half at 0.45 of the sung alpha
+// clip M55 drew. The mask is one such gradient per row the chunk's own text
+// laid out on, never one across the whole box: a `Flow` breaks between its
+// items and a chunk too wide for the pane breaks inside its own `Text`, and
+// a single gradient over that box lit every row of it left of one x, so a
+// second row read as sung before the first row had finished (owner,
+// 2026-09-18). `chunkRowBands` and `rowWipe` carry the edge over the break
+// in reading order instead.
+// kopuz reads its own unsung half at 0.45 of the sung alpha
 // and MultiEffect cannot: its mask thresholds rather than multiplies, so
 // every alpha above the threshold is fully sung. The mask runs to 0 instead
 // and the unsung reading is the copy underneath.
@@ -39,7 +46,11 @@ import "../../Lyrics/model.js" as Lyrics
 //
 // Depth of field (spec P7, the owner's exception to the no-blur rule): every
 // line that is not lit blurs by its distance in rows from the anchor, on top
-// of M55's opacity ramp rather than instead of it. The anchor is the active
+// of M55's opacity ramp rather than instead of it. Both ramps are spent over
+// the rows the pane has room for (`rowSpans`), not over a fixed three: a
+// ramp that bottomed out three rows from the anchor left everything past it
+// at the floor, so a pane with room for ten lines still read as four (owner,
+// 2026-09-18). The anchor is the active
 // main line, else the highest lit secondary, else the last anchor, so a gap
 // between lines holds the ramp where it was instead of flattening the list.
 // A hovered row and the keyboard cursor's row lift to 0 so they can be read
@@ -133,6 +144,16 @@ Card {
         }
         return out;
     }
+
+    // How far the two depth ramps reach, in rows, either side of the
+    // anchored row. The pitch is the column's own settled height over its
+    // row count rather than a font measurement, so a track whose lines wrap
+    // is measured as it actually draws, and both re-evaluate whenever the
+    // card morphs the viewport under them.
+    readonly property real _rowPitch: (root.lines.length > 0 && lyricsColumn.height > 0)
+        ? lyricsColumn.height / root.lines.length
+        : 0
+    readonly property var _rowSpans: Lyrics.rowSpans(lyricsViewport.height, root._rowPitch)
 
     // Where the column rests with row `index` parked at the comfort offset.
     // `itemAt` is a call rather than a dependency, so every caller re-reads
@@ -287,17 +308,18 @@ Card {
                         return next ? next.time : undefined;
                     }
 
-                    // A past interlude sits fully lit, a future one fully
-                    // dark, no clock needed for either; only the lit one
-                    // reads the position, per frame.
-                    readonly property real _interludeProgress: !lineCell._interlude
+                    // The fill only exists while the stretch is the one being
+                    // played: a past interlude resets to the empty note the
+                    // way kopuz's own `resetWords` leaves it
+                    // (crates/components/src/playback/lyrics.rs), rather than
+                    // sitting filled in the list behind the song. Only the
+                    // lit one reads the position, per frame.
+                    readonly property real _interludeProgress: (!lineCell._interlude || !lineCell._lit)
                         ? 0
-                        : lineCell._lit
-                            ? (lineCell.modelData.end > lineCell.modelData.time
-                                ? Math.max(0, Math.min(1, (root._position - lineCell.modelData.time)
-                                    / (lineCell.modelData.end - lineCell.modelData.time)))
-                                : (root._position >= lineCell.modelData.time ? 1 : 0))
-                            : (lineCell.index < root._activeIndex ? 1 : 0)
+                        : (lineCell.modelData.end > lineCell.modelData.time
+                            ? Math.max(0, Math.min(1, (root._position - lineCell.modelData.time)
+                                / (lineCell.modelData.end - lineCell.modelData.time)))
+                            : (root._position >= lineCell.modelData.time ? 1 : 0))
 
                     // `edgeFraction` spends the fade before the viewport's
                     // clip reaches the row, caelestia's mask done with
@@ -307,13 +329,20 @@ Card {
                     readonly property real _edgeFraction: Lyrics.edgeFraction(lyricsColumn.y + lineCell.y,
                         lineCell.height, lyricsViewport.height)
 
+                    // The row's place on both depth ramps: its distance from
+                    // the anchor, and the room the pane has in that
+                    // direction, which is what the ramps are spent over.
+                    readonly property int _distance: lineCell.index - root._anchorIndex
+                    readonly property real _rowSpan: lineCell._distance < 0
+                        ? root._rowSpans.above : root._rowSpans.below
+
                     // Hover lifts a row clear of the depth of field so it can
                     // be read before it is clicked (spec P7); the cursor's own
                     // row is lifted for the same reason.
                     readonly property real _blurTarget: (!LyricsService.blurEnabled || lineCell._lit
                         || lineCell.containsPointer || lineCell.cursor)
                         ? 0
-                        : Lyrics.blurFor(lineCell.index - root._anchorIndex, LyricsService.blurStrength)
+                        : Lyrics.blurFor(lineCell._distance, LyricsService.blurStrength, lineCell._rowSpan)
                     property real _blurPx: lineCell._blurTarget
 
                     Behavior on _blurPx {
@@ -352,15 +381,29 @@ Card {
                             : Math.max(lineText.implicitHeight, wordFlow.implicitHeight)
 
                         // The ramp (spec P5/P7): 1 at the lit lines, then
-                        // 0.7, 0.45, 0.25 and no lower, with a background
-                        // line held at 0.7 of whatever its own rank gives it.
-                        opacity: (lineCell._lit ? 1 : Lyrics.depthOpacity(lineCell.index - root._anchorIndex))
+                        // 0.7, 0.45, 0.25 and no lower, sampled over the rows
+                        // the pane has room for rather than over three, with
+                        // a background line held at 0.7 of whatever its own
+                        // rank gives it.
+                        opacity: (lineCell._lit
+                                ? 1
+                                : Lyrics.depthOpacity(lineCell._distance, lineCell._rowSpan))
                             * (lineCell._background ? 0.7 : 1)
                         // The lit/dark tell is a transform, never a relayout,
                         // so a line's box never changes shape on activation.
-                        // A background line activates to 0.9 (spec P8).
-                        scale: lineCell._lit ? (lineCell._background ? 0.9 : 1) : 0.85
-                        transformOrigin: lineCell._opposite ? Item.Right : Item.Left
+                        // A background line activates to 0.9 (spec P8), and
+                        // so does an interlude: kopuz pops its note less than
+                        // a line of words (1.06 against 1.12), since the note
+                        // is standing in for a stretch with nothing to sing
+                        // rather than taking the song over.
+                        scale: lineCell._lit
+                            ? ((lineCell._background || lineCell._interlude) ? 0.9 : 1)
+                            : 0.85
+                        // The note is centred in the column, so it grows in
+                        // place instead of walking out of its own row.
+                        transformOrigin: lineCell._interlude && !root._hasOpposite
+                            ? Item.Center
+                            : (lineCell._opposite ? Item.Right : Item.Left)
 
                         Behavior on opacity {
                             Anim { kind: "effects" }
@@ -380,17 +423,25 @@ Card {
 
                             // An instrumental stretch is a `music` icon
                             // wiping left to right over the gap (M55 A4).
+                            // kopuz's own note (crates/components/src/
+                            // playback/lyrics.rs): a step larger than the
+                            // line type it stands between, its unfilled copy
+                            // at 0.35, and centred in the column unless the
+                            // track has a duet turn, where the sides carry
+                            // the meaning and it keeps the reading edge.
                             Item {
                                 id: interludeRow
                                 visible: lineCell._interlude
+                                x: root._hasOpposite ? 0 : (lineContent.width - width) / 2
                                 implicitWidth: noteIcon.implicitWidth
                                 implicitHeight: noteIcon.implicitHeight
 
                                 Icon {
                                     id: noteIcon
                                     name: "music"
-                                    size: Theme.fontSize.title
+                                    size: Theme.fontSize.heading
                                     color: Theme.color.mutedForeground
+                                    opacity: 0.35
                                 }
 
                                 Item {
@@ -402,7 +453,7 @@ Card {
 
                                     Icon {
                                         name: "music"
-                                        size: Theme.fontSize.title
+                                        size: Theme.fontSize.heading
                                         color: Theme.color.foreground
                                     }
                                 }
@@ -454,7 +505,8 @@ Card {
                                                 readonly property real _progress: lineCell._chunked
                                                     ? Lyrics.chunkProgress(lineCell.modelData.words,
                                                         chunkItem.modelData.chunkIndex,
-                                                        lineCell._lineEnd, root._position)
+                                                        lineCell._lineEnd, root._position,
+                                                        lineCell.modelData.estimated === true)
                                                     : 0
                                                 readonly property real _glow: lineCell._chunked
                                                     ? Lyrics.chunkGlow(lineCell.modelData.words,
@@ -489,6 +541,30 @@ Card {
                                                     font.weight: Theme.weight.medium
                                                     font.italic: lineCell._opposite
                                                     color: Theme.color.mutedForeground
+
+                                                    // The rows this chunk's
+                                                    // own text wrapped onto,
+                                                    // which the mask needs and
+                                                    // nothing else can measure:
+                                                    // where each one sits and
+                                                    // how much ink it carries.
+                                                    // Published as a fresh
+                                                    // array per line so the
+                                                    // mask rebuilds on the
+                                                    // layout that produced it.
+                                                    property var textRows: []
+
+                                                    onLineLaidOut: line => {
+                                                        var rows = line.number === 0
+                                                            ? []
+                                                            : chunkBase.textRows.slice(0, line.number);
+                                                        rows.push({
+                                                            y: line.y,
+                                                            height: line.height,
+                                                            width: line.implicitWidth
+                                                        });
+                                                        chunkBase.textRows = rows;
+                                                    }
                                                 }
 
                                                 // The sung copy, its mask and
@@ -541,16 +617,45 @@ Card {
                                                         layer.enabled: true
                                                         visible: false
 
-                                                        Rectangle {
-                                                            width: chunkMask.width * 2.2
-                                                            height: chunkMask.height
-                                                            x: -1.2 * (0.99 - chunkItem._progress * 0.98) * chunkMask.width
-                                                            gradient: Gradient {
-                                                                orientation: Gradient.Horizontal
-                                                                GradientStop { position: 0; color: Qt.rgba(1, 1, 1, 1) }
-                                                                GradientStop { position: 0.46; color: Qt.rgba(1, 1, 1, 1) }
-                                                                GradientStop { position: 0.54; color: Qt.rgba(1, 1, 1, 0) }
-                                                                GradientStop { position: 1; color: Qt.rgba(1, 1, 1, 0) }
+                                                        // One gradient per row
+                                                        // the chunk wrapped
+                                                        // onto, each run
+                                                        // against that row's
+                                                        // own ink width, so
+                                                        // the edge finishes a
+                                                        // row before the next
+                                                        // one starts.
+                                                        readonly property var bands: Lyrics.chunkRowBands(chunkBase.textRows,
+                                                            chunkItem.height, chunkItem.width)
+
+                                                        Repeater {
+                                                            model: chunkMask.bands
+
+                                                            delegate: Item {
+                                                                id: maskBand
+                                                                required property var modelData
+                                                                required property int index
+
+                                                                y: maskBand.modelData.top
+                                                                width: chunkMask.width
+                                                                height: maskBand.modelData.height
+
+                                                                readonly property real _width: maskBand.modelData.width
+                                                                readonly property real _progress: Lyrics.rowWipe(chunkMask.bands,
+                                                                    maskBand.index, chunkItem._progress)
+
+                                                                Rectangle {
+                                                                    width: maskBand._width * 2.2
+                                                                    height: maskBand.height
+                                                                    x: -1.2 * (0.99 - maskBand._progress * 0.98) * maskBand._width
+                                                                    gradient: Gradient {
+                                                                        orientation: Gradient.Horizontal
+                                                                        GradientStop { position: 0; color: Qt.rgba(1, 1, 1, 1) }
+                                                                        GradientStop { position: 0.46; color: Qt.rgba(1, 1, 1, 1) }
+                                                                        GradientStop { position: 0.54; color: Qt.rgba(1, 1, 1, 0) }
+                                                                        GradientStop { position: 1; color: Qt.rgba(1, 1, 1, 0) }
+                                                                    }
+                                                                }
                                                             }
                                                         }
                                                     }

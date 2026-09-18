@@ -744,7 +744,14 @@ Panel {
         LyricsPane {
             visible: root._lyricsPresent
             width: contentRow._paneWidth
-            height: Math.max(nowPlayingColumn.implicitHeight, Theme.space.controlHeight * 6)
+            // Twelve control heights rather than six: the pane reads as many
+            // lines either side of the one being sung as it has room for, so
+            // the room is what decides how much of the song is on screen
+            // (owner, 2026-09-18). The card is still nowhere near the height
+            // a panel is capped at (Components/Panel.qml's own
+            // `maxFrameHeight`), and the column beside it sets the floor
+            // whenever it is the taller of the two.
+            height: Math.max(nowPlayingColumn.implicitHeight, Theme.space.controlHeight * 12)
             lines: root._lyricsLines
             cursorOn: root.cursorActive && root.cursorSection === root._lyricsSection
             cursorIndex: root.cursorIndex

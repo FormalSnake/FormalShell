@@ -38,7 +38,8 @@
 // groups a run of chunks joined by no whitespace (`joinsNext`) into the
 // word the panel draws as one `Row`; `chunkEnd`/`chunkProgress` are the
 // wipe's own span and its 0..1 fraction at a given position, capped at
-// `WIPE_MAX_SECONDS`, and `chunkGlow` is the sung chunk's own 0..1 glow.
+// `WIPE_MAX_SECONDS` for a provider's own stamps and uncapped for
+// synthesised ones, and `chunkGlow` is the sung chunk's own 0..1 glow.
 // `synthesiseWords` fabricates chunks, proportioned by
 // character count, for a line a provider left untimed, so the wipe always
 // has something to draw (spec P4).
@@ -50,7 +51,11 @@
 // `comfortY` are the depth-of-field ramp and the 42% comfort anchor (spec
 // P7/P9). `depthOpacity` and `edgeFraction` are not superseded by the blur:
 // the opacity ramp keeps running alongside it (spec P7), just no longer
-// alone.
+// alone. `rowSpans` is how far those two ramps reach: the rows the pane has
+// room for either side of the anchor, so the ramps are spent on the pane's
+// own height rather than on a fixed count of rows. `chunkRowBands` and
+// `rowWipe` are the wipe over a chunk the pane is too narrow to hold on one
+// row.
 
 var INTERLUDE_MIN_SECONDS = 5;
 var MISS_TTL_DAYS = 7;
@@ -652,12 +657,23 @@ function chunkEnd(words, index, lineEnd) {
 // span's own start rather than off `chunkEnd`'s raw answer, so a chunk
 // whose next stamp (or line end) is far in the future still finishes its
 // wipe at WIPE_MAX_SECONDS instead of creeping toward it.
-function chunkProgress(words, index, lineEnd, t) {
+//
+// `estimated` is the line's own flag, and it turns the cap off. The cap is
+// there for a provider's own stamp held over a pause, where the syllable is
+// long over and the wipe would creep through the silence after it;
+// synthesised chunks have no such silence in them, since `synthesiseWords`
+// laid them across the line's whole sung stretch by character count. Capping
+// them wiped every word in 1.2s and then waited, which is what read as one
+// rate for a line held two seconds and a line held twelve (owner,
+// 2026-09-18).
+function chunkProgress(words, index, lineEnd, t, estimated) {
     var chunk = words[index];
     if (!chunk)
         return 0;
     var start = chunk.time;
-    var end = Math.min(chunkEnd(words, index, lineEnd), start + WIPE_MAX_SECONDS);
+    var end = chunkEnd(words, index, lineEnd);
+    if (estimated !== true)
+        end = Math.min(end, start + WIPE_MAX_SECONDS);
     if (end <= start)
         return t >= start ? 1 : 0;
     return Math.max(0, Math.min(1, (t - start) / (end - start)));
@@ -679,7 +695,10 @@ function chunkGlow(words, index, lineEnd, t) {
 // A line's own words if it has any (not synthesised), the whole main-line
 // run's span otherwise: from `line.time` to `line.end` when the provider
 // gave one, else to the smaller of the next main line's own start and
-// `time + LINE_ASSUMED_SECONDS` (spec P4). Skips an interlude and a merged
+// `time + LINE_ASSUMED_SECONDS` (spec P4). That span is the same number
+// `displayLines` clamps a gap's own start to, which is the instant the line
+// stops being lit, so the last chunk's wipe lands exactly as the next line
+// (or the note over an instrumental) takes over. Skips an interlude and a merged
 // translation line (its text carries a "\n", and synthesising only the
 // first physical line would desync the second's own wipe).
 function synthesiseWords(lines) {
@@ -849,11 +868,16 @@ function activeSecondaryLines(lines, mainIndices, t, mainLineIndex) {
 
 // A line's own estimated end when it has none: its last word plus the
 // chunk fallback, or the assumed line length off its own start when it
-// has no words either.
+// has no words either. Synthesised words are not an answer here: they are
+// spread over this very estimate, so reading them back would report a line
+// as ending wherever its own fabricated last word happened to land and
+// close a real instrumental gap to nothing. kopuz has no such branch to
+// fall into, since it never synthesises (crates/components/src/playback/
+// lyrics.rs line_end_estimate).
 function lineEndEstimate(line) {
     if (typeof line.end === "number" && isFinite(line.end))
         return line.end;
-    if (line.words && line.words.length > 0)
+    if (!line.estimated && line.words && line.words.length > 0)
         return line.words[line.words.length - 1].time + WORD_FALLBACK_SECONDS;
     return line.time + LINE_ASSUMED_SECONDS;
 }
@@ -871,7 +895,9 @@ function displayLines(lines) {
     var main = mainLineIndices(lines);
     var gaps = [];
 
-    if (main.length > 0 && lines[main[0]].time >= INTERLUDE_MIN_SECONDS)
+    // Nothing is lit before the first line, so the run-in is judged on the
+    // dark rule alone rather than on kopuz's wider one.
+    if (main.length > 0 && lines[main[0]].time > SEAMLESS_GAP_SECONDS)
         gaps.push({ at: main[0], start: 0, end: lines[main[0]].time });
 
     for (var w = 0; w + 1 < main.length; w++) {
@@ -879,10 +905,28 @@ function displayLines(lines) {
         var next = main[w + 1];
         var nextStart = lines[next].time;
         var gapStart = -Infinity;
-        for (var k = current; k < next; k++)
+        // Whether the whole run (the main line and any background line
+        // riding after it) carries an end of its own, which is what decides
+        // whether it goes dark at all: `lineActiveAt` runs a line with no end
+        // until the next main line starts, so such a run is never dark and
+        // needs no note over it however wide the gap reads.
+        var runEnds = true;
+        for (var k = current; k < next; k++) {
+            if (typeof lines[k].end !== "number" || !isFinite(lines[k].end))
+                runEnds = false;
             gapStart = Math.max(gapStart, lineEndEstimate(lines[k]));
+        }
         gapStart = Math.max(lines[current].time, Math.min(gapStart, nextStart));
-        if (nextStart - gapStart >= INTERLUDE_MIN_SECONDS)
+        // Two rules, not one. kopuz's own threshold marks an instrumental
+        // stretch, and the second one closes the hole it leaves: a run that
+        // ends 3 to 5 seconds before the next line goes dark (the seamless
+        // carry only reaches SEAMLESS_GAP_SECONDS) and drew nothing at all,
+        // so the pane sat between two lines with no lit row and no note
+        // (owner, 2026-09-18). Past this, the row that goes dark and the note
+        // that lights answer one rule: the note's own start IS the instant
+        // `lineActiveAt` stops holding the line before it.
+        if (nextStart - gapStart >= INTERLUDE_MIN_SECONDS
+            || (runEnds && nextStart - gapStart > SEAMLESS_GAP_SECONDS))
             gaps.push({ at: next, start: gapStart, end: nextStart });
     }
 
@@ -921,11 +965,41 @@ function displayLines(lines) {
     return display;
 }
 
-function depthOpacity(distance) {
-    var d = Math.abs(distance);
-    if (d > 3)
-        d = 3;
-    return _DEPTH_OPACITY[d];
+// The depth ramp at `distance` rows from the anchor, spread over `rowSpan`
+// rows instead of the table's own four entries: `rowSpan` is how many rows
+// the pane actually has room for on that side of the anchor, so the ramp
+// reaches its floor at the viewport's edge rather than three rows in with
+// the rest of the pane left holding rows nobody can read (owner,
+// 2026-09-18). The table is sampled rather than replaced, so the curve is
+// the one spec P5 asked for whatever the pane's height turns out to be, and
+// an omitted span reproduces the four entries exactly.
+function depthOpacity(distance, rowSpan) {
+    var last = _DEPTH_OPACITY.length - 1;
+    var span = (typeof rowSpan === "number" && isFinite(rowSpan) && rowSpan > 0) ? rowSpan : last;
+    // Multiplied before the divide, so an integer distance against the
+    // default span lands on a table entry exactly rather than a float
+    // hair away from one.
+    var at = Math.min(last, Math.abs(distance) * last / span);
+    var low = Math.floor(at);
+    if (low >= last)
+        return _DEPTH_OPACITY[last];
+    return _DEPTH_OPACITY[low] + (_DEPTH_OPACITY[low + 1] - _DEPTH_OPACITY[low]) * (at - low);
+}
+
+// How many rows fit between the anchored row's own resting place (the
+// comfort offset) and each end of a `viewportHeight`-tall viewport, at
+// `rowPitch` px a row. The two ramps above and `blurFor` below span these
+// rather than a fixed row count, so a taller pane reads more of the song.
+// Never under 1: a pane with room for less than one row either side still
+// has to put its neighbours somewhere on the ramp.
+function rowSpans(viewportHeight, rowPitch) {
+    if (!(viewportHeight > 0) || !(rowPitch > 0))
+        return { above: 1, below: 1 };
+    var top = viewportHeight * COMFORT_OFFSET_FRACTION;
+    return {
+        above: Math.max(1, top / rowPitch),
+        below: Math.max(1, (viewportHeight - top) / rowPitch)
+    };
 }
 
 // The 0..1 fade a `height`-tall row starting at `top` carries for its
@@ -946,11 +1020,64 @@ function edgeFraction(top, height, viewportHeight) {
 // A line's depth-of-field blur for its distance (in display rows, not
 // seconds) from the anchor: kopuz's rightbar ramp, capped before the
 // strength scale is applied, quantised to BLUR_QUANTUM_PX so the effect's
-// own cache doesn't rebuild every frame over a sub-pixel change.
-function blurFor(distance, strengthPercent) {
-    var capped = Math.min(Math.abs(distance) * BLUR_STEP_PX, BLUR_MAX_PX);
+// own cache doesn't rebuild every frame over a sub-pixel change. `rowSpan`
+// is the row count the pane has room for on that side (`rowSpans` above),
+// so the cap lands at the viewport's edge; omitting it keeps the ramp's own
+// BLUR_STEP_PX slope, which is where the default span comes from.
+function blurFor(distance, strengthPercent, rowSpan) {
+    var span = (typeof rowSpan === "number" && isFinite(rowSpan) && rowSpan > 0)
+        ? rowSpan : (BLUR_MAX_PX / BLUR_STEP_PX);
+    var capped = Math.min(Math.abs(distance) / span, 1) * BLUR_MAX_PX;
     var scaled = capped * (strengthPercent / 100);
     return Math.round(scaled / BLUR_QUANTUM_PX) * BLUR_QUANTUM_PX;
+}
+
+// A chunk's own text rows as bands over its box. A `Flow` breaks between
+// its items and never inside one, so a chunk wider than the pane wraps
+// inside its own `Text` instead, and the wipe over it has to cross that
+// break the way reading does. `rows` is what `Text.onLineLaidOut` handed
+// over ({y, height, width} per laid-out line, in order); the bands returned
+// tile the whole box top to bottom (a band runs to the next row's own top,
+// and the last to the box's floor) so the mask never leaves a sliver of a
+// glyph uncovered, and each carries the row's own ink width for `rowWipe`.
+function chunkRowBands(rows, boxHeight, boxWidth) {
+    if (!rows || rows.length === 0)
+        return [{ top: 0, height: boxHeight, width: boxWidth }];
+    var out = [];
+    for (var i = 0; i < rows.length; i++) {
+        var top = (i === 0) ? 0 : rows[i].y;
+        var bottom = (i + 1 < rows.length) ? rows[i + 1].y : boxHeight;
+        out.push({
+            top: top,
+            height: Math.max(0, bottom - top),
+            width: rows[i].width > 0 ? rows[i].width : boxWidth
+        });
+    }
+    return out;
+}
+
+// The 0..1 wipe on one band of a wrapped chunk at the chunk's own
+// `progress`: band N finishes at its own right end before band N+1 starts at
+// its left, so the lit run reads in reading order rather than as one
+// horizontal cut across every row of the block at once (owner, 2026-09-18).
+// The travel is weighted by each band's own ink width, so the edge crosses a
+// full row and a short last one at one speed instead of spending the same
+// time on each.
+function rowWipe(bands, index, progress) {
+    if (!bands || index < 0 || index >= bands.length)
+        return 0;
+    if (bands.length === 1)
+        return progress;
+    var total = 0;
+    for (var i = 0; i < bands.length; i++)
+        total += Math.max(0, bands[i].width);
+    var own = Math.max(0, bands[index].width);
+    if (!(total > 0) || !(own > 0))
+        return progress >= 1 ? 1 : 0;
+    var before = 0;
+    for (var j = 0; j < index; j++)
+        before += Math.max(0, bands[j].width);
+    return Math.max(0, Math.min(1, (progress * total - before) / own));
 }
 
 // The column `y` that rests an item starting at `itemY` with its own top
