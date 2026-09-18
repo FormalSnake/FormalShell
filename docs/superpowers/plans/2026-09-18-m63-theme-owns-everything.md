@@ -72,6 +72,19 @@ inset `screenPadding: 16`, and leaves the rest. A key a user sets
 falls back to; pantheon says `transparent`, metamorphosis `auto` (which
 under the strip habit samples nothing). The nix mixin carries no pin.
 
+**O6 The ink glow.** Wingpanel's contrast on a transparent panel is its
+text and icon shadow, `0 0 2px black 0.3` plus `0 1px 2px black 0.6` (white
+at 0.3 and 0.25 for dark ink), a blurred glow and an offset, which QML
+`Text` cannot draw and `Text.Raised` only approximates as a 1px offset.
+Owner, 2026-09-18, asked whether a transparent band "will always contrast
+decently like pantheon", and chose rendering the shadow as elementary
+draws it: a `MultiEffect` glow behind each bar cell's ink under the
+wingpanel habit, blurred per the table's `inkShadow` entry (blur radius,
+offset, colour, alpha, per paint), off entirely under a table whose ink
+carries no shadow. The glow is one layer per cell, drawn once per change
+of the cell's content, and the strip's cost stays what `--bar-room`
+measures today.
+
 ## Tasks
 
 One subagent per task, in order, verification read before each commit,
@@ -95,6 +108,13 @@ Verify: `just test`, lint, `--pantheon --panel network` (the gap at 8),
 `--pantheon --frame-adaptive` or whatever M62 named it (transparent by the
 table with no key set), `--bar-adaptive`, metamorphosis `--panel network`,
 `--notify`, `dev/parity.sh --panel network --notify --tooltip`.
+
+### Task 3b: the ink glow (O6)
+
+Verify: `just test`, lint, `--pantheon --bar-adaptive` reading a crop of a
+cell's glyph over the busy band for the glow (a dark halo around light
+ink), `--bar-room` under both presets for the strip's own cost, `--frame-adaptive`,
+metamorphosis `--bar-layout` unchanged.
 
 ### Task 4: the record and the hosts
 
