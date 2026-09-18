@@ -274,10 +274,11 @@ Card {
                                 : (root._position >= lineCell.modelData.time ? 1 : 0))
                             : (lineCell.index < root._activeIndex ? 1 : 0)
 
-                    // `edgeFraction` fades a row the viewport's own edge
-                    // slices, caelestia's mask done with opacity rather than
-                    // a shader: `top` is the row's place after the column's
-                    // travel, so the fade tracks it frame by frame.
+                    // `edgeFraction` spends the fade before the viewport's
+                    // clip reaches the row, caelestia's mask done with
+                    // opacity rather than a shader: `top` is the row's place
+                    // after the column's travel, so the fade tracks it frame
+                    // by frame.
                     readonly property real _edgeFraction: Lyrics.edgeFraction(lyricsColumn.y + lineCell.y,
                         lineCell.height, lyricsViewport.height)
 
@@ -424,8 +425,19 @@ Card {
                                                     lineCell.modelData.words, chunkItem.modelData.chunkIndex,
                                                     lineCell._lineEnd, root._position)
 
-                                                width: chunkBase.implicitWidth
-                                                height: chunkBase.implicitHeight
+                                                // A `Flow` breaks between
+                                                // its items and never inside
+                                                // one, so a chunk the pane
+                                                // cannot hold has to break
+                                                // itself: a provider that
+                                                // joins a whole phrase into
+                                                // one word otherwise ran the
+                                                // lit line off the pane's
+                                                // edge, where the plain copy
+                                                // below wraps it (owner,
+                                                // 2026-09-18).
+                                                width: Math.min(chunkBase.implicitWidth, wordFlow.width)
+                                                height: chunkBase.height
 
                                                 // The unsung word, and what a
                                                 // chunk still reads as with
@@ -433,6 +445,8 @@ Card {
                                                 Text {
                                                     id: chunkBase
                                                     text: chunkItem.modelData.text
+                                                    width: chunkItem.width
+                                                    wrapMode: Text.Wrap
                                                     font.family: Theme.fontFamilySans
                                                     font.pixelSize: lineCell._fontSize
                                                     font.weight: Theme.weight.medium
@@ -446,6 +460,8 @@ Card {
                                                     id: chunkSung
                                                     text: chunkBase.text
                                                     font: chunkBase.font
+                                                    width: chunkBase.width
+                                                    wrapMode: chunkBase.wrapMode
                                                     color: Theme.color.foreground
                                                     visible: false
                                                 }
