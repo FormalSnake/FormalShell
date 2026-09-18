@@ -78,6 +78,13 @@ shell/
       metamorphosis.js           the shipped shadcn-on-Omarchy chrome table (M59)
       retro.js                   re-exports metamorphosis.js's table; retro differs only in the
                                   scalars presets.js already owns
+      pantheon.js                elementary OS 8's material transcribed from its own GTK
+                                  stylesheet, plus the `habits` swapping bar/emerge/notification/
+                                  launcher/switcher shape (M60)
+    barpaint.js                 pure JS, .pragma library: the wingpanel band's paint decision off
+                                 a wallpaper band's luminance, spread and acutance (M60 T3)
+    BarPaint.qml                 the sampler behind barpaint.js: crops the wallpaper into a Canvas
+                                  and reads the band's own rows back out of it, never the screen
     ThemeEngine.qml             singleton: serialized matugen Process queue
     templates/
       theme.json.tmpl           matugen template rendering theme.json
@@ -107,6 +114,10 @@ shell/
     Cell.qml                    the shared cell: the `cell` role at radiusMd, with the
                                  active/selected/destructive/warning/cursor states and
                                  default-property content
+    DrawerJoin.qml               the `emerge: "join"` recipe (M57 D4, M60 T2): the metamorphosis,
+                                  a card budding off the line it came out of
+    DrawerPopover.qml            the `emerge: "popover"` recipe (M60 T2): elementary's, a card
+                                  dropping out of its cell with no line, no gap and no deform
     Panel.qml                    the shared per-widget popout: an omarchy-style card (full border,
                                   opaque fill, Theme.space.barMargin below the bar) anchored under its
                                   opening bar cell, on that cell's own output (anchorX/anchorScreen, both
@@ -253,6 +264,8 @@ shell/
   Surfaces/
     Bar/
       Bar.qml                  PanelWindow; three-region Row (left/center/right) resolved from Layout.resolve(Config.get("bar")), height tracks the tallest cell present
+      BarStrip.qml               the `bar.kind: strip` paint (M60 T3): a full-length `card` fill at surfaceOpacity with a 1px border along the inner edge, ghost cells over it
+      BarWingpanel.qml            the `bar.kind: wingpanel` paint (M60 T3): no strip card, the band coloured by BarPaint.qml/barpaint.js's read of the wallpaper under it
       TrayMenu.qml               shell-owned tray context menu: one shared instance (shell.qml), composes Panel.qml, driven by QsMenuOpener over the clicked item's DBusMenuHandle: replaces the old native QsMenuAnchor popup
       BarOverflow.qml            the chevron's second bar: one shared instance (shell.qml), composes Panel.qml headerless, renders Bar.qml's own region delegate over the governed group, which lives here rather than on the strip
       widgets/
@@ -310,7 +323,9 @@ shell/
     Notifications/
       Toasts.qml                 per-screen PanelWindow, Overlay layer; sonner-style depth stack off NotificationService.popups, anchored per notifications.position (default bottom-right), hover/IPC expand into a full column
       Center.qml                  single-instance PanelWindow, Top layer; right-anchored full-height Card, PENDING/SEEN sections, DND Switch
-      NotificationCard.qml        shared Card: app icon, app name + time, summary/body, action Buttons; critical = destructive border and icon, never a fill
+      NotificationCard.qml        the facade over two shapes, picked by the live theme's `notification` habit (M60 T4): the sanitized body, relative time, actions and icon picture every shape reads, and nothing painted here
+      NotificationRow.qml          the `notification: "row"` shape: the shadcn toast card as built, header row, summary, two-line body, action Buttons; critical = destructive border and icon, never a fill
+      NotificationBubble.qml       the `notification: "bubble"` shape: elementary's own, 332 wide, icon left, hover-only close button, the 400ms flip-in and the restack stagger
     Osd/
       Osd.qml                     single-instance PanelWindow, Overlay layer, bottom-centre; Card pill of Icon | Track | percentage, no keyboard focus
       icon.js                     pure JS, .pragma library: which Icon name each kind draws (volume ramp, mute, brightness, media)

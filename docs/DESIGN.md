@@ -93,6 +93,20 @@ and never names a theme; a theme never reaches into a primitive.
 `Theme.box(role, state)` is the only way chrome reaches one, drawn by
 `Components/Box.qml`.
 
+**Pantheon** (`shell/Theme/themes/pantheon.js`): elementary OS 8's material
+as the same kind of table, transcribed from its own GPL stylesheet rather
+than ported, each block naming the file its numbers came from
+(`_exported.scss` for the tokens, `_index.scss` for the mixins,
+`widgets/*.scss` for the roles). GTK's `alpha(c, f)` multiplies rather than
+sets, and the `highlight` base is white in light but white at 0.2 in dark,
+so every highlight-derived alpha in the dark column is written as that
+product: `alpha(@highlight_color, 0.3)` lands at white 0.06, not 0.3, which
+is why the dark material reads quieter than the light one rather than as
+the same lines at a lower opacity. Radii are elementary's own, pinned by
+number rather than by the radius ladder's step so `theme.radius` moving the
+base never drifts them: 3 for a control, 6 for a popover, 9 for a card or
+bubble.
+
 **Type** (`Theme.fontFamilySans`, `Theme.fontFamilyMono`,
 `Theme.fontSize.*`, `Theme.weight.*`): sans for words (titles, labels,
 buttons, section labels, descriptions, hints), mono for values (numbers,
@@ -484,7 +498,7 @@ thing.
 | `Card` | the `card` role at `panelPadding`, `opaque` on a surface the compositor does not blur; the surface's own frame, never nested | `rest`, `opaque` |
 | `Shoulders` | the `card` role with the anchored edge left open and a concave fillet outside each of its two corners, running out to the line it came out of (§1 Motion), and, at `attach` 0, a plain `Card` again: what every surface coming out of a line draws instead of `Card` | attached, letting go, free |
 | `Joint` | the join controller beside a `Presence` (§1 Motion): the silhouette's depth from the line, the let-go clock, the deform's pivot, and the gap it publishes to the line | attached, released |
-| `Drawer` | one edge-anchored card recipe (§1 Motion, M57 D4): a consumer states its edge and resting rect, this derives the line, the depth, the walls, the nested bud's span and the deform's two pivots, and assembles `Presence`, `Joint`, `Deform` and `Shoulders` underneath; Panel, the notification centre, the launcher, polkit, a plugin's overlay and the OSD all sit on it | attached, letting go, free |
+| `Drawer` | the facade over two edge-anchored card recipes, picked by the live theme's `emerge` habit and never a theme name (§1 Motion, M57 D4, M60 T2): `join` (`Components/DrawerJoin.qml`, the metamorphosis) derives the line, the depth, the walls, the nested bud's span and the deform's two pivots, and assembles `Presence`, `Joint`, `Deform` and `Shoulders` underneath; `popover` (`Components/DrawerPopover.qml`, elementary's) drops the card straight out of the cell that opened it, with no line, no gap and no deform. Panel, the notification centre, the launcher, polkit, a plugin's overlay and the OSD all sit on it | attached, letting go, free |
 | `Picture` | content imagery, bare: the retro pass under `theme.dither`, no frame and no rounding | none |
 | `Cover` | a `Picture` in a `muted` well with a 1px `border`, clipped to `Theme.coverRadius`: album art, a notification's app icon | none |
 | `SectionLabel` | `caption`, `medium`, `mutedForeground`, uppercase, `letterSpacing.meta`; optional trailing count `(3)` | none |
@@ -556,6 +570,17 @@ centre, never the one against the screen edge; a cell comes back the
 instant the room does. The chevron takes no part in any of this: it stays
 config-only, collapsing whatever bar.layout put on its governed side
 whether the strip is crowded or not.
+
+**Wingpanel band** (`bar.kind: wingpanel`, the pantheon habit). No strip
+card, no hairline, no cell borders: the band's paint is read off the
+wallpaper under it rather than drawn as chrome, one of five paints
+(`light`, `dark`, `translucentLight`, `translucentDark`, `maximized`)
+decided by the band's own mean luminance, standard deviation and acutance
+against wingpanel's own thresholds (mean 180, spread 45, acutance 8, plus
+the 1.645-sigma rule for a band whose mean falls short but whose spread
+puts a twentieth of it past 180) and Hyprland's fullscreen state, which
+forces `maximized` outright. `debug dump` reports the three numbers as
+`bar.paint`.
 
 **Frame.** Off by default (`frame.thickness` 0). On, the bar's `card` fill
 continues round the other three edges as a band `frame.thickness` wide, and
@@ -629,6 +654,14 @@ cell draws, coloured by the same three energy bands off the one shared
 cava process, carried toward every new frame rather than snapped to it, so
 the motion runs at the screen's own refresh rate.
 
+**Popover emerge** (`emerge: "popover"`, the pantheon habit). A panel, the
+launcher, the OSD, polkit, the notification centre and a plugin overlay all
+read this off `Drawer` the way they read the joined recipe (§1 Motion,
+§2 `Drawer`): the card drops straight out of the cell that opened it on
+Gala's 150ms menu map instead of budding off the bar's line, so there is no
+`Joint`, no gap published to the line, and no `Shoulders` either: the card
+is a plain rounded rectangle on all four sides.
+
 **Launcher.** shadcn Command: `Card` `Menu` wide at 30% from the top; input
 with a bottom rule only; a shadcn Breadcrumb under it (ancestors in
 `mutedForeground`, the level in `foreground`, a `chevron-right` between,
@@ -637,7 +670,9 @@ no fill and no frame); rows with the cursor row in
 scrim. The split route's preview pane is the one card this surface spends
 inside its own frame (§1's ladder, rung 5): `radiusMd`, an `sm` gutter off
 the list, flat rows beside it. Nothing inside the pane draws a frame of its
-own, the preview picture included.
+own, the preview picture included. `launcher: "grid"` (the pantheon habit)
+makes `menu.appGrid` default true instead of false, swapping app rows for
+Slingshot's icon grid; nothing else in this paragraph changes either way.
 
 **Toasts.** The sonner stack as built. `Card` chrome; critical is a
 `destructive` border and icon, not a fill. The card's icon slot resolves the
@@ -646,6 +681,15 @@ notification's image, its app icon, the sender's desktop entry, then a
 the whole output and holds that size for as long as it is mapped, so a
 compositor's own layer animation has no geometry change to fight; the cards
 move, and everything outside them is click-through.
+
+**Bubble** (`notification: "bubble"`, the pantheon habit). elementary's own
+notification, drawn by `NotificationBubble.qml` behind the same
+`NotificationCard` facade `NotificationRow.qml` draws for the toast above:
+332 wide, radius 9, icon left with a 6px gap, bold title, body wrapped at
+33 characters, a round close button that appears on hover. It flips in
+over 400ms (opacity plus an x rotation from 90 degrees through -10 at 60%
+to 0) and restacks on `emphasizedDecel` 200ms with a 150ms stagger across
+however many bubbles move.
 
 **Notification centre.** A floating `Card` off the right edge, content-tall
 and capped at the output; DND is a `Switch` in a ruled header; unread rows
@@ -714,4 +758,7 @@ A theme table change runs `dev/parity.sh <flags>` against `origin/main`
 before anything else: it accepts every pixel that lies inside the bar
 clock's own rect, a caret or a toast's timestamp, or a burst frame's own
 motion sample taken at a fixed wall-clock offset, and treats anything else
-that differs as a defect in the migration.
+that differs as a defect in the migration. The pantheon habits add their
+own legs: `--pantheon` rides any other for the table alone, `--bar-adaptive`
+reads the wingpanel band's paint off four fixture wallpapers, and
+`--notify-emerge` reads the bubble's flip-in frame by frame.

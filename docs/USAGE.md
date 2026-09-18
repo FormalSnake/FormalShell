@@ -652,6 +652,14 @@ cast, and elementary's own corners (3 on a control, 6 on a popover, 9 on a
 card). Any key you write explicitly wins over the preset, so `retro` with
 `"radius": 4` is the retro look on slightly rounded corners.
 
+`pantheon` also swaps four habits beyond the chrome table: panels, the
+launcher, the OSD and the notification centre drop straight out of the cell
+or edge that opened them instead of budding off the bar's line, toasts and
+the notification centre draw as elementary's own bubble instead of the
+shadcn card, the app grid is the launcher's default route instead of rows,
+and the bar paints as a wingpanel band that reads the wallpaper under it
+instead of a strip card.
+
 Under the hood a preset is a table file, `shell/Theme/themes/<name>.js`,
 plus the scalar keys in the table below; `retro`'s file re-exports
 `metamorphosis`'s table rather than carrying its own, since the two share
