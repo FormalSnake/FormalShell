@@ -27,7 +27,9 @@ import qs.Core
 //
 // Both drawer modes take their clock from the live theme's table
 // (`Theme.motion.emerge`, shell/Theme/style.js), which is the one number
-// and curve a habit brings with it.
+// and curve a habit brings with it, unless the consumer names another key
+// in that same table through `clock` (the window switcher, whose card Gala
+// fades on a different constant from the one its menus map on).
 //
 // The spatial curves overshoot by design (M54 D1): `emergeX`/`emergeY` pass
 // rest by a few pixels and settle back, and `scale` passes 1 the same way.
@@ -59,6 +61,11 @@ QtObject {
 
     // "fade", "emerge" or "popover"; see the header.
     property string mode: "fade"
+
+    // The clock the pose rides, for a surface whose table names one of its
+    // own (`switcher`). Empty is the mode's own: `effects` for a fade,
+    // `emerge` for either drawer.
+    property string clock: ""
 
     // The drawer modes only: how far behind the edge a closed card sits,
     // toward the anchor. `emerge` takes the card's own size on that axis
@@ -111,7 +118,8 @@ QtObject {
     Behavior on _progress {
         Anim {
             id: _progressAnimation
-            kind: root.mode === "fade" ? "effects" : "emerge"
+            kind: root.clock !== "" ? root.clock
+                : (root.mode === "fade" ? "effects" : "emerge")
         }
     }
 

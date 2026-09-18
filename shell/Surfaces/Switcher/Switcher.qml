@@ -8,11 +8,15 @@ import "switcher.js" as Model
 
 // Gala's Alt+Tab (`lib/Widgets/WindowSwitcher.vala`,
 // `WindowSwitcherIcon.vala`; the 2026-09-17 spec's Part 2, M60 T6): a row of
-// app icons on one card in the middle of the output, the selected one on an
-// `accent` fill with its title under the row. Keyboard only, and summoned
-// over IPC alone (`switcher next|prev|commit|cancel|state`), so the
-// compositor's own bind drives it: Alt+Tab advances, the release of the
-// modifier commits, and nothing here ever grabs a modifier of its own
+// app icons on one card in the middle of the output, the selected one on a
+// quarter-strength `accent` tile with its title under the row. Keyboard
+// only, and summoned over IPC alone
+// (`switcher next|prev|commit|cancel|state`), so the compositor's own bind
+// drives it: Alt+Tab advances, the release of the modifier commits, and
+// nothing here ever grabs a modifier of its own. That release bind has to
+// carry Hyprland's `t` flag (`bindrt`, M64): a bind whose key is held while
+// another bind fires is shadowed for as long as that key stays down, and a
+// transparent bind is the only kind `shadowKeybinds` leaves alone
 // (docs/examples/hyprland/formalshell.conf).
 //
 // One instance rather than one per output, the same reasoning Menu, Center
@@ -24,7 +28,7 @@ import "switcher.js" as Model
 //
 // The cursor here is a FILL rather than the `cursor` ring every other
 // keyboard surface draws (DESIGN.md §1 "Ring"): Gala marks the selected
-// window by filling its cell, the card carries no other selectable chrome to
+// window by tinting its cell, the card carries no other selectable chrome to
 // confuse it with, and a ring around a 64px icon at this size reads as a
 // second border on the icon rather than as a cursor.
 PanelWindow {
@@ -120,10 +124,15 @@ PanelWindow {
     readonly property real _outputWidth: root._screen ? root._screen.width : 0
     readonly property real _outputHeight: root._screen ? root._screen.height : 0
 
-    // One cell: Gala's 64px icon with `md` around it, and the 3px corner the
-    // table gives a control.
-    readonly property real _cellExtent: Theme.space.switcherIcon + Theme.space.md * 2
-    readonly property real _cellGap: Theme.space.md
+    // One cell: Gala's 64px icon inside `WRAPPER_PADDING` on all four sides
+    // (`WindowSwitcherIcon.vala`'s `reload_icon`), which is the same 12 the
+    // card keeps around its own contents, so both are `panelPadding` here.
+    // The cells touch: Gala lays them out in a `Clutter.FlowLayout` and sets
+    // no spacing on it, and the 24px the two paddings leave between two
+    // icons is the gap the row reads as.
+    readonly property real _cellExtent: Theme.space.switcherIcon
+        + Theme.space.panelPadding * 2
+    readonly property real _cellGap: 0
 
     // How many cells fit across before the row wraps: the output minus the
     // room the card keeps off both edges and its own padding.
@@ -140,14 +149,15 @@ PanelWindow {
         ? root._rows * root._cellExtent + (root._rows - 1) * root._cellGap
         : root._cellExtent
 
-    // The card is as wide as its widest row and no wider, floored at the
-    // narrow snap point so a session with one window still gives its title a
-    // line to sit on. The title itself elides inside that width rather than
-    // setting it: a card that resized as the cursor walked would move the
-    // icons under it (the plan-wide no-jitter contract).
-    readonly property real _contentWidth: Math.max(root._gridWidth, Theme.space.popupWidthNarrow)
+    // The card is as wide as its widest row and no wider, which is Gala's
+    // own `get_preferred_width`: the icons set the width and the caption
+    // ellipsizes into it, never the other way round. A card that resized as
+    // the cursor walked would move the icons under it (the plan-wide
+    // no-jitter contract), so nothing here reads the title's length.
+    readonly property real _contentWidth: root.count > 0
+        ? root._gridWidth : Theme.space.popupWidthNarrow
     readonly property real _cardWidth: root._contentWidth + Theme.space.panelPadding * 2
-    readonly property real _cardHeight: root._gridHeight + Theme.space.md
+    readonly property real _cardHeight: root._gridHeight + Theme.space.panelPadding
         + captionMetric.implicitHeight + Theme.space.panelPadding * 2
 
     screen: root._screen
@@ -186,8 +196,8 @@ PanelWindow {
         onTriggered: if (root.isOpen) root._focusPrimed = true
     }
 
-    // Off-screen calibration: the caption's band is one line of `body` at the
-    // live font, whatever title is in it, so a two-word title and a path
+    // Off-screen calibration: the caption's band is one line of `heading` at
+    // the live font, whatever title is in it, so a two-word title and a path
     // leave the card the same height.
     Item {
         visible: false
@@ -196,7 +206,7 @@ PanelWindow {
             id: captionMetric
             text: "Ag"
             font.family: Theme.fontFamilySans
-            font.pixelSize: Theme.fontSize.body
+            font.pixelSize: Theme.fontSize.heading
         }
     }
 
@@ -233,28 +243,31 @@ PanelWindow {
         // to do by accident.
     }
 
-    // Everything the card is, is the drawer's (Components/Drawer.qml): under
-    // this habit that is elementary's popover, a fade from nothing over a
-    // short drop on Gala's own 150ms menu map. `joined: false` because the
-    // card floats in the middle of the output and meets no line, so there is
-    // nothing for it to bud off and no gap to publish.
+    // Everything the card is, is the drawer's (Components/Drawer.qml), on
+    // the table's own `switcher` clock rather than the popover habit's:
+    // Gala's card fades and does not travel, so `edge: "center"` zeroes the
+    // drop a popover would otherwise take and leaves the fade alone.
+    // `joined: false` because the card floats in the middle of the output
+    // and meets no line, so there is nothing for it to bud off and no gap to
+    // publish.
     Drawer {
         id: drawer
         anchors.fill: parent
         owner: root
         open: root.isOpen
         mapped: root.backingWindowVisible
-        edge: "top"
+        edge: "center"
         screen: root._screen
         joined: false
         role: "switcher"
+        clock: "switcher"
         rect: Qt.rect(Math.round((root._outputWidth - root._cardWidth) / 2),
             Math.round((root._outputHeight - root._cardHeight) / 2),
             root._cardWidth, root._cardHeight)
 
         Column {
             anchors.centerIn: parent
-            spacing: Theme.space.md
+            spacing: Theme.space.panelPadding
 
             // The row, wrapped: `_columns` cells across, the last row short
             // and centred under the ones above it.
@@ -302,8 +315,8 @@ PanelWindow {
                                     && cell._desktopEntry.icon)
                                     ? Quickshell.iconPath(cell._desktopEntry.icon, true) : ""
 
-                                role: "cell"
-                                state: cell._selected ? "selected" : "ghost"
+                                role: "switcher.cell"
+                                state: cell._selected ? "selected" : "rest"
                                 width: root._cellExtent
                                 height: root._cellExtent
 
@@ -326,8 +339,7 @@ PanelWindow {
                                     visible: cell._iconSource === ""
                                     name: "app-window"
                                     size: Theme.space.switcherIcon
-                                    color: cell._selected
-                                        ? Theme.color.accentForeground : Theme.color.foreground
+                                    color: Theme.color.foreground
                                 }
                             }
                         }
@@ -339,7 +351,7 @@ PanelWindow {
             // an empty card or an invented window.
             Box {
                 visible: root.count === 0
-                role: "cell"
+                role: "switcher.cell"
                 state: "rest"
                 width: root._contentWidth
                 height: root._cellExtent
@@ -352,7 +364,10 @@ PanelWindow {
 
             // The selected window's title under the row, centred, in the
             // card's own words rather than the mono column a value would
-            // take.
+            // take. `heading` because Gala pins the caption at 12 against
+            // elementary's own `Inter 9` system font (`Text.vala`'s
+            // `set_system_font_name`, default-settings' gschema override),
+            // and 12/9 is this ladder's heading step exactly.
             Text {
                 width: root._contentWidth
                 horizontalAlignment: Text.AlignHCenter
@@ -360,7 +375,7 @@ PanelWindow {
                 text: root.selectedTitle
                 color: Theme.color.foreground
                 font.family: Theme.fontFamilySans
-                font.pixelSize: Theme.fontSize.body
+                font.pixelSize: Theme.fontSize.heading
             }
         }
     }

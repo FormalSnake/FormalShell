@@ -59,6 +59,9 @@ Item {
     // the chrome is the table's, the radius the consumer's, since every
     // number derived from it here is geometry.
     property string role: "card"
+    // The clock the entrance rides, when the theme's table names one for
+    // this card rather than the habit's own (Components/Presence.qml).
+    property string clock: ""
     property real radius: Theme.box(root.role).radius
     property real padding: Theme.space.panelPadding
     property bool bypass: false
@@ -107,6 +110,7 @@ Item {
         id: presence
         open: root.open
         bypass: root.bypass
+        clock: root.clock
         edge: root.edge
         // The travel waits for the surface: a cold window takes long enough
         // to come up that an emerge started on the open would be over before
