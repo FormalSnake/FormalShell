@@ -179,15 +179,14 @@ ShellRoot {
     // trigger time.
     Osd { id: osd }
 
-    // Gala's Alt+Tab, and only under a theme that has one (M60 T6): the
-    // `switcher` habit decides whether the surface exists at all, so a
-    // session on a table without it carries no window for it and
-    // SwitcherIpc answers that instead of a silent no-op. Same "one
+    // The Alt+Tab switcher (M60 T6), under every theme unless
+    // `switcher.enabled` is false: off, the session carries no window for it
+    // and SwitcherIpc answers that instead of a silent no-op. Same "one
     // instance, on the focused output at summon time" reasoning as Menu
     // and Osd above.
     Loader {
         id: switcherLoader
-        active: Theme.habit.switcher
+        active: Config.get("switcher.enabled", true) !== false
 
         sourceComponent: Component {
             Switcher {}

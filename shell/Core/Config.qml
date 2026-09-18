@@ -39,7 +39,10 @@ import QtQuick
 // panel is open). media.lyrics (bool, default true, LyricsService's gate:
 // off, no provider lookup ever runs; on, a lookup starts a second after a
 // track change regardless of whether the panel is open, M56 P14).
-// switcher.currentWorkspace (bool, default false, the window switcher
+// switcher.enabled (bool, default true under every theme, whether the
+// Alt+Tab window switcher exists at all; false leaves the `switcher` IPC
+// target answering an error). switcher.currentWorkspace (bool, default
+// false, the window switcher
 // offering the focused workspace's windows only, Gala's list, instead of
 // every workspace's). media.lyricsBlur (bool, default true,
 // the lyrics pane's depth-of-field blur on every line but the lit one; off

@@ -83,11 +83,6 @@ switcher_keys_fast_3_json="$shot_dir/switcher-keys-fast-3.json"
 switcher_keys_fast_state_json="$shot_dir/switcher-keys-fast-state.json"
 
 leg_switcher_keys_fixture() {
-  # --pantheon pins the same preset; two "theme" keys in one settings.json
-  # would be one object silently winning over the other.
-  if ! leg_on pantheon; then
-    settings_fragment ', "theme": {"preset": "pantheon"}'
-  fi
   # The fourth window on workspace 2 is only held out of the card under
   # Gala's list, which is opt-in.
   settings_fragment ', "switcher": {"currentWorkspace": true}'
@@ -95,9 +90,9 @@ leg_switcher_keys_fixture() {
 
 leg_switcher_keys_validate() {
   local other
-  for other in switcher switcher_off retro; do
+  for other in switcher switcher_off; do
     if leg_on "$other"; then
-      echo "usage: --switcher-keys drives the same surface under its own preset, so it cannot combine with --${other//_/-}" >&2
+      echo "usage: --switcher-keys spawns and drives its own windows on the same card, so it cannot combine with --${other//_/-}" >&2
       exit 1
     fi
   done

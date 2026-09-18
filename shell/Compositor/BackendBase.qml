@@ -16,7 +16,9 @@ QtObject {
     // report a geometry for that window: a window with no box must not become
     // a rectangle at the origin, which the capture picker would happily
     // highlight and crop to.
-    property var windows: [] // [{ id:string, title:string, appId:string, workspaceId:string, isFocused:bool, isFloating:bool, isUrgent:bool, rect:{x,y,width,height}|null }]
+    // `initialClass`, `initialTitle` and `pid` are "" / 0 where the backend
+    // cannot say; they only ever pick a window's icon (Compositor/appicon.js).
+    property var windows: [] // [{ id:string, title:string, appId:string, initialClass:string, initialTitle:string, pid:int, workspaceId:string, isFocused:bool, isFloating:bool, isUrgent:bool, rect:{x,y,width,height}|null }]
     // Display/outputs.js's row contract, see its header for the full shape
     // and for why a disabled output reports a zero mode rather than its last
     // known one. Populated only by refreshOutputs() below; the compositor
@@ -91,7 +93,9 @@ QtObject {
     // window model is already event-driven leaves this a no-op. It exists for
     // Hyprland, where the box in `rect` goes stale between refreshes, so
     // anything about to CROP to a window (the capture picker) can ask for a
-    // current one first rather than capturing where the window used to be.
+    // current one first rather than capturing where the window used to be,
+    // and the switcher can read `pid`/`initialTitle` off a window opened
+    // since the last one.
     function refreshWindows() {}
 
     // Output management (DisplayPanel). `outputs` above is the read model;

@@ -317,7 +317,8 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   bar.layout, pgrep proving it appears on open and dies on close.
 - `speedtest.sh` `--speedtest`: `network speedtest` settling both phases in
   the network panel.
-- `switcher.sh` `--switcher`: Gala's Alt+Tab under the pantheon habit, three
+- `switcher.sh` `--switcher`: the Alt+Tab switcher under whatever theme the
+  run rides (it pins none), three
   windows of the fixture's own app id on the focused workspace and a fourth
   on workspace 2 that must not be offered (the leg pins
   `switcher.currentWorkspace`, off by default), `switcher next` twice and `prev`
@@ -338,9 +339,9 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   taps close it out, each one wtype process with no sleep between the Tab
   and the Alt release, asserting the active window alternates every time
   rather than a commit racing ahead of the next that opened the card.
-- `switcher_off.sh` `--switcher-off`: the same target under the shipped
-  preset, where the habit is off: all five verbs answering the error string
-  and no switcher surface mapped at all.
+- `switcher_off.sh` `--switcher-off`: the same target with
+  `switcher.enabled: false` in the settings fixture: all five verbs answering
+  the error string and no switcher surface mapped at all.
 - `systemupdate.sh` `--systemupdate`: the flake-inputs-behind cell and panel
   reading this repo's own flake through one shared poll.
 - `theme_auto.sh` `--theme-auto`: `theme.mode: "auto"` resolving off the
