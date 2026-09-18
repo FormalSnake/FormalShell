@@ -151,12 +151,14 @@ PanelWindow {
         root.close();
         if (id === "")
             return false;
-        CompositorService.focusWindow(id);
         // A commit inside the prime window lands while this layer still holds
         // the keyboard exclusively, and Hyprland hands focus back to the
-        // window it came from once the layer lets go, undoing the switch. The
-        // second dispatch runs after that release has been processed.
-        if (!primed) {
+        // window it came from once the layer lets go, undoing the switch. One
+        // dispatch after that release rather than one either side of it: two
+        // make the compositor start its animation, reverse it and start again.
+        if (primed) {
+            CompositorService.focusWindow(id);
+        } else {
             root._refocusId = id;
             _refocusTimer.restart();
         }
@@ -167,7 +169,7 @@ PanelWindow {
 
     Timer {
         id: _refocusTimer
-        interval: 120
+        interval: 80
         onTriggered: {
             if (!root.isOpen && root._refocusId !== "")
                 CompositorService.focusWindow(root._refocusId);
