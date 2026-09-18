@@ -82,7 +82,7 @@ Box {
     // sits on it.
     role: "button." + root.variant
     state: pointer.pressed ? "press" : root.hovered ? "hover" : "rest"
-    box: Theme.withCursor(Theme.box(root.role, root.state), root.cursor, !root._haloOwned)
+    box: Theme.withCursor(Theme.box(root.role, root.state), root._cursorRing, !root._haloOwned)
 
     readonly property color _ink: root.variant === "default"
         ? Theme.color.primaryForeground
@@ -113,7 +113,18 @@ Box {
     // cursor rather than when it is built.
     property bool _haloOwned: false
 
-    onCursorChanged: if (root.cursor) root._haloOwned = Cursor.haloOwned(root);
+    // Whether the ring draws for this button at all (DESIGN.md §1 "Ring"): the
+    // list above it hands the ring to the keyboard and the wash to the
+    // pointer, and a button with no such list above it draws both. cursor.js
+    // carries the walk, resolved on the same hop `_haloOwned` is.
+    property Item _ringOwner: null
+    readonly property bool _cursorRing: root.cursor
+        && (!root._ringOwner || root._ringOwner.cursorFromKeys)
+
+    onCursorChanged: if (root.cursor) {
+        root._haloOwned = Cursor.haloOwned(root);
+        root._ringOwner = Cursor.ringOwner(root);
+    }
 
     Row {
         id: row

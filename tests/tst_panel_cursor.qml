@@ -6,6 +6,7 @@ import "../shell/Components/cursor.js" as Cursor
 // imports Quickshell, so the arithmetic it drives lives in cursor.js and is
 // tested head-on, the same split tst_theme_tokens and tst_menu_search use.
 TestCase {
+    id: testCase
     name: "PanelCursor"
 
     function test_first_move_reveals_without_moving() {
@@ -115,6 +116,59 @@ TestCase {
 
     function test_the_catcher_is_blocked_on_a_closed_panel() {
         compare(Cursor.catcherBlocked(false, false), true);
+    }
+
+    // --- The ring (M68) -------------------------------------------------
+
+    // The sequence the rule exists for (owner, 2026-09-18: a hovered row drew
+    // the ring and the hover wash at once, which reads as a web focus ring).
+    // `keyed` is set by Panel's moveCursor and moveSection alone; every other
+    // write to the cursor is a panel's own `_pointAt`.
+    function test_a_key_lights_the_ring_and_the_pointer_takes_it_off() {
+        var on = Cursor.ringAfter(false, true, true);
+        compare(on, true);
+        on = Cursor.ringAfter(on, false, true);
+        compare(on, false);
+        on = Cursor.ringAfter(on, true, true);
+        compare(on, true);
+    }
+
+    function test_a_write_with_no_cursor_showing_decides_nothing() {
+        compare(Cursor.ringAfter(true, false, false), true);
+        compare(Cursor.ringAfter(false, false, false), false);
+    }
+
+    Component {
+        id: listFixture
+        Item {
+            property bool cursorFromKeys: false
+            property alias row: rowItem
+            Item {
+                id: rowItem
+                property alias control: controlItem
+                Item { id: controlItem }
+            }
+        }
+    }
+
+    Component {
+        id: loneFixture
+        Item {
+            property alias row: loneRow
+            Item { id: loneRow }
+        }
+    }
+
+    function test_a_row_reads_the_nearest_list_above_it() {
+        var list = createTemporaryObject(listFixture, testCase);
+        compare(Cursor.ringOwner(list.row), list);
+        // A control nested inside the row (Audio's tracks) reads the same one.
+        compare(Cursor.ringOwner(list.row.control), list);
+    }
+
+    function test_a_row_under_no_list_at_all_draws_the_ring() {
+        var lone = createTemporaryObject(loneFixture, testCase);
+        compare(Cursor.ringOwner(lone.row), null);
     }
 
     // --- Scroll-follow (M53) -------------------------------------------

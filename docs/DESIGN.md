@@ -44,13 +44,18 @@ follow. Nested corners are outer minus padding, floored at `Sm`.
 **Border**: 1px `border`. `input` on text fields. No other width exists.
 
 **Ring**: focus is `border` swapped to `ring` plus a 3px outer halo of `ring`
-at 0.5 alpha (`Theme.ringWidth`). Same drawing on every surface. The halo
-falls outside the item's own bounds, so a clipping container reserves room
-for it: it grows its clip rect by `ringWidth` on every side and insets its
-content by the same, which leaves every row at the x, width and top it had
-without a ring. The rule lives in the container (`Panel`'s content
-flickable, the launcher's and the centre's lists), never in the surface, and
-a row never insets itself.
+at 0.5 alpha (`Theme.ringWidth`). Same drawing on every surface, and the
+keyboard's own mark: it draws only while the cursor's last move came from a
+key, and a cursor the pointer put on a row leaves that row its hover wash
+alone, which is the whole mark a pointer needs. The row keeps the cursor
+either way, so Enter still acts on it. The surface owning the cursor
+publishes `cursorFromKeys` over its rows and each row reads the nearest one
+(`Components/cursor.js`). The halo falls outside the item's own bounds, so a
+clipping container reserves room for it: it grows its clip rect by
+`ringWidth` on every side and insets its content by the same, which leaves
+every row at the x, width and top it had without a ring. The rule lives in
+the container (`Panel`'s content flickable, the launcher's and the centre's
+lists), never in the surface, and a row never insets itself.
 
 **Translucency and blur**: the bar strip, panels, the launcher card and the
 polkit consent card paint `Theme.surface(Theme.color.card)`, the card colour
@@ -733,7 +738,8 @@ no exceptions.
 Anything a pointer can do on a shell surface has a key, and the target is
 visible. Panels take keys through `KeyCatcher` and show the cursor as the
 ring; the launcher shows it as the `accent` row. A panel opened by pointer
-hides the cursor until the first key. `panel toggle <name>`, `panel toggleAt
+hides the cursor until the first key, and a pointer moving the cursor takes
+the ring off it again (§1 "Ring"). `panel toggle <name>`, `panel toggleAt
 <n>` and `menu summon <route>` are the keybind entry points; the shipped
 Hyprland bindings are in `docs/examples/hyprland/formalshell.conf`.
 

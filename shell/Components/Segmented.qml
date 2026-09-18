@@ -75,14 +75,25 @@ Item {
     // built.
     property bool _haloOwned: false
 
-    onCursorChanged: if (root.cursor) root._haloOwned = Cursor.haloOwned(root);
+    // Whether the ring draws for this trough at all (DESIGN.md §1 "Ring"): the
+    // list above it hands the ring to the keyboard and the wash to the
+    // pointer, and a trough with no such list above it draws both. cursor.js
+    // carries the walk, resolved on the same hop `_haloOwned` is.
+    property Item _ringOwner: null
+    readonly property bool _cursorRing: root.cursor
+        && (!root._ringOwner || root._ringOwner.cursorFromKeys)
+
+    onCursorChanged: if (root.cursor) {
+        root._haloOwned = Cursor.haloOwned(root);
+        root._ringOwner = Cursor.ringOwner(root);
+    }
 
     // The trough, with the cursor composed over it: the ring takes its
     // border, and the halo outside it belongs to whatever owns one.
     Box {
         anchors.fill: parent
         role: "trough"
-        box: Theme.withCursor(Theme.box("trough"), root.cursor, !root._haloOwned)
+        box: Theme.withCursor(Theme.box("trough"), root._cursorRing, !root._haloOwned)
     }
 
     // One selection, outside the Repeater (M53 D2): the chosen segment used

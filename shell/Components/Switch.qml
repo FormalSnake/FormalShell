@@ -54,8 +54,8 @@ Item {
     // The cursor composed onto the track (M59 T6): its border in place of
     // the track's own, and its halo outside unless a list above draws one.
     readonly property var _box: {
-        if (root.cursor)
-            return Theme.withCursor(root._trackBox, root.cursor, !root._haloOwned);
+        if (root._cursorRing)
+            return Theme.withCursor(root._trackBox, root._cursorRing, !root._haloOwned);
         // Held at the ring's own colour with no width while the cursor is
         // elsewhere: the track carries no line of its own, so the one it
         // takes has to arrive as a line rather than as a colour fading up
@@ -74,7 +74,18 @@ Item {
     // built.
     property bool _haloOwned: false
 
-    onCursorChanged: if (root.cursor) root._haloOwned = Cursor.haloOwned(root);
+    // Whether the ring draws for this track at all (DESIGN.md §1 "Ring"): the
+    // list above it hands the ring to the keyboard and the wash to the
+    // pointer, and a track with no such list above it draws both. cursor.js
+    // carries the walk, resolved on the same hop `_haloOwned` is.
+    property Item _ringOwner: null
+    readonly property bool _cursorRing: root.cursor
+        && (!root._ringOwner || root._ringOwner.cursorFromKeys)
+
+    onCursorChanged: if (root.cursor) {
+        root._haloOwned = Cursor.haloOwned(root);
+        root._ringOwner = Cursor.ringOwner(root);
+    }
 
     Box {
         id: track

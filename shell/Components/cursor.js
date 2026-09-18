@@ -107,3 +107,33 @@ function haloOwned(item) {
 function catcherBlocked(isOpen, inlineEditorFocused) {
     return !isOpen || !!inlineEditorFocused;
 }
+
+// The cursor's ring after one write to it (DESIGN.md §1 "Ring"). The ring is
+// the keyboard's own mark: `keyed` is set by Panel's moveCursor and
+// moveSection, the only two paths a key reaches the cursor by, and every
+// other write to the index, the section or `cursorActive` is a panel's own
+// `_pointAt` naming the row under the pointer. That row keeps the cursor,
+// so Enter still acts on it, and loses the ring, since its hover wash is
+// already the whole mark a pointer needs. A write that leaves no cursor
+// showing decides nothing and the mark survives to whatever puts one back.
+function ringAfter(on, keyed, shown) {
+    if (!shown)
+        return on;
+    return !!keyed;
+}
+
+// Which item above this one answers that for a row. A surface whose cursor
+// the pointer can move publishes `cursorFromKeys` over its rows and each row
+// reads the nearest one; a row with nothing above it has no pointer path to
+// its cursor either, and null there draws the ring. Resolved to the item
+// rather than to its value because the flag flips while the cursor stays
+// where it is, so the row has to bind to it rather than sample it.
+function ringOwner(item) {
+    var p = item ? item.parent : null;
+    while (p) {
+        if (p.cursorFromKeys !== undefined)
+            return p;
+        p = p.parent;
+    }
+    return null;
+}
