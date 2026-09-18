@@ -93,8 +93,12 @@ Box {
     // beside `ghost`, and transparent everywhere else, which leaves every
     // state's own ink standing. The band's ink comes with the band's weight
     // too, which is what `bandInk` below says to a label.
+    //
+    // The shadow is the table's own layer list (M63 O6), empty everywhere a
+    // band does not reach and under any table declaring none, which is what
+    // keeps the glow below from instantiating an effect.
     property color barInk: "transparent"
-    property color barInkShadow: "transparent"
+    property var barInkShadow: []
 
     readonly property bool bandInk: root.barInk.a > 0
 
@@ -459,6 +463,19 @@ Box {
         anchors.fill: parent
     }
 
+    // The band's ink shadow, behind the content and never measured with it:
+    // a sibling of `contentBox` rather than a child, so the padding the blur
+    // needs never reaches `_measure`, and declared ahead of it so the crisp
+    // glyphs the topmost effect draws land over every halo under them.
+    InkGlow {
+        x: contentBox.x
+        y: contentBox.y
+        width: contentBox.width
+        height: contentBox.height
+        source: contentBox
+        shadows: root.barInkShadow
+    }
+
     // The content box: the cell less `controlPaddingX` at both ends of the
     // content and `_insetAcross` either side of it. On a vertical bar the
     // two insets swap axes with the content, so the end padding runs down
@@ -471,6 +488,15 @@ Box {
         height: root.height - (root.vertical ? Theme.space.controlPaddingX : root._insetAcross) * 2
         x: (root.width - contentBox.width) / 2
         y: (root.height - contentBox.height) / 2
+
+        // Drawn by the glow above while there is one: the effects render
+        // this layer's texture back with their halos under it, so drawing it
+        // here too would double it. `opacity` rather than `visible` (a layer
+        // renders at opacity 1 and the item's own opacity applies to the
+        // texture) because an interactive child in the content box keeps
+        // answering the pointer either way.
+        opacity: root.barInkShadow.length > 0 ? 0 : 1
+        layer.enabled: root.barInkShadow.length > 0
 
         // Deliberately no implicit size of its own: root._measure() reads
         // the children directly, so nothing ever writes an implicit size

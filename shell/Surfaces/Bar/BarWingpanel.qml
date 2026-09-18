@@ -17,8 +17,9 @@ import "../../Theme/barpaint.js" as Paint
 //
 // The ink comes with the paint and is the one thing the band hands the cells
 // on it (Bar.qml passes it down, Components/Cell.qml resolves it): white
-// over a dark band, dark over a light one, with the text shadow that lifts
-// it off a wallpaper it is drawn straight onto.
+// over a dark band, dark over a light one, with the layer list of a text
+// shadow that lifts it off a wallpaper it is drawn straight onto
+// (Components/InkGlow.qml draws them).
 //
 // The paint answers for the band whether or not the band is on screen: a
 // window covering the output makes it solid, and the same window takes the
@@ -38,7 +39,7 @@ Item {
     readonly property var _box: Core.Theme.box("bar", root.paint)
 
     readonly property color ink: root._box.ink
-    readonly property color inkShadow: root._box.inkShadow
+    readonly property var inkShadow: root._box.inkShadow
 
     // No line along the desktop's edge to report: the band is what separates
     // the bar from the wallpaper, and a joined card has nothing to break.

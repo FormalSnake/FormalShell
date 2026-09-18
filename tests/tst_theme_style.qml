@@ -122,6 +122,37 @@ TestCase {
         }
     }
 
+    // An ink-shadow layer reaches Components/InkGlow.qml as a MultiEffect's
+    // offsets and blur, so a field that is not a number lands there as a NaN
+    // rather than as a glow that looks wrong. The alphas themselves are
+    // covered by the walk above, which takes each layer's own.
+    function test_every_ink_shadow_layer_is_an_offset_a_blur_and_a_colour() {
+        var names = tableNames();
+        var seen = 0;
+        for (var t = 0; t < names.length; t++) {
+            var style = tables[names[t]];
+            var found = Style.inkShadowLayers(style);
+            for (var i = 0; i < found.length; i++) {
+                var layer = found[i].layer;
+                var where = names[t] + " " + found[i].path;
+                verify(typeof layer === "object" && layer !== null, where + " is not a layer");
+                var fields = ["x", "y", "blur"];
+                for (var f = 0; f < fields.length; f++) {
+                    var value = layer[fields[f]];
+                    verify(value === undefined || (typeof value === "number" && isFinite(value)),
+                        where + "." + fields[f] + " is not a number");
+                }
+                verify(typeof layer.color === "string", where + " names no colour");
+                seen++;
+            }
+        }
+        // metamorphosis and retro declare none, so pantheon's own are the
+        // whole set and an empty walk would pass vacuously.
+        compare(seen, Style.inkShadowLayers(Pantheon.STYLE).length);
+        verify(seen > 0);
+        compare(Style.inkShadowLayers(Metamorphosis.STYLE).length, 0);
+    }
+
     function test_every_radius_is_a_step_or_a_number() {
         var names = tableNames();
         var roles = Style.roleNames();
@@ -441,13 +472,28 @@ TestCase {
         var light = Style.resolve(style, "bar", "light", ctx("dark"));
         compare(light.fill, Style.LITERAL_COLORS.transparent);
         compare(light.ink, white);
-        compare(light.inkShadow, black + "@0.6");
         compare(light.casts.length, 0);
+        // Both layers elementary writes (O6): the wide halo, then the
+        // offset one under it.
+        compare(light.inkShadow.length, 2);
+        compare(light.inkShadow[0].color, black + "@0.3");
+        compare(light.inkShadow[0].blur, 2);
+        compare(light.inkShadow[0].y, 0);
+        compare(light.inkShadow[1].color, black + "@0.6");
+        compare(light.inkShadow[1].blur, 2);
+        compare(light.inkShadow[1].y, 1);
 
         var dark = Style.resolve(style, "bar", "dark", ctx("dark"));
         compare(dark.fill, Style.LITERAL_COLORS.transparent);
         compare(dark.ink, black + "@0.65");
-        compare(dark.inkShadow, white + "@0.25");
+        // Dark ink takes the white pair, whose lower layer is an unblurred
+        // lip rather than a second halo.
+        compare(dark.inkShadow.length, 2);
+        compare(dark.inkShadow[0].color, white + "@0.3");
+        compare(dark.inkShadow[0].blur, 2);
+        compare(dark.inkShadow[1].color, white + "@0.25");
+        compare(dark.inkShadow[1].blur, 0);
+        compare(dark.inkShadow[1].y, 1);
 
         // A fill of its own under the ink steps the shadow back to
         // elementary's lighter pair, and white on white at 0.5 carries none
@@ -455,20 +501,26 @@ TestCase {
         var translucentDark = Style.resolve(style, "bar", "translucentDark", ctx("dark"));
         compare(translucentDark.fill, black + "@0.3");
         compare(translucentDark.ink, white);
-        compare(translucentDark.inkShadow, black + "@0.3");
+        compare(translucentDark.inkShadow.length, 2);
+        compare(translucentDark.inkShadow[0].color, black + "@0.15");
+        compare(translucentDark.inkShadow[1].color, black + "@0.3");
 
         var translucentLight = Style.resolve(style, "bar", "translucentLight", ctx("dark"));
         compare(translucentLight.fill, white + "@0.5");
         compare(translucentLight.ink, black + "@0.65");
-        compare(translucentLight.inkShadow, Style.LITERAL_COLORS.transparent);
+        compare(translucentLight.inkShadow.length, 0);
         compare(translucentLight.hairlines.length, 2);
         compare(translucentLight.hairlines[0].color, white + "@0.15");
         compare(translucentLight.hairlines[1].edge, "bottom");
         compare(translucentLight.hairlines[1].color, white + "@0.03");
 
+        // A window over the output keeps the bare band's pair: the ink is
+        // still white and the fill under it is not the band's own material.
         var maximized = Style.resolve(style, "bar", "maximized", ctx("dark"));
         compare(maximized.fill, black);
         compare(maximized.ink, white);
+        compare(maximized.inkShadow.length, 2);
+        compare(maximized.inkShadow[1].color, black + "@0.6");
 
         // Every band draws its own edge at width 0: wingpanel has no line
         // facing the desktop, and Bar reads the width either way.

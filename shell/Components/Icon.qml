@@ -29,11 +29,10 @@ Item {
 
     readonly property string _set: Theme.iconSet
 
-    // The cell this glyph sits in, if any, for the ink shadow a band hands
-    // its cells (Components/Cell.qml's `barInkShadow`): a glyph drawn
-    // straight onto a wallpaper needs it as much as a word does. The same
-    // walk CellLabel.qml makes, and nothing anywhere else in the shell
-    // answers it.
+    // The cell this glyph sits in, if any, for the weight a band hands its
+    // cells (Components/Cell.qml's `bandInk`). The same walk CellLabel.qml
+    // makes; the shadow under a band's ink is the cell's own, drawn behind
+    // the whole content box by Components/InkGlow.qml.
     readonly property Item _cell: {
         var item = root.parent;
         while (item && item.bandInk === undefined)
@@ -42,7 +41,6 @@ Item {
     }
 
     readonly property bool _band: !!root._cell && root._cell.bandInk
-    readonly property color _shadow: root._cell ? root._cell.barInkShadow : "transparent"
 
     // One key for both halves of a glyph's identity: the icon set decides
     // the font as well as the codepoint, so a set swap has to move through
@@ -123,8 +121,6 @@ Item {
         width: root.size
         text: root._glyphA
         color: root.color
-        style: root._band ? Text.Raised : Text.Normal
-        styleColor: root._shadow
         opacity: root._cross
         font.family: root._familyA === "" ? Theme.fontFamilyMono : root._familyA
         font.pixelSize: root.size
@@ -140,8 +136,6 @@ Item {
         width: root.size
         text: root._glyphB
         color: root.color
-        style: root._band ? Text.Raised : Text.Normal
-        styleColor: root._shadow
         opacity: 1 - root._cross
         font.family: root._familyB === "" ? Theme.fontFamilyMono : root._familyB
         font.pixelSize: root.size

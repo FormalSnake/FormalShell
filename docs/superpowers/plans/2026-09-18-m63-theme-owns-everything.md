@@ -72,6 +72,19 @@ inset `screenPadding: 16`, and leaves the rest. A key a user sets
 falls back to; pantheon says `transparent`, metamorphosis `auto` (which
 under the strip habit samples nothing). The nix mixin carries no pin.
 
+**O6 The ink glow.** Wingpanel's contrast on a transparent panel is its
+text and icon shadow, `0 0 2px black 0.3` plus `0 1px 2px black 0.6` (white
+at 0.3 and 0.25 for dark ink), a blurred glow and an offset, which QML
+`Text` cannot draw and `Text.Raised` only approximates as a 1px offset.
+Owner, 2026-09-18, asked whether a transparent band "will always contrast
+decently like pantheon", and chose rendering the shadow as elementary
+draws it: a `MultiEffect` glow behind each bar cell's ink under the
+wingpanel habit, blurred per the table's `inkShadow` entry (blur radius,
+offset, colour, alpha, per paint), off entirely under a table whose ink
+carries no shadow. The glow is one layer per cell, drawn once per change
+of the cell's content, and the strip's cost stays what `--bar-room`
+measures today.
+
 ## Tasks
 
 One subagent per task, in order, verification read before each commit,
@@ -96,6 +109,13 @@ Verify: `just test`, lint, `--pantheon --panel network` (the gap at 8),
 table with no key set), `--bar-adaptive`, metamorphosis `--panel network`,
 `--notify`, `dev/parity.sh --panel network --notify --tooltip`.
 
+### Task 3b: the ink glow (O6)
+
+Verify: `just test`, lint, `--pantheon --bar-adaptive` reading a crop of a
+cell's glyph over the busy band for the glow (a dark halo around light
+ink), `--bar-room` under both presets for the strip's own cost, `--frame-adaptive`,
+metamorphosis `--bar-layout` unchanged.
+
 ### Task 4: the record and the hosts
 
 `docs/DESIGN.md` §1 Themes (what a table owns now: chrome, habits, motion,
@@ -106,3 +126,22 @@ lock, rebuild e1504g then g815.
 ## Evidence
 
 Filled per task.
+
+**Task 3b, the ink glow (O6).** `--pantheon --bar-adaptive`, the clock read
+over the busy band's bright half: the band is 178 with nothing on it, 177.2
+on the row above the glyph (min 175) and 164.9 then 173.8 on the two rows
+under it (min 145.9), which is the black pair, deepest a pixel down where
+the offset layer lands. Over the bright band the same columns read 230
+plain against 232.7 above the glyph and 243.7 then 236.5 under it (max
+255), the white pair under dark ink. `--frame-adaptive` passes on all five
+paints (bright=dark/230, dark=light/30, busy=translucentDark/178,
+maximized=maximized/36, pinned=light/255), and `--bar-layout` is the
+metamorphosis strip unchanged.
+
+`SMOKE_MEM` off `--bar-room`: 385780 kB rss and 12856 kB of JS heap under
+pantheon, against 361740 and 10480 under metamorphosis, whose table
+declares no shadow and instantiates no effect at all (`--bar-layout` runs
+at 363108 and 10320). Both effects sample the content box's own layer, so a
+cell redraws them when its glyphs change rather than per frame; a scrolling
+now-playing title is the exception, and that re-render is the marquee's
+own.

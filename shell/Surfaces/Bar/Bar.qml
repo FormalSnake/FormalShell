@@ -236,7 +236,7 @@ PanelWindow {
     // with the same reading (Components/Cell.qml's `barInk`). A strip hands
     // down nothing and every cell resolves its own ink from its state.
     readonly property color _cellInk: stripPaint.item ? stripPaint.item.ink : "transparent"
-    readonly property color _cellInkShadow: stripPaint.item ? stripPaint.item.inkShadow : "transparent"
+    readonly property var _cellInkShadow: stripPaint.item ? stripPaint.item.inkShadow : []
 
     // The inward line's two segments in this window's own coordinates, for
     // `debug dump` (Ipc/DebugIpc.qml): a rig leg reads the gap a joined card

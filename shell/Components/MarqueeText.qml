@@ -31,9 +31,10 @@ Item {
     // any other embedding still animates.
     property bool windowVisible: true
 
-    // The cell this line sits in, if any, for the ink shadow and the weight
-    // a band hands its cells (Components/Cell.qml's `barInk`): the same walk
-    // CellLabel.qml makes.
+    // The cell this line sits in, if any, for the weight a band hands its
+    // cells (Components/Cell.qml's `bandInk`): the same walk CellLabel.qml
+    // makes. The shadow under that ink is the cell's own, drawn behind the
+    // whole content box by Components/InkGlow.qml.
     readonly property Item _cell: {
         var item = root.parent;
         while (item && item.bandInk === undefined)
@@ -42,7 +43,6 @@ Item {
     }
 
     readonly property bool _band: !!root._cell && root._cell.bandInk
-    readonly property color _shadow: root._cell ? root._cell.barInkShadow : "transparent"
     readonly property int _weight: root._band ? Theme.weight.semibold : Theme.weight.normal
 
     readonly property real _fullWidth: root.leftPadding + measureText.implicitWidth
@@ -101,8 +101,6 @@ Item {
             visible: !root._marquee
             text: root.text
             color: root.color
-            style: root._band ? Text.Raised : Text.Normal
-            styleColor: root._shadow
             font.family: Theme.fontFamilySans
             font.pixelSize: root.pixelSize
             font.weight: root._weight
@@ -122,8 +120,6 @@ Item {
             Text {
                 text: root.text
                 color: root.color
-                style: root._band ? Text.Raised : Text.Normal
-                styleColor: root._shadow
                 font.family: Theme.fontFamilySans
                 font.pixelSize: root.pixelSize
                 font.weight: root._weight
@@ -132,8 +128,6 @@ Item {
             Text {
                 text: root.text
                 color: root.color
-                style: root._band ? Text.Raised : Text.Normal
-                styleColor: root._shadow
                 font.family: Theme.fontFamilySans
                 font.pixelSize: root.pixelSize
                 font.weight: root._weight
