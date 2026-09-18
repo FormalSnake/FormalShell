@@ -83,10 +83,12 @@ var STYLE = {
         // band's own square outer edge and FrameRing keeps deciding the cut
         // out it leaves for the desktop.
         "frame": {
-            fill: "card",
-            fillAlpha: "surface",
-            radius: 0,
-            border: { color: "border", width: 1 }
+            rest: {
+                fill: "card",
+                fillAlpha: "surface",
+                radius: 0,
+                border: { color: "border", width: 1 }
+            }
         },
 
         // Every floating surface's frame. `opaque` is the same box on a
@@ -307,6 +309,7 @@ var STYLE = {
         emerge: "join",
         notification: "row",
         launcher: "list",
-        switcher: false
+        switcher: false,
+        paint: "auto"
     }
 };

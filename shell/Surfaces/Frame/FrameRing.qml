@@ -19,9 +19,16 @@ Item {
     // The output this ring is on, for the joins it opens its line under.
     property string screenName: ""
 
+    // Which paint the band under the bar settled on, under a theme whose bar
+    // reads one (M62, Surfaces/Bar/BarWingpanel.qml): with the frame on, the
+    // ring IS that band on all four edges, so it wears the paint or the
+    // habit is invisible on the one config that shows the most of it. Empty
+    // under a theme whose `frame` has no states, where it reads as the base.
+    property string paint: ""
+
     // The ring's own box in the theme's table: the band's fill, and the
     // hairline along the cut-out as its border.
-    readonly property var _box: Theme.box("frame")
+    readonly property var _box: Theme.box("frame", ring.paint)
 
     readonly property var _g: Geometry.frameGeometry(ring.width, ring.height,
         Theme.edgeInset, Theme.frameRadius)

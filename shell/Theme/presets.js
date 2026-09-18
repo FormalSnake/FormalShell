@@ -26,7 +26,10 @@ var _TABLE = {
         style: Metamorphosis.STYLE },
     retro: { radius: 0, icons: "nerd", fonts: "mono", surfaceOpacity: 1, blur: false, dither: true,
         style: Retro.STYLE },
-    pantheon: { radius: 6, icons: "lucide", fonts: "pair", surfaceOpacity: 0.85, blur: true, dither: false,
+    // Opaque, unlike the other two: elementary's popovers and dialogs are
+    // `bg_color(2)` with nothing behind them, and its one translucent
+    // surface is the panel, which carries its own alpha in the table (M62).
+    pantheon: { radius: 6, icons: "lucide", fonts: "pair", surfaceOpacity: 1, blur: true, dither: false,
         style: Pantheon.STYLE }
 };
 

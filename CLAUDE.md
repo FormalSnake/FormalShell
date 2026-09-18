@@ -144,6 +144,12 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `frame.sh` `--frame`: pins `frame.thickness` in the settings fixture so the
   bar's window grows to the output and paints the frame round it, and reads
   that box and the four exclusion zones off the compositor's own layer list.
+- `frame_adaptive.sh` `--frame-adaptive`: the ring wearing the wingpanel
+  band's own paint under pantheon, on the owner's layout (a left bar inside
+  a 24px frame): four wallpapers, each paint read off `bar paint` and off a
+  patch of the ring's TOP edge, which no bar touches, and a fifth case where
+  `bar.paint: "transparent"` alone takes the busy wallpaper's black 0.3 wash
+  back off, reported as pinned on both routes.
 - `fullscreen.sh` `--fullscreen`: the fullscreen chrome auto-hide, read off
   the compositor's own layer list: bar, frame zones and hot corners gone
   while the fixture window is fullscreen and back to their starting counts

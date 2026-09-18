@@ -33,7 +33,7 @@
 // on screen.
 var ROLES = {
     "bar": ["rest"],
-    "frame": [],
+    "frame": ["rest"],
     "card": ["rest", "opaque"],
     "notification": ["rest", "critical", "flat", "flatCritical"],
     "popover": [],
@@ -69,7 +69,11 @@ var HABITS = {
     emerge: ["join", "popover"],
     notification: ["row", "bubble"],
     launcher: ["list", "grid"],
-    switcher: [true, false]
+    switcher: [true, false],
+    // The band's paint policy under the wingpanel habit (M62, owner
+    // 2026-09-18: "make it part of our theme"): what `bar.paint` falls back
+    // to when settings.json says nothing, barpaint.js's own PINS.
+    paint: ["auto", "transparent", "light", "dark", "translucentLight", "translucentDark", "maximized"]
 };
 
 // The states a habit brings with it, over and above `ROLES` (T3):
@@ -81,10 +85,16 @@ var HABITS = {
 // validation test; a surface asks `hasState` before naming one, so a table
 // without it falls back to the state under it instead of to the role's
 // base.
+//
+// `frame` takes the same five (M62): with `frame.thickness` set the bar's
+// band is a stretch of the ring rather than a strip of its own, so the ring
+// has to wear the paint the band would have, or the habit disappears on
+// exactly the config that shows the most of it.
 var HABIT_STATES = {
     bar: {
         wingpanel: {
             "bar": ["light", "dark", "translucentLight", "translucentDark", "maximized"],
+            "frame": ["light", "dark", "translucentLight", "translucentDark", "maximized"],
             "cell": ["ghostOpen"]
         }
     }

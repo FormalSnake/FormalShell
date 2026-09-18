@@ -69,7 +69,8 @@ TestCase {
         compare(t.radius, 6);
         compare(t.icons, "lucide");
         compare(t.fonts, "pair");
-        compare(t.surfaceOpacity, 0.85);
+        // Opaque (M62): elementary's popovers have nothing behind them.
+        compare(t.surfaceOpacity, 1);
         compare(t.blur, true);
         compare(t.dither, false);
         compare(t.wallpaperDither, false);

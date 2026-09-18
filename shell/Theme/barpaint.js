@@ -88,16 +88,36 @@ function busy(s) {
         || (s.mean < LUMA_THRESHOLD && s.mean + SIGMA * s.std > LUMA_THRESHOLD);
 }
 
-// The paint, one of the five the table describes. A window covering the
-// output wins over everything the wallpaper says, since none of it is
+// What `bar.paint` may say (M62). `auto` is wingpanel's rule, the default
+// and what every session had before the key existed. `transparent` is that
+// rule with the busy branch taken out: the band never takes a fill, and its
+// ink still follows the wallpaper's own mean, which is the reading a user
+// wants when their wallpaper trips the busy rule and they would rather have
+// the panel elementary shows over a calm sky. The other five pin one paint
+// outright.
+var PINS = ["auto", "transparent", "light", "dark", "translucentLight", "translucentDark", "maximized"];
+
+// An unknown value is a typo rather than a request, and reads as the rule,
+// the same unknown-value habit presets.js keeps for `theme.preset`.
+function pin(value) {
+    return typeof value === "string" && PINS.indexOf(value) !== -1 ? value : "auto";
+}
+
+// The paint, one of the five the table describes. A pinned paint is the
+// answer whatever is under the band, including a window over it: pinning is
+// the user saying they have looked. Under the two rules a window covering
+// the output wins over everything the wallpaper says, since none of it is
 // visible then. With no wallpaper set there is nothing to sample and
 // nothing to invent: the honest answer is the bare band with light ink.
-function decide(s, mode, fullscreen) {
+function decide(s, mode, fullscreen, pinned) {
+    var p = pin(pinned);
+    if (p !== "auto" && p !== "transparent")
+        return p;
     if (fullscreen)
         return "maximized";
     if (!s || !s.sampled)
         return "light";
-    if (busy(s))
+    if (p === "auto" && busy(s))
         return mode === "light" ? "translucentLight" : "translucentDark";
     return s.mean > LUMA_THRESHOLD ? "dark" : "light";
 }

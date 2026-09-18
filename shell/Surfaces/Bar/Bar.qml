@@ -840,6 +840,12 @@ PanelWindow {
         anchors.fill: parent
         visible: bar._framed
         screenName: bar.modelData ? bar.modelData.name : ""
+        // The band's own paint, under the habit that reads one (M62): the
+        // ring carries the bar's band with the frame on, so it is painted
+        // with what the strip would have been. The loaded paint answers
+        // whether or not it is drawn, which is what makes this readable at
+        // all here.
+        paint: bar._wingpanel && stripPaint.item ? stripPaint.item.paint : ""
     }
 
     // The strip: the whole window on its own, or the bar's edge of a
@@ -856,10 +862,11 @@ PanelWindow {
         opacity: presence.opacity
 
         // Declared before the regions, so it stacks behind every cell. With
-        // the screen frame on, the ring below already paints the strip as
+        // the screen frame on, the ring above already paints the strip as
         // part of itself, so the paint is off and only the cells draw here;
-        // the loaded item still answers `paint`, since what the band would
-        // be painted with is the same question either way.
+        // the loaded item still answers `paint` and hands down its ink,
+        // since what the band would be painted with is the same question
+        // either way, and the ring is handed that answer to wear.
         Loader {
             id: stripPaint
             anchors.fill: parent

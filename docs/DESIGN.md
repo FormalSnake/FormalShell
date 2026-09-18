@@ -105,7 +105,10 @@ is why the dark material reads quieter than the light one rather than as
 the same lines at a lower opacity. Radii are elementary's own, pinned by
 number rather than by the radius ladder's step so `theme.radius` moving the
 base never drifts them: 3 for a control, 6 for a popover, 9 for a card or
-bubble.
+bubble. Its surfaces are opaque (`theme.surfaceOpacity` 1): elementary's
+popovers and dialogs are `bg_color(2)` with nothing behind them, and its one
+translucent surface is the panel, whose alpha belongs to the band's paint
+rather than to that key.
 
 **Type** (`Theme.fontFamilySans`, `Theme.fontFamilyMono`,
 `Theme.fontSize.*`, `Theme.weight.*`): sans for words (titles, labels,
@@ -579,10 +582,17 @@ decided by the band's own mean luminance, standard deviation and acutance
 against wingpanel's own thresholds (mean 180, spread 45, acutance 8, plus
 the 1.645-sigma rule for a band whose mean falls short but whose spread
 puts a twentieth of it past 180) and Hyprland's fullscreen state, which
-forces `maximized` outright. `debug dump` reports the three numbers as
-`bar.paint`.
+forces `maximized` outright. Each paint carries its own ink and one text
+shadow under it, elementary's two collapsed to the offset one (Qt draws a
+text shadow as `Text.Raised` with no blur): black 0.6 under white words on
+a bare band, black 0.3 once the band has a fill of its own, white 0.25
+under dark words, and none at all over white at 0.5. `bar.paint` in
+settings.json overrules the reading: `transparent` keeps the ink adaptive
+and drops the fill, and the five names pin one paint outright. `bar paint`
+and `debug dump` report the paint, whether it was pinned, and the three
+numbers.
 
-**Frame.** Off by default (`frame.thickness` 0). On, the bar's `card` fill
+**Frame.** Off by default (`frame.thickness` 0). On, the bar's own fill
 continues round the other three edges as a band `frame.thickness` wide, and
 a rounded rectangle (`frame.radius`, 20; 0 with a base radius of 0) is cut
 out of the whole for the desktop, so the bar reads as the thick side of one
@@ -590,7 +600,12 @@ frame and the two corners beside it curve into the strip. The bar's window
 grows to the output and paints the whole ring, strip included, then its
 cells over it, so the three are one surface under the compositor's blur and
 above windows; it draws the single 1px `border` along the cut-out and takes
-input on the strip alone. Windows tile
+input on the strip alone. Under the wingpanel habit the ring takes the
+band's own paint from the same sampler (M62): the bar's band is a stretch
+of the ring there, so a calm wallpaper leaves the whole frame undrawn, a
+busy one washes it, and what wingpanel puts along its panel's inside edge
+lands on the ring's hairline. Its cast is dropped, having only the desktop
+inside the cut-out to fall on. Windows tile
 inside it (the band is an exclusive zone on each of its edges), and every
 floating surface clears it the way it clears the bar.
 
