@@ -1,20 +1,20 @@
 import QtQuick
-import Quickshell
 import qs.Core
 import qs.Components
 import qs.Compositor
+import qs.Services
 
 // The focused app's menu (DESIGN.md §3 "Panel"), opened from the bar's
 // active-window cell: macOS's app-name menu, in the place the app name
 // already sits.
 //
 // Everything here is data the desktop already publishes, so no per-app list
-// is ever maintained: the window's appId resolves a desktop entry
-// (DesktopEntries.heuristicLookup, the same lookup ActiveWindow's icon and
-// name come from), that entry's own `Actions=` groups become the ACTIONS
-// rows, and the compositor's window list filtered by the same appId becomes
-// the WINDOWS rows. The window you are already in carries a `check`, the
-// same mark macOS's Window menu puts there.
+// is ever maintained: the window resolves a desktop entry
+// (AppIconService.entryFor, the same class/process/title chain ActiveWindow's
+// icon and name come from), that entry's own `Actions=` groups become the
+// ACTIONS rows, and the compositor's window list filtered by the same appId
+// becomes the WINDOWS rows. The window you are already in carries a `check`,
+// the same mark macOS's Window menu puts there.
 //
 // This is deliberately NOT a global menu bar. Reading an app's real File/
 // Edit menus needs either org.gtk.Menus (GTK4 apps that set a menubar,
@@ -49,16 +49,13 @@ Panel {
     // window it describes (Compositor/focus.js).
     readonly property var _window: CompositorService.windowById(CompositorService.heldFocusedWindowId)
     readonly property string _appId: root._window ? root._window.appId : ""
-    readonly property var _entry: root._appId !== "" ? DesktopEntries.heuristicLookup(root._appId) : null
+    readonly property var _entry: root._window ? AppIconService.entryFor(root._window) : null
     readonly property var _actions: (root._entry && root._entry.actions) ? root._entry.actions : []
 
-    // The themed icon behind the hero's leading slot: the same lookup and
-    // check-then-fall-back-to-nothing idiom ActiveWindow.qml's own bar cell
-    // uses, so an unresolved icon just leaves the row shorter rather than a
-    // missing-texture box.
-    readonly property string _iconSource: (root._entry && root._entry.icon)
-        ? Quickshell.iconPath(root._entry.icon, true)
-        : ""
+    // The same resolver and fall-back-to-nothing idiom ActiveWindow.qml's own
+    // bar cell uses, so an unresolved icon just leaves the row shorter rather
+    // than a missing-texture box.
+    readonly property string _iconSource: root._entry ? AppIconService.source(root._entry.icon) : ""
 
     readonly property var _appWindows: {
         var out = [];

@@ -1,21 +1,21 @@
 import QtQuick
-import Quickshell
 import qs.Core
 import qs.Compositor
 import qs.Components
+import qs.Services
 
 // Icon and app name of the focused window (DESIGN.md §3 "Bar", the bar's
-// one image-icon exception): the desktop entry behind the focused window's
-// appId (DesktopEntries.heuristicLookup, the same lookup the launcher uses)
-// supplies the themed icon and the display name, which leads in foreground;
-// the window title follows dimmed. Both are words, so both are sans. No
-// entry resolves: falls back to the dim raw appId, the foreground title and
-// no icon. No focused window: hidden. The app name elides and the title
-// marquee-scrolls once the combined label would exceed maxWidth, which the
-// whole pill (padding included) is capped to, the bar setting it to a
-// quarter of its own width under a hard ceiling. Text colours resolve
-// through `foreground`/`dimForeground` rather than hardcoded roles, so a
-// filled cell carries every one of them.
+// one image-icon exception): the desktop entry behind the focused window
+// (AppIconService.entryFor, the same class/process/title chain the launcher
+// and the switcher use) supplies the themed icon and the display name, which
+// leads in foreground; the window title follows dimmed. Both are words, so
+// both are sans. No entry resolves: falls back to the dim raw appId, the
+// foreground title and no icon. No focused window: hidden. The app name
+// elides and the title marquee-scrolls once the combined label would exceed
+// maxWidth, which the whole pill (padding included) is capped to, the bar
+// setting it to a quarter of its own width under a hard ceiling. Text
+// colours resolve through `foreground`/`dimForeground` rather than
+// hardcoded roles, so a filled cell carries every one of them.
 //
 // Clicking the cell toggles the app menu (AppMenuPanel) under it, macOS's
 // app-name menu in the same place the app name already sits. The window it
@@ -40,14 +40,17 @@ Cell {
     readonly property string appId: focusedWindow ? focusedWindow.appId : ""
     readonly property string title: focusedWindow ? focusedWindow.title : ""
 
-    readonly property var desktopEntry: root.appId !== "" ? DesktopEntries.heuristicLookup(root.appId) : null
+    readonly property var desktopEntry: root.focusedWindow ? AppIconService.entryFor(root.focusedWindow) : null
 
-    // check=true so a theme that can't resolve the entry's icon name
-    // yields "", the Image slot below then simply doesn't render, the
-    // same missing-texture-free contract as MenuRow's app rows.
-    readonly property string iconSource: (root.desktopEntry && root.desktopEntry.icon)
-        ? Quickshell.iconPath(root.desktopEntry.icon, true)
-        : ""
+    // "" when the entry names no icon, the Image slot below then simply
+    // doesn't render, the same missing-texture-free contract as MenuRow's
+    // app rows.
+    readonly property string iconSource: root.desktopEntry ? AppIconService.source(root.desktopEntry.icon) : ""
+
+    // A class-less window (empty appId and initialClass, the process chain's
+    // job) needs its /proc read before entryFor's second tier can answer;
+    // Switcher.qml probes the same way for its tiles.
+    onFocusedWindowChanged: if (root.focusedWindow) AppIconService.probe([root.focusedWindow]);
 
     readonly property bool shown: root.focusedWindow !== null
     visible: root.shown
