@@ -1768,6 +1768,7 @@ Item {
                     id: kernelChip
                     x: root._cmdX
                     anchors.verticalCenter: parent.verticalCenter
+                    height: Core.Theme.space.keycapHeight
                     visible: procRow.row.kernel === true
                     chip: true
                     selected: true
