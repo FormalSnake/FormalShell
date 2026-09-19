@@ -108,19 +108,19 @@ TestCase {
     // formatDuration
 
     function test_format_duration_minutes_only() {
-        compare(Power.formatDuration(14 * 60), "14M");
+        compare(Power.formatDuration(14 * 60), "14m");
     }
 
     function test_format_duration_hours_and_minutes() {
-        compare(Power.formatDuration(2 * 3600 + 14 * 60), "2H 14M");
+        compare(Power.formatDuration(2 * 3600 + 14 * 60), "2h 14m");
     }
 
     function test_format_duration_days_and_hours() {
-        compare(Power.formatDuration(27 * 3600), "1D 3H");
+        compare(Power.formatDuration(27 * 3600), "1d 3h");
     }
 
     function test_format_duration_zero() {
-        compare(Power.formatDuration(0), "0M");
+        compare(Power.formatDuration(0), "0m");
     }
 
     // formatRate
@@ -346,11 +346,11 @@ TestCase {
     }
 
     function test_time_row_value_charging() {
-        compare(Power.timeRowValue(true, 2 * 3600 + 14 * 60, 0), "2H 14M");
+        compare(Power.timeRowValue(true, 2 * 3600 + 14 * 60, 0), "2h 14m");
     }
 
     function test_time_row_value_discharging() {
-        compare(Power.timeRowValue(false, 0, 14 * 60), "14M");
+        compare(Power.timeRowValue(false, 0, 14 * 60), "14m");
     }
 
     function test_time_row_value_no_reading_is_dash() {

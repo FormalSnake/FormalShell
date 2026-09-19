@@ -51,16 +51,17 @@ function warnEvent(prevPct, pct, charging, fired, warnPct, criticalPct) {
     return { fired: prevFired, event: null };
 }
 
-// "2H 14M" / "14M" / "1D 3H", mirrors Usage/usage.js's formatReset shape.
+// "2h 14m" / "14m" / "1d 3h", lowercase units per Notifications/model.js's
+// relative-time strings.
 function formatDuration(totalSeconds) {
     var totalMins = Math.floor(totalSeconds / 60);
     var hours = Math.floor(totalMins / 60);
     var mins = totalMins % 60;
     if (hours >= 24)
-        return Math.floor(hours / 24) + "D " + (hours % 24) + "H";
+        return Math.floor(hours / 24) + "d " + (hours % 24) + "h";
     if (hours > 0)
-        return hours + "H " + mins + "M";
-    return mins + "M";
+        return hours + "h " + mins + "m";
+    return mins + "m";
 }
 
 // UPowerDevice.changeRate is signed (positive charging, negative
@@ -227,7 +228,7 @@ function timeRowLabel(charging) {
 // timeToFull/timeToEmpty are 0 whenever the other one applies (the pinned
 // quickshell source's own contract, see rateRowValue above) and can
 // both briefly read 0 right after a state flip before UPower's next
-// estimate lands, an honest em dash rather than "0M" either way.
+// estimate lands, an honest em dash rather than "0m" either way.
 function timeRowValue(charging, timeToFull, timeToEmpty) {
     var seconds = charging ? timeToFull : timeToEmpty;
     return (seconds > 0) ? formatDuration(seconds) : "--";

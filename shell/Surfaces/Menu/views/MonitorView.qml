@@ -744,7 +744,7 @@ Item {
                         width: parent.width
                         label: "Uptime"
                         // Power/model.js's formatDuration, not a second
-                        // copy of the same "1D 3H" arithmetic: it is a
+                        // copy of the same "1d 3h" arithmetic: it is a
                         // pure formatter that happens to live beside the
                         // battery's own remaining-time readout.
                         value: SystemMonitorService.uptime.available
