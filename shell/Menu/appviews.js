@@ -4,7 +4,7 @@
 // listed here renders as a whole view inside the menu card instead of a row
 // list: Menu.qml loads the named QML file into one Loader sibling of its
 // rowsView/gridView, at the card's own app-view width, and the route's
-// chrome (breadcrumb, Escape/backspace-pop, the `menu` IPC) keeps working
+// chrome (the back chip, Escape/backspace-pop, the `menu` IPC) keeps working
 // unchanged because all of it keys off currentNodeId, never off which view
 // is live.
 //

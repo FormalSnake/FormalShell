@@ -4,7 +4,7 @@ import "../shell/Menu/providers.js" as Providers
 
 // clipboardProvider's node shape (M14 Task 1): text rows get a truncated
 // preview label; image rows (history.js's `kind: "image"`) get a fixed
-// IMAGE label, a capture-time desc, and a thumbSource for Task 6's
+// Image label, a capture-time desc, and a thumbSource for Task 6's
 // thumbnail row. Menu.qml's activation/debounce wiring is out of scope —
 // this is the pure half, same split as tst_menu_nix.qml/tst_menu_apps.qml.
 TestCase {
@@ -60,7 +60,7 @@ TestCase {
         ]);
         compare(nodes.length, 1);
         compare(nodes[0].id, "clipboard.b");
-        compare(nodes[0].label, "IMAGE");
+        compare(nodes[0].label, "Image");
         compare(nodes[0].desc, "09:05");
         compare(nodes[0].thumbSource, "/state/clipboard-images/abc.png");
         compare(nodes[0].fullText, "");
@@ -75,7 +75,7 @@ TestCase {
             { id: "a", kind: "text", text: "one", capturedAt: 999 }
         ]);
         compare(nodes.length, 2);
-        compare(nodes[0].label, "IMAGE");
+        compare(nodes[0].label, "Image");
         compare(nodes[1].label, "one");
     }
 
@@ -193,14 +193,14 @@ TestCase {
     // Honest empty-list notes (M30): dim, non-activatable, no colon.
     function test_empty_row_shape() {
         var row = Providers.clipboardEmptyRow();
-        compare(row.label, "CLIPBOARD EMPTY");
+        compare(row.label, "Clipboard history is empty");
         compare(row.kind, "note");
         compare(row.dim, true);
     }
 
     function test_no_match_row_shape() {
         var row = Providers.clipboardNoMatchRow();
-        compare(row.label, "NO MATCHES");
+        compare(row.label, "No matches");
         compare(row.kind, "note");
         compare(row.dim, true);
     }

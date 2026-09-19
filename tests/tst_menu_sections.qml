@@ -103,7 +103,7 @@ TestCase {
         compare(Model.searchSectionOf(tree.nodes, row), "Calculator");
     }
 
-    // The breadcrumb chip above the list already says "Clipboard", so a
+    // The back chip above the list already says "Clipboard", so a
     // CLIPBOARD heading under it separates nothing.
     function test_a_single_group_level_draws_no_heading() {
         var rows = [{ id: "clipboard.a" }, { id: "clipboard.b" }];
@@ -161,5 +161,30 @@ TestCase {
         }
         compare(sections[0], "Suggestions");
         compare(sections[sections.length - 1], "Commands");
+    }
+
+    // The app grid's cells are one block under Applications (M72 T4), and
+    // the rows under the grid keep the headings they carry anywhere else:
+    // at the root that is Applications, then Suggestions, then Commands.
+    function test_the_app_grid_heads_its_cells() {
+        var rows = [
+            { id: "apps.a", kind: "app" },
+            { id: "apps.b", kind: "app" },
+            { id: "apps", section: "Suggestions" },
+            { id: "tray" }
+        ];
+        var sections = Model.sectionsFor(rows, { mode: "menu", level: null, cells: 2 });
+        compare(sections, ["Applications", "Applications", "Suggestions", "Commands"]);
+        compare(Model.sectionNames(sections), ["Applications", "Suggestions", "Commands"]);
+    }
+
+    // Inside a level whose cells are the whole of it (the apps route), the
+    // one heading goes: the back chip already names the level.
+    function test_a_level_of_cells_alone_draws_no_heading() {
+        var rows = [{ id: "apps.a", kind: "app" }, { id: "apps.b", kind: "app" }];
+        var sections = Model.sectionsFor(rows, {
+            mode: "menu", level: "apps", levelLabel: "Apps", cells: 2
+        });
+        compare(Model.sectionNames(sections), []);
     }
 }

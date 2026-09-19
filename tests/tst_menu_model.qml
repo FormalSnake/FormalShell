@@ -60,7 +60,7 @@ TestCase {
     // that static jsonc's action/target/provider fields can't express.
     function test_explicit_kind_override_and_dim_passthrough() {
         var def = {
-            "a": { label: "Nothing To Share", kind: "note", dim: true }
+            "a": { label: "Nothing to share", kind: "note", dim: true }
         };
         var tree = M.buildTree(def, {});
         compare(tree.nodes["a"].kind, "note");
@@ -209,7 +209,7 @@ TestCase {
         var row = M.gatedNoteRow(node);
         compare(row.id, "share.unavailable");
         compare(row.parentId, "share");
-        compare(row.label, "UNAVAILABLE");
+        compare(row.label, "Unavailable");
         compare(row.kind, "note");
         compare(row.dim, true);
         compare(row.childIds.length, 0);

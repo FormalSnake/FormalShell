@@ -4,11 +4,12 @@ import qs.Components
 import ".." as MenuParts
 import "../../../Menu/toggles.js" as Toggles
 
-// The launcher's default view: a plain row list, shadcn's `CommandList`
-// (M48 D6). Menu.qml's keyed `rowsModel` feeds it (ids only, never a fresh
-// array per keystroke, so a row survives a re-rank), and it draws one cursor
-// fill that travels between rows rather than one per row, which is what
-// lets it travel at all (M53 D4).
+// The launcher's default view: a plain row list, Menu.qml's keyed
+// `rowsModel` feeding it (ids only, never a fresh array per keystroke, so a
+// row survives a re-rank). The cursor is the `cell` role's `selected` box,
+// one of it travelling under the rows rather than one per row, which is
+// what lets it travel at all (M53 D4); every row leaves its own selected
+// fill to it through `ownsSelectionFill`.
 ListView {
     id: root
 
@@ -41,6 +42,17 @@ ListView {
 
     signal activated(int index)
     signal cursorRequested(int index)
+
+    // What Cell.qml's selection walk reads: every row under here keeps its
+    // selected ink and leaves the fill to `rowCursor` below.
+    readonly property bool ownsSelectionFill: true
+
+    // The inset between the rules above and below the view and its first
+    // and last rows, held as a header and a footer rather than as the
+    // Flickable's own margins, so `contentY` is 0 at the top of the list.
+    property real inset: 0
+    header: Item { height: root.inset; width: 1 }
+    footer: Item { height: root.inset; width: 1 }
 
     // Delegates recycle rather than being destroyed and rebuilt on every
     // flick. Safe here because every delegate in this file is required
@@ -91,25 +103,23 @@ ListView {
         flickable: root
     }
 
-    // The cursor (M53 D4): one fill that travels between rows on an arrow
-    // step, drawn here rather than per row so there is one of it to travel.
-    // A child of the ListView is a child of its contentItem, so it scrolls
-    // with the rows it sits under; `z` puts it under them, since the row's
-    // own ink draws over it.
-    //
-    // Offset by the current row's heading band: a row that opens a group is
-    // taller than its own body by that band, and a fill covering it would
-    // swallow the heading.
-    Rectangle {
+    // The cursor (M53 D4): the table's `selected` cell box, drawn here
+    // rather than per row so there is one of it to travel. Parented into the
+    // view's contentItem by hand, since a child declared on an item view
+    // stays on the view and would hold still while the rows scroll; `z` puts
+    // it under them, since the row's own ink draws over it. Offset by the
+    // current row's heading band, which the box must not swallow.
+    Box {
         id: rowCursor
         readonly property var row: root.currentItem
+        parent: root.contentItem
         z: -1
+        role: "cell"
+        state: "selected"
         visible: rowCursor.row !== null && root.count > 0
         width: root.width
         y: rowCursor.row ? rowCursor.row.y + rowCursor.row._headerBand : 0
         height: rowCursor.row ? rowCursor.row._rowHeight : 0
-        radius: Core.Theme.radiusSm
-        color: Core.Theme.color.accent
 
         Behavior on y {
             enabled: root.cursorTravels

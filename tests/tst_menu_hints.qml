@@ -90,4 +90,21 @@ TestCase {
         compare(Hints.hintFor({ id: "apps.firefox", kind: "app", childIds: [] }), "");
         compare(Hints.hintFor(null), "");
     }
+
+    // The row's accessory (M72 T4): its value first, then what it is. A
+    // route says how to reach it, the prefix ahead of the chord since it is
+    // the shorter way.
+    function test_accessory_names_the_row_or_carries_its_value() {
+        compare(Hints.accessoryFor({ id: "calc.result", kind: "action", meta: "= 8" }), "= 8");
+        compare(Hints.accessoryFor({ id: "apps.firefox", kind: "app", childIds: [] }), "Application");
+        compare(Hints.accessoryFor({ id: "system.lock", kind: "action" }), "Command");
+        compare(Hints.accessoryFor({ id: "clipboard.1", kind: "action", verb: "Paste" }), "");
+        compare(Hints.accessoryFor({ id: "emoji", kind: "provider", childIds: [] }), ":e");
+        compare(Hints.accessoryFor({ id: "keybinds", kind: "provider", childIds: [] }), ":k");
+        compare(Hints.accessoryFor({ id: "clipboard", kind: "provider", childIds: [] }), "Super+Ctrl+V");
+        compare(Hints.accessoryFor({ id: "panels", kind: "provider", childIds: ["a", "b"] }), "2");
+        compare(Hints.accessoryFor({ id: "select.0", kind: "option" }), "");
+        compare(Hints.accessoryFor({ id: "keybinds.0", kind: "note" }), "");
+        compare(Hints.accessoryFor(null), "");
+    }
 }

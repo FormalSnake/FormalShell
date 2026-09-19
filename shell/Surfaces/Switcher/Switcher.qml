@@ -453,9 +453,10 @@ PanelWindow {
                                     width: root._cellExtent
                                     height: root._cellExtent
 
-                                    // The launcher grid's tile (AppGridView.qml):
-                                    // a ghost `Cell` whose cursor is the ring,
-                                    // over the table's own `switcher.cell` fill.
+                                    // A ghost `Cell`, as the launcher's tiles are
+                                    // (Menu/views/LauncherTile.qml), over the
+                                    // table's own `switcher.cell` fill, with the
+                                    // ring on the chosen one.
                                     // Inert, since a click anywhere cancels.
                                     Cell {
                                         id: tile

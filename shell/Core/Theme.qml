@@ -255,6 +255,7 @@ Singleton {
     // roomier spacing automatically) but can be pinned independently.
     property real spacingScale: fontScale
     readonly property var space: Tokens.spacingTokens(spacingScale)
+    readonly property var launcher: Tokens.LAUNCHER
 
     // Letter-spacing tokens (DESIGN.md §2.3's meta-row tracking, plus the
     // wider variant the lock/greeter date label uses), scale with

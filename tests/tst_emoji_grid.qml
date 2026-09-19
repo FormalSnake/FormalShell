@@ -76,7 +76,7 @@ TestCase {
     }
 
     // The load-bearing assumption behind showing all 3944: a GridView whose
-    // height is capped (Menu.qml's _rowsAreaCap) instantiates delegates for
+    // height is fixed (Menu.qml's `_bodyHeight`) instantiates delegates for
     // what it can see plus its cache buffer, never for the model. If this
     // ever stopped holding, browsing emoji would build thousands of items.
     Component {

@@ -31,7 +31,7 @@ TestCase {
         var entry = Providers.shareClipboardEntry([]);
         var node = entry["share.clipboard"];
         verify(node);
-        compare(node.label, "Nothing To Share");
+        compare(node.label, "Nothing to share");
         compare(node.kind, "note");
         compare(node.dim, true);
         verify(node.action === undefined);
@@ -91,7 +91,7 @@ TestCase {
             { id: "b", kind: "image", path: "/img/one.png", capturedAt: new Date(2026, 0, 1, 9, 5).getTime() }
         ], "share");
         compare(nodes[0].id, "share.history.b");
-        compare(nodes[0].label, "IMAGE");
+        compare(nodes[0].label, "Image");
         compare(nodes[0].desc, "09:05");
         compare(nodes[0].thumbSource, "/img/one.png");
         compare(nodes[0].action, "localsend_app '/img/one.png'");

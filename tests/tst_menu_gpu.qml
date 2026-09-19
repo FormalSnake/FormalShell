@@ -104,7 +104,7 @@ TestCase {
         compare(rows[0].id, "gpu.empty");
         compare(rows[0].kind, "note");
         compare(rows[0].dim, true);
-        compare(rows[0].label, "NO GPU");
+        compare(rows[0].label, "No GPU");
     }
 
     // ---- gpuLaunchAction (what Shift+Enter on an app row runs) ------------

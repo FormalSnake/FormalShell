@@ -115,7 +115,7 @@ function applyProviders(tree, providerFns) {
 // Raycast's clipboard behaviour. Config gates it, so the caller decides.
 //
 // Image entries (M14 Task 1, history.js's `kind: "image"`) get a fixed
-// "IMAGE" label instead of a text preview, a dimmed capture time in the
+// "Image" label instead of a text preview, a dimmed capture time in the
 // `desc` slot (same trailing-text idiom nixRows uses), and `thumbSource`,
 // a new node field MenuRow doesn't render yet (Task 6 wires the thumbnail
 // row); the activation action is identical to a text row's.
@@ -146,7 +146,7 @@ function clipboardProvider(items, mode, paste) {
         return {
             id: idPrefix + entry.id,
             parentId: null,
-            label: isImage ? "IMAGE" : previewLabel(entry.text),
+            label: isImage ? "Image" : previewLabel(entry.text),
             icon: "",
             title: "",
             desc: isImage ? _capturedAtLabel(entry.capturedAt) : "",
@@ -252,8 +252,8 @@ function _clipboardNoteRow(id, label) {
     };
 }
 
-function clipboardEmptyRow() { return _clipboardNoteRow("clipboard.empty", "CLIPBOARD EMPTY"); }
-function clipboardNoMatchRow() { return _clipboardNoteRow("clipboard.nomatch", "NO MATCHES"); }
+function clipboardEmptyRow() { return _clipboardNoteRow("clipboard.empty", "Clipboard history is empty"); }
+function clipboardNoMatchRow() { return _clipboardNoteRow("clipboard.nomatch", "No matches"); }
 
 // Single-quotes `value` for a sh -c string, escaping embedded single quotes
 // the same way HyprlandBackend.qml's _quoteArg does ('\'', close the
@@ -310,7 +310,7 @@ function shareClipboardEntry(items) {
     if (!newest) {
         return {
             "share.clipboard": {
-                label: "Nothing To Share",
+                label: "Nothing to share",
                 icon: "",
                 kind: "note",
                 dim: true
@@ -612,11 +612,11 @@ function _nixNoteRow(id, label) {
     };
 }
 
-function nixUnavailableRow() { return _nixNoteRow("nix.unavailable", "NO NIX"); }
-function nixIndexingRow() { return _nixNoteRow("nix.indexing", "INDEXING NIXPKGS"); }
-function nixSearchingRow() { return _nixNoteRow("nix.searching", "SEARCHING"); }
-function nixNoResultsRow() { return _nixNoteRow("nix.noresults", "NO RESULTS"); }
-function nixFailedRow() { return _nixNoteRow("nix.failed", "SEARCH FAILED"); }
+function nixUnavailableRow() { return _nixNoteRow("nix.unavailable", "Nix is not installed"); }
+function nixIndexingRow() { return _nixNoteRow("nix.indexing", "Indexing nixpkgs"); }
+function nixSearchingRow() { return _nixNoteRow("nix.searching", "Searching"); }
+function nixNoResultsRow() { return _nixNoteRow("nix.noresults", "No results"); }
+function nixFailedRow() { return _nixNoteRow("nix.failed", "Search failed"); }
 
 // ~/.clipssh/aliases (`name=user@host` lines, clipssh's own alias store,
 // its alias_add rejects `=`/whitespace in names) -> [{name, target}].
@@ -677,7 +677,7 @@ function clipsshRows(aliases) {
         return [{
             id: "clipssh.empty",
             parentId: null,
-            label: "NO ALIASES",
+            label: "No aliases",
             icon: "",
             title: "",
             desc: "clipssh alias add <name> <user@host>",
@@ -1023,7 +1023,7 @@ function trayProvider(items, selfPath) {
         return [{
             id: "tray.empty",
             parentId: null,
-            label: "NO TRAY ITEMS",
+            label: "No tray items",
             icon: "",
             title: "",
             aliases: [],
@@ -1074,7 +1074,7 @@ function gpuProvider(cards) {
         return [{
             id: "gpu.empty",
             parentId: null,
-            label: "NO GPU",
+            label: "No GPU",
             icon: "",
             title: "",
             aliases: [],

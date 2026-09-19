@@ -219,8 +219,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   player switch, with and without synced lyrics, the drawn progress fill
   measured off the frame against the position `media status` reports at
   every sample.
-- `menu.sh` `--menu`: the launcher at root, its fuzzy ranking against the
-  live tree, and the select round trip, with every status read's
+- `menu.sh` `--menu`: the launcher at root laid out as its sections in
+  order (a staged app's grid under Applications, then the Suggestions and
+  Commands rows), its fuzzy ranking against the live tree, and the select
+  round trip, with every status read's
   `cursorId` checked against the row the live view holds its current item
   on (`viewCursor`).
 - `menu_emerge.sh` `--menu-emerge`: the launcher budding off the top line,

@@ -49,9 +49,9 @@ Box {
     // (`pointer` spans it exactly).
     signal pointerMoved(real x, real y)
 
-    // Escape hatch for a target that deliberately covers less than the cell:
-    // MenuActionBar's primary half is the only one, since its right half is a
-    // legend rather than a button. A whole-cell target belongs on
+    // Escape hatch for a target that deliberately covers less than the cell,
+    // a button on one half and a legend on the other. A whole-cell target
+    // belongs on
     // `interactive` above, never here. Anchor to `parent` (this layer spans
     // the cell) and not to a content child.
     //

@@ -122,3 +122,21 @@ function logoFor(node) {
         return "";
     return ROUTE_LOGOS[node.id] || "";
 }
+
+// The named icon a row draws when it has none of its own, by what the row
+// is. A row whose own icon is a raw glyph (a user menu.jsonc route, a custom
+// power button) draws this instead: the icon set is `theme.icons`' choice,
+// and a codepoint from one set is a missing-glyph box in another.
+function fallbackFor(node) {
+    switch (node ? node.kind : "") {
+    case "app":
+        return "app-window";
+    case "submenu":
+    case "provider":
+    case "link":
+        return "folder";
+    case "action":
+        return "terminal";
+    }
+    return "circle-help";
+}

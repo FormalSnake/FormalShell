@@ -14,14 +14,25 @@ GridView {
     property var rowsPrev: ({})
     property var blankRow: ({})
     property int cursorIndex: -1
+    property bool cursorTravels: false
     property var hoverGate: null
     property real pixelRatio: 1
 
-    // 4 columns at every scale (spec §11's grid): a wallpaper preview reads
-    // fine at that size, and Menu.qml's `cursorColumns` reads it back for
-    // wrap/page-step arithmetic, the same seam appGrid's own `columns`
+    // The same count at every scale (spec §11's grid): a wallpaper preview
+    // reads fine at that size, and Menu.qml's `cursorColumns` reads it back
+    // for wrap/page-step arithmetic, the same seam appGrid's own `columns`
     // property already is.
-    readonly property int columns: 4
+    readonly property int columns: Core.Theme.launcher.pickerColumns
+
+    // Every tile keeps its own selected fill off, `cursorBox` draws the one.
+    readonly property bool ownsSelectionFill: true
+    readonly property real _gutter: Core.Theme.space.sm
+
+    // The inset under the rule above and over the one below, as a header and
+    // a footer so `contentY` is 0 at the top of the grid.
+    property real inset: 0
+    header: Item { height: root.inset; width: 1 }
+    footer: Item { height: root.inset; width: 1 }
 
     signal activated(int index)
     signal cursorRequested(int index)
@@ -65,7 +76,13 @@ GridView {
         step: root.cellHeight
     }
 
-    // The wrapper carries the GridView's own cell, so the `Cell` inside it
+    GridCursor {
+        view: root
+        gutter: root._gutter
+        travels: root.cursorTravels
+    }
+
+    // The wrapper carries the GridView's own cell, so the tile inside it
     // can hold the gutter between thumbnails in its margins and every gap
     // comes out the same width, the edges of the grid included.
     delegate: Item {
@@ -78,22 +95,18 @@ GridView {
         width: root.cellWidth
         height: root.cellHeight
 
-        Cell {
+        LauncherTile {
             id: imageCell
             anchors.fill: parent
-            anchors.margins: Core.Theme.space.xs
-            radius: Core.Theme.radiusMd
-            // A grid cursor is the ring (spec "Launcher"): the thumbnail
-            // covers the cell, so a fill would sit under the picture and
-            // never be seen.
-            cursor: imageSlot.index === root.cursorIndex
-            hovered: imageCell.containsPointer && (!root.hoverGate || root.hoverGate.live)
+            anchors.margins: root._gutter
+            selected: imageSlot.index === root.cursorIndex
+            hoverGate: root.hoverGate
+            onPointed: root.cursorRequested(imageSlot.index)
+            onClicked: root.activated(imageSlot.index)
 
-            // The thumbnail is inset far enough that its square corners sit
-            // inside the cell's rounded ones, which is what lets an image
-            // live in a `radiusMd` frame with no mask: at `sm` the corner of
-            // the inset square is 5.7px from the arc's centre against a
-            // radius of 8.
+            // The thumbnail is inset `sm` inside the tile, so the selected
+            // box shows round it as a frame and its square corners sit inside
+            // the tile's rounded ones with no mask.
             //
             // Decode capped at the cell's own on-screen size (M16 Task 12):
             // without this, a 6000×4000 source decodes at full resolution
@@ -119,8 +132,8 @@ GridView {
             Image {
                 id: thumb
                 anchors.centerIn: parent
-                width: imageSlot.width - (Core.Theme.space.xs + Core.Theme.space.sm) * 2
-                height: imageSlot.height - (Core.Theme.space.xs + Core.Theme.space.sm) * 2
+                width: imageSlot.width - (root._gutter + Core.Theme.space.sm) * 2
+                height: imageSlot.height - (root._gutter + Core.Theme.space.sm) * 2
                 // ThumbnailService's prerendered square crop when there is
                 // one, the wallpaper itself otherwise. The fallback is not a
                 // degraded mode, it is exactly what this cell did before the
@@ -137,16 +150,6 @@ GridView {
                 sourceSize.width: thumb.width * 2 * root.pixelRatio
                 sourceSize.height: thumb.height * 2 * root.pixelRatio
             }
-
-            interactive: true
-            // Same gate as the row list: filtering re-renders cells under a
-            // parked pointer, and Qt delivers that as a hover move
-            // indistinguishable from a real one.
-            onPointerMoved: (x, y) => {
-                if (root.hoverGate && root.hoverGate.moved(imageCell, x, y))
-                    root.cursorRequested(imageSlot.index);
-            }
-            onClicked: root.activated(imageSlot.index)
         }
     }
 }

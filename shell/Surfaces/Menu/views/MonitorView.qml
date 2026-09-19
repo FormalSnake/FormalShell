@@ -71,12 +71,10 @@ import "../../../Power/model.js" as Power
 Item {
     id: root
 
-    // What the card wants before Menu.qml caps it (_rowsAreaHeight takes
-    // the smaller of this and its cap): the whole ledger plus a row per
-    // process, which on any real machine is far past the cap and therefore
-    // asks for the tallest card the launcher will draw. That is the point:
-    // the table is the reason this route is a view rather than a row list.
-    // Measured arithmetically off the row count rather than read back off
+    // What the view's content would take uncapped: the whole ledger plus a
+    // row per process, which on any real machine is far past the body it is
+    // given. That is the point: the table is the reason this route is a view
+    // rather than a row list. Measured arithmetically off the row count rather than read back off
     // `list.contentHeight`, which would close a loop through the height the
     // list is then given.
     implicitHeight: statsColumns.height + procChrome.height
@@ -1627,7 +1625,7 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         // A whole number of rows, never the leftover space: the card's own
-        // height cap (Menu.qml's _maxTotalHeight) lands wherever it lands,
+        // body height (Menu.qml's `_bodyHeight`) lands wherever it lands,
         // and a list anchored to the bottom of it draws its last row cut in
         // half, which reads as a broken frame rather than as more content
         // below.
@@ -1707,14 +1705,13 @@ Item {
                 }
             }
 
-            // An armed row states itself in `destructive` ink behind a
-            // `destructive` border, never a full-bleed fill (DESIGN.md §5).
-            Rectangle {
+            // An armed row states itself in `destructive` ink behind the
+            // `cell` role's destructive border, never a full-bleed fill.
+            Cell {
                 anchors.fill: parent
                 visible: procRow.armed
-                color: "transparent"
-                border.width: Core.Theme.borderWidth
-                border.color: Core.Theme.color.destructive
+                ghost: true
+                destructive: true
             }
 
             MouseArea {

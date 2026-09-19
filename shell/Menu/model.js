@@ -200,6 +200,10 @@ function buildTree(defaultObj, userObj) {
 // level itself.
 var ROOT_SECTION = "Commands";
 
+// The heading over the app grid's cells (M72 T4): the body's first section
+// wherever the level has more than the one group.
+var APPS_SECTION = "Applications";
+
 // One heading per row, index-aligned with `rows` (M48 D6). The launcher
 // draws a `SectionLabel` wherever this array CHANGES value, so a heading
 // costs nothing when the whole list belongs to one group, and no row is
@@ -207,9 +211,10 @@ var ROOT_SECTION = "Commands";
 // rows it was handed simply gets its heading twice, which is the honest
 // picture of a list ordered by something other than its sections.
 //
-// `ctx` is { mode, grid, searching, level, levelLabel, nodes }: the two
-// dmenu modes name themselves, a grid has nowhere to draw a full-width band
-// between two cells of a row so it has no headings at all, a query that
+// `ctx` is { mode, grid, cells, searching, level, levelLabel, nodes }: the
+// two dmenu modes name themselves, a grid has nowhere to draw a full-width
+// band between two cells of a row so it has no headings at all, the app
+// grid's leading `cells` rows are one block under APPS_SECTION, a query that
 // ranks the whole tree names each row after the root route it came from
 // (searchSectionOf, the same key search.js's rank groups by, so the
 // headings come out one block each), and everything else is either the
@@ -226,25 +231,31 @@ function sectionsFor(rows, ctx) {
     ctx = ctx || {};
     if (ctx.grid === true)
         return [];
+    var cells = ctx.cells > 0 ? ctx.cells : 0;
     var out = [];
     for (var i = 0; i < rows.length; i++)
-        out.push(_sectionOf(rows[i], ctx));
+        out.push(i < cells ? APPS_SECTION : _sectionOf(rows[i], ctx));
     return _collapseSingleLevelGroup(out, ctx);
 }
 
-// A level whose rows are all one group is already named, by the breadcrumb
-// chip directly above them: "Clipboard" followed by a CLIPBOARD heading says
-// the word twice and separates nothing. A level that does split (the apps
-// route's Recent) keeps every heading, because there the names are what tell
-// the two runs apart.
+// A level whose rows are all one group is already named, by the back chip
+// and the footer: "Clipboard" over a Clipboard heading says the word twice
+// and separates nothing, and the apps route's grid under an Applications
+// heading is the same. A level that does split (the apps route's Recent in
+// a row list) keeps every heading, because there the names are what tell the
+// two runs apart.
 function _collapseSingleLevelGroup(sections, ctx) {
     if (ctx.level === null || ctx.level === undefined || ctx.searching === true)
         return sections;
     if (ctx.mode !== undefined && ctx.mode !== "menu")
         return sections;
+    var only = "";
     for (var i = 0; i < sections.length; i++) {
-        if (sections[i] !== "" && sections[i] !== ctx.levelLabel)
+        if (sections[i] === "")
+            continue;
+        if (only !== "" && sections[i] !== only)
             return sections;
+        only = sections[i];
     }
     return sections.map(function () { return ""; });
 }
@@ -319,7 +330,7 @@ function gatedNoteRow(node) {
     return {
         id: node.id + ".unavailable",
         parentId: node.id,
-        label: "UNAVAILABLE",
+        label: "Unavailable",
         icon: "",
         title: "",
         aliases: [],

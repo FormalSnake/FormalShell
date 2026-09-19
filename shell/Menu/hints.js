@@ -58,3 +58,37 @@ function hintFor(node) {
     var chord = chordFor(node.id);
     return chord !== "" ? chord : countFor(node);
 }
+
+// What a route answers to when typed as a prefix from any level
+// (providers.js's emojiTriggerQuery and nixTriggerQuery, keybinds.js's
+// triggerQuery): the shortest way to it, so it outranks the chord.
+var ROUTE_PREFIXES = {
+    "emoji": ":e",
+    "nix": ":nix",
+    "keybinds": ":k"
+};
+
+// The launcher row's accessory, right-aligned and muted (M72 T4): the row's
+// own value when it carries one, otherwise what the row is. An app says so;
+// a route says how to reach it without the launcher's tree, by prefix, by
+// chord or by how many rows it holds; a runnable row is a command. A row
+// whose provider names its own verb (a clipboard entry, an emoji) is
+// content rather than a command, and like a note or an option it carries
+// nothing its own label does not already say.
+function accessoryFor(node) {
+    if (!node)
+        return "";
+    if ((node.meta || "") !== "")
+        return String(node.meta);
+    switch (node.kind) {
+    case "app":
+        return "Application";
+    case "action":
+        return node.verb ? "" : "Command";
+    case "submenu":
+    case "provider":
+    case "link":
+        return ROUTE_PREFIXES[String(node.id || "")] || hintFor(node);
+    }
+    return "";
+}

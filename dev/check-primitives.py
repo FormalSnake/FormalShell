@@ -42,6 +42,7 @@ SCANNED = [
     "shell/Surfaces/Bar",
     "shell/Surfaces/Capture",
     "shell/Surfaces/Gallery",
+    "shell/Surfaces/Menu",
 ]
 
 # The card-count rule below is cheap and has no exemptions, so it runs over

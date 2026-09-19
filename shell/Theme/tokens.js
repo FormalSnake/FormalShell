@@ -80,6 +80,11 @@ var SPACING_BASE = {
 // (`notifications/data/application.css`, M60 T4). It is beside the snap
 // points rather than on the ladder: a transcribed number that happens to
 // sit between `Narrow` and `Default`, and only the bubble takes it.
+// `popupHeightMenu{,Split,App}` are the launcher card's three settled
+// heights, one per level kind (the grid root and every row list or grid, the
+// split with its preview, an app view): the card never sizes to its rows, so
+// typing scrolls results inside a card that stays put, and only a level
+// change can morph it. `LAUNCHER` below caps each at a share of the output.
 // `switcherIcon` and `switcherInset` are Gala's two window-switcher numbers
 // (`lib/Widgets/WindowSwitcherIcon.vala`, M60 T6): the app icon a cell
 // carries, and the room the card keeps off every edge of the output, which
@@ -93,6 +98,7 @@ var SEMANTIC_SPACING_BASE = {
     popupWidthNarrow: 320, popupWidthDefault: 380, popupWidthWide: 480, popupWidthMenu: 560,
     popupWidthMenuSplit: 840, popupWidthMenuApp: 900,
     popupWidthBubble: 332,
+    popupHeightMenu: 520, popupHeightMenuSplit: 560, popupHeightMenuApp: 720,
     switcherIcon: 64, switcherInset: 64
 };
 
@@ -104,6 +110,22 @@ function spacingTokens(scale) {
         out[semanticKey] = Math.round(SEMANTIC_SPACING_BASE[semanticKey] * scale);
     return out;
 }
+
+// The launcher's counts and ceilings, unscaled: a column count and a share
+// of the output are not lengths. `heightShare` caps the card at that much of
+// the output's height (`appHeightShare` for an app view, a whole surface
+// rather than a list). `pickerColumns` and `emojiColumns` are the two fixed
+// grids; the app grid's count comes off its own width instead. `rootApps` is
+// how many of the ranked apps the root's Applications section carries: the
+// commands follow it, so a machine with two hundred apps must not push them
+// two hundred cells down. The Apps route lists the rest.
+var LAUNCHER = {
+    heightShare: 0.6,
+    appHeightShare: 0.82,
+    pickerColumns: 4,
+    emojiColumns: 8,
+    rootApps: 8
+};
 
 // DESIGN.md §2.3's uppercase meta-row tracking, the wider variant the
 // lock/greeter date label uses, and `display`'s own wide tracking for the

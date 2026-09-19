@@ -103,4 +103,21 @@ TestCase {
             verify((Distro.LOGOS[key] || "") !== "", ids[i] + " -> " + key + " is not in distro.js");
         }
     }
+
+    // A row whose own icon is a raw codepoint draws a named icon for what it
+    // is instead, and every one of them exists in both sets.
+    function test_the_fallback_is_named_and_resolves() {
+        var kinds = ["app", "submenu", "provider", "link", "action", "note", "option"];
+        var sets = ["lucide", "nerd"];
+        for (var s = 0; s < sets.length; s++) {
+            var help = Icons.glyph(sets[s], "circle-help");
+            for (var i = 0; i < kinds.length; i++) {
+                var name = MenuIcons.fallbackFor({ kind: kinds[i] });
+                verify(name === "circle-help" || Icons.glyph(sets[s], name) !== help,
+                    kinds[i] + " -> " + name + " fell back in " + sets[s]);
+            }
+        }
+        compare(MenuIcons.fallbackFor({ kind: "action" }), "terminal");
+        compare(MenuIcons.fallbackFor(null), "circle-help");
+    }
 }

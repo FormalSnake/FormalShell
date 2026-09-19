@@ -3,7 +3,7 @@ import qs.Core as Core
 import qs.Components
 
 // The split route's right half (M30, M43 D4): the cursor row's full
-// content in an inner `Card` at `radiusMd`, a `sm` gutter off the list.
+// content in an inner `Card`, a `sm` gutter off the list.
 // This is the launcher spending its one card (DESIGN.md §1's ladder, rung
 // 5, owner 2026-08-26): the surface's own frame, and inside it exactly one
 // block that outranks the rest. The left half is flat `MenuRow`s and this
@@ -20,8 +20,6 @@ Card {
     property bool isImage: false
     property string imageSource: ""
     property real pixelRatio: 1
-
-    radius: Core.Theme.radiusMd
 
     Row {
         id: previewHeader

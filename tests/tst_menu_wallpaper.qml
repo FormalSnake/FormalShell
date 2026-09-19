@@ -203,7 +203,7 @@ TestCase {
         var withVariants = Actions.hints({ mode: "menu", grid: true, variantSwitch: "light" });
         var tab = withVariants.filter(function (h) { return h.key === "TAB"; });
         compare(tab.length, 1);
-        compare(tab[0].label, "Show Light");
+        compare(tab[0].label, "Show light");
 
         var flat = Actions.hints({ mode: "menu", grid: true, variantSwitch: null });
         compare(flat.filter(function (h) { return h.key === "TAB"; }).length, 0);

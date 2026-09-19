@@ -11,12 +11,15 @@ import "../../../Menu/toggles.js" as Toggles
 // on by default under every theme (M72 T2).
 //
 // The grid owns the app rows only. Whatever else the ranking returned draws
-// as ordinary `MenuRow`s in the view's footer, under a rule, which is why
-// Menu/appgrid.js partitions the row list before it ever reaches here: the
-// cells are rows 0..appCount-1 and the footer is the rest, so a cell's index
-// IS its index in the launcher's own list. A query no app matches leaves
-// the grid with no cells and the rows alone, with no rule over them: the
-// view stays the level's view rather than handing over to the row list.
+// as ordinary `MenuRow`s in the view's footer, under their own headings,
+// which is why Menu/appgrid.js partitions the row list before it ever
+// reaches here: the cells are rows 0..appCount-1 and the footer is the rest,
+// so a cell's index IS its index in the launcher's own list. The cells sit
+// under their own heading too (`cellsHeading`, "Applications" wherever the
+// level has more than the one group), so the body reads as sections top to
+// bottom with no rule anywhere. A query no app matches leaves the grid with
+// no cells and the rows alone: the view stays the level's view rather than
+// handing over to the row list.
 //
 // Both halves are Menu.qml's keyed models (ids only, `rowsById` for the
 // rows), never a fresh array per keystroke, so a cell survives a re-rank,
@@ -44,8 +47,16 @@ Item {
     property var blankRow: ({})
     // Where the apps stop in the launcher's row list.
     property int appCount: 0
+    // The cells' own heading, "" where the level is one group.
+    property string cellsHeading: ""
     // Written by placeCursor() alone, after the models it indexes changed.
     property int cursor: -1
+    // Whether the cursor's box travels to its next place or is simply there
+    // (Menu.qml's `_cursorTravels`).
+    property bool cursorTravels: false
+
+    // The inset under the rule above and over the one below.
+    property real inset: 0
 
     // Menu.qml's one gate, passed in rather than rebuilt: filtering
     // re-renders cells under a parked pointer and Qt delivers that as a
@@ -74,16 +85,16 @@ Item {
     // of room either side before it elides. At `popupWidthMenu` that is four
     // columns, which holds a two-word app name whole.
     readonly property real _cellMin: root.iconExtent * 2
-    // The gutter every cell holds in its own margins. Wider than
-    // `Theme.ringWidth`, so a cursor cell's halo lands in the gutter instead
-    // of under the neighbour or the grid's own clip.
+    // The gutter every cell holds in its own margins.
     readonly property real _cellGutter: Core.Theme.space.sm
 
     readonly property int columns: AppGrid.columnsFor(root.width, root._cellMin)
     readonly property int tailCount: root.tailModel ? root.tailModel.count : 0
 
     readonly property real contentHeight: grid.contentHeight
-    readonly property real contentY: grid.contentY
+    // From the top of the header, which the view places above its first
+    // cell, at a negative origin.
+    readonly property real contentY: grid.contentY - grid.originY
     readonly property real cellHeight: grid.cellHeight
 
     function _rowFor(id) {
@@ -144,6 +155,11 @@ Item {
 
     GridView {
         id: grid
+
+        // Every tile and every footer row leaves its own selected fill to
+        // the one box that travels under them (`GridCursor`, `tailCursor`).
+        readonly property bool ownsSelectionFill: true
+
         // Delegates recycle rather than being destroyed and rebuilt on every
         // flick, the same contract the two grids in Menu.qml take: every
         // delegate here is required properties plus bindings off them, with
@@ -167,7 +183,31 @@ Item {
             step: grid.cellHeight
         }
 
-        // The wrapper carries the GridView's own cell so the `Cell` inside it
+        GridCursor {
+            view: grid
+            gutter: root._cellGutter
+            travels: root.cursorTravels
+        }
+
+        // The top inset, and the cells' heading under it when the level has
+        // one. The heading stands on the same row inset the footer's rows
+        // take, so every heading in the body starts on one column.
+        header: Item {
+            width: grid.width
+            height: root.inset + (appsHeading.visible ? appsHeading.implicitHeight + Core.Theme.space.rowGap : 0)
+
+            SectionLabel {
+                id: appsHeading
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: Core.Theme.space.rowGap
+                anchors.left: parent.left
+                leftPadding: root._cellGutter + Core.Theme.space.controlPaddingX
+                visible: root.cellsHeading !== "" && root.appCount > 0
+                text: root.cellsHeading
+            }
+        }
+
+        // The wrapper carries the GridView's own cell so the tile inside it
         // can hold the gutter in its margins, exactly as the wallpaper and
         // emoji grids do.
         delegate: Item {
@@ -179,24 +219,15 @@ Item {
             width: grid.cellWidth
             height: grid.cellHeight
 
-            Cell {
+            LauncherTile {
                 id: appCell
                 anchors.fill: parent
                 anchors.margins: root._cellGutter
-                radius: Core.Theme.radiusMd
-                // Ghost, so a grid of forty apps is forty icons rather than
-                // forty boxes; hover washes and the cursor is the ring, the
-                // two states every other cell in the shell draws.
-                ghost: true
-                cursor: appSlot.index === root.cursor
-                hovered: appCell.containsPointer && (!root.hoverGate || root.hoverGate.live)
-                interactive: true
+                selected: appSlot.index === root.cursor
+                hoverGate: root.hoverGate
                 // The name in full, and only where the cell had to cut it.
                 tooltipText: appName.truncated ? appSlot.modelData.label : ""
-                onPointerMoved: (x, y) => {
-                    if (root.hoverGate && root.hoverGate.moved(appCell, x, y))
-                        root.cursorRequested(appSlot.index);
-                }
+                onPointed: root.cursorRequested(appSlot.index)
                 onClicked: root.activated(appSlot.index)
 
                 Item {
@@ -231,7 +262,7 @@ Item {
                         visible: (appSlot.modelData.iconSource || "") === ""
                         name: "layout-grid"
                         size: root.iconExtent
-                        color: Core.Theme.color.mutedForeground
+                        color: appCell.dimForeground
                     }
 
                     Text {
@@ -246,7 +277,7 @@ Item {
                         // so it is drawn as the bytes it is rather than
                         // parsed as a rich-text document.
                         textFormat: Text.PlainText
-                        color: Core.Theme.color.foreground
+                        color: appCell.foreground
                         font.family: Core.Theme.fontFamilySans
                         font.pixelSize: Core.Theme.fontSize.body
                         font.weight: Core.Theme.weight.medium
@@ -257,20 +288,14 @@ Item {
 
         // Everything the ranking returned that is not an app (M58 G2): the
         // commands, the routes, the calculator's answer, in the order they
-        // ranked, drawn as the rows they are everywhere else in the launcher.
-        // In the view's own footer rather than beside it, so the grid keeps
-        // virtualising its cells and one wheel carries both.
-        //
-        // The seam is a rule (DESIGN.md §1's ladder, rung 4): two halves of
-        // one surface that differ in kind, with no name to give the second
-        // one that its rows do not already carry.
+        // ranked, drawn as the rows they are everywhere else in the launcher
+        // and under the headings they carry there. In the view's own footer
+        // rather than beside it, so the grid keeps virtualising its cells and
+        // one wheel carries both.
         footer: Item {
             id: tailFooter
             width: grid.width
-            height: root.tailCount > 0
-                ? tailColumn.y + tailColumn.height + Core.Theme.space.rowGap
-                : 0
-            visible: root.tailCount > 0
+            height: (root.tailCount > 0 ? tailColumn.y + tailColumn.height : 0) + root.inset
 
             // Brings the footer row the cursor has landed on into view. The
             // grid's own `currentIndex` does this for the cells; the footer
@@ -293,25 +318,41 @@ Item {
                 var row = tailRepeater.itemAt(index);
                 if (!row)
                     return;
-                grid.contentY = Cursor.follow(row.mapToItem(grid.contentItem, 0, 0).y,
-                    row.height, grid.contentY, grid.height, grid.contentHeight, 0);
+                // Cursor.follow clamps to [0, contentHeight - height], and
+                // the header puts this view's range at `originY` instead.
+                var origin = grid.originY;
+                grid.contentY = origin + Cursor.follow(row.mapToItem(grid.contentItem, 0, 0).y - origin,
+                    row.height, grid.contentY - origin, grid.height, grid.contentHeight, 0);
             }
 
-            Separator {
-                id: tailRule
-                anchors.top: parent.top
-                anchors.topMargin: Core.Theme.space.rowGap
-                anchors.left: parent.left
-                anchors.right: parent.right
-                visible: root.appCount > 0
+            // The footer rows' cursor, the grid's box on this side of it:
+            // the `cell` role's `selected` state, travelling between rows.
+            Box {
+                id: tailCursor
+                readonly property Item slot: {
+                    var index = root.cursor - root.appCount;
+                    return index >= 0 && index < tailRepeater.count ? tailRepeater.itemAt(index) : null;
+                }
+                z: -1
+                role: "cell"
+                state: "selected"
+                visible: tailCursor.slot !== null
+                x: tailColumn.x
+                y: tailCursor.slot ? tailColumn.y + tailCursor.slot.y + tailCursor.slot.band : 0
+                width: tailColumn.width
+                height: tailCursor.slot ? tailCursor.slot.height - tailCursor.slot.band : 0
+
+                Behavior on y {
+                    enabled: root.cursorTravels
+                    Anim { kind: "spatialFast" }
+                }
             }
 
-            // With no cells above them the rows start where the cells would
-            // have: there is no second half for a rule to separate them from.
+            // Straight under the cells, or under the header's inset where
+            // there are none: the gap above the first heading is the row's
+            // own (MenuRow's `sectionFirst`).
             Column {
                 id: tailColumn
-                anchors.top: root.appCount > 0 ? tailRule.bottom : parent.top
-                anchors.topMargin: root.appCount > 0 ? Core.Theme.space.rowGap : 0
                 anchors.left: parent.left
                 anchors.leftMargin: root._cellGutter
                 anchors.right: parent.right
@@ -325,10 +366,14 @@ Item {
                         id: tailSlot
                         required property int index
                         required property string rowId
-                        readonly property var modelData: root._rowFor(tailSlot.rowId)
+                        readonly property var entry: root.rowsById[tailSlot.rowId] || root.rowsPrev[tailSlot.rowId] || null
+                        readonly property var modelData: tailSlot.entry ? tailSlot.entry.row : root.blankRow
 
                         readonly property int rowIndex: root.appCount + tailSlot.index
                         readonly property bool isCursor: root.cursor === tailSlot.rowIndex
+                        // The heading band above the row proper, which the
+                        // cursor's box must not swallow.
+                        readonly property real band: tailRow._headerBand
 
                         width: tailColumn.width
                         height: tailRow.height
@@ -338,21 +383,6 @@ Item {
                         // Nothing is handed over with it, so the reveal
                         // reads the cursor and the rows as they are by then.
                         onIsCursorChanged: if (tailSlot.isCursor) Qt.callLater(tailFooter.revealCursorRow)
-
-                        // The cursor fill the row list draws under its rows,
-                        // drawn per row here: the footer is one item and its
-                        // rows do not move under a query, so there is nothing
-                        // for a single travelling fill to travel between.
-                        // primitive-exempt: the launcher's list is the one
-                        // place in the shell with no Cell chrome at all
-                        // (MenuRow.qml's header), so its cursor is this bare
-                        // fill rather than a primitive's state.
-                        Rectangle {
-                            anchors.fill: parent
-                            radius: Core.Theme.radiusSm
-                            color: Core.Theme.color.accent
-                            visible: tailSlot.isCursor
-                        }
 
                         MenuParts.MenuRow {
                             id: tailRow
@@ -364,6 +394,8 @@ Item {
                             checkedState: Toggles.checkedFor(tailSlot.modelData,
                                 root.stateSnapshot, root.checkedResults)
                             confirming: root.confirmPendingId === tailSlot.modelData.id
+                            section: tailSlot.entry ? tailSlot.entry.section : ""
+                            sectionFirst: tailSlot.entry ? tailSlot.entry.sectionFirst : false
 
                             onActivate: root.activated(tailSlot.rowIndex)
                             onHoverMoved: (source, x, y) => {

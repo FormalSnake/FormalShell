@@ -78,8 +78,8 @@ leg_wheel_drive() {
   t0=$(wheel_t0)
   # 893x604 is the middle of a THUMBNAIL, second row, second column: the
   # card is centred and popupWidthMenu wide, its top edge sits at 30% of a
-  # 1080-tall output, and the grid starts a search row plus its rule and the
-  # breadcrumb below that. The middle of the grid is not good enough: 960
+  # 1080-tall output, and the grid starts under the header band's rule, its
+  # own inset below that. The middle of the grid is not good enough: 960
   # lands in the gutter between two cells, where the wheel reaches the
   # GridView without passing a cell at all, which is the one path that was
   # never broken.

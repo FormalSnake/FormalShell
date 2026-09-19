@@ -4,7 +4,7 @@
 // this shell's own ledger language: what Enter does to the row under the
 // cursor on the left, the keys that always apply on the right. Pure data,
 // so the verb a row answers to is decided in exactly one place and a test
-// can reach it; Menu.qml owns the state and MenuActionBar.qml paints it.
+// can reach it; Menu.qml owns the state and views/MenuFooter.qml paints it.
 //
 // Verbs come from a node's `kind`, never from its id: a verb keyed off an
 // id prefix would go quietly wrong the first time a provider renamed its
@@ -50,7 +50,7 @@ function primaryAction(ctx) {
     case "option":
         return { key: KEY_ENTER, label: "Select" };
     case "image":
-        return { key: KEY_ENTER, label: c.pickerSelect ? "Choose" : "Set Wallpaper" };
+        return { key: KEY_ENTER, label: c.pickerSelect ? "Choose" : "Set wallpaper" };
     case "app":
         return { key: KEY_ENTER, label: "Open" };
     case "submenu":
@@ -91,11 +91,11 @@ function hints(ctx) {
     var move = { key: c.grid ? KEY_GRID : KEY_UPDOWN, label: "Move" };
     var out = [move];
     if (c.variantSwitch === "dark" || c.variantSwitch === "light")
-        out.push({ key: KEY_TAB, label: c.variantSwitch === "light" ? "Show Light" : "Show Dark" });
+        out.push({ key: KEY_TAB, label: c.variantSwitch === "light" ? "Show light" : "Show dark" });
     if (c.discreteGpu && c.node && c.node.kind === "app" && !c.confirming)
-        out.push({ key: KEY_SHIFT_ENTER, label: "Open On GPU" });
+        out.push({ key: KEY_SHIFT_ENTER, label: "Open on GPU" });
     if (c.clipsshImage && !c.confirming)
-        out.push({ key: KEY_SHIFT_ENTER, label: "Send Over SSH" });
+        out.push({ key: KEY_SHIFT_ENTER, label: "Send over SSH" });
     if (c.mode === "select")
         return out.concat([{ key: KEY_ESC, label: "Cancel" }]);
     return out.concat([{ key: KEY_ESC, label: c.atRoot ? "Close" : "Back" }]);

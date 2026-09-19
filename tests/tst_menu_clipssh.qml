@@ -111,12 +111,12 @@ TestCase {
     // out the add command, which beats a hint that isn't there.
     function test_hint_on_a_clipboard_image_row() {
         var labels = Actions.hints({ mode: "menu", clipsshImage: true }).map(function (h) { return h.label; });
-        verify(labels.indexOf("Send Over SSH") >= 0);
+        verify(labels.indexOf("Send over SSH") >= 0);
     }
 
     function test_no_hint_off_an_image_row() {
         var labels = Actions.hints({ mode: "menu", clipsshImage: false }).map(function (h) { return h.label; });
-        compare(labels.indexOf("Send Over SSH"), -1);
+        compare(labels.indexOf("Send over SSH"), -1);
     }
 
     // A row mid-confirmation has already claimed Enter for the confirm, so
@@ -124,7 +124,7 @@ TestCase {
     function test_no_hint_while_confirming() {
         var labels = Actions.hints({ mode: "menu", clipsshImage: true, confirming: true })
             .map(function (h) { return h.label; });
-        compare(labels.indexOf("Send Over SSH"), -1);
+        compare(labels.indexOf("Send over SSH"), -1);
     }
 
     function test_rows_empty_is_note() {
@@ -132,7 +132,7 @@ TestCase {
         compare(rows.length, 1);
         compare(rows[0].kind, "note");
         compare(rows[0].dim, true);
-        compare(rows[0].label, "NO ALIASES");
+        compare(rows[0].label, "No aliases");
         compare(rows[0].desc, "clipssh alias add <name> <user@host>");
     }
 }

@@ -222,8 +222,8 @@ TestCase {
 
     function test_note_rows_are_honest() {
         var notes = [Keybinds.noBindsRow(), Keybinds.failedRow()];
-        compare(notes[0].label, "NO BINDS");
-        compare(notes[1].label, "BINDS UNAVAILABLE");
+        compare(notes[0].label, "No binds");
+        compare(notes[1].label, "Binds unavailable");
         for (var i = 0; i < notes.length; i++) {
             compare(notes[i].kind, "note");
             compare(notes[i].dim, true);

@@ -166,7 +166,7 @@ TestCase {
         }
     }
 
-    // MenuActionBar's shape: a cell whose left half is a button and whose
+    // The escape hatch's shape: a cell whose left half is a button and whose
     // right half is an inert legend, so it builds a partial target in `hit`
     // instead of taking the cell-wide `interactive` one.
     Component {
@@ -339,7 +339,7 @@ TestCase {
         verify(cell);
         settle(cell);
 
-        // MenuActionBar's shape: only part of the cell is a button, so it
+        // The escape hatch's shape: only part of the cell is a button, so it
         // builds its own target in `hit`. That slot spans the cell, so the
         // target starts at the cell's own edge and covers the padding the
         // content box leaves out.

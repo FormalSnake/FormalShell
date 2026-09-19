@@ -243,9 +243,9 @@ function _noteRow(id, label, desc) {
 }
 
 function noBindsRow() {
-    return _noteRow("keybinds.nobinds", "NO BINDS", "no bind lines in the hyprland config");
+    return _noteRow("keybinds.nobinds", "No binds", "no bind lines in the hyprland config");
 }
 
 function failedRow() {
-    return _noteRow("keybinds.failed", "BINDS UNAVAILABLE", "hyprctl binds failed");
+    return _noteRow("keybinds.failed", "Binds unavailable", "hyprctl binds failed");
 }

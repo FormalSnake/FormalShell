@@ -12,7 +12,10 @@
 # (M48): the field's placeholder, the group headings in the order they
 # appear, and the column count. That last one is what tells a grid from a
 # list at all, since a frame cannot say whether eight glyphs on one line are
-# eight cells of a grid or one wide row of a list. Whether a search heading
+# eight cells of a grid or one wide row of a list. The root is the app grid
+# (M72 T4): its apps under Applications, then the tree's own commands under
+# their headings, so the leg stages one desktop entry for the isolated
+# session to list, and the root has to report that order. Whether a search heading
 # names one block or two comes off `debug query`'s per-row `section`
 # instead, since `menu status` lists each heading once.
 #
@@ -40,6 +43,18 @@ menu_emoji_path="$shot_dir/menu-emoji.png"
 menu_status_root_path="$shot_dir/menu-status-root.json"
 menu_status_search_path="$shot_dir/menu-status-search.json"
 menu_status_emoji_path="$shot_dir/menu-status-emoji.json"
+
+menu_app_dir="$iso_home/.local/share/applications"
+
+leg_menu_fixture() {
+  mkdir -p "$menu_app_dir"
+  {
+    echo "[Desktop Entry]"
+    echo "Type=Application"
+    echo "Name=Menu Fixture"
+    echo "Exec=true"
+  } > "$menu_app_dir/formalshell-menu-fixture.desktop"
+}
 
 leg_menu_timing() {
   # menu-finish.sh's own read-back lands 13s after menu_t0, so the session
@@ -123,8 +138,9 @@ leg_menu_assert() {
     fail "no root-level menu screenshot produced"
   fi
   echo "SMOKE_MENU_ROOT $menu_root_path"
-  # The root's own chrome: shadcn's placeholder, the two group headings in
-  # declaration order, and a row list rather than a grid.
+  # The root's own chrome: shadcn's placeholder, and the body's sections in
+  # order: the staged app's grid under Applications first, then the tree's
+  # own two command groups, in declaration order, in the rows under it.
   if [ ! -s "$menu_status_root_path" ]; then
     fail "no root menu status produced"
   fi
@@ -132,11 +148,9 @@ leg_menu_assert() {
   if ! grep -q '"placeholder":"Type a command or search..."' "$menu_status_root_path"; then
     fail "the root field did not carry the command-palette placeholder, got: $(cat "$menu_status_root_path")"
   fi
-  if ! grep -q '"sections":\["Suggestions","Commands"\]' "$menu_status_root_path"; then
-    fail "the root rows did not group into Suggestions then Commands, got: $(cat "$menu_status_root_path")"
-  fi
-  if ! grep -q '"columns":1' "$menu_status_root_path"; then
-    fail "the root level reported a grid rather than a row list, got: $(cat "$menu_status_root_path")"
+  if ! "$jq_bin" -e '.view == "appGrid" and .columns > 1
+      and .sections == ["Applications", "Suggestions", "Commands"]' "$menu_status_root_path" > /dev/null 2>&1; then
+    fail "the root did not lay out as the Applications grid, then Suggestions, then Commands, got: $(cat "$menu_status_root_path")"
   fi
   menu_cursor_agrees "$menu_status_root_path" "root"
   # The emoji route: a grid, filtered, with the route's own prompt in the

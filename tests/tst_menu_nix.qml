@@ -95,11 +95,11 @@ TestCase {
 
     function test_note_rows() {
         var cases = [
-            [Providers.nixUnavailableRow(), "nix.unavailable", "NO NIX"],
-            [Providers.nixIndexingRow(), "nix.indexing", "INDEXING NIXPKGS"],
-            [Providers.nixSearchingRow(), "nix.searching", "SEARCHING"],
-            [Providers.nixNoResultsRow(), "nix.noresults", "NO RESULTS"],
-            [Providers.nixFailedRow(), "nix.failed", "SEARCH FAILED"]
+            [Providers.nixUnavailableRow(), "nix.unavailable", "Nix is not installed"],
+            [Providers.nixIndexingRow(), "nix.indexing", "Indexing nixpkgs"],
+            [Providers.nixSearchingRow(), "nix.searching", "Searching"],
+            [Providers.nixNoResultsRow(), "nix.noresults", "No results"],
+            [Providers.nixFailedRow(), "nix.failed", "Search failed"]
         ];
         for (var i = 0; i < cases.length; i++) {
             compare(cases[i][0].id, cases[i][1]);

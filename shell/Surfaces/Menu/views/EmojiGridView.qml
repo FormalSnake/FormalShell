@@ -12,12 +12,24 @@ GridView {
     property var rowsById: ({})
     property var rowsPrev: ({})
     property int cursorIndex: -1
+    property bool cursorTravels: false
     property var hoverGate: null
 
-    // 8 columns (M48 D5): Menu.qml's `cursorColumns` reads it back for
+    // A fixed count (M48 D5): Menu.qml's `cursorColumns` reads it back for
     // wrap/page-step arithmetic, the same seam appGrid's own `columns`
     // property already is.
-    readonly property int columns: 8
+    readonly property int columns: Core.Theme.launcher.emojiColumns
+
+    // Every tile keeps its own selected fill off, the `GridCursor` below
+    // draws the one.
+    readonly property bool ownsSelectionFill: true
+    readonly property real _gutter: Core.Theme.space.sm
+
+    // The inset under the rule above and over the one below, as a header and
+    // a footer so `contentY` is 0 at the top of the grid.
+    property real inset: 0
+    header: Item { height: root.inset; width: 1 }
+    footer: Item { height: root.inset; width: 1 }
 
     signal activated(int index)
     signal cursorRequested(int index)
@@ -60,7 +72,13 @@ GridView {
         step: root.cellHeight
     }
 
-    // The wrapper carries the GridView's own cell so the `Cell` inside it
+    GridCursor {
+        view: root
+        gutter: root._gutter
+        travels: root.cursorTravels
+    }
+
+    // The wrapper carries the GridView's own cell so the tile inside it
     // can hold the gutter between glyphs in its margins, exactly as the
     // wallpaper grid does.
     delegate: Item {
@@ -72,25 +90,14 @@ GridView {
         width: root.cellWidth
         height: root.cellHeight
 
-        Cell {
+        LauncherTile {
             id: emojiCell
             anchors.fill: parent
-            anchors.margins: Core.Theme.space.xs
-            radius: Core.Theme.radiusSm
-            // Ghost, so a grid of 40 glyphs is 40 glyphs rather than 40
-            // boxes; hover fills `accent` and the cursor is the ring, the
-            // same two states every other cell draws.
-            ghost: true
-            cursor: emojiSlot.index === root.cursorIndex
-            hovered: emojiCell.containsPointer && (!root.hoverGate || root.hoverGate.live)
-            interactive: true
-            // Same gate as the row list: filtering re-renders cells under a
-            // parked pointer, and Qt delivers that as a hover move
-            // indistinguishable from a real one.
-            onPointerMoved: (x, y) => {
-                if (root.hoverGate && root.hoverGate.moved(emojiCell, x, y))
-                    root.cursorRequested(emojiSlot.index);
-            }
+            anchors.margins: root._gutter
+            selected: emojiSlot.index === root.cursorIndex
+            hoverGate: root.hoverGate
+            tooltipText: emojiSlot.entry ? emojiSlot.entry.row.label : ""
+            onPointed: root.cursorRequested(emojiSlot.index)
             onClicked: root.activated(emojiSlot.index)
 
             // The glyph IS the row's icon (providers.js's emojiRows),
@@ -102,7 +109,7 @@ GridView {
             Text {
                 anchors.centerIn: parent
                 text: emojiSlot.entry ? emojiSlot.entry.row.icon : ""
-                color: Core.Theme.color.foreground
+                color: emojiCell.foreground
                 font.family: Core.Theme.fontFamilyMono
                 font.pixelSize: Core.Theme.fontSize.display
             }
