@@ -36,6 +36,10 @@
 // drawn past it, which is how an etched rule (a dark line over a lit one)
 // keeps the one-line footprint every layout was cut for.
 //
+// `keycap` is one key on its own cap (Components/Keycap.qml): a legend
+// rather than a control, so it has no pointer states, and its `ink` is the
+// material's, since granite dims the key's name where shadcn mutes it.
+//
 // `window` is the one role nothing in the shell draws. Hyprland does, off
 // the variables ThemeEngine publishes into formalshell-chrome.conf
 // (chrome.js, M60 P7), so it carries a `shadow` the compositor can render
@@ -69,6 +73,7 @@ var ROLES = {
     "cursor": [],
     "scrim": [],
     "separator": [],
+    "keycap": [],
     "switcher": [],
     "switcher.cell": ["rest", "selected"],
     "window": ["rest", "inactive"]

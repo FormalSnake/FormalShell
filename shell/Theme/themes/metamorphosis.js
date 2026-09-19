@@ -264,6 +264,15 @@ var STYLE = {
         // shadcn's `<Separator>`: one `border` line and nothing under it.
         "separator": { fill: "border" },
 
+        // shadcn's `<Kbd>`: the muted fill, a 1px `border` round it, the
+        // small radius and the muted ink over it.
+        "keycap": {
+            fill: "muted",
+            radius: "sm",
+            border: { color: "border", width: 1 },
+            ink: ["mutedForeground", 1]
+        },
+
         // The window switcher's card (M60 T6): shadcn's own card, the same
         // material every other floating card in this table wears.
         "switcher": {

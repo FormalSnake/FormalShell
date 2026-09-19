@@ -89,6 +89,8 @@ var SPACING_BASE = {
 // (`lib/Widgets/WindowSwitcherIcon.vala`, M60 T6): the app icon a cell
 // carries, and the room the card keeps off every edge of the output, which
 // is also what caps how many cells fit across before the row wraps.
+// `keycapHeight` is shadcn's `<Kbd>` (`h-5`): one key's cap, and its
+// narrowest width too, so a one-letter cap is square.
 var SEMANTIC_SPACING_BASE = {
     controlGap: 8, controlPaddingX: 12, controlPaddingY: 6,
     controlHeight: 32, barCellHeight: 28, barCellWidth: 44, barMargin: 6,
@@ -99,7 +101,8 @@ var SEMANTIC_SPACING_BASE = {
     popupWidthMenuSplit: 840, popupWidthMenuApp: 900,
     popupWidthBubble: 332,
     popupHeightMenu: 520, popupHeightMenuSplit: 560, popupHeightMenuApp: 720,
-    switcherIcon: 64, switcherInset: 64
+    switcherIcon: 64, switcherInset: 64,
+    keycapHeight: 20
 };
 
 function spacingTokens(scale) {

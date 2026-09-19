@@ -1360,17 +1360,16 @@ Item {
     // bar can never promise a key the handler below does not answer.
     readonly property var viewActions: {
         var hints = [
-            { key: Actions.KEY_UPDOWN, label: "Move" },
-            { key: "^" + Actions.KEY_ENTER, label: "Kill" },
-            { key: "^R", label: "Restart" },
-            { key: Actions.KEY_ESC, label: root.confirmAction !== "" ? "Cancel" : "Back" }
+            { keys: ["Ctrl", "Enter"], label: "Kill" },
+            { keys: ["Ctrl", "R"], label: "Restart" },
+            { keys: Actions.KEY_ESC, label: root.confirmAction !== "" ? "Cancel" : "Back" }
         ];
         if (!root._cursorRow)
             return { primary: null, hints: hints };
         var name = root._cursorRow.name;
         if (root.confirmAction !== "")
-            return { primary: { key: Actions.KEY_ENTER, label: "Confirm " + root.confirmAction + " " + name }, hints: hints };
-        return { primary: { key: Actions.KEY_ENTER, label: "Terminate " + name }, hints: hints };
+            return { primary: { keys: Actions.KEY_ENTER, label: "Confirm " + root.confirmAction + " " + name }, hints: hints };
+        return { primary: { keys: Actions.KEY_ENTER, label: "Terminate " + name }, hints: hints };
     }
 
     // One press of the primary: arm the action, or run the armed one. The

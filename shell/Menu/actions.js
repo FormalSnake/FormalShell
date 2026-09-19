@@ -16,54 +16,49 @@
 // gets no primary action rather than a verb that would do nothing when
 // pressed.
 //
-// Key caps are literal characters, not names, and every one of them is
-// checked against the pinned nerd-fonts-jetbrains-mono cmap: U+23CE ⏎ is
-// present, U+21B5 ↵, the more obvious return glyph, is NOT, and would
-// render as tofu. Escape stays the word "ESC" for the same reason its
-// U+238B symbol is unhelpful even where it exists.
-var KEY_ENTER = "⏎";
-var KEY_UPDOWN = "↑↓";
-var KEY_GRID = "←→↑↓";
-var KEY_ESC = "ESC";
-// The word, for the same reason Escape is: U+21E5 ⇥ is absent from the pinned
-// nerd-fonts-jetbrains-mono cmap and would render as tofu.
-var KEY_TAB = "TAB";
-// Spelt out for the same reason, and reusing the one return glyph already
-// checked above: U+21E7 ⇧ is not in every font the `monospace` alias
-// resolves to either.
-var KEY_SHIFT_ENTER = "SHIFT \u23CE";
+// Keys are names, one per cap (Components/keys.js spells them and turns
+// the arrows into icons), so a legend never depends on which glyphs the
+// `monospace` face happens to carry. `keys` is a list: a chord's keys, or
+// the keys a legend offers side by side.
+var KEY_ENTER = ["Enter"];
+var KEY_ESC = ["Esc"];
+var KEY_TAB = ["Tab"];
+var KEY_SHIFT_ENTER = ["Shift", "Enter"];
 
-// `ctx`: { mode, node, atRoot, grid, pickerSelect, variantSwitch, confirming,
+// `ctx`: { mode, node, atRoot, pickerSelect, variantSwitch, confirming,
 // discreteGpu, clipsshImage }.
 function primaryAction(ctx) {
     var c = ctx || {};
     if (c.mode === "input")
-        return { key: KEY_ENTER, label: "Submit" };
+        return { keys: KEY_ENTER, label: "Submit" };
     var node = c.node;
     if (!node || node.dim === true)
         return null;
     if (c.confirming)
-        return { key: KEY_ENTER, label: "Confirm " + node.label };
+        return { keys: KEY_ENTER, label: "Confirm " + node.label };
     if (node.verb)
-        return { key: KEY_ENTER, label: node.verb };
+        return { keys: KEY_ENTER, label: node.verb };
     switch (node.kind) {
     case "option":
-        return { key: KEY_ENTER, label: "Select" };
+        return { keys: KEY_ENTER, label: "Select" };
     case "image":
-        return { key: KEY_ENTER, label: c.pickerSelect ? "Choose" : "Set wallpaper" };
+        return { keys: KEY_ENTER, label: c.pickerSelect ? "Choose" : "Set wallpaper" };
     case "app":
-        return { key: KEY_ENTER, label: "Open" };
+        return { keys: KEY_ENTER, label: "Open" };
     case "submenu":
     case "provider":
     case "link":
-        return { key: KEY_ENTER, label: "Enter" };
+        return { keys: KEY_ENTER, label: "Open" };
     case "action":
-        return { key: KEY_ENTER, label: "Run" };
+        return { keys: KEY_ENTER, label: "Run" };
     }
     return null;
 }
 
-// The keys that always apply, right-aligned. Escape reads BACK wherever
+// The keys that apply beside Enter, right-aligned after its verb. The
+// arrows are not among them: every level moves on them, and four caps for
+// the one thing every list does crowd out the verbs a reader does not
+// already know. Escape reads BACK wherever
 // there is a level to pop and CLOSE at the root, because those are two
 // genuinely different outcomes and guessing wrong is the whole reason a
 // hint bar exists.
@@ -87,18 +82,17 @@ function primaryAction(ctx) {
 function hints(ctx) {
     var c = ctx || {};
     if (c.mode === "input")
-        return [{ key: KEY_ESC, label: "Cancel" }];
-    var move = { key: c.grid ? KEY_GRID : KEY_UPDOWN, label: "Move" };
-    var out = [move];
+        return [{ keys: KEY_ESC, label: "Cancel" }];
+    var out = [];
     if (c.variantSwitch === "dark" || c.variantSwitch === "light")
-        out.push({ key: KEY_TAB, label: c.variantSwitch === "light" ? "Show light" : "Show dark" });
+        out.push({ keys: KEY_TAB, label: c.variantSwitch === "light" ? "Show light" : "Show dark" });
     if (c.discreteGpu && c.node && c.node.kind === "app" && !c.confirming)
-        out.push({ key: KEY_SHIFT_ENTER, label: "Open on GPU" });
+        out.push({ keys: KEY_SHIFT_ENTER, label: "Open on GPU" });
     if (c.clipsshImage && !c.confirming)
-        out.push({ key: KEY_SHIFT_ENTER, label: "Send over SSH" });
+        out.push({ keys: KEY_SHIFT_ENTER, label: "Send over SSH" });
     if (c.mode === "select")
-        return out.concat([{ key: KEY_ESC, label: "Cancel" }]);
-    return out.concat([{ key: KEY_ESC, label: c.atRoot ? "Close" : "Back" }]);
+        return out.concat([{ keys: KEY_ESC, label: "Cancel" }]);
+    return out.concat([{ keys: KEY_ESC, label: c.atRoot ? "Close" : "Back" }]);
 }
 
 function actionBar(ctx) {

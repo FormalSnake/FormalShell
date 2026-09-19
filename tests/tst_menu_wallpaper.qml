@@ -200,12 +200,12 @@ TestCase {
     // The action bar names the set Tab would show, and only while the
     // switcher is actually up (Menu/actions.js).
     function test_the_action_bar_offers_tab_only_where_variants_exist() {
-        var withVariants = Actions.hints({ mode: "menu", grid: true, variantSwitch: "light" });
-        var tab = withVariants.filter(function (h) { return h.key === "TAB"; });
+        var withVariants = Actions.hints({ mode: "menu", variantSwitch: "light" });
+        var tab = withVariants.filter(function (h) { return h.keys.join("+") === "Tab"; });
         compare(tab.length, 1);
         compare(tab[0].label, "Show light");
 
-        var flat = Actions.hints({ mode: "menu", grid: true, variantSwitch: null });
-        compare(flat.filter(function (h) { return h.key === "TAB"; }).length, 0);
+        var flat = Actions.hints({ mode: "menu", variantSwitch: null });
+        compare(flat.filter(function (h) { return h.keys.join("+") === "Tab"; }).length, 0);
     }
 }

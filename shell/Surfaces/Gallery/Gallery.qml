@@ -372,6 +372,27 @@ Panel {
 
                         SectionLabel {
                             leftPadding: Theme.space.controlPaddingX
+                            text: "Keycap"
+                        }
+
+                        Row {
+                            x: Theme.space.controlPaddingX
+                            spacing: Theme.space.lg
+
+                            Chord { keys: "Enter" }
+                            Chord { keys: ["Up", "Down"] }
+                            Chord { keys: "Shift+Enter" }
+                            Chord { keys: "Super+Alt+Space" }
+                            Chord { keys: "Esc" }
+                        }
+                    }
+
+                    Column {
+                        width: parent.width
+                        spacing: Theme.space.rowGap
+
+                        SectionLabel {
+                            leftPadding: Theme.space.controlPaddingX
                             text: "Color tokens"
                         }
 

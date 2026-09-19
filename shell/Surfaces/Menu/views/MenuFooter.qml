@@ -4,7 +4,8 @@ import qs.Components
 
 // The launcher's footer band (M72 T4), Raycast's: where you are on the
 // left, the level's icon and name; what Enter does on the right, as a
-// `Button` carrying its key, then the legend for the other keys that apply.
+// `Button` followed by its key's cap, then each other key that applies as
+// its verb and its caps.
 // Menu/actions.js owns the wording of both.
 //
 // The verb is the one thing here that answers a click, doing exactly what
@@ -51,24 +52,37 @@ Item {
         }
     }
 
+    // The verb, then each legend entry, `xxl` apart; inside an entry the
+    // words sit `sm` off their caps, so a key is read with the verb it
+    // belongs to rather than with the next one along. The button's own
+    // padding is the gap before its cap.
     Row {
         id: actions
         anchors.right: parent.right
         anchors.rightMargin: Core.Theme.space.controlPaddingX
         anchors.verticalCenter: parent.verticalCenter
-        spacing: Core.Theme.space.md
+        spacing: Core.Theme.space.xxl
 
-        Button {
+        Row {
             anchors.verticalCenter: parent.verticalCenter
             visible: !!root.primary
-            variant: "ghost"
-            text: root.primary ? root.primary.label : ""
-            shortcut: root.primary ? root.primary.key : ""
-            onClicked: root.primaryActivated()
+
+            Button {
+                anchors.verticalCenter: parent.verticalCenter
+                variant: "ghost"
+                paddingX: Core.Theme.space.lg
+                text: root.primary ? root.primary.label : ""
+                onClicked: root.primaryActivated()
+            }
+
+            Chord {
+                anchors.verticalCenter: parent.verticalCenter
+                keys: root.primary ? root.primary.keys : []
+            }
         }
 
-        // The legend: a key and what it does, never a control. Keys are
-        // values, so mono; the verbs are words.
+        // The legend: what a key does, never a control. The verb is words in
+        // the muted ink, its keys on their caps after it.
         Repeater {
             model: root.hints
 
@@ -76,22 +90,19 @@ Item {
                 required property var modelData
 
                 anchors.verticalCenter: parent ? parent.verticalCenter : undefined
-                spacing: Core.Theme.space.xs
-
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: modelData.key
-                    color: Core.Theme.color.mutedForeground
-                    font.family: Core.Theme.fontFamilyMono
-                    font.pixelSize: Core.Theme.fontSize.caption
-                }
+                spacing: Core.Theme.space.sm
 
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     text: modelData.label
                     color: Core.Theme.color.mutedForeground
                     font.family: Core.Theme.fontFamilySans
-                    font.pixelSize: Core.Theme.fontSize.caption
+                    font.pixelSize: Core.Theme.fontSize.bodySmall
+                }
+
+                Chord {
+                    anchors.verticalCenter: parent.verticalCenter
+                    keys: modelData.keys
                 }
             }
         }

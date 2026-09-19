@@ -514,6 +514,22 @@ var STYLE = {
             edge: { color: "white", alpha: { light: 0.8, dark: 0.07 }, width: 1 }
         },
 
+        // granite's `.keycap` (granite `lib/Styles/Gtk/ShortcutsWindow.scss`,
+        // the class `Granite.AccelLabel` puts on each key): `fg` at 0.1, the
+        // highlight at 0.2 lit along the lower edge and fading upward (the
+        // highlight product from the header, so 0.04 in dark), radius half
+        // the window's 6, one inset line of the toplevel border at half its
+        // alpha along the bottom, and `fg` at 0.9 for the key's name.
+        // granite's second, sideways gradient is dropped: Box draws one face.
+        "keycap": {
+            fill: "foreground",
+            fillAlpha: 0.1,
+            radius: R_POPOVER / 2,
+            face: { from: ["white", 0], to: ["white", { light: 0.2, dark: 0.04 }] },
+            layers: [{ inset: true, y: -1, color: "black", alpha: { light: 0.1, dark: 0.375 } }],
+            ink: ["foreground", 0.9]
+        },
+
         // Gala's window switcher (`lib/Widgets/AbstractSwitcher.vala`'s own
         // `draw()`, M60 T6/M64): the background level at 0.6 over the
         // compositor's blur, a toplevel rim, and one lit stroke a pixel and

@@ -19,10 +19,6 @@ Box {
     property string text: ""
     // An icon name for Icon.qml, leading the label. Empty means no icon.
     property string icon: ""
-    // The key that does what a click does, drawn after the label as a
-    // keycap: a key is a value, so mono, a step down and dimmer than the
-    // verb it answers for. Empty means no keycap.
-    property string shortcut: ""
     property bool cursor: false
     property bool hovered: pointer.containsMouse
 
@@ -152,16 +148,6 @@ Box {
             font.weight: Theme.weight.medium
             width: root._labelWidth
             elide: root.labelBudget >= 0 ? Text.ElideRight : Text.ElideNone
-        }
-
-        Text {
-            visible: root.shortcut !== ""
-            anchors.verticalCenter: label.verticalCenter
-            text: root.shortcut
-            color: root._ink
-            opacity: 0.6
-            font.family: Theme.fontFamilyMono
-            font.pixelSize: Theme.fontSize.caption
         }
     }
 

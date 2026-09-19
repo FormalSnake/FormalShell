@@ -9,6 +9,7 @@ Card Card.qml
 Cell Cell.qml
 CellLabel CellLabel.qml
 CellRow CellRow.qml
+Chord Chord.qml
 Cover Cover.qml
 Deform Deform.qml
 DismissTwins DismissTwins.qml
@@ -23,6 +24,7 @@ IconButton IconButton.qml
 Input Input.qml
 Joint Joint.qml
 KeyCatcher KeyCatcher.qml
+Keycap Keycap.qml
 MarqueeText MarqueeText.qml
 MoveTransition MoveTransition.qml
 Panel Panel.qml

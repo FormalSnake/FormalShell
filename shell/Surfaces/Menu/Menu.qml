@@ -989,7 +989,6 @@ PanelWindow {
         mode: root._mode,
         node: root._cursorNode,
         atRoot: root.currentNodeId === null,
-        grid: root._gridCursor,
         pickerSelect: pickerProvider.mode === "select",
         // The variant Tab would switch TO, null wherever Tab does nothing.
         variantSwitch: root._isPickerRoute && pickerProvider.hasVariants
@@ -1029,7 +1028,7 @@ PanelWindow {
         ? "list"
         : (root._levelNode
             ? (MenuIcons.iconFor(root._levelNode) || MenuIcons.fallbackFor(root._levelNode))
-            : "command")
+            : "search")
 
     // What the empty field says it is for: shadcn's Command line at the
     // root, the level's own prompt inside one (its `prompt` key, or "Search

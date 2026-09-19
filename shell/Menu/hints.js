@@ -92,3 +92,15 @@ function accessoryFor(node) {
     }
     return "";
 }
+
+// The accessory as the keys of a chord, one per cap, when that is what it
+// is: a route's summoning chord. Empty for every other accessory, which
+// stays a word or a value.
+function chordKeysFor(node) {
+    if (!node)
+        return [];
+    var chord = chordFor(node.id);
+    if (chord === "" || accessoryFor(node) !== chord)
+        return [];
+    return chord.split("+");
+}

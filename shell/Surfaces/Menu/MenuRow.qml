@@ -75,6 +75,7 @@ Item {
     readonly property real _iconSize: Theme.fontSize.body
 
     readonly property string _accessory: MenuHints.accessoryFor(root.node)
+    readonly property var _chordKeys: MenuHints.chordKeysFor(root.node)
     // A kind name is a word and takes the sans face; a value, a chord, a
     // prefix or a count takes the mono one (spec "Type").
     readonly property bool _accessoryWord: (root.node.meta || "") === ""
@@ -223,10 +224,16 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: Theme.space.iconGap
 
+                Chord {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: root._chordKeys.length > 0
+                    keys: root._chordKeys
+                }
+
                 Text {
                     id: accessory
                     anchors.verticalCenter: parent.verticalCenter
-                    visible: root._accessory !== ""
+                    visible: root._accessory !== "" && root._chordKeys.length === 0
                     text: root._accessory
                     color: cell.dimForeground
                     font.family: root._accessoryWord ? Theme.fontFamilySans : Theme.fontFamilyMono
