@@ -214,6 +214,14 @@ function filterRows(rows, query) {
 
 var SORTS = ["cpu", "mem", "pid", "name"];
 
+// What the sort control and the column headers call each mode.
+var SORT_LABELS = { cpu: "CPU", mem: "Memory", pid: "PID", name: "Name" };
+
+// The costs run largest first, the identifiers in reading order.
+function sortDescending(mode) {
+    return mode === "cpu" || mode === "mem";
+}
+
 // Every mode breaks its own ties on pid, so the order two idle processes
 // sit in cannot flip between polls: a list that reshuffled under the cursor
 // every two seconds would make the cursor point at a different process than

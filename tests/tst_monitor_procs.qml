@@ -283,6 +283,19 @@ TestCase {
         compare(Procs.nextSort("nonsense"), "cpu");
     }
 
+    // The sort control and the column headers name every mode, and the
+    // arrow a header draws matches the order sortRows actually produces.
+    function test_every_mode_has_a_label_and_a_direction() {
+        for (var i = 0; i < Procs.SORTS.length; i++)
+            verify((Procs.SORT_LABELS[Procs.SORTS[i]] || "") !== "", Procs.SORTS[i]);
+        verify(Procs.sortDescending("cpu"));
+        verify(Procs.sortDescending("mem"));
+        verify(!Procs.sortDescending("pid"));
+        verify(!Procs.sortDescending("name"));
+        var byPid = Procs.sortRows(_rows(), "pid");
+        verify(byPid[0].pid < byPid[byPid.length - 1].pid);
+    }
+
     // ---- actions ----
 
     function test_only_the_four_offered_signals_are_accepted() {
