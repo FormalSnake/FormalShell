@@ -224,7 +224,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   Commands rows), its fuzzy ranking against the live tree, and the select
   round trip, with every status read's
   `cursorId` checked against the row the live view holds its current item
-  on (`viewCursor`).
+  on (`viewCursor`). Then real arrow keys on a two-row grid of twelve
+  staged apps: one Down from a fresh open scrolls nothing, and four Downs
+  into the rows under the grid and four Ups back each leave the cursor's
+  item whole inside the viewport (`viewCursor.top`/`bottom`).
 - `menu_emerge.sh` `--menu-emerge`: the launcher budding off the top line,
   sampled frame by frame under `debug motionScale`: card fill under the line
   with nothing at its resting floor, the bar's own band undimmed while it is

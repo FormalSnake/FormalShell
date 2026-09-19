@@ -65,14 +65,17 @@ WheelHandler {
         var flick = root.flickable;
         if (!flick)
             return;
-        var max = Math.max(0, flick.contentHeight - flick.height);
+        // A view with a header scrolls over [originY, originY + range], not
+        // from 0.
+        var min = flick.originY;
+        var max = min + Math.max(0, flick.contentHeight - flick.height);
         // A touchpad reports the finger's own travel in pixelDelta and a
         // wheel reports notches in angleDelta, 120 units to the notch.
         var delta = event.pixelDelta.y !== 0
             ? event.pixelDelta.y
             : (event.angleDelta.y / 120) * root.step;
         var base = glide.running ? root._target : flick.contentY;
-        root._target = Math.max(0, Math.min(max, base - delta));
+        root._target = Math.max(min, Math.min(max, base - delta));
         glide.stop();
         glide.to = root._target;
         glide.start();

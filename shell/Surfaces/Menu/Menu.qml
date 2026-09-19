@@ -923,7 +923,12 @@ PanelWindow {
                     : (k === "appGrid" ? appGrid.cursorReport() : null)));
         if (!cell)
             return { view: k, index: -1, id: "" };
-        return { view: k, index: cell.index, id: cell.id };
+        return {
+            view: k, index: cell.index, id: cell.id,
+            top: cell.top === undefined ? -1 : cell.top,
+            bottom: cell.bottom === undefined ? -1 : cell.bottom,
+            viewport: cell.viewport === undefined ? -1 : Math.round(cell.viewport)
+        };
     }
 
     // shadcn's `CommandEmpty`. Never in input mode, whose row list is empty

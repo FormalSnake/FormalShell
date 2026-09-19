@@ -26,7 +26,7 @@
 # cursor, which put the fill on one row and Enter on another.
 leg_menu_flag="--menu"
 leg_menu_order=20
-leg_menu_needs="jq"
+leg_menu_needs="jq wtype"
 
 # This leg's own clock. The launcher covers the whole output, so under
 # --wallpaper it starts after that leg's last frame (t=14) rather than
@@ -43,6 +43,8 @@ menu_emoji_path="$shot_dir/menu-emoji.png"
 menu_status_root_path="$shot_dir/menu-status-root.json"
 menu_status_search_path="$shot_dir/menu-status-search.json"
 menu_status_emoji_path="$shot_dir/menu-status-emoji.json"
+menu_down_path="$shot_dir/menu-down.png"
+menu_status_down_path="$shot_dir/menu-status-down.json"
 
 menu_app_dir="$iso_home/.local/share/applications"
 
@@ -54,14 +56,21 @@ leg_menu_fixture() {
     echo "Name=Menu Fixture"
     echo "Exec=true"
   } > "$menu_app_dir/formalshell-menu-fixture.desktop"
+  # A root grid of more than one row, the shape a real install has: the
+  # Down check below is about a cursor moving between grid rows.
+  local n
+  for n in 01 02 03 04 05 06 07 08 09 10 11; do
+    printf '[Desktop Entry]\nType=Application\nName=Fixture App %s\nExec=true\n' "$n" \
+      > "$menu_app_dir/formalshell-menu-fixture-$n.desktop"
+  done
 }
 
 leg_menu_timing() {
-  # menu-finish.sh's own read-back lands 13s after menu_t0, so the session
+  # menu-finish.sh's own read-back lands 20s after menu_t0, so the session
   # has to outlive that, not just the screenshot.
   local t0
   t0=$(menu_t0)
-  leg_timing $((14 + t0 - 3)) $((46 + t0 - 3)) 4
+  leg_timing $((21 + t0 - 3)) $((53 + t0 - 3)) 4
 }
 
 leg_menu_drive() {
@@ -79,6 +88,20 @@ sleep 2
 "$qs_bin" ipc -p "$shell_path" call debug query 'e' > "$query_path" 2>&1
 "$grim_bin" "$menu_root_path" > /dev/null 2>&1
 "$qs_bin" ipc -p "$shell_path" call menu status > "$menu_status_root_path" 2>&1
+"$wtype_bin" -k Down
+sleep 1
+"$grim_bin" "$menu_down_path" > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu status > "$menu_status_down_path" 2>&1
+for n in 2 3 4; do
+  "$wtype_bin" -k Down
+  sleep 0.6
+  "$qs_bin" ipc -p "$shell_path" call menu status > "$shot_dir/menu-status-down\$n.json" 2>&1
+done
+for n in 1 2 3 4; do
+  "$wtype_bin" -k Up
+  sleep 0.6
+  "$qs_bin" ipc -p "$shell_path" call menu status > "$shot_dir/menu-status-up\$n.json" 2>&1
+done
 sleep 1
 "$qs_bin" ipc -p "$shell_path" call menu filter e > /dev/null 2>&1
 sleep 1
@@ -101,7 +124,7 @@ EOF
   local menu_finish_script="$shot_dir/menu-finish.sh"
   write_script "$menu_finish_script" <<EOF
 #!/usr/bin/env bash
-sleep $((t0 + 12))
+sleep $((t0 + 19))
 "$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
 sleep 1
 cat "$iso_home/.local/state/formalshell/menu-selection.txt" > "$selection_path" 2>&1
@@ -124,6 +147,18 @@ menu_cursor_agrees() {
     fail "$what: the cursor is on row $index ($id) but the view holds $view_index (${view_id:-nothing})"
   fi
   echo "SMOKE_MENU_CURSOR $what: row $index ($id)"
+}
+
+menu_cursor_on_screen() {
+  local f="$1" what="$2" top bottom viewport
+  menu_cursor_agrees "$f" "$what"
+  top=$("$jq_bin" -r '.viewCursor.top' "$f" 2>/dev/null)
+  bottom=$("$jq_bin" -r '.viewCursor.bottom' "$f" 2>/dev/null)
+  viewport=$("$jq_bin" -r '.viewCursor.viewport' "$f" 2>/dev/null)
+  if [ -z "$top" ] || [ "$top" -lt 0 ] || [ "$bottom" -gt "$viewport" ]; then
+    fail "$what: the cursor row spans $top..$bottom in a viewport of $viewport"
+  fi
+  echo "SMOKE_MENU_ON_SCREEN $what: $top..$bottom of $viewport"
 }
 
 leg_menu_assert() {
@@ -153,6 +188,37 @@ leg_menu_assert() {
     fail "the root did not lay out as the Applications grid, then Suggestions, then Commands, got: $(cat "$menu_status_root_path")"
   fi
   menu_cursor_agrees "$menu_status_root_path" "root"
+  # One real Down straight after opening: the row it lands on has to be
+  # inside the viewport, whole, not scrolled past.
+  echo "SMOKE_MENU_DOWN $menu_down_path"
+  menu_cursor_agrees "$menu_status_down_path" "root after Down"
+  local top bottom viewport
+  top=$("$jq_bin" -r '.viewCursor.top' "$menu_status_down_path" 2>/dev/null)
+  bottom=$("$jq_bin" -r '.viewCursor.bottom' "$menu_status_down_path" 2>/dev/null)
+  viewport=$("$jq_bin" -r '.viewCursor.viewport' "$menu_status_down_path" 2>/dev/null)
+  if [ -z "$top" ] || [ "$top" -lt 0 ] || [ "$bottom" -gt "$viewport" ]; then
+    fail "root after Down: the cursor row spans $top..$bottom in a viewport of $viewport"
+  fi
+  echo "SMOKE_MENU_DOWN_RECT $top..$bottom of $viewport"
+  # The second grid row fits the card, so that Down scrolls nothing: the
+  # heading over the grid stays in sight.
+  if [ "$(menu_field "$menu_status_down_path" scrollTop)" != "0" ]; then
+    fail "root after Down: the view scrolled to $(menu_field "$menu_status_down_path" scrollTop) for a row that already fit"
+  fi
+  # Down through the grid's last row into the rows under it and back up to
+  # the first cell: every stop whole inside the viewport.
+  local f
+  for f in down2 down3 down4 up1 up2 up3 up4; do
+    menu_cursor_on_screen "$shot_dir/menu-status-$f.json" "root after $f"
+  done
+  # Up out of the rows lands on the grid's last cell, so four Ups end in
+  # the grid's first row rather than on cell 0.
+  local back cols
+  back=$("$jq_bin" -r '.cursor' "$shot_dir/menu-status-up4.json")
+  cols=$("$jq_bin" -r '.columns' "$shot_dir/menu-status-up4.json")
+  if [ -z "$back" ] || [ "$back" -ge "$cols" ]; then
+    fail "root: four Downs then four Ups left the cursor on $back, outside the grid's first row"
+  fi
   # The emoji route: a grid, filtered, with the route's own prompt in the
   # field. More columns than one is the whole claim, and it is not readable
   # off the frame.

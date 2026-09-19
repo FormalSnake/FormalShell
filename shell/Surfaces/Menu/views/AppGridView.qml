@@ -94,7 +94,7 @@ Item {
     readonly property real contentHeight: grid.contentHeight
     // From the top of the header, which the view places above its first
     // cell, at a negative origin.
-    readonly property real contentY: grid.contentY - grid.originY
+    readonly property real contentY: grid.contentY - (grid.headerItem ? grid.headerItem.y : grid.originY)
     readonly property real cellHeight: grid.cellHeight
 
     function _rowFor(id) {
@@ -107,20 +107,73 @@ Item {
     // insert, and a binding whose value did not change would never put it
     // back. -1 while the cursor is in the footer, or the view would scroll
     // a cell back into sight over the row the reader is on.
+    //
+    // The view does not follow its current item (see the grid's
+    // `highlightFollowsCurrentItem`), so the scroll is held where it was and
+    // the cell brought into view by the smallest move that shows it whole,
+    // the footer rows' own rule (`revealCursorRow`).
     function placeCursor(index) {
+        var offset = grid.contentY - root._top();
         root.cursor = index;
         grid.currentIndex = index >= 0 && index < root.appCount ? index : -1;
+        root._scrollTo(offset);
+        var cell = grid.currentItem;
+        if (cell)
+            root._reveal(cell.y, cell.height);
+    }
+
+    // The top of the content and how far it runs, off the header and the
+    // footer themselves: `originY` moves under a keyed insert and is not
+    // where the header is.
+    function _top() {
+        return grid.headerItem ? grid.headerItem.y : grid.originY;
+    }
+
+    function _extent() {
+        if (grid.footerItem)
+            return grid.footerItem.y + grid.footerItem.height - root._top();
+        return grid.contentHeight;
+    }
+
+    function _scrollTo(offset) {
+        grid.contentY = root._top() + Math.max(0, Math.min(offset, root._extent() - grid.height));
+    }
+
+    // The scroll from the top of the content, as last set by a key, the
+    // wheel or a flick.
+    property real _offset: 0
+
+    // The smallest scroll that shows [y, y + height] (content coordinates)
+    // whole (Components/cursor.js).
+    function _reveal(y, height) {
+        var top = root._top();
+        root._scrollTo(Cursor.follow(y - top, height, grid.contentY - top,
+            grid.height, root._extent(), 0));
     }
 
     // What the view draws the cursor on, by index and by the id its own
     // model holds there, for `menu status`.
+    // `top`/`bottom` are the cursor item's edges inside the viewport, so the
+    // rig can assert the row a key landed on is on screen.
     function cursorReport() {
-        if (grid.currentIndex >= 0 && root.cellsModel && grid.currentIndex < root.cellsModel.count)
-            return { index: grid.currentIndex, id: root.cellsModel.get(grid.currentIndex).rowId };
+        var out = { index: -1, id: "", top: -1, bottom: -1, viewport: grid.height };
+        var item = null;
         var k = root.cursor - root.appCount;
-        if (root.tailModel && k >= 0 && k < root.tailModel.count)
-            return { index: root.cursor, id: root.tailModel.get(k).rowId };
-        return { index: -1, id: "" };
+        if (grid.currentIndex >= 0 && root.cellsModel && grid.currentIndex < root.cellsModel.count) {
+            out.index = grid.currentIndex;
+            out.id = root.cellsModel.get(grid.currentIndex).rowId;
+            item = grid.currentItem;
+        } else if (root.tailModel && k >= 0 && k < root.tailModel.count) {
+            out.index = root.cursor;
+            out.id = root.tailModel.get(k).rowId;
+            item = grid.footerItem ? grid.footerItem.rowAt(k) : null;
+        }
+        if (item) {
+            var p = item.mapToItem(grid, 0, 0);
+            out.top = Math.round(p.y);
+            out.bottom = Math.round(p.y + item.height);
+        }
+        return out;
     }
 
     function cancelGlide() {
@@ -175,6 +228,12 @@ Item {
         // keys outrun the default animated highlight move and the cursor
         // cell ends up off-viewport.
         highlightMoveDuration: 0
+        // GridView's own follow shows the footer along with any cell in the
+        // last row (`showFooterForIndex` in qquickitemview.cpp), and the
+        // footer here is every row under the grid, so one Down scrolled to
+        // the end. `placeCursor` owns the scroll instead.
+        highlightFollowsCurrentItem: false
+        onContentYChanged: root._offset = grid.contentY - root._top()
 
         // A row here is a row of icons, not a text line.
         WheelScroll {
@@ -193,6 +252,11 @@ Item {
         // one. The heading stands on the same row inset the footer's rows
         // take, so every heading in the body starts on one column.
         header: Item {
+            // A sync can settle through several snapshots in one turn, and
+            // the heading comes and goes with them. GridView moves the header
+            // and keeps `contentY`, which leaves the view scrolled by the
+            // heading's height; the offset the reader had is put back.
+            onYChanged: root._scrollTo(root._offset)
             width: grid.width
             height: root.inset + (appsHeading.visible ? appsHeading.implicitHeight + Core.Theme.space.rowGap : 0)
 
@@ -311,6 +375,10 @@ Item {
             // Panel's (Components/cursor.js): the smallest one that puts the
             // row inside the viewport, and never past either end of what
             // the view has to scroll.
+            function rowAt(index) {
+                return tailRepeater.itemAt(index);
+            }
+
             function revealCursorRow() {
                 var index = root.cursor - root.appCount;
                 if (!grid.contentItem || index < 0 || index >= root.tailCount)
@@ -318,11 +386,7 @@ Item {
                 var row = tailRepeater.itemAt(index);
                 if (!row)
                     return;
-                // Cursor.follow clamps to [0, contentHeight - height], and
-                // the header puts this view's range at `originY` instead.
-                var origin = grid.originY;
-                grid.contentY = origin + Cursor.follow(row.mapToItem(grid.contentItem, 0, 0).y - origin,
-                    row.height, grid.contentY - origin, grid.height, grid.contentHeight, 0);
+                root._reveal(row.mapToItem(grid.contentItem, 0, 0).y, row.height);
             }
 
             // The footer rows' cursor, the grid's box on this side of it:
