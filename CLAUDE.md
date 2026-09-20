@@ -124,7 +124,8 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   it settles on, and nothing inside it moves once its own entrance is over.
 - `clipboard.sh` `--clipboard`: the ledger's capture order and in-process row
   activation, with the image entry's preview and a copied-markup row's own
-  angle brackets in the frame.
+  angle brackets in the frame, and a `text/uri-list` copy of one jpeg (how a
+  GTK4 app copies an image) landing as a png image row.
 - `clipssh.sh` `--clipssh`: the clipssh route's send, its bar indicator and
   its copied/failed toasts, against a shimmed binary.
 - `clipssh_image.sh` `--clipssh-image`: the two sends that resolve a host out

@@ -37,6 +37,12 @@
 # bold "clipboard smoke markup" with its tags eaten and its font no longer
 # the row's. The ledger dump asserts the markup survived capture; the frame
 # is where the row is read back with its angle brackets intact.
+#
+# Before that, a file copy of the shape a GTK4 app makes of an image: a
+# `text/uri-list` offer naming one jpeg, a space in its name so the percent
+# escape is real. No image/* type is ever on the clipboard, so the row can
+# only come from the uri-list watcher, and the stored file has to open with
+# the png signature: the jpeg went through ffmpeg on the way in.
 leg_clipboard_flag="--clipboard"
 leg_clipboard_order=130
 leg_clipboard_needs="wl-copy wl-paste convert"
@@ -53,22 +59,25 @@ clip_route_png="$shot_dir/clipboard-route.png"
 clip_thumb_cache_path="$shot_dir/clipboard-thumb-cache.txt"
 clip_warmup_path="$shot_dir/clipboard-warmup.json"
 clip_burst_path="$shot_dir/clipboard-burst.json"
+clip_uri_fixture_path="$shot_dir/clip uri image.jpg"
+clip_uri_list_path="$shot_dir/clipboard-uri.json"
 
 leg_clipboard_fixture() {
   # The ledger's image entry: a small solid PNG copied last, so the route's
   # newest row is the image one and the split pane's screenshot shows the
   # framed preview rather than the text one.
   $convert_bin -size 320x180 xc:'#3fae2a' "$clip_image_fixture_path"
+  $convert_bin -size 200x120 xc:'#ae2a3f' "$clip_uri_fixture_path"
 }
 
 leg_clipboard_timing() {
   # The head costs a fixed 4s and every frame after it stacks on top. The
   # end state (the route summoned over the image entry) is stable, so a
   # generous delay only ever lands on it.
-  leg_timing 42 70
+  leg_timing 46 74
   # Sharing the launcher surface with --picker costs this leg the whole
   # picker timeline before its own route can be summoned.
-  if leg_on picker; then leg_timing 50 85; fi
+  if leg_on picker; then leg_timing 54 89; fi
 }
 
 leg_clipboard_drive() {
@@ -116,6 +125,9 @@ sleep 1
 sleep 2
 "$wl_paste_bin" --no-newline > "$clip_activate_paste_path" 2>&1
 sleep 1
+printf 'file://%s\r\n' "\$(printf '%s' "$clip_uri_fixture_path" | sed 's/ /%20/g')" | "$wl_copy_bin" --type text/uri-list
+sleep 3
+"$qs_bin" ipc -p "$shell_path" call clipboard list > "$clip_uri_list_path" 2>&1
 "$wl_copy_bin" '<b>clipboard smoke markup</b>'
 sleep 1
 "$wl_copy_bin" --type image/png < "$clip_image_fixture_path"
@@ -205,6 +217,15 @@ leg_clipboard_assert() {
   fi
   if ! grep -qF 'burst-t' "$clip_burst_path"; then
     fail "the burst row is not the value the clipboard settled on: $(cat "$clip_burst_path")"
+  fi
+  # The uri-list copy, dumped before any image/png was ever copied.
+  cat "$clip_uri_list_path"; echo
+  uri_store=$(grep -o '"path":"[^"]*"' "$clip_uri_list_path" | head -n 1 | cut -d'"' -f4)
+  if [ -z "$uri_store" ] || [ ! -s "$uri_store" ]; then
+    fail "a text/uri-list copy of one jpeg never reached the ledger as an image: $(cat "$clip_uri_list_path" 2>/dev/null)"
+  fi
+  if [ "$(head -c 8 "$uri_store" | od -An -tx1 | tr -d ' \n')" != "89504e470d0a1a0a" ]; then
+    fail "the uri-list capture at $uri_store is not a png"
   fi
   # The image entry is what the split pane's preview frame is read against.
   if ! grep -qF '"kind":"image"' "$clip_list3_path"; then

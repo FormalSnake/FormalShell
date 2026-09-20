@@ -3,6 +3,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "../Clipboard/history.js" as History
+import "../Clipboard/urilist.js" as UriList
 import "../Core/proc.js" as Proc
 
 // Capture via `wl-paste --type text --watch <cmd>` under a long-running
@@ -33,6 +34,16 @@ import "../Core/proc.js" as Proc
 // (overflow/remove/clear) can orphan an image file, history.js reports
 // those paths back as `removedPaths`, and `_deletePaths` is the one place
 // that ever calls `rm`, guarded to paths under `_imagesDir` only.
+//
+// A THIRD watcher takes `text/uri-list`, which is how a GTK4 app copies an
+// image: Loupe and Nautilus offer the file, never its pixels, so the
+// image/png watcher above does not fire for them at all. urilist.js reads
+// the offer down to one local picture, `importProc` brings it into the same
+// store (a png copied as is, anything else through ffmpeg, so every file in
+// the store stays a png and `copy()` and clipssh need no second branch),
+// and the path the text watcher recorded for the same copy is dropped as
+// the echo it is. No ffmpeg, or a file it cannot decode, leaves that text
+// row as the honest record of the copy.
 Singleton {
     id: root
 
@@ -42,6 +53,15 @@ Singleton {
     }
 
     readonly property string _imagesDir: root._stateDir + "/clipboard-images"
+
+    // The store's own half of a capture, run with the bytes already in
+    // `$tmp` under `$dir`: an empty read leaves nothing behind, the file is
+    // named by its sha256, and the final path goes out NUL-delimited.
+    readonly property string _storeScript:
+        "if [ ! -s \"$tmp\" ]; then rm -f \"$tmp\"; exit 0; fi; " +
+        "hash=$(sha256sum \"$tmp\" | cut -d ' ' -f1); file=\"$dir/$hash.png\"; " +
+        "if [ -e \"$file\" ]; then rm -f \"$tmp\"; else mv \"$tmp\" \"$file\"; fi; " +
+        "printf '%s\\0' \"$file\""
 
     property alias items: adapter.items
 
@@ -92,6 +112,36 @@ Singleton {
         // one, so a list watcher would miss exactly the copies that matter.
         // The service owns the gate; this is only the moment.
         ClipsshService.autoSendImage(path);
+    }
+
+    // The text watcher sees the same file copy as its path (or its uri, for
+    // a file GTK cannot name by path), before or after the import lands.
+    readonly property int _echoMs: 5000
+
+    function _captureUriList(data) {
+        var file = UriList.imageFile(data);
+        if (!file)
+            return;
+        importProc.source = file;
+        importProc.exec({ command: ["sh", "-c",
+            "dir=\"$0\"; src=\"$1\"; [ -f \"$src\" ] || exit 0; mkdir -p \"$dir\" || exit 0; " +
+            "tmp=$(mktemp \"$dir/tmp.XXXXXX\") || exit 0; " +
+            "if [ \"$2\" = png ]; then cp -- \"$src\" \"$tmp\"; " +
+            "else ffmpeg -v error -y -i \"$src\" -frames:v 1 -update 1 -c:v png -f image2 \"$tmp\"; fi " +
+            "|| { rm -f \"$tmp\"; exit 0; }; " + root._storeScript,
+            root._imagesDir, file.path, file.png ? "png" : "convert"] });
+    }
+
+    function _captureImported(path, source) {
+        var echoes = [source.path, source.uri];
+        if (root._hasPendingText && echoes.indexOf(root._pendingText.replace(/\0/g, "").trim()) >= 0) {
+            settleTimer.stop();
+            root._hasPendingText = false;
+        }
+        var state = History.dropEcho({ items: root.items }, echoes, Date.now(), root._echoMs);
+        if (state.items !== root.items)
+            adapter.items = state.items;
+        root._captureImage(path);
     }
 
     function copy(id) {
@@ -200,10 +250,7 @@ Singleton {
             "[ \"$CLIPBOARD_STATE\" = sensitive ] && exit 0; " +
             "dir=\"$0\"; mkdir -p \"$dir\" || exit 0; " +
             "tmp=$(mktemp \"$dir/tmp.XXXXXX\") || exit 0; cat > \"$tmp\"; " +
-            "if [ ! -s \"$tmp\" ]; then rm -f \"$tmp\"; exit 0; fi; " +
-            "hash=$(sha256sum \"$tmp\" | cut -d ' ' -f1); file=\"$dir/$hash.png\"; " +
-            "if [ -e \"$file\" ]; then rm -f \"$tmp\"; else mv \"$tmp\" \"$file\"; fi; " +
-            "printf '%s\\0' \"$file\"",
+            root._storeScript,
             root._imagesDir])
         running: true
         stdout: SplitParser {
@@ -217,5 +264,38 @@ Singleton {
         id: imageRestartTimer
         interval: 3000
         onTriggered: imageWatcher.running = true
+    }
+
+    // Third watcher, `text/uri-list` (see header comment). The offer is a
+    // line or two of text, so it is forwarded whole and read in urilist.js
+    // rather than parsed in sh.
+    Process {
+        id: uriWatcher
+        command: Proc.dieWithParent(["wl-paste", "--type", "text/uri-list", "--watch", "sh", "-c",
+            "[ \"$CLIPBOARD_STATE\" = sensitive ] && exit 0; cat; printf '\\0'"])
+        running: true
+        stdout: SplitParser {
+            splitMarker: "\u0000"
+            onRead: data => root._captureUriList(data)
+        }
+        onExited: exitCode => uriRestartTimer.restart()
+    }
+
+    Timer {
+        id: uriRestartTimer
+        interval: 3000
+        onTriggered: uriWatcher.running = true
+    }
+
+    // One import at a time: a newer copy's exec() replaces a running one,
+    // which is the right winner. `source` is the copy the running import
+    // belongs to.
+    Process {
+        id: importProc
+        property var source: null
+        stdout: SplitParser {
+            splitMarker: "\u0000"
+            onRead: data => root._captureImported(data, importProc.source)
+        }
     }
 }

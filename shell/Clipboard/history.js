@@ -114,6 +114,17 @@ function remove(state, id) {
     };
 }
 
+// A copied file reaches the text watcher too, as its own path or uri. Once
+// the same copy has landed as an image that row is its echo. Only the
+// newest row, and only inside `windowMs` of `now`: the echo is always the
+// capture that just happened, never a row further down.
+function dropEcho(state, texts, now, windowMs) {
+    var top = state.items[0];
+    if (!top || top.kind === "image" || now - top.capturedAt > windowMs) return state;
+    if (texts.indexOf((top.text || "").trim()) < 0) return state;
+    return Object.assign({}, state, { items: state.items.slice(1) });
+}
+
 function clear(state) {
     if (state.items.length === 0) return _noRemoval(state);
     return { state: Object.assign({}, state, { items: [] }), removedPaths: _imagePathsOf(state.items) };
