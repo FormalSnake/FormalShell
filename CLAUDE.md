@@ -244,6 +244,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `notify.sh` `--notify`: the toast stack collapsed and expanded, critical
   holding the front slot over a newer normal, the icon resolution order over
   three cards, and the layer surface the same size either way.
+- `notify_close.sh` `--notify-close`: one sticky critical notification closed
+  by a real pointer parked on its close button and a real click, `notifications
+  status` counting one popup parked and none after. Rides `--pantheon` for
+  the bubble, whose button only exists while the card's hover holds.
 - `notify_emerge.sh` `--notify-emerge`: rides `--pantheon` and needs it; one
   sticky notification arriving at a tenth speed, read as a ladder down the
   card's own centre column: the bubble unfolds off its top edge, so the

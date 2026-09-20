@@ -64,15 +64,18 @@ Box {
         anchors.margins: -root.padding
         cursorShape: Qt.PointingHandCursor
         onClicked: root.bodyClicked()
+    }
 
-        // A handler rather than this MouseArea's own containsMouse, which
-        // drops out the moment the pointer crosses onto the close button:
-        // that button's own appearance rides this, and so does the toast's
-        // expiry pause (NotificationService.setPopupHovered, wired by
-        // Toasts.qml).
-        HoverHandler {
-            id: hover
-        }
+    // On the content slot rather than inside the MouseArea above: the close
+    // button's own hover area is that MouseArea's sibling, and Qt hands a
+    // hover it accepted on to ancestors only, so a handler in there went
+    // false with the pointer on the button. The button's own appearance
+    // rides this, and so does the toast's expiry pause
+    // (NotificationService.setPopupHovered, wired by Toasts.qml). The margin
+    // takes it back out to the bubble's own edges.
+    HoverHandler {
+        id: hover
+        margin: root.padding
     }
 
     Row {

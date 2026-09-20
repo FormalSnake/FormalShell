@@ -65,15 +65,16 @@ Card {
         anchors.margins: -root.padding
         cursorShape: Qt.PointingHandCursor
         onClicked: root.bodyClicked()
+    }
 
-        // Hover has to keep reporting with a button under the pointer:
-        // this MouseArea's own containsMouse drops out the moment the
-        // pointer crosses onto the close button, and the toast's expiry
-        // pause rides this (same reason Toasts.qml's stack hover is a
-        // handler).
-        HoverHandler {
-            id: hover
-        }
+    // On the content slot rather than inside the MouseArea above: a button's
+    // own hover area is that MouseArea's sibling, and Qt hands a hover it
+    // accepted on to ancestors only, so a handler in there went false with
+    // the pointer on the close button. The toast's expiry pause rides this.
+    // The margin takes it back out to the card's own edges.
+    HoverHandler {
+        id: hover
+        margin: root.padding
     }
 
     Column {
