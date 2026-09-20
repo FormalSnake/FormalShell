@@ -1906,7 +1906,10 @@ PanelWindow {
     }
 
     WlrLayershell.namespace: "formalshell:menu"
-    WlrLayershell.layer: WlrLayer.Top
+    // Overlay rather than Top: Hyprland draws a fullscreen window over the
+    // top layer, so a launcher there takes the keyboard under a video and
+    // shows nothing.
+    WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.exclusiveZone: -1
     WlrLayershell.keyboardFocus: root.isOpen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 

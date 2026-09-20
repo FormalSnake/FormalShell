@@ -16,15 +16,22 @@
 # in the middle dump and back to their starting counts in the last one, and
 # `hyprctl -j clients` confirms a window really was fullscreen in the middle
 # (so the disappearance is the cause under test, not a window that closed).
+#
+# The launcher is the chrome that has to stay reachable there: summoned over
+# the fullscreen window, its surface is on the overlay level of a fourth dump
+# (Hyprland draws a fullscreen window over the top level) and its card is in
+# the frame, read as the frame differing from the bare fullscreen one.
 leg_fullscreen_flag="--fullscreen"
 leg_fullscreen_order=200
-leg_fullscreen_needs="jq"
+leg_fullscreen_needs="convert jq"
 leg_fullscreen_fixture_window=keep
 
 fullscreen_before_layers="$shot_dir/fullscreen-before-layers.json"
 fullscreen_on_layers="$shot_dir/fullscreen-on-layers.json"
 fullscreen_after_layers="$shot_dir/fullscreen-after-layers.json"
 fullscreen_on_clients="$shot_dir/fullscreen-on-clients.json"
+fullscreen_menu_layers="$shot_dir/fullscreen-menu-layers.json"
+fullscreen_menu_path="$shot_dir/fullscreen-menu.png"
 fullscreen_before_path="$shot_dir/fullscreen-before.png"
 fullscreen_on_path="$shot_dir/fullscreen-on.png"
 fullscreen_after_path="$shot_dir/fullscreen-after.png"
@@ -34,7 +41,7 @@ leg_fullscreen_fixture() {
 }
 
 leg_fullscreen_timing() {
-  leg_timing 16 50
+  leg_timing 21 55
 }
 
 leg_fullscreen_drive() {
@@ -49,6 +56,12 @@ sleep 3
 "$hyprctl_bin" -j layers > "$fullscreen_on_layers" 2>&1
 "$hyprctl_bin" -j clients > "$fullscreen_on_clients" 2>&1
 "$grim_bin" "$fullscreen_on_path" > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu summon "" > /dev/null 2>&1
+sleep 2
+"$hyprctl_bin" -j layers > "$fullscreen_menu_layers" 2>&1
+"$grim_bin" "$fullscreen_menu_path" > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
+sleep 1
 "$hyprctl_bin" dispatch fullscreen 0 > /dev/null 2>&1
 sleep 3
 "$hyprctl_bin" -j layers > "$fullscreen_after_layers" 2>&1
@@ -94,6 +107,20 @@ leg_fullscreen_assert() {
   [ "$frame_on" -eq 0 ] || fail "frame zones stayed mapped under fullscreen ($frame_on)"
   [ "$corner_on" -eq 0 ] || fail "hot corners stayed mapped under fullscreen ($corner_on)"
 
+  # The launcher over the fullscreen window: on the overlay level, the one
+  # Hyprland still draws above it, and actually in the frame.
+  [ -s "$fullscreen_menu_layers" ] || fail "no dump produced at $fullscreen_menu_layers"
+  local menu_overlay
+  menu_overlay=$("$jq_bin" -r '[.[] | .levels["3"][]? | select(.namespace == "formalshell:menu")] | length' "$fullscreen_menu_layers" 2>/dev/null)
+  echo "launcher over fullscreen: overlay surfaces=$menu_overlay"
+  [ "${menu_overlay:-0}" -ge 1 ] || fail "the launcher is not on the overlay level over a fullscreen window"
+  [ -s "$fullscreen_menu_path" ] || fail "no launcher frame at $fullscreen_menu_path"
+  local menu_diff
+  menu_diff=$($convert_bin "$fullscreen_on_path" "$fullscreen_menu_path" -compose difference -composite \
+    -colorspace Gray -threshold 5% -format '%[fx:mean*w*h]' info: 2>/dev/null | awk '{printf "%d", $1}')
+  echo "launcher over fullscreen: pixels differing from the bare frame=$menu_diff"
+  [ "${menu_diff:-0}" -gt 10000 ] || fail "the launcher did not draw over the fullscreen window ($menu_diff pixels differ)"
+
   local bar_after frame_after corner_after
   bar_after=$(_fullscreen_count "$fullscreen_after_layers" "formalshell:bar")
   frame_after=$(_fullscreen_count "$fullscreen_after_layers" "formalshell:frame-zone")
@@ -105,5 +132,6 @@ leg_fullscreen_assert() {
 
   echo "SMOKE_FULLSCREEN_BEFORE $fullscreen_before_path"
   echo "SMOKE_FULLSCREEN_ON $fullscreen_on_path"
+  echo "SMOKE_FULLSCREEN_MENU $fullscreen_menu_path"
   echo "SMOKE_FULLSCREEN_AFTER $fullscreen_after_path"
 }
