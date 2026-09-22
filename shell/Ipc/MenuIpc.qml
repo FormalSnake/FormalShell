@@ -122,7 +122,8 @@ IpcHandler {
             cursor: menu.cursorIndex,
             cursorId: menu.cursorId,
             viewCursor: menu.viewCursor(),
-            rows: menu.rowCount
+            rows: menu.rowCount,
+            cells: menu.cellIds()
         });
     }
 

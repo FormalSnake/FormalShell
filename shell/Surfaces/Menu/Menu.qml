@@ -673,6 +673,15 @@ PanelWindow {
 
     readonly property int rowCount: root._displayRows.length
 
+    // The ids the cells model holds, read out of the model itself rather
+    // than `_rowsModelIds`, for `menu status`: what the grid draws.
+    function cellIds() {
+        var out = [];
+        for (var i = 0; i < rowsModel.count; i++)
+            out.push(rowsModel.get(i).rowId);
+        return out;
+    }
+
     // On `menu status` (M58 G5): which row or cell the cursor sits on. A
     // frame shows the ring, but only a number says an arrow press moved by
     // one cell rather than by a whole row of them.
