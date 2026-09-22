@@ -36,11 +36,22 @@ function dieWithParent(argv) {
 // parsed command: uwsm only resolves actions by id, which DesktopAction does
 // not document. Returns null outside a uwsm session (the nested smoke rig
 // has no app slice to land in); the caller keeps execute() then.
+//
+// uwsm rejects an id outside the pattern below with an error toast, and a
+// file named "Modrinth App.desktop" has a space in its id. Such an entry goes
+// by its parsed command too, with -T carrying Terminal=true.
+var UWSM_ENTRY_ID = /^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$/;
+
 function appLaunch(uwsmSession, entry, action) {
     if (!uwsmSession || !entry)
         return null;
-    var target = action ? (action.command || []) : [entry.id + ".desktop"];
-    if (target.length === 0)
+    if (!action && UWSM_ENTRY_ID.test(entry.id))
+        return ["uwsm", "app", "--", entry.id + ".desktop"];
+    var command = (action || entry).command || [];
+    if (command.length === 0)
         return null;
-    return ["uwsm", "app", "--"].concat(target);
+    var argv = ["uwsm", "app"];
+    if (!action && entry.runInTerminal)
+        argv.push("-T");
+    return argv.concat(["--"], command);
 }

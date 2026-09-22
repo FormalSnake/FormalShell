@@ -48,6 +48,16 @@ TestCase {
                 ["uwsm", "app", "--", "firefox", "--private-window"]);
     }
 
+    function test_an_id_uwsm_rejects_launches_by_command() {
+        var entry = { id: "Modrinth App", command: ["ModrinthApp"] };
+        compare(Proc.appLaunch("x", entry, null), ["uwsm", "app", "--", "ModrinthApp"]);
+    }
+
+    function test_a_terminal_entry_by_command_keeps_its_terminal() {
+        var entry = { id: "My Tool", command: ["htop"], runInTerminal: true };
+        compare(Proc.appLaunch("x", entry, null), ["uwsm", "app", "-T", "--", "htop"]);
+    }
+
     // No uwsm session: the caller falls back to execute().
     function test_no_uwsm_session_means_no_argv() {
         compare(Proc.appLaunch("", { id: "firefox" }, null), null);
