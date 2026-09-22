@@ -101,17 +101,19 @@ GridView {
             onClicked: root.activated(emojiSlot.index)
 
             // The glyph IS the row's icon (providers.js's emojiRows),
-            // carried in the mono font that renders it. At `display` rather
-            // than `heading`: a cell eight columns into `popupWidthMenu` is
-            // wide enough that a heading-sized glyph read as a scatter of
-            // dots rather than as a picture to pick from (read off
-            // menu-emoji.png).
+            // carried in the mono font that renders it. Sized off the tile
+            // rather than a font token: a cell eight columns into
+            // `popupWidthMenu` is ~58px, and `display` (26px) filled under
+            // half of it, a scatter of dots rather than a picture to pick
+            // from (read off menu-emoji.png). Seven tenths of the tile keeps
+            // a colour emoji's own square inside the cell, and follows the
+            // column count and `fontBaseSize` with it.
             Text {
                 anchors.centerIn: parent
                 text: emojiSlot.entry ? emojiSlot.entry.row.icon : ""
                 color: emojiCell.foreground
                 font.family: Core.Theme.fontFamilyMono
-                font.pixelSize: Core.Theme.fontSize.display
+                font.pixelSize: Math.max(Core.Theme.fontSize.display, Math.round(emojiCell.height * 0.7))
             }
         }
     }
