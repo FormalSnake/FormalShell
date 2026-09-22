@@ -19,6 +19,21 @@ Singleton {
     // which does not happen under a running shell.
     property var _sources: ({})
 
+    // Icon names a lookup has failed for, retried on a timer rather than
+    // only on whatever unrelated event next rebuilds the caller's tree.
+    // `Quickshell.iconPath` occasionally misses a name it resolves fine a
+    // moment later (the icon theme's own cache still warming up right
+    // after the shell starts), so a name earns one retry cycle rather than
+    // being taken as permanently missing.
+    property var _failed: ({})
+
+    // Bumped when a retry recovers a name. `source()` reads it before its
+    // cache check, so every binding that resolves an icon through it (an
+    // app row's `iconSource`, a switcher tile, the bar's active-window
+    // cell) depends on it too and repaints on its own, with no retry logic
+    // of its own to write.
+    property int generation: 0
+
     // `{ "<pid>": [{ exe, argv }, …] }`, the window's process and its
     // ancestors. Assigned whole rather than mutated, so a tile bound through
     // `forWindow` repaints when its pid's answer lands. A pid is read once:
@@ -28,13 +43,55 @@ Singleton {
     property var _asked: ({})
     property var _queue: []
 
+    function _themed(n) {
+        return Quickshell.iconPath(n, true);
+    }
+
     function source(name) {
         var key = String(name || "");
-        if (!root._sources[key])
-            root._sources[key] = AppIcon.source(key, function (n) {
-                return Quickshell.iconPath(n, true);
-            });
+        root.generation; // read for the dependency described above
+        if (!root._sources[key]) {
+            var resolved = AppIcon.source(key, root._themed);
+            root._sources[key] = resolved;
+            if (key !== "") {
+                if (resolved)
+                    delete root._failed[key];
+                else if (!root._failed[key]) {
+                    root._failed[key] = true;
+                    retryTimer.restart();
+                }
+            }
+        }
         return root._sources[key];
+    }
+
+    // One retry pass over every name still failed. Reschedules itself
+    // while any remain, so a theme that takes a couple of seconds to warm
+    // up gets a couple of tries rather than one.
+    function _retryFailed() {
+        var keys = Object.keys(root._failed);
+        if (keys.length === 0)
+            return;
+        var recovered = false;
+        for (var i = 0; i < keys.length; i++) {
+            var key = keys[i];
+            var resolved = AppIcon.source(key, root._themed);
+            if (resolved) {
+                root._sources[key] = resolved;
+                delete root._failed[key];
+                recovered = true;
+            }
+        }
+        if (Object.keys(root._failed).length > 0)
+            retryTimer.restart();
+        if (recovered)
+            root.generation++;
+    }
+
+    Timer {
+        id: retryTimer
+        interval: 750
+        onTriggered: root._retryFailed()
     }
 
     function entryFor(win) {
