@@ -5,7 +5,9 @@
 # and launched, which records the launch, rebuilds the tree as the launcher
 # closes and moves that app to the head of the grid. `menu status`'s
 # `cells` is read on every reopen: eight ids, none of them twice, the
-# launched app first.
+# launched app first. It summons and closes the launcher on its own clock
+# from t=3, so it does not ride another launcher leg (`--app-grid`,
+# `--menu`): run it on its own.
 leg_grid_relaunch_flag="--grid-relaunch"
 leg_grid_relaunch_order=27
 leg_grid_relaunch_needs="jq"
@@ -38,12 +40,13 @@ leg_grid_relaunch_fixture() {
     grid_relaunch_entry "formalshell-relaunch-$letter.desktop" "Relaunch $letter"
   done
   # Launch records the shell reads after its first tree build, so the
-  # first reorder lands on a grid whose window has never mapped.
+  # first reorder lands on a grid whose window has never mapped. A season
+  # old (six half-lives), so a launch inside the run outranks every one of them.
   mkdir -p "$iso_home/.local/state/formalshell"
-  local now
-  now=$(date +%s)000
+  local then
+  then=$(( $(date +%s) - 90 * 24 * 3600 ))000
   cat > "$iso_home/.local/state/formalshell/state.json" <<EOF
-{"appLaunches":[{"id":"formalshell-relaunch-hotel","count":9,"lastMs":$now},{"id":"formalshell-relaunch-bravo","count":7,"lastMs":$now},{"id":"formalshell-relaunch-foxtrot","count":5,"lastMs":$now},{"id":"formalshell-relaunch-delta","count":3,"lastMs":$now}]}
+{"appLaunches":[{"id":"formalshell-relaunch-hotel","count":9,"lastMs":$then},{"id":"formalshell-relaunch-bravo","count":7,"lastMs":$then},{"id":"formalshell-relaunch-foxtrot","count":5,"lastMs":$then},{"id":"formalshell-relaunch-delta","count":3,"lastMs":$then}]}
 EOF
 }
 

@@ -168,6 +168,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   drawn against the live theme.
 - `gpu.sh` `--gpu`: both cards of a hybrid laptop this rig is not, and the
   four PRIME offload variables reaching a launched child.
+- `grid_relaunch.sh` `--grid-relaunch`: the root grid after launches that
+  re-rank it and desktop entry rescans while it is closed and open, read
+  off `menu status`'s `cells`: eight ids, none twice, the launched app
+  first.
 - `hotcorner.sh` `--hotcorner`: both hot corner surfaces mapped on the right
   layer, which is all a rig with no synthetic pointer can observe.
 - `hotcorner_relock.sh` `--hotcorner-relock`: locks from the corner, unlocks
