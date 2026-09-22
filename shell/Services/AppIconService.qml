@@ -30,7 +30,7 @@ Singleton {
 
     function source(name) {
         var key = String(name || "");
-        if (root._sources[key] === undefined)
+        if (!root._sources[key])
             root._sources[key] = AppIcon.source(key, function (n) {
                 return Quickshell.iconPath(n, true);
             });
