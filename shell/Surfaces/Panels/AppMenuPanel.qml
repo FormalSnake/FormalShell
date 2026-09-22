@@ -1,8 +1,10 @@
 import QtQuick
+import Quickshell
 import qs.Core
 import qs.Components
 import qs.Compositor
 import qs.Services
+import "../../Core/proc.js" as Proc
 
 // The focused app's menu (DESIGN.md §3 "Panel"), opened from the bar's
 // active-window cell: macOS's app-name menu, in the place the app name
@@ -78,7 +80,7 @@ Panel {
         if (root._window === null)
             return;
         if (index < root._actions.length) {
-            root._actions[index].execute();
+            root._runAction(root._actions[index]);
             root.close();
         } else if (index < root._closeIndex) {
             CompositorService.focusWindow(root._appWindows[index - root._actions.length].id);
@@ -92,6 +94,14 @@ Panel {
     onIsOpenChanged: if (root.isOpen) {
         root.cursorIndex = 0;
         root.cursorSection = 0;
+    }
+
+    function _runAction(action) {
+        var argv = Proc.appLaunch(Quickshell.env("UWSM_FINALIZE_VARNAMES"), root._entry, action);
+        if (argv)
+            Quickshell.execDetached(argv);
+        else
+            action.execute();
     }
 
     function _pointAt(index) {
@@ -114,7 +124,7 @@ Panel {
             onContainsPointerChanged: if (actionCell.containsPointer) root._pointAt(actionCell.index)
 
             onClicked: {
-                actionCell.modelData.execute();
+                root._runAction(actionCell.modelData);
                 root.close();
             }
 

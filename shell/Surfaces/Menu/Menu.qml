@@ -25,6 +25,7 @@ import "../../Compositor/keybinds.js" as Keybinds
 import "../../Menu/rowsync.js" as RowSync
 import "../../Menu/nav.js" as Nav
 import "../../Compositor/appmatch.js" as AppMatch
+import "../../Core/proc.js" as Proc
 
 // The unified menu (M72 T4, Raycast's layout kept plain): a single
 // keyboard-exclusive top-layer window covering the focused output, a plain
@@ -1713,12 +1714,16 @@ PanelWindow {
             }
             // Baseline first: nothing can map a window inside this same JS
             // block, so the count postActivation.beginLaunchWatch reads is
-            // genuinely the "before". execute() stays exactly as it was,
-            // the entry's own Exec field codes and quoting only survive
-            // that path (see providers.js's header), so the feedback wraps
-            // it rather than routing around it.
+            // genuinely the "before". Under uwsm the entry goes by id, so
+            // uwsm parses its Exec line; elsewhere execute() is the only
+            // path that keeps field codes and quoting intact (see
+            // providers.js's header).
             postActivation.beginLaunchWatch(node.label);
-            node._entry.execute();
+            var launchArgv = Proc.appLaunch(Quickshell.env("UWSM_FINALIZE_VARNAMES"), node._entry, null);
+            if (launchArgv)
+                Quickshell.execDetached(launchArgv);
+            else
+                node._entry.execute();
             Core.State.setAppLaunches(Frecency.record(Core.State.appLaunches, node._entry.id, Date.now()));
             root.close();
             return;

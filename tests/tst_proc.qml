@@ -36,4 +36,22 @@ TestCase {
         Proc.dieWithParent(argv);
         compare(argv, ["ttfx", "--effect", "rain"]);
     }
+
+    function test_app_launch_goes_by_desktop_id_under_uwsm() {
+        compare(Proc.appLaunch("HYPRLAND_INSTANCE_SIGNATURE", { id: "org.gnome.Nautilus" }, null),
+                ["uwsm", "app", "--", "org.gnome.Nautilus.desktop"]);
+    }
+
+    function test_an_action_launches_by_its_parsed_command() {
+        var action = { command: ["firefox", "--private-window"] };
+        compare(Proc.appLaunch("x", { id: "firefox" }, action),
+                ["uwsm", "app", "--", "firefox", "--private-window"]);
+    }
+
+    // No uwsm session: the caller falls back to execute().
+    function test_no_uwsm_session_means_no_argv() {
+        compare(Proc.appLaunch("", { id: "firefox" }, null), null);
+        compare(Proc.appLaunch(undefined, { id: "firefox" }, null), null);
+        compare(Proc.appLaunch("x", { id: "firefox" }, { command: [] }), null);
+    }
 }
