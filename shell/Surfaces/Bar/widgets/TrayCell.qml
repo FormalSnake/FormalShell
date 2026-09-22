@@ -56,7 +56,8 @@ Cell {
     // width, which Bar/tray.js's fit is arithmetic on.
     IconImage {
         anchors.verticalCenter: parent.verticalCenter
-        asynchronous: true
+        // Themed icons stay on the main thread, see Picture.qml.
+        asynchronous: String(source).indexOf("image://icon/") !== 0
         smooth: false
         width: Theme.fontSize.body
         height: Theme.fontSize.body

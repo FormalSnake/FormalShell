@@ -34,6 +34,15 @@ Item {
     property int fillMode: Image.PreserveAspectFit
     property bool cache: true
     property bool asynchronous: true
+
+    // A themed icon never loads off the main thread, whatever the caller
+    // asked for: quickshell's icon provider runs QIcon::fromTheme on the
+    // pixmap reader thread, and Qt's icon loader shares its caches with the
+    // main thread's own Quickshell.iconPath calls with no lock between
+    // them. Racing the two returns null icons (an app resolved to no icon
+    // for the whole session) and segfaults the shell under load
+    // (dev/stress, 2026-09-22).
+    readonly property bool _themed: String(root.source).indexOf("image://icon/") === 0
     property bool smooth: true
     property alias sourceSize: img.sourceSize
     readonly property alias status: img.status
@@ -47,7 +56,7 @@ Item {
         source: root.source
         fillMode: root.fillMode
         cache: root.cache
-        asynchronous: root.asynchronous
+        asynchronous: root.asynchronous && !root._themed
         smooth: root.smooth
         visible: !ditherLoader.active || !(ditherLoader.item && ditherLoader.item.painted)
     }

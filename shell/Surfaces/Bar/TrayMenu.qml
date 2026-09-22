@@ -336,7 +336,8 @@ Panel {
                         anchors.left: parent.left
                         anchors.leftMargin: Theme.space.controlPaddingX + rowWrap.depth * Theme.space.xxl
                         anchors.verticalCenter: parent.verticalCenter
-                        asynchronous: true
+                        // Themed icons stay on the main thread, see Picture.qml.
+                        asynchronous: String(source).indexOf("image://icon/") !== 0
                         visible: rowWrap.entry.icon !== ""
                         source: rowWrap.entry.icon || ""
                         width: Theme.fontSize.body

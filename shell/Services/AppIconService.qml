@@ -21,10 +21,11 @@ Singleton {
 
     // Icon names a lookup has failed for, retried on a timer rather than
     // only on whatever unrelated event next rebuilds the caller's tree.
-    // `Quickshell.iconPath` occasionally misses a name it resolves fine a
-    // moment later (the icon theme's own cache still warming up right
-    // after the shell starts), so a name earns one retry cycle rather than
-    // being taken as permanently missing.
+    // A miss used to come from the icon provider's own lookups on the
+    // pixmap reader thread racing these (Components/Picture.qml); every
+    // themed load is on the main thread now, so a miss here is a name the
+    // theme lacks, and the retry only covers a theme installed under a
+    // running shell.
     property var _failed: ({})
 
     // Bumped when a retry recovers a name. `source()` reads it before its

@@ -92,7 +92,8 @@ Cell {
         width: Theme.fontSize.body
         height: Theme.fontSize.body
         fillMode: Image.PreserveAspectFit
-        asynchronous: true
+        // Themed icons stay on the main thread, see Picture.qml.
+        asynchronous: String(source).indexOf("image://icon/") !== 0
         sourceSize.width: width * Screen.devicePixelRatio
         sourceSize.height: height * Screen.devicePixelRatio
     }

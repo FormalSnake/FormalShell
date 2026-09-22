@@ -146,7 +146,8 @@ Item {
                     height: root._thumbHeight
                     width: root._thumbHeight * 3
                     fillMode: Image.PreserveAspectFit
-                    asynchronous: true
+                    // Themed icons stay on the main thread, see Picture.qml.
+                    asynchronous: String(source).indexOf("image://icon/") !== 0
                     cache: false
                     sourceSize.width: root._thumbHeight * 3
                     sourceSize.height: root._thumbHeight
