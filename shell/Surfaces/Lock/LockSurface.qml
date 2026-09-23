@@ -218,6 +218,7 @@ WlSessionLockSurface {
         errorText: surfaceRoot.authError
         checking: surfaceRoot.authenticating
         fingerprintEnrolled: surfaceRoot.fingerprintEnrolled
+        avatarPath: Core.Config.avatarPath
         onAccepted: password => surfaceRoot.submit(password)
         onActivity: surfaceRoot.activity()
     }

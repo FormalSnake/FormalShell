@@ -191,7 +191,8 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `keybinds.sh` `--keybinds`: the launcher's binds route rendering rows off
   Hyprland's own expanded bind table.
 - `lock.sh` `--lock`: the lock round trip over real PAM, wrong password to
-  unlocked, typed by a real virtual-keyboard client.
+  unlocked, typed by a real virtual-keyboard client, with a staged `~/.face`
+  found in the locked frame as the avatar over the clock.
 - `lyrics.sh` `--lyrics`: three tracks (two cached, one a sibling `.lrc` of
   the shape a line-synced provider really returns), the lit set on a duet and
   background overlap, quality and estimated timing, the estimated wipe read

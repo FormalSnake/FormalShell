@@ -739,7 +739,10 @@ sections `sectionGap` apart.
 tabular percentage.
 
 **Lock, greeter.** Wallpaper, 0.5 scrim, `displayLarge` x3 clock, date as a
-`SectionLabel`, one `Input`. Wrong password: `Input` error state.
+`SectionLabel`, one `Input`. Wrong password: `Input` error state. The lock
+screen puts the profile picture (`avatar.path`, default `~/.face`) over the
+clock as a circular `Avatar` the clock's height; no readable image, no slot.
+The greeter draws none: it has no account until a username is typed.
 
 **Picker.** Thumbnail `Cell`s with `radiusMd`; cursor is the ring;
 `Dark | Light` is a `Segmented`.

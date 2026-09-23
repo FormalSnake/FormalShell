@@ -12,7 +12,7 @@
 # the only way to prove the unlock path is to actually type into it.
 leg_lock_flag="--lock"
 leg_lock_order=110
-leg_lock_needs="wtype"
+leg_lock_needs="wtype convert"
 
 lock_locked_path="$shot_dir/lock-locked.png"
 lock_typing_path="$shot_dir/lock-typing.png"
@@ -39,6 +39,9 @@ leg_lock_fixture() {
   local rc=0
   "$PWD/result/bin/formalshell-lock-before-sleep" || rc=$?
   echo "$rc" > "$lock_before_sleep_rc_path"
+  # A profile picture at the default `avatar.path`, one flat colour nothing
+  # else on the lock screen paints, so the locked frame can be searched for it.
+  $convert_bin -size 256x256 xc:'#1FB86A' "png:$iso_home/.face"
 }
 
 leg_lock_timing() {
@@ -113,6 +116,14 @@ leg_lock_assert() {
   # the built-in surface is the one that came up and `external` has to say so.
   if ! grep -q '"external":false' "$lock_status_path"; then
     fail "lock status did not report external:false with no lock.command set. Got: $(cat "$lock_status_path")"
+  fi
+  # The avatar over the clock: ~/.face's colour covering at least a 40px
+  # disc's worth of the locked frame (a quarter of the 90px slot).
+  local avatar_px
+  avatar_px=$($convert_bin "$lock_locked_path" -fuzz 4% -fill black +opaque '#1FB86A' -fill white -opaque '#1FB86A' -format '%[fx:int(mean*w*h)]' info: 2>/dev/null)
+  echo "lock avatar pixels: ${avatar_px:-none}"
+  if [ "${avatar_px:-0}" -lt 1250 ]; then
+    fail "the lock screen drew no avatar from \$HOME/.face (${avatar_px:-0} pixels of its colour)"
   fi
   # A locked frame and an unlocked one cannot be the same picture. The
   # cheapest guard there is against a leg that photographed the desktop four

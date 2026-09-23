@@ -56,7 +56,9 @@ import QtQuick
 // governed by bar.layout alone, M55). media.visualizerStyle (string,
 // default "bars", the spectrum's style id from Visualizer/styles.js; an
 // unknown id draws bars and `visualizer status` reports it, M73).
-// lock.blankAfterSeconds (number, default 30, Lock.qml's idle-blank
+// avatar.path (string, default "$HOME/.face", an absolute path to the
+// profile picture the lock screen and the polkit card show; no readable
+// image there means no avatar is drawn). lock.blankAfterSeconds (number, default 30, Lock.qml's idle-blank
 // timeout, seconds, fed straight to IdleMonitor.timeout), lock.
 // fingerprintPamService (string, default "", the PAM service name for
 // Lock.qml's parallel fingerprint flow; empty means no reader enrolled, so
@@ -430,6 +432,9 @@ Singleton {
         root._publish(settingsFile.text());
         root.loaded = true;
     }
+
+    // The profile picture the lock screen and the polkit card show.
+    readonly property string avatarPath: root.get("avatar.path", "") || (Quickshell.env("HOME") + "/.face")
 
     // Dotted-path lookup: Config.get("menu.customPowerButtons", [])
     function get(path, fallback) {

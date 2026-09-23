@@ -1,6 +1,7 @@
 AddTransition AddTransition.qml
 Anim Anim.qml
 AuthPrompt AuthPrompt.qml
+Avatar Avatar.qml
 Box Box.qml
 Button Button.qml
 ButtonGroup ButtonGroup.qml

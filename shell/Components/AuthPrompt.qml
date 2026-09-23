@@ -33,6 +33,9 @@ Item {
     // Non-empty replaces the field with this message (the greeter's "no
     // greetd socket" honest-unavailable state) instead of a dead input.
     property string unavailableText: ""
+    // Profile picture over the clock. The greeter leaves it empty: it has no
+    // account resolved until a username is typed.
+    property string avatarPath: ""
 
     property alias text: input.text
 
@@ -77,6 +80,12 @@ Item {
         id: column
         anchors.centerIn: parent
         spacing: Theme.space.lg
+
+        Avatar {
+            anchors.horizontalCenter: parent.horizontalCenter
+            path: root.avatarPath
+            size: Math.round(Theme.fontSize.displayLarge * 3)
+        }
 
         Text {
             anchors.horizontalCenter: parent.horizontalCenter

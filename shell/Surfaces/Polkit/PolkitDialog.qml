@@ -57,6 +57,14 @@ PanelWindow {
         return identity.displayName || identity.string || "";
     }
 
+    // Only the account this shell runs as has a known picture: another
+    // user's ~/.face is not ours to read.
+    readonly property bool _identityIsSelf: {
+        var flow = root._flow;
+        var identity = flow ? flow.selectedIdentity : null;
+        return !!identity && !identity.isGroup && identity.string === Quickshell.env("USER");
+    }
+
     // PAM's own conversation prompt, verbatim (trimmed), never the
     // static "Enter Password" once a real one has arrived. A single-
     // prompt password-only stack never notices ("Password: " trimmed
@@ -275,14 +283,26 @@ PanelWindow {
                         text: "Identity"
                     }
 
-                    // An account name, so mono (spec "Type").
-                    Text {
+                    Row {
                         width: parent.width
-                        text: root._identityName()
-                        color: Theme.color.mutedForeground
-                        font.family: Theme.fontFamilyMono
-                        font.pixelSize: Theme.fontSize.bodySmall
-                        elide: Text.ElideRight
+                        spacing: Theme.space.iconGap
+
+                        Avatar {
+                            id: identityAvatar
+                            anchors.verticalCenter: parent.verticalCenter
+                            path: root._identityIsSelf ? Config.avatarPath : ""
+                        }
+
+                        // An account name, so mono (spec "Type").
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: parent.width - (identityAvatar.visible ? identityAvatar.width + parent.spacing : 0)
+                            text: root._identityName()
+                            color: Theme.color.mutedForeground
+                            font.family: Theme.fontFamilyMono
+                            font.pixelSize: Theme.fontSize.bodySmall
+                            elide: Text.ElideRight
+                        }
                     }
                 }
 
