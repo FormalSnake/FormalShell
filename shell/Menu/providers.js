@@ -1,5 +1,6 @@
 .pragma library
 .import "frecency.js" as Frecency
+.import "../Clipboard/emoji.js" as Emoji
 
 // Provider functions populate a "provider" kind node's children at
 // tree-build time (Model.buildTree() infers "provider" from an entry's
@@ -143,10 +144,11 @@ function clipboardProvider(items, mode, paste) {
     var idPrefix = share ? "share.history." : "clipboard.";
     return (items || []).map(function (entry) {
         var isImage = entry.kind === "image";
+        var emojiOnly = !isImage && Emoji.isEmojiOnly(entry.text);
         return {
             id: idPrefix + entry.id,
             parentId: null,
-            label: isImage ? "Image" : previewLabel(entry.text),
+            label: isImage ? "Image" : (emojiOnly ? entry.text.trim().replace(/\s+/g, " ") : previewLabel(entry.text)),
             icon: "",
             title: "",
             desc: isImage ? _capturedAtLabel(entry.capturedAt) : "",
@@ -163,6 +165,9 @@ function clipboardProvider(items, mode, paste) {
             // images, unlike `desc`) since the preview pane's meta line
             // needs a capture time regardless of entry kind.
             fullText: isImage ? "" : entry.text,
+            // A capture that is only emoji draws as a picture (MenuRow,
+            // SplitPreview) rather than as body text.
+            emojiOnly: emojiOnly,
             time: _capturedAtLabel(entry.capturedAt),
             aliases: [],
             kind: "action",

@@ -30,6 +30,22 @@ TestCase {
         compare(nodes[0].verb, "Paste");
     }
 
+    function test_emoji_only_rows_are_flagged_and_keep_their_run() {
+        var nodes = Providers.clipboardProvider([
+            { id: "a", kind: "text", text: "😂\n", capturedAt: 0 },
+            { id: "b", kind: "text", text: "❤️\n🌹", capturedAt: 0 },
+            { id: "c", kind: "text", text: "rose 🌹", capturedAt: 0 },
+            { id: "d", kind: "image", path: "/tmp/x.png", capturedAt: 0 }
+        ]);
+        compare(nodes[0].emojiOnly, true);
+        compare(nodes[0].label, "😂");
+        compare(nodes[1].emojiOnly, true);
+        compare(nodes[1].label, "❤️ 🌹");
+        compare(nodes[2].emojiOnly, false);
+        compare(nodes[2].label, "rose 🌹");
+        compare(nodes[3].emojiOnly, false);
+    }
+
     // Shift+Enter's target (M50), on image rows in copy mode alone: a text
     // row has no file to send, and a share row's Shift+Enter has nothing of
     // its own to do.

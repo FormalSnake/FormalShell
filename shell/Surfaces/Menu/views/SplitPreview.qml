@@ -1,6 +1,7 @@
 import QtQuick
 import qs.Core as Core
 import qs.Components
+import "../../../Clipboard/emoji.js" as Emoji
 
 // The split route's right half (M30, M43 D4): the cursor row's full
 // content in an inner `Card`, a `sm` gutter off the list.
@@ -20,6 +21,13 @@ Card {
     property bool isImage: false
     property string imageSource: ""
     property real pixelRatio: 1
+
+    // A capture that is only emoji is previewed as a picture, centred like an
+    // image capture, at twice the emoji grid's floor, shrunk so a run of them
+    // stays on one line. A colour emoji advances about 1.25em.
+    readonly property int _emojiCount: Emoji.emojiCount(root.text)
+    readonly property int _emojiPixelSize: Math.max(Core.Theme.fontSize.display,
+        Math.min(Core.Theme.fontSize.display * 2, Math.floor(previewText.width / (root._emojiCount * 1.25))))
 
     Row {
         id: previewHeader
@@ -64,9 +72,11 @@ Card {
         // copied markup as a rich-text document.
         textFormat: Text.PlainText
         wrapMode: Text.WrapAnywhere
+        horizontalAlignment: root._emojiCount > 0 ? Text.AlignHCenter : Text.AlignLeft
+        verticalAlignment: root._emojiCount > 0 ? Text.AlignVCenter : Text.AlignTop
         color: Core.Theme.color.foreground
         font.family: Core.Theme.fontFamilyMono
-        font.pixelSize: Core.Theme.fontSize.body
+        font.pixelSize: root._emojiCount > 0 ? root._emojiPixelSize : Core.Theme.fontSize.body
     }
 
     // True-color (menu thumbnails are never dithered) full preview of the
