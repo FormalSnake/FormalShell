@@ -56,6 +56,10 @@ Item {
     readonly property bool _isImage: (root.node.thumbSource || "") !== ""
     readonly property real _bodyHeight: label.implicitHeight
     readonly property real _thumbHeight: root._bodyHeight * 2
+    // A capture that is only emoji (providers.js) is a picture, drawn at the
+    // emoji grid's floor. At the body size a colour emoji fills about the
+    // body font's cap height, smaller than the words on the rows around it.
+    readonly property bool _isEmoji: root.node.emojiOnly === true
 
     // The route's named icon, else the logo a distro route draws from the
     // font that carries it, else the named fallback for what the row is
@@ -83,7 +87,7 @@ Item {
 
     readonly property real _rowHeight: root._isImage
         ? root._thumbHeight + Theme.space.controlPaddingY * 2
-        : Theme.space.controlHeight
+        : (root._isEmoji ? root._bodyHeight + Theme.space.controlPaddingY * 2 : Theme.space.controlHeight)
     readonly property real _headerBand: root.section === ""
         ? 0
         : (root.sectionFirst ? 0 : Theme.space.sectionGap) + sectionHeading.implicitHeight + Theme.space.rowGap
@@ -198,7 +202,7 @@ Item {
                     textFormat: Text.PlainText
                     color: root.node.dim === true ? cell.dimForeground : cell.foreground
                     font.family: Theme.fontFamilySans
-                    font.pixelSize: Theme.fontSize.body
+                    font.pixelSize: root._isEmoji ? Theme.fontSize.display : Theme.fontSize.body
                     font.weight: Theme.weight.medium
                 }
 

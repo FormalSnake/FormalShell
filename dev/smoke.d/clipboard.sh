@@ -43,6 +43,10 @@
 # escape is real. No image/* type is ever on the clipboard, so the row can
 # only come from the uri-list watcher, and the stored file has to open with
 # the png signature: the jpeg went through ffmpeg on the way in.
+#
+# Last, two emoji-only clips over one text clip carrying an emoji, and a
+# second frame with the cursor on the newest: an emoji-only row and its
+# preview draw the glyph at display size, the inline one stays body text.
 leg_clipboard_flag="--clipboard"
 leg_clipboard_order=130
 leg_clipboard_needs="wl-copy wl-paste convert"
@@ -61,6 +65,8 @@ clip_warmup_path="$shot_dir/clipboard-warmup.json"
 clip_burst_path="$shot_dir/clipboard-burst.json"
 clip_uri_fixture_path="$shot_dir/clip uri image.jpg"
 clip_uri_list_path="$shot_dir/clipboard-uri.json"
+clip_emoji_png="$shot_dir/clipboard-emoji.png"
+clip_emoji_list_path="$shot_dir/clipboard-emoji.json"
 
 leg_clipboard_fixture() {
   # The ledger's image entry: a small solid PNG copied last, so the route's
@@ -74,10 +80,10 @@ leg_clipboard_timing() {
   # The head costs a fixed 4s and every frame after it stacks on top. The
   # end state (the route summoned over the image entry) is stable, so a
   # generous delay only ever lands on it.
-  leg_timing 46 74
+  leg_timing 54 82
   # Sharing the launcher surface with --picker costs this leg the whole
   # picker timeline before its own route can be summoned.
-  if leg_on picker; then leg_timing 54 89; fi
+  if leg_on picker; then leg_timing 62 97; fi
 }
 
 leg_clipboard_drive() {
@@ -137,6 +143,17 @@ sleep 2
 sleep 3
 "$grim_bin" "$clip_route_png" > /dev/null 2>&1
 ls -1 "$iso_home/.cache/formalshell/thumbnails" > "$clip_thumb_cache_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
+"$wl_copy_bin" 'clipboard smoke 🌹 inline'
+sleep 1
+"$wl_copy_bin" '❤️'
+sleep 1
+"$wl_copy_bin" '😂'
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call clipboard list > "$clip_emoji_list_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu summon clipboard > /dev/null 2>&1
+sleep 3
+"$grim_bin" "$clip_emoji_png" > /dev/null 2>&1
 EOF
   echo "exec-once = bash $script"
 }
@@ -239,4 +256,12 @@ leg_clipboard_assert() {
     fail "no clipboard-route screenshot produced"
   fi
   echo "SMOKE_CLIPBOARD_ROUTE $clip_route_png"
+  cat "$clip_emoji_list_path"; echo
+  if ! grep -qF '😂' "$clip_emoji_list_path"; then
+    fail "the emoji-only capture never reached the ledger: $(cat "$clip_emoji_list_path" 2>/dev/null)"
+  fi
+  if [ ! -f "$clip_emoji_png" ]; then
+    fail "no clipboard-emoji screenshot produced"
+  fi
+  echo "SMOKE_CLIPBOARD_EMOJI $clip_emoji_png"
 }
