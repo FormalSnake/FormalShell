@@ -24,6 +24,7 @@ import qs.Surfaces.HotCorners
 import qs.Surfaces.Capture
 import qs.Surfaces.Plugins
 import qs.Surfaces.Polkit
+import qs.Surfaces.Radio
 import qs.Surfaces.Debug
 import qs.Surfaces.Gallery
 import qs.Components
@@ -239,7 +240,7 @@ ShellRoot {
     PanelSlot { id: dualsensePanelInstance; DualsensePanel {} }
     PowerPanel { id: powerPanelInstance }
     WeatherPanel { id: weatherPanelInstance }
-    MediaPanel { id: mediaPanelInstance }
+    MediaPanel { id: mediaPanelInstance; radio: radioInstance }
     GithubPanel { id: githubPanelInstance }
     UsagePanel { id: usagePanelInstance }
     TailscalePanel { id: tailscalePanelInstance }
@@ -265,6 +266,10 @@ ShellRoot {
     // chevron handed it, so `bar chevron` is its summon path rather than
     // `panel open`.
     BarOverflow { id: barOverflowInstance }
+    // Radio Atlas (Surfaces/Radio/): one instance, on the focused output at
+    // summon time. The media panel's radio button opens it, and PanelIpc
+    // below registers it as `radio`.
+    RadioOverlay { id: radioInstance }
 
     // Plugin-declared surfaces (shell/Plugins/manifest.js): created from the
     // scanned manifests rather than named here, because nobody knows their
@@ -318,14 +323,14 @@ ShellRoot {
     NotificationsIpc { center: notificationsCenter }
     OsdIpc { osd: osd }
     SwitcherIpc { switcher: switcherLoader.item }
-    // The static seventeen merged with every plugin surface that has
+    // The static eighteen merged with every plugin surface that has
     // registered itself. Plugin keys carry manifest.js's "plugin:" prefix, so
     // a plugin can never shadow a builtin name and PanelIpc needs no
     // reserved-id list. PluginService.surfaces is replaced wholesale on every
     // register/unregister, so this binding re-fires.
     PanelIpc {
         registry: {
-            var reg = { appmenu: appMenuPanelInstance, audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance, airpods: airpodsPanelInstance, dualsense: dualsensePanelInstance, power: powerPanelInstance, weather: weatherPanelInstance, media: mediaPanelInstance, github: githubPanelInstance, usage: usagePanelInstance, tailscale: tailscalePanelInstance, systemupdate: systemUpdatePanelInstance, display: displayPanelInstance, monitor: monitorPanelInstance, trayoverflow: trayOverflowInstance };
+            var reg = { appmenu: appMenuPanelInstance, audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance, airpods: airpodsPanelInstance, dualsense: dualsensePanelInstance, power: powerPanelInstance, weather: weatherPanelInstance, media: mediaPanelInstance, github: githubPanelInstance, usage: usagePanelInstance, tailscale: tailscalePanelInstance, systemupdate: systemUpdatePanelInstance, display: displayPanelInstance, monitor: monitorPanelInstance, trayoverflow: trayOverflowInstance, radio: radioInstance };
             var surfaces = PluginService.surfaces;
             for (var key in surfaces)
                 reg[key] = surfaces[key];
@@ -340,6 +345,7 @@ ShellRoot {
     BluetoothIpc {}
     AirpodsIpc {}
     MediaIpc {}
+    RadioIpc {}
     TrayIpc { trayMenu: trayMenuInstance; trayOverflow: trayOverflowInstance }
     BarIpc { barOverflow: barOverflowInstance }
     LockIpc {}

@@ -29,13 +29,18 @@ import "../../Visualizer/model.js" as Visualizer
 // VisualizerService, absent whenever cava is off PATH or `media.visualizer`
 // is false. Then the position row (elapsed, the track, total, one line) and
 // the transport row (the transport leading, the player's own volume filling
-// the rest of the same line, absent when the player has none). A chip per
-// registered player follows once more than one is on the bus.
+// the rest of the same line, absent when the player has none). Above all of
+// it, two small menus: the source (auto, every MPRIS player, the radio while
+// a station is tuned, and any app with audio and no MPRIS) and the output
+// that source plays on, the second only while there is more than one output
+// and a stream to move. A menu opens inline under its trigger and the card
+// grows to hold it, so nothing floats over the panel. The radio button in
+// the header opens Radio Atlas (Surfaces/Radio/).
 //
 // Nothing inside either half is a second card (owner, 2026-08-26): the
 // pane's own frame is `radiusMd`, a 1px `border`, `card` fill and nothing
 // nested inside it, and the now-playing side keeps the same chrome it
-// always did (the transport's trough, the player chips, the cover's own 1px
+// always did (the transport's trough, the menu triggers, the cover's own 1px
 // frame). What ranks the now-playing block is type: `caption` source,
 // `title` track, `body` artist, `bodySmall` album. The ring the keyboard
 // cursor draws on a track comes from `Track.cursor` rather than from a Cell
@@ -63,8 +68,8 @@ import "../../Visualizer/model.js" as Visualizer
 // synced, where Up/Down walk the lines, Enter seeks, and the column follows
 // the cursor instead of the song for as long as it sits here, with the
 // pane's resync control the entry after the last line while a wheel has
-// the column; the player chips last, where Enter pins the shell to that
-// player. The pointer never drives the lyrics cursor (M55 A5): hovering a
+// the column; the menus last, the two triggers and then the open menu's
+// rows, where Enter opens a menu or picks a row. The pointer never drives the lyrics cursor (M55 A5): hovering a
 // line draws the row's own hover wash and lifts it clear of the blur, and
 // nothing else, the ring and the follow-the-cursor anchor staying the
 // keyboard's alone.
@@ -78,7 +83,16 @@ Panel {
     // MPRIS Raise: bring the player's own window up, the one transport verb
     // that isn't about the track. Absent entirely on a player that doesn't
     // implement it.
+    // Radio Atlas's overlay (shell.qml): the header's radio button opens it.
+    property var radio: null
+
     titleActions: [
+        IconButton {
+            name: "radio"
+            visible: root.radio !== null
+            tooltipText: "Radio"
+            onClicked: root.radio.open()
+        },
         IconButton {
             name: "external-link"
             visible: MediaService.canRaise
@@ -102,6 +116,14 @@ Panel {
     Binding {
         target: AnimatedCoverFrameSource
         property: "panelWants"
+        value: root.isOpen
+    }
+
+    // The source list's app streams and the output list both bind Pipewire
+    // nodes, so they only exist while the panel is open.
+    Binding {
+        target: MediaService
+        property: "routingWanted"
         value: root.isOpen
     }
 
@@ -166,7 +188,7 @@ Panel {
     // them, so the list is built rather than fixed and the cursor addresses
     // whatever actually rendered.
     readonly property var _transport: {
-        if (!MediaService.available)
+        if (!MediaService.available || MediaService.activeKind === "stream")
             return [];
         var out = ["previous", "playpause", "next"];
         if (MediaService.shuffleSupported)
@@ -180,7 +202,7 @@ Panel {
     readonly property var _tracks: {
         if (!MediaService.available)
             return [];
-        var out = ["progress"];
+        var out = MediaService.hasTimeline ? ["progress"] : [];
         if (MediaService.volumeSupported)
             out.push("volume");
         return out;
@@ -203,12 +225,66 @@ Panel {
         MediaService.seek(time / MediaService.length);
     }
 
-    // Section 3 (2 without lyrics). A list of one would just repeat the
-    // identity line above, so the whole section is absent with a single
-    // player.
-    readonly property var _playerRows: MediaService.players.length > 1 ? MediaService.players : []
-    readonly property int _playersSection: root._playerRows.length > 0
-        ? (2 + (root._lyricsPresent ? 1 : 0)) : -1
+    // Section 3 (2 without lyrics): the menu triggers, then the rows of
+    // whichever menu is open.
+    property string _menu: ""
+    readonly property int _menuSection: MediaService.available ? (2 + (root._lyricsPresent ? 1 : 0)) : -1
+    readonly property var _triggers: MediaService.canRoute ? ["source", "output"] : ["source"]
+
+    function _sourceIcon(kind) {
+        if (kind === "radio")
+            return "radio";
+        if (kind === "stream")
+            return "audio-lines";
+        return "music";
+    }
+
+    readonly property var _menuRows: {
+        if (root._menu === "source")
+            return [{ value: "", label: "Auto", icon: "", current: MediaService.selectedId === "", playing: false }]
+                .concat(MediaService.players.map(function (p) {
+                    return {
+                        value: p.id,
+                        label: p.label,
+                        icon: root._sourceIcon(p.kind),
+                        current: MediaService.selectedId === p.id,
+                        playing: p.isPlaying
+                    };
+                }));
+        if (root._menu === "output")
+            return MediaService.outputs.map(function (o) {
+                return { value: o.id, label: o.label, icon: "speaker", current: o.id === MediaService.outputId, playing: false };
+            });
+        return [];
+    }
+
+    readonly property string _outputLabel: {
+        var outs = MediaService.outputs;
+        for (var i = 0; i < outs.length; i++)
+            if (outs[i].id === MediaService.outputId)
+                return outs[i].label;
+        return "Output";
+    }
+
+    // A menu with nothing to pick from closes rather than hanging open empty.
+    readonly property bool _outputGone: root._menu === "output" && !MediaService.canRoute
+    on_OutputGoneChanged: if (root._outputGone) root._menu = ""
+
+    holdsEscape: root._menu !== ""
+    onEscaped: root._menu = ""
+
+    function _toggleMenu(name) {
+        root._menu = root._menu === name ? "" : name;
+    }
+
+    function _pickRow(row) {
+        if (root._menu === "source")
+            MediaService.select(row.value);
+        else
+            MediaService.setOutput(row.value);
+        root._menu = "";
+        root._pointAt(root._menuSection, 0);
+    }
 
     // The transport as `ButtonGroup` options, in the order `_transport`
     // built: icon only, no label, so the row stays a strip of controls.
@@ -280,7 +356,7 @@ Panel {
         root.cursorIndex = index;
     }
 
-    sectionCount: 2 + (root._lyricsPresent ? 1 : 0) + (root._playerRows.length > 0 ? 1 : 0)
+    sectionCount: 2 + (root._lyricsPresent ? 1 : 0) + (root._menuSection >= 0 ? 1 : 0)
 
     cursorCount: root.cursorSection === 0
         ? root._transport.length
@@ -288,7 +364,7 @@ Panel {
             ? root._tracks.length
             : root.cursorSection === root._lyricsSection
                 ? root._lyricsRows
-                : root._playerRows.length
+                : root._triggers.length + root._menuRows.length
 
     // Left/Right belongs to the track under the cursor in section 1, and to
     // the list itself in the other two.
@@ -319,10 +395,12 @@ Panel {
                 root._seekLyricLine(entry.time);
             else
                 LyricsService.follow = true;
+        } else if (index < root._triggers.length) {
+            root._toggleMenu(root._triggers[index]);
         } else {
-            var player = root._playerRows[index];
-            if (player)
-                MediaService.select(player.id);
+            var row = root._menuRows[index - root._triggers.length];
+            if (row)
+                root._pickRow(row);
         }
     }
 
@@ -341,6 +419,7 @@ Panel {
     // resync control, a new track and the keyboard cursor, all sit inside an
     // open panel, so none of them can fire while it is shut.
     onIsOpenChanged: {
+        root._menu = "";
         if (!root.isOpen)
             return;
         LyricsService.follow = true;
@@ -373,13 +452,99 @@ Panel {
                 text: "No player"
             }
 
-            // The now-playing block: the cover beside the source, the title,
-            // the artist and the album. Four sizes of type doing the
-            // ranking, so the block leads the column without a box around it
-            // (DESIGN.md §1's ladder, rung 5). The player's own name heads
-            // it as a `SectionLabel`, which takes the `NOW PLAYING` label's
-            // slot: the panel header already says Media, and naming the
-            // source is the thing that row can say instead.
+            // The two menu triggers: the source leading, named by what is
+            // playing, the output trailing. Chips hugging their own labels,
+            // so the line stays as quiet as the source caption it replaced.
+            Item {
+                width: parent.width
+                visible: MediaService.available
+                height: sourceTrigger.height
+
+                MenuTrigger {
+                    id: sourceTrigger
+                    anchors.left: parent.left
+                    maxWidth: parent.width - (outputTrigger.visible ? outputTrigger.width + Theme.space.xs : 0)
+                    icon: root._sourceIcon(MediaService.activeKind)
+                    label: MediaService.selectedId === "" ? "Auto · " + MediaService.activeLabel : MediaService.activeLabel
+                    open: root._menu === "source"
+                    cursor: root.cursorActive && root.cursorSection === root._menuSection && root.cursorIndex === 0
+                    onContainsPointerChanged: if (sourceTrigger.containsPointer) root._pointAt(root._menuSection, 0)
+                    onClicked: root._toggleMenu("source")
+                }
+
+                MenuTrigger {
+                    id: outputTrigger
+                    anchors.right: parent.right
+                    visible: MediaService.canRoute
+                    maxWidth: parent.width / 2
+                    icon: "speaker"
+                    label: root._outputLabel
+                    open: root._menu === "output"
+                    cursor: root.cursorActive && root.cursorSection === root._menuSection && root.cursorIndex === 1
+                    onContainsPointerChanged: if (outputTrigger.containsPointer) root._pointAt(root._menuSection, 1)
+                    onClicked: root._toggleMenu("output")
+                }
+            }
+
+            // The open menu, inline: one row per choice, the current one
+            // checked, a playing source marked.
+            Column {
+                width: parent.width
+                visible: root._menuRows.length > 0
+
+                Repeater {
+                    model: root._menuRows
+
+                    delegate: Cell {
+                        id: menuRow
+                        required property int index
+                        required property var modelData
+
+                        width: parent.width
+                        selected: menuRow.modelData.current
+                        cursor: root.cursorActive && root.cursorSection === root._menuSection
+                            && root.cursorIndex === root._triggers.length + menuRow.index
+                        interactive: true
+                        onContainsPointerChanged: if (menuRow.containsPointer)
+                            root._pointAt(root._menuSection, root._triggers.length + menuRow.index)
+                        onClicked: root._pickRow(menuRow.modelData)
+
+                        Row {
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: Theme.space.iconGap
+
+                            Icon {
+                                anchors.verticalCenter: parent.verticalCenter
+                                name: menuRow.modelData.current ? "check" : menuRow.modelData.icon
+                                size: Theme.fontSize.bodySmall
+                                color: menuRow.foreground
+                                opacity: name === "" ? 0 : 1
+                            }
+
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: menuRow.modelData.label
+                                color: menuRow.foreground
+                                font.family: Theme.fontFamilySans
+                                font.pixelSize: Theme.fontSize.bodySmall
+                            }
+
+                            Icon {
+                                anchors.verticalCenter: parent.verticalCenter
+                                visible: menuRow.modelData.playing
+                                name: "play"
+                                size: Theme.fontSize.caption
+                                color: Theme.color.mutedForeground
+                            }
+                        }
+                    }
+                }
+            }
+
+            // The now-playing block: the cover beside the title, the artist
+            // and the album. Three sizes of type doing the ranking, so the
+            // block leads the column without a box around it (DESIGN.md §1's
+            // ladder, rung 5). The source trigger above names the player.
             Row {
                 id: infoRow
                 width: parent.width
@@ -427,13 +592,6 @@ Panel {
                         - (root._spectrumVisible ? infoRow.spacing + root._spectrumWidth : 0)
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: Theme.space.xxs
-
-                    SectionLabel {
-                        width: parent.width
-                        visible: MediaService.identity !== ""
-                        text: MediaService.identity
-                        elide: Text.ElideRight
-                    }
 
                     Text {
                         width: parent.width
@@ -537,7 +695,7 @@ Panel {
             Item {
                 id: positionRow
                 width: parent.width
-                visible: MediaService.available
+                visible: MediaService.hasTimeline
                 height: Theme.space.controlHeight
 
                 Text {
@@ -607,11 +765,12 @@ Panel {
             Item {
                 id: transportRow
                 width: parent.width
-                visible: MediaService.available
+                visible: MediaService.available && (root._transport.length > 0 || MediaService.volumeSupported)
                 height: Theme.space.controlHeight
 
                 ButtonGroup {
                     id: transportGroup
+                    visible: root._transport.length > 0
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
                     height: Theme.space.controlHeight
@@ -626,8 +785,8 @@ Panel {
                 Icon {
                     id: volumeIcon
                     visible: MediaService.volumeSupported
-                    anchors.left: transportGroup.right
-                    anchors.leftMargin: Theme.space.sectionGap
+                    anchors.left: transportGroup.visible ? transportGroup.right : parent.left
+                    anchors.leftMargin: transportGroup.visible ? Theme.space.sectionGap : 0
                     anchors.verticalCenter: parent.verticalCenter
                     name: MediaService.volume > 0 ? (MediaService.volume < 0.5 ? "volume-1" : "volume-2") : "volume-x"
                     size: Theme.fontSize.body
@@ -666,70 +825,6 @@ Panel {
                         }
                         onPressed: mouse => _setFromX(mouse.x)
                         onPositionChanged: mouse => { if (pressed) _setFromX(mouse.x); }
-                    }
-                }
-            }
-
-            // Two players at once is the ordinary case (a browser tab plus a
-            // music app) and MPRIS names them all, so the pick MediaService
-            // makes is worth overriding by hand.
-            Column {
-                width: parent.width
-                visible: root._playerRows.length > 0
-                spacing: Theme.space.rowGap
-
-                SectionLabel {
-                    leftPadding: Theme.space.controlPaddingX
-                    text: "Players"
-                    count: root._playerRows.length
-                }
-
-                Flow {
-                    width: parent.width
-                    spacing: Theme.space.xs
-
-                    Repeater {
-                        model: root._playerRows
-
-                        delegate: Cell {
-                            id: playerChip
-                            required property int index
-                            required property var modelData
-
-                            // A badge sitting in a row rather than being one,
-                            // so it hugs its own label (DESIGN.md §2).
-                            chip: true
-                            radius: Theme.radiusSm
-                            selected: playerChip.modelData.id === MediaService.activeId
-                            cursor: root.cursorActive && root.cursorSection === root._playersSection
-                                && root.cursorIndex === playerChip.index
-                            interactive: true
-                            onContainsPointerChanged: if (playerChip.containsPointer)
-                                root._pointAt(root._playersSection, playerChip.index)
-                            onClicked: MediaService.select(playerChip.modelData.id)
-
-                            Row {
-                                anchors.verticalCenter: parent.verticalCenter
-                                spacing: Theme.space.xs
-
-                                Icon {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    visible: playerChip.modelData.isPlaying
-                                    name: "play"
-                                    size: Theme.fontSize.bodySmall
-                                    color: playerChip.foreground
-                                }
-
-                                Text {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: playerChip.modelData.label
-                                    color: playerChip.foreground
-                                    font.family: Theme.fontFamilySans
-                                    font.pixelSize: Theme.fontSize.bodySmall
-                                    font.weight: Theme.weight.medium
-                                }
-                            }
-                        }
                     }
                 }
             }

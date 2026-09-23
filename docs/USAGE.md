@@ -2400,9 +2400,12 @@ than a guessed instance.
 
 ## Now playing
 
-The media service picks a player that is actually playing over the rest when
-several are registered, otherwise the first one, otherwise nothing at all.
-The bar cell is hidden entirely with no player present.
+The media service picks a source that is actually playing over the rest when
+several are there, otherwise the first one, otherwise nothing at all. A
+source is an MPRIS player, the radio while a station is tuned (see Radio
+below), or, picked by hand only, an app playing audio with no MPRIS, which
+offers nothing but its own stream volume. The bar cell is hidden entirely
+with no source present.
 
 ![The media panel](screenshots/media-hyprland.png)
 
@@ -2411,10 +2414,11 @@ source, title, artist and album, with the live spectrum inline at the end
 of that row; the elapsed time, a progress track you can drag to seek where
 the player supports it, and the total on one line; the transport and the
 player's own volume on the next. Shuffle and loop are the outer two cells
-of the transport cluster, `RAISE` sits in the title band, and a row per
-player appears at the bottom once more than one is on the bus. Clicking one
-pins the bar cell, the panel and the IPC routes to it until that player
-quits. With synced lyrics the panel widens and the lyrics take their own
+of the transport cluster, and `RAISE` and the radio button sit in the title
+band. Two small menus head the panel: the source (Auto, or one source
+pinned for the bar cell, the panel and the IPC routes until it goes away)
+and, once there is more than one output and a stream to move, the output
+that source plays on. Each opens inline under its trigger. With synced lyrics the panel widens and the lyrics take their own
 pane trailing the now-playing column, already loaded by the time the panel
 opens (see Synced lyrics below).
 
@@ -2519,8 +2523,10 @@ fs media shuffle toggle   # on | off | toggle
 fs media loop cycle       # none | track | playlist | cycle
 fs media volume 30        # percent, the player's own
 fs media raise
-fs media players          # [{"id":…,"identity":…,"label":…,"isPlaying":…}]
-fs media select org.mpris.MediaPlayer2.mpv
+fs media players          # [{"id":…,"kind":…,"identity":…,"label":…,"isPlaying":…}]
+fs media select org.mpris.MediaPlayer2.mpv   # or radio, stream:<id>, "" for auto
+fs media outputs          # [{"id":<sink name>,"label":…}], while the panel is open
+fs media output <sink>    # move the source's stream there
 fs media status
 fs media lyrics           # {state, source, quality, active, secondary, blur, follow, lines, position}
 ```
@@ -2529,6 +2535,30 @@ A route acting on something the player doesn't implement answers with an
 error naming it (`error: player does not support shuffle`) rather than `ok`
 over a call that went nowhere, and `select` rejects a bus name no registered
 player answers on.
+
+### Radio
+
+Radio Atlas is built in: the radio button in the media panel's title band
+(or `fs panel toggle radio`) opens a globe of Radio Browser's stations beside
+a list with four tabs. **World** is the most-listened stations, a country
+click narrows it, and search covers names, countries and tags. **cliamp** is
+[cliamp](https://github.com/bjarneo/cliamp)'s own channels, read from the
+list cliamp itself uses, minus the Omarchy channel. **Favorites** and
+**Recent** hold stations from both. Playback runs through the shell's own
+mpv, so the radio is a source in the media panel and the bar's now-playing
+cell like any player, and the `media` keybinds drive it. Favourites, recent
+stations, the volume and the output live in
+`~/.local/state/formalshell/radio-atlas.json`. Press `?` in the atlas for its
+keys.
+
+```sh
+fs panel toggle radio
+fs radio play <id>        # a favourite's, a recent station's or a cliamp channel's id
+fs radio toggle
+fs radio random
+fs radio stop
+fs radio status
+```
 
 ## Lock screen
 

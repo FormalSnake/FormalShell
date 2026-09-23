@@ -137,4 +137,47 @@ TestCase {
         compare(MediaModel.clampFraction(2), 1);
         compare(MediaModel.clampFraction(NaN), 0);
     }
+
+    // sources MPRIS cannot drive
+
+    function test_auto_skips_a_stream_row() {
+        var rows = [{ id: "stream:7", isPlaying: true, auto: false }, row("a")];
+        compare(MediaModel.pickPlayerId(rows, ""), "a");
+        compare(MediaModel.pickPlayerId([{ id: "stream:7", isPlaying: true, auto: false }], ""), "");
+    }
+
+    function test_a_stream_row_picked_by_hand_wins() {
+        var rows = [row("a", true), { id: "stream:7", isPlaying: false, auto: false }];
+        compare(MediaModel.pickPlayerId(rows, "stream:7"), "stream:7");
+    }
+
+    function test_labels_carry_kind_and_auto() {
+        var rows = MediaModel.withLabels([{ id: "radio", kind: "radio", identity: "Radio" },
+            { id: "stream:3", kind: "stream", auto: false, identity: "Discord" }, row("org.mpris.MediaPlayer2.mpv")]);
+        compare(rows[0].kind, "radio");
+        compare(rows[1].auto, false);
+        compare(rows[2].kind, "mpris");
+        compare(rows[2].auto, true);
+    }
+
+    // streamOwner
+
+    function test_stream_owner_by_bus_word_and_identity() {
+        var rows = [row("org.mpris.MediaPlayer2.firefox.instance_1_2", false, "Mozilla Firefox"),
+            row("org.mpris.MediaPlayer2.spotify", false, "Spotify")];
+        compare(MediaModel.streamOwner(["Firefox", "firefox"], rows), "org.mpris.MediaPlayer2.firefox.instance_1_2");
+        compare(MediaModel.streamOwner(["spotify"], rows), "org.mpris.MediaPlayer2.spotify");
+        compare(MediaModel.streamOwner(["Discord", "discord"], rows), "");
+        compare(MediaModel.streamOwner([undefined, "", "ab"], rows), "");
+    }
+
+    // sinkInputIndex
+
+    function test_sink_input_index_by_object_id() {
+        var text = JSON.stringify([{ index: 41, properties: { "object.id": "88" } },
+            { index: 52, properties: { "object.id": "90" } }]);
+        compare(MediaModel.sinkInputIndex(text, 90), 52);
+        compare(MediaModel.sinkInputIndex(text, 12), -1);
+        compare(MediaModel.sinkInputIndex("not json", 90), -1);
+    }
 }

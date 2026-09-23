@@ -9,19 +9,76 @@
 // properties in QML, never MprisPlayer instances themselves. The binding
 // that builds them is where the property capture has to happen.
 
-// An explicit pick wins for as long as that player is still registered;
-// otherwise an actually-playing one, otherwise the first registered. A pick
-// whose player has quit falls back rather than pinning the panel to a bus
-// name nothing answers on any more.
+// An explicit pick wins for as long as that source is still there;
+// otherwise an actually-playing one, otherwise the first. A pick whose source
+// has gone falls back rather than pinning the panel to a name nothing answers
+// on any more. Rows carrying `auto: false` (an app with audio and no MPRIS)
+// are only ever picked by hand: auto never lands on a source the transport
+// cannot drive.
 function pickPlayerId(rows, selectedId) {
     if (!rows || rows.length === 0) return "";
     if (selectedId) {
         for (var i = 0; i < rows.length; i++)
             if (rows[i].id === selectedId) return selectedId;
     }
-    for (var j = 0; j < rows.length; j++)
+    var first = "";
+    for (var j = 0; j < rows.length; j++) {
+        if (rows[j].auto === false) continue;
         if (rows[j].isPlaying) return rows[j].id;
-    return rows[0].id;
+        if (!first) first = rows[j].id;
+    }
+    return first;
+}
+
+// What a player row can be recognised by on a Pipewire stream: the bus name's
+// first word (org.mpris.MediaPlayer2.firefox.instance_1_2 -> firefox) and the
+// identity it publishes, lowercased.
+function playerTokens(row) {
+    var out = [];
+    var bus = busSuffix(row.id).split(/[.]/)[0].toLowerCase();
+    if (bus.length >= 3) out.push(bus);
+    var identity = String(row.identity || "").toLowerCase();
+    if (identity.length >= 3 && out.indexOf(identity) < 0) out.push(identity);
+    return out;
+}
+
+// Which player row a playback stream belongs to, or "". `keys` are the
+// stream's application.name, application.process.binary, application.id and
+// node.name. A key and a token match when one holds the other ("google
+// chrome" and "chrome", "mozilla firefox" and "firefox"). MPRIS carries no
+// pid, so a name is all there is to go on.
+function streamOwner(keys, rows) {
+    var names = [];
+    for (var k = 0; k < (keys || []).length; k++) {
+        var key = String(keys[k] || "").toLowerCase();
+        if (key.length >= 3) names.push(key);
+    }
+    for (var i = 0; i < (rows || []).length; i++) {
+        var tokens = playerTokens(rows[i]);
+        for (var t = 0; t < tokens.length; t++)
+            for (var n = 0; n < names.length; n++)
+                if (names[n].indexOf(tokens[t]) >= 0 || tokens[t].indexOf(names[n]) >= 0)
+                    return rows[i].id;
+    }
+    return "";
+}
+
+// The sink-input index `pactl move-sink-input` takes for a Pipewire node, out
+// of `pactl -f json list sink-inputs`, or -1.
+function sinkInputIndex(text, nodeId) {
+    var rows;
+    try {
+        rows = JSON.parse(text);
+    } catch (e) {
+        return -1;
+    }
+    if (!Array.isArray(rows)) return -1;
+    for (var i = 0; i < rows.length; i++) {
+        var props = rows[i] && rows[i].properties;
+        if (props && String(props["object.id"]) === String(nodeId) && typeof rows[i].index === "number")
+            return rows[i].index;
+    }
+    return -1;
 }
 
 var BUS_PREFIX = "org.mpris.MediaPlayer2.";
@@ -61,6 +118,8 @@ function withLabels(rows) {
         label = playerLabel(rows[i]);
         out.push({
             id: rows[i].id,
+            kind: rows[i].kind || "mpris",
+            auto: rows[i].auto !== false,
             identity: rows[i].identity,
             label: counts[label] > 1 ? busSuffix(rows[i].id) : label,
             isPlaying: rows[i].isPlaying === true

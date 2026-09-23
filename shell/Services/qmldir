@@ -22,6 +22,7 @@ singleton MediaService MediaService.qml
 singleton NightLightService NightLightService.qml
 singleton PolkitService PolkitService.qml
 singleton ProcessService ProcessService.qml
+singleton RadioService RadioService.qml
 singleton RecordingService RecordingService.qml
 singleton SystemMonitorService SystemMonitorService.qml
 singleton ThumbnailService ThumbnailService.qml

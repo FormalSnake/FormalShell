@@ -309,6 +309,11 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   TERM, and `monitor restart` re-running the same argv under a new pid.
 - `record.sh` `--record`: `record` start to finished GIF through a real
   wf-recorder child, with the bar's recording cell mid-run.
+- `radio.sh` `--radio`: Radio Atlas's mpv tuned with `radio play` to a
+  favourite served on loopback, read back as a media source (`media status`
+  kind, title and playing, `media players` listing it once, its own Pipewire
+  stream not listed again as an app), the media panel's source menu opened
+  on real keys and photographed, and the source gone after `radio stop`.
 - `reminder.sh` `--reminder`: a real countdown firing inside the run and
   bypassing DND into the popup tier.
 - `retro.sh` `--retro`: pins `theme.preset` to `retro` in the settings

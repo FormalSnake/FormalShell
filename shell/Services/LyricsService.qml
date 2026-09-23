@@ -89,7 +89,10 @@ Singleton {
         return xdgCache + "/formalshell/lyrics";
     }
 
-    readonly property string key: root.enabled && MediaService.title !== "" && MediaService.artist !== ""
+    // A source with no timeline (the radio, an app stream) has nothing to
+    // sync lines against, so it never asks.
+    readonly property string key: root.enabled && MediaService.hasTimeline
+        && MediaService.title !== "" && MediaService.artist !== ""
         ? Lyrics.cacheKey(MediaService.artist, MediaService.title, MediaService.album, MediaService.length) : ""
 
     // key -> {state, lines, source}, P1-shaped lines pre-synthesis. A track

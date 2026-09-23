@@ -138,6 +138,12 @@ PanelWindow {
     // Left/Right stop at the ends of their own week.
     property int cursorColumns: 1
 
+    // Set while the panel holds something open inside itself (the media
+    // panel's source and output menus): Escape then emits `escaped` for the
+    // panel to fold it, and only the next one closes the panel.
+    property bool holdsEscape: false
+    signal escaped()
+
     // Whether the ring draws on whatever row the cursor is on (DESIGN.md §1
     // "Ring", §4): it is the keyboard's mark, so a cursor the pointer put
     // there keeps the row's hover wash and nothing else. Claimed by
@@ -773,7 +779,12 @@ PanelWindow {
         // (open() always forces it here), so key events land here first
         // regardless. This pins that contract rather than leaning on it.
         Keys.priority: Keys.BeforeItem
-        Keys.onEscapePressed: root.close()
+        Keys.onEscapePressed: {
+            if (root.holdsEscape)
+                root.escaped();
+            else
+                root.close();
+        }
         Keys.onPressed: event => {
             root.keyPressed(event);
             if (!event.accepted)

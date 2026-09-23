@@ -83,9 +83,14 @@ IpcHandler {
         return "ok";
     }
 
-    // Bus name, exactly as `status`/`players` report it. An unknown one is an
+    // Bus name, "radio" or "stream:<id>", exactly as `status`/`players`
+    // report it; "" puts the pick back on auto. An unknown one is an
     // error rather than a selection nothing can satisfy.
     function select(id: string): string {
+        if (id === "") {
+            MediaService.select("");
+            return "ok";
+        }
         var rows = MediaService.players;
         for (var i = 0; i < rows.length; i++) {
             if (rows[i].id === id) {
@@ -96,6 +101,23 @@ IpcHandler {
         return "error: no player " + id;
     }
 
+    // The source's output, by sink name as `outputs` lists it. Only listed
+    // while the media panel is open (MediaService.routingWanted).
+    function output(name: string): string {
+        if (!MediaService.available)
+            return "error: no player";
+        if (!MediaService.canRoute)
+            return "error: source has no stream to move";
+        if (!MediaService.outputs.some(o => o.id === name))
+            return "error: no output " + name;
+        MediaService.setOutput(name);
+        return "ok";
+    }
+
+    function outputs(): string {
+        return JSON.stringify(MediaService.outputs);
+    }
+
     function players(): string {
         return JSON.stringify(MediaService.players);
     }
@@ -104,7 +126,10 @@ IpcHandler {
         return JSON.stringify({
             available: MediaService.available,
             id: MediaService.activeId,
+            kind: MediaService.activeKind,
             selectedId: MediaService.selectedId,
+            output: MediaService.outputId,
+            canRoute: MediaService.canRoute,
             playerCount: MediaService.players.length,
             identity: MediaService.identity,
             title: MediaService.title,
