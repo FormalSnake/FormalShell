@@ -105,9 +105,16 @@ Singleton {
     // last sent, so what's drawn moves at the compositor's own rate.
     property var levels: Model.baselineLevels()
 
+    // The same bands per channel, for the `stereo` style. `levels` stays the
+    // per-band mix of the two, the frame every other consumer draws.
+    property var levelsLeft: Model.baselineLevels()
+    property var levelsRight: Model.baselineLevels()
+
     // The most recent frame cava actually sent, a target rather than a
     // value anything draws directly.
     property var _target: Model.baselineLevels()
+    property var _targetLeft: Model.baselineLevels()
+    property var _targetRight: Model.baselineLevels()
 
     // model.js's running peak and the wall clock of the frame that last
     // advanced it. Both reset with the levels when cava stops, so a new
@@ -143,6 +150,10 @@ Singleton {
     //   sleep_timer = 3                cava idles itself after 3s of silence.
     //     The _shouldRun gate already kills the process on pause; this covers
     //     silence *inside* a playing track.
+    //   channels = stereo              `bars` counts both channels, so it is
+    //     twice BAR_COUNT; model.js's stereoFrameToLevels has the layout.
+    //     A mono source still arrives as two channels, pipewire input
+    //     defaults to `channels = 2`, so cava never falls back to mono.
     //   framerate = 120                 raised again from 60 (M55 A3): a
     //     60-frame source under a screen well past that (240Hz is common)
     //     holds each frame for four repaints then jumps to the next, which
@@ -159,7 +170,7 @@ Singleton {
             "framerate = 120\n" +
             "autosens = 0\n" +
             "sensitivity = 200\n" +
-            "bars = " + Model.BAR_COUNT + "\n" +
+            "bars = " + (Model.BAR_COUNT * 2) + "\n" +
             "lower_cutoff_freq = 50\n" +
             "higher_cutoff_freq = 12000\n" +
             "sleep_timer = 3\n" +
@@ -170,8 +181,7 @@ Singleton {
             "\n" +
             "[output]\n" +
             "method = raw\n" +
-            "channels = mono\n" +
-            "mono_option = average\n" +
+            "channels = stereo\n" +
             "raw_target = /dev/stdout\n" +
             "data_format = ascii\n" +
             "ascii_max_range = " + Model.MAX_LEVEL + "\n" +
@@ -221,17 +231,25 @@ Singleton {
         command: Proc.dieWithParent(["sh", "-c", 'command -v cava >/dev/null 2>&1 || exit 127; exec cava -p "$1"', "sh", root._configPath])
         stdout: SplitParser {
             onRead: line => {
-                const raw = Model.frameToLevels(line, Model.BAR_COUNT, Model.MAX_LEVEL);
+                const raw = Model.stereoFrameToLevels(line, Model.BAR_COUNT, Model.MAX_LEVEL);
                 const now = Date.now();
-                root._agcRef = Model.agcStep(root._agcRef, Model.framePeak(raw), root._agcAt > 0 ? (now - root._agcAt) / 1000 : 0);
+                // One running peak, off the mix, so the channels keep their
+                // balance and the mix draws as it did under `channels = mono`.
+                root._agcRef = Model.agcStep(root._agcRef, Model.framePeak(raw.mono), root._agcAt > 0 ? (now - root._agcAt) / 1000 : 0);
                 root._agcAt = now;
-                root._target = Model.levelFrame(raw, root._agcRef);
+                root._target = Model.levelFrame(raw.mono, root._agcRef);
+                root._targetLeft = Model.levelFrame(raw.left, root._agcRef);
+                root._targetRight = Model.levelFrame(raw.right, root._agcRef);
             }
         }
         onRunningChanged: {
             if (!cavaProc.running) {
                 root._target = Model.baselineLevels();
+                root._targetLeft = Model.baselineLevels();
+                root._targetRight = Model.baselineLevels();
                 root.levels = Model.baselineLevels();
+                root.levelsLeft = Model.baselineLevels();
+                root.levelsRight = Model.baselineLevels();
                 root._agcRef = 0;
                 root._agcAt = 0;
             }
@@ -246,6 +264,10 @@ Singleton {
     FrameAnimation {
         id: _smoothClock
         running: cavaProc.running
-        onTriggered: root.levels = Model.smoothLevels(root.levels, root._target, frameTime)
+        onTriggered: {
+            root.levels = Model.smoothLevels(root.levels, root._target, frameTime);
+            root.levelsLeft = Model.smoothLevels(root.levelsLeft, root._targetLeft, frameTime);
+            root.levelsRight = Model.smoothLevels(root.levelsRight, root._targetRight, frameTime);
+        }
     }
 }

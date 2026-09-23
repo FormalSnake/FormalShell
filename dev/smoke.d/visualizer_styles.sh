@@ -33,18 +33,18 @@ leg_visualizer_styles_fixture() {
   # of the twelve columns, and half these styles (butterfly, terrain,
   # mirror) have nothing to show without a spread across the bands.
   "$ffmpeg_bin" -nostdin -loglevel error -f lavfi \
-    -i "anoisesrc=color=pink:amplitude=0.7:sample_rate=48000:duration=50" \
-    -ac 2 -t 50 \
+    -i "anoisesrc=color=pink:amplitude=0.7:sample_rate=48000:duration=70" \
+    -ac 2 -t 70 \
     -metadata "title=$visualizer_styles_track_title" -metadata "artist=$visualizer_styles_track_artist" \
     -c:a flac -y "$visualizer_styles_track_path"
 }
 
 leg_visualizer_styles_timing() {
   # 2s pre-roll, up to 8s for the tag-match poll, 2s panel-open settle, ~1s
-  # for the three rect-finding frames, ~17 styles at ~1s each including the
+  # for the three rect-finding frames, ~31 styles at ~1s each including the
   # IPC round trip and the crop, then the volume-100 phase (~4s): worst case
-  # lands ~34s in.
-  leg_timing 42 90 3
+  # lands ~52s in (sand's own dwell included).
+  leg_timing 60 110 3
 }
 
 leg_visualizer_styles_drive() {
@@ -127,7 +127,11 @@ prev=""
 while IFS= read -r id; do
   [ -z "\$id" ] && continue
   "$qs_bin" ipc -p "$shell_path" call visualizer style "\$id" > /dev/null 2>&1
-  sleep 0.5
+  # sand starts from an empty bed and needs a few seconds to pile up.
+  case "\$id" in
+    sand) sleep 4 ;;
+    *) sleep 0.5 ;;
+  esac
   frame="$shot_dir/visualizer-styles-frame-\$id.png"
   "$grim_bin" "\$frame" > /dev/null 2>&1
   crop="$shot_dir/visualizer-style-\$id.png"
@@ -210,6 +214,11 @@ except Exception as e:
 levels = d.get("levels") or []
 if not levels:
     print("no levels in status: %s" % d)
+    sys.exit(2)
+left = d.get("levelsLeft") or []
+right = d.get("levelsRight") or []
+if len(left) != len(levels) or len(right) != len(levels) or not any(left) or not any(right):
+    print("stereo levels missing or silent: left=%s right=%s" % (left, right))
     sys.exit(2)
 print(",".join("%.3f" % v for v in levels))
 sys.exit(1 if all(v > 0.9 for v in levels) else 0)

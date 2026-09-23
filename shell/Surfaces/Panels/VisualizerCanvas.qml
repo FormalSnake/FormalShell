@@ -61,7 +61,7 @@ Canvas {
         var ctx = root.getContext("2d");
         ctx.reset();
         root._clock += root._pending;
-        Styles.draw(root.style, ctx, root.width, root.height, VisualizerService.levels, root._state, root.ink, root._pending, root._clock);
+        Styles.draw(root.style, ctx, root.width, root.height, VisualizerService.levels, root._state, root.ink, root._pending, root._clock, VisualizerService.levelsLeft, VisualizerService.levelsRight);
         root._pending = 0;
     }
 }

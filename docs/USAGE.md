@@ -2519,7 +2519,7 @@ gate both consumers share and the refresh-rate smoothing).
 { "media": { "visualizer": false } }
 ```
 
-**Its style** is one of seventeen (`media.visualizerStyle`, default
+**Its style** is one of thirty-one (`media.visualizerStyle`, default
 `"bars"`; an unknown id falls back to `bars`, reported as such by
 `visualizer status`'s `configuredKnown`):
 
@@ -2537,7 +2537,7 @@ draws are in the [README](../README.md#a-tour).
 ```sh
 fs visualizer style led    # an id, "next", "prev", or "config" to drop the override
 fs visualizer styles       # every id, one per line
-fs visualizer status       # {style, override, configured, configuredKnown, running, state, levels}
+fs visualizer status       # {style, override, configured, configuredKnown, running, state, levels, levelsLeft, levelsRight}
 fs media playPause
 fs media next
 fs media previous

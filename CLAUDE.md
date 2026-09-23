@@ -394,7 +394,8 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   styles` reports set over IPC in turn and cropped to `visualizer-style-
   <id>.png`, no crop empty and no two consecutive ones byte-identical. Then
   the player volume forced to 100 and `visualizer status`'s levels read back
-  once cava has settled, none of them pegged above 0.9.
+  once cava has settled, none of them pegged above 0.9, with both stereo
+  channels present and not silent.
 - `wallpaper.sh` `--wallpaper`: the matugen recolour on a set wallpaper, the
   crossfade to a second one, and both sides of the opt-in dither key.
 - `wifi.sh` `--wifi`: the network panel against two real hostapd radios:

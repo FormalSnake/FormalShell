@@ -49,9 +49,10 @@ is a bar at the bottom telling you what Enter is about to do.
 | :---: | :---: |
 | <img src="docs/screenshots/notifications-center-hyprland.png" width="420"><br>Notification center, with DND and a real history | <img src="docs/screenshots/media-hyprland.png" width="420"><br>Now playing, over MPRIS |
 
-The now-playing panel's spectrum has seventeen styles: the plain bar columns
+The now-playing panel's spectrum has thirty-one styles: the plain bar columns
 from before, plus a Winamp LED matrix, an oscilloscope trace, a heartbeat
-that beats on the bass, and more. Set one with `media.visualizerStyle`, or
+that beats on the bass, a synthwave grid, falling sand, stereo meters, a
+tumbling wireframe equalizer, and more. Set one with `media.visualizerStyle`, or
 cycle through them live by clicking the spectrum, scrolling on it, or
 running `qs ipc call visualizer style next`.
 
@@ -76,6 +77,20 @@ running `qs ipc call visualizer style next`.
 | `pulse` | A disc breathing on the bass, a ring on the mids, flares on the highs. |
 | `heartbeat` | An ECG trace that beats on every bass onset. |
 | `terrain` | A scrolling ridge of recent loudness over the bass. |
+| `bricks` | Columns stacked from separate bricks, nothing drawn above the stack. |
+| `columns` | Dense one-pixel columns, the bands interpolated between them. |
+| `scatter` | Sparkling dots, denser low down and on the loud bands. |
+| `retro` | A synthwave sun over a perspective grid, the spectrum on the horizon. |
+| `binary` | Streams of 0s and 1s, faster and busier on the loud bands. |
+| `sakura` | Petals drifting down, more of them and faster with more energy. |
+| `firework` | Rockets bursting into falling sparks, one on every bass hit. |
+| `firefly` | Fireflies over a strip of grass, blinking on the highs. |
+| `mosaic` | A fixed grid of tiles, each lit by its own band past its own threshold. |
+| `sand` | Grains poured by each band, piling up until a bass hit drains the bed. |
+| `geyser` | A fountain fed by the bass, a burst shot up on every hit. |
+| `stereo` | Left and right LED meters with a falling peak segment. |
+| `redsector` | A tumbling wireframe equalizer over a starfield, after the 1989 Amiga demo. |
+| `stipple` | Fine dot columns, shaded by height rather than by level. |
 
 Sixteen panels hang off the bar cells (audio, network, bluetooth, calendar,
 weather, power, displays, system monitor, AirPods, and friends). A panel with

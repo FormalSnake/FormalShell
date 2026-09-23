@@ -102,6 +102,41 @@ TestCase {
         compare(levels, Model.baselineLevels());
     }
 
+    // cava writes the left channel high to low, then the right low to high,
+    // with a trailing delimiter before the newline.
+    function test_stereo_frame_splits_the_mirrored_halves_into_channels() {
+        var s = Model.stereoFrameToLevels("40;30;20;10;60;70;80;100;", 4, 100);
+        compare(s.left, [0.1, 0.2, 0.3, 0.4]);
+        compare(s.right, [0.6, 0.7, 0.8, 1]);
+        compare(s.mono, [0.35, 0.45, 0.55, 0.7]);
+    }
+
+    function test_stereo_frame_mono_is_the_average_before_the_noise_floor() {
+        var n = Model.NOISE_FLOOR;
+        var s = Model.stereoFrameToLevels([n - 3, 0, 0, n + 1].join(";"), 2, Model.MAX_LEVEL);
+        compare(s.left, [0, 0]);
+        compare(s.right, [0, (n + 1) / Model.MAX_LEVEL]);
+        compare(s.mono, [0, 0]);
+    }
+
+    function test_stereo_frame_of_a_centred_source_matches_its_mono_frame() {
+        var mono = "10;200;500;900";
+        var s = Model.stereoFrameToLevels("900;500;200;10;10;200;500;900", 4, Model.MAX_LEVEL);
+        compare(s.mono, Model.frameToLevels(mono, 4, Model.MAX_LEVEL));
+        compare(s.left, s.mono);
+        compare(s.right, s.mono);
+    }
+
+    function test_stereo_frame_tolerates_short_and_malformed_lines() {
+        var s = Model.stereoFrameToLevels("garbage;;", Model.BAR_COUNT, Model.MAX_LEVEL);
+        compare(s.mono, Model.baselineLevels());
+        compare(s.left, Model.baselineLevels());
+        compare(s.right, Model.baselineLevels());
+        var u = Model.stereoFrameToLevels(undefined, 3, 100);
+        compare(u.left.length, 3);
+        compare(u.right, [0, 0, 0]);
+    }
+
     function test_level_color_band_zero_is_dim() {
         compare(Model.levelColorBand(0), "dim");
     }

@@ -31,7 +31,12 @@ TestCase {
             moveTo: function (x, y) { pt(x, y, "moveTo"); },
             lineTo: function (x, y) { pt(x, y, "lineTo"); },
             quadraticCurveTo: function (cx, cy, x, y) { pt(cx, cy, "quadCtl"); pt(x, y, "quadTo"); },
-            fillRect: function (x, y, w, h) { pt(x, y, "fillRect"); pt(x + w, y + h, "fillRect end"); },
+            fills: [],
+            fillRect: function (x, y, w, h) {
+                this.fills.push(this.fillStyle);
+                pt(x, y, "fillRect");
+                pt(x + w, y + h, "fillRect end");
+            },
             roundedRect: function (x, y, w, h) { pt(x, y, "roundedRect"); pt(x + w, y + h, "roundedRect end"); },
             arc: function (x, y, r) { pt(x - r, y - r, "arc"); pt(x + r, y + r, "arc end"); },
             fillText: function (text, x, y) {
@@ -63,7 +68,7 @@ TestCase {
     function test_ids_are_unique_and_start_with_bars() {
         var ids = Styles.ids();
         compare(ids[0], "bars");
-        verify(ids.length >= 17);
+        verify(ids.length >= 31);
         var seen = {};
         for (var i = 0; i < ids.length; i++) {
             verify(!seen[ids[i]], "duplicate id " + ids[i]);
@@ -128,6 +133,27 @@ TestCase {
             verify(a.points.length > 0, ids[s] + " draws a resting state");
             compare(JSON.stringify(b.points), JSON.stringify(a.points), ids[s] + " does not move in silence");
         }
+    }
+
+    // An id with no drawing function would fall back to bars unnoticed.
+    function test_every_id_has_its_own_drawing() {
+        var ids = Styles.ids();
+        for (var i = 0; i < ids.length; i++)
+            verify(Styles.DRAW.hasOwnProperty(ids[i]), ids[i] + " has no entry in DRAW");
+    }
+
+    function test_stereo_draws_each_channel_on_its_own() {
+        var loud = frame(0.9);
+        var quiet = frame(0.1);
+        var a = mockContext();
+        Styles.draw("stereo", a, boxW, boxH, loud, Styles.freshState(), ink, 0.016, 0, loud, quiet);
+        var b = mockContext();
+        Styles.draw("stereo", b, boxW, boxH, loud, Styles.freshState(), ink, 0.016, 0, quiet, loud);
+        var c = mockContext();
+        Styles.draw("stereo", c, boxW, boxH, loud, Styles.freshState(), ink, 0.016, 0);
+        checkInside("stereo", "split", a);
+        verify(JSON.stringify(a.fills) !== JSON.stringify(b.fills), "swapping the channels changes the meters");
+        verify(JSON.stringify(a.fills) !== JSON.stringify(c.fills), "a missing channel pair falls back to the mix");
     }
 
     function test_unknown_style_draws_bars() {

@@ -12,8 +12,9 @@
 // here. No Quickshell access, so the mapping/clamping/malformed-line paths
 // are testable head-on.
 // `BAR_COUNT`/`MAX_LEVEL` must match VisualizerService's generated
-// cava.conf (`bars` / `ascii_max_range`), the two are kept in the same
-// place on purpose so they can't drift apart.
+// cava.conf (`bars`, which counts both stereo channels, so twice
+// BAR_COUNT / `ascii_max_range`), the two are kept in the same place on
+// purpose so they can't drift apart.
 //
 // Malformed input (wrong token count, non-numeric values, a blank or
 // undefined line) parses to an all-zero frame rather than throwing, one
@@ -250,6 +251,28 @@ function frameToLevels(line, barCount, maxLevel) {
     for (var i = 0; i < levels.length; i++)
         fractions[i] = levelToFraction(levels[i], maxLevel);
     return fractions;
+}
+
+// cava's `channels = stereo` raw frame (0.10.7's cava.c, reverse = 0, no
+// horizontal_stereo): `2 * barCount` values, the left channel's bands high
+// to low, then the right channel's low to high, so the bass meets in the
+// middle. `mono` is the per-band average of the two integer levels, the
+// frame `channels = mono` with `mono_option = average` would have written,
+// so the noise floor cuts it exactly where it cut the mono output.
+function stereoFrameToLevels(line, barCount, maxLevel) {
+    var count = barCount === undefined ? BAR_COUNT : barCount;
+    var raw = parseFrame(line, count * 2);
+    var left = new Array(count);
+    var right = new Array(count);
+    var mono = new Array(count);
+    for (var i = 0; i < count; i++) {
+        var l = raw[count - 1 - i];
+        var r = raw[count + i];
+        left[i] = levelToFraction(l, maxLevel);
+        right[i] = levelToFraction(r, maxLevel);
+        mono[i] = levelToFraction((l + r) / 2, maxLevel);
+    }
+    return { mono: mono, left: left, right: right };
 }
 
 // Level-color bands (M20 Task 4b, owner: "the audio visualizer can
