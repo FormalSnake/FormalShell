@@ -143,9 +143,11 @@ WlSessionLockSurface {
         to: 0
     }
 
+    // Black while blanked, whatever the mode: a light theme's background is
+    // near white, which is a lit screen rather than a blank one.
     Rectangle {
         anchors.fill: parent
-        color: Theme.color.background
+        color: surfaceRoot._wakeShown ? Theme.color.background : "black"
     }
 
     // The wallpaper backdrop (spec "Lock and greeter"): plain by default,
