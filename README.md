@@ -49,6 +49,34 @@ is a bar at the bottom telling you what Enter is about to do.
 | :---: | :---: |
 | <img src="docs/screenshots/notifications-center-hyprland.png" width="420"><br>Notification center, with DND and a real history | <img src="docs/screenshots/media-hyprland.png" width="420"><br>Now playing, over MPRIS |
 
+The now-playing panel's spectrum has seventeen styles: the plain bar columns
+from before, plus a Winamp LED matrix, an oscilloscope trace, a heartbeat
+that beats on the bass, and more. Set one with `media.visualizerStyle`, or
+cycle through them live by clicking the spectrum, scrolling on it, or
+running `qs ipc call visualizer style next`.
+
+![Every visualizer style drawn from the same pink noise](docs/media/visualizer-styles.png)
+
+| id | draws |
+| --- | --- |
+| `bars` | Twelve columns filled from the floor, the default. |
+| `peaks` | Thin columns under falling peak caps, Winamp's classic analyser. |
+| `led` | Segmented LED columns with a lit peak segment, Winamp 2's matrix. |
+| `mirror` | Columns grown both ways from the horizontal centre. |
+| `butterfly` | Bass in the middle, mirrored out to both edges. |
+| `outline` | The column tops alone, joined into one stepped line. |
+| `wave` | A filled curve through every band. |
+| `dots` | A stippled dot grid, one column per band, lit to its level. |
+| `ascii` | Shade glyphs stacked in the mono font. |
+| `matrix` | Mono glyphs falling down each column as fast as it is loud. |
+| `rain` | Droplets falling from each column's top, as many as it is loud. |
+| `flame` | Flickering tips and embers rising off the columns. |
+| `bubbles` | Rings rising off the loudest bands, faster with more energy. |
+| `scope` | An oscilloscope trace, synthesised by summing one sine per band. |
+| `pulse` | A disc breathing on the bass, a ring on the mids, flares on the highs. |
+| `heartbeat` | An ECG trace that beats on every bass onset. |
+| `terrain` | A scrolling ridge of recent loudness over the bass. |
+
 Sixteen panels hang off the bar cells (audio, network, bluetooth, calendar,
 weather, power, displays, system monitor, AirPods, and friends). A panel with
 nothing to say prints `NO ADAPTER` rather than inventing a device, which is a

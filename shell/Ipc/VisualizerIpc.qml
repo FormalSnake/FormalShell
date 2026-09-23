@@ -25,7 +25,8 @@ IpcHandler {
             configured: VisualizerService.configuredStyle,
             configuredKnown: VisualizerService.configuredStyleKnown,
             running: VisualizerService.running,
-            state: VisualizerService.state
+            state: VisualizerService.state,
+            levels: VisualizerService.levels
         });
     }
 }

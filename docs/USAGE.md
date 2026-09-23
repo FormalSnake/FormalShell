@@ -2519,7 +2519,25 @@ gate both consumers share and the refresh-rate smoothing).
 { "media": { "visualizer": false } }
 ```
 
+**Its style** is one of seventeen (`media.visualizerStyle`, default
+`"bars"`; an unknown id falls back to `bars`, reported as such by
+`visualizer status`'s `configuredKnown`):
+
+```jsonc
+// ~/.config/formalshell/settings.json
+{ "media": { "visualizerStyle": "led" } }
+```
+
+Clicking the spectrum steps to the next style and a wheel notch over it
+steps either way, both in memory only; the shell never writes
+settings.json, so a session that has clicked past the configured style
+falls back to it on the next launch. The full id list and what each one
+draws are in the [README](../README.md#a-tour).
+
 ```sh
+fs visualizer style led    # an id, "next", "prev", or "config" to drop the override
+fs visualizer styles       # every id, one per line
+fs visualizer status       # {style, override, configured, configuredKnown, running, state, levels}
 fs media playPause
 fs media next
 fs media previous

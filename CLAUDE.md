@@ -388,6 +388,13 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   read off `tray status`.
 - `visualizer.sh` `--visualizer`: the `cava` child owned and killed with
   playback, proven by pgrep rather than by the frame.
+- `visualizer_styles.sh` `--visualizer-styles`: pink noise through a real
+  MPRIS player so every band actually differs, the media panel's spectrum
+  box found by pixel diff rather than a hardcoded rect, every id `visualizer
+  styles` reports set over IPC in turn and cropped to `visualizer-style-
+  <id>.png`, no crop empty and no two consecutive ones byte-identical. Then
+  the player volume forced to 100 and `visualizer status`'s levels read back
+  once cava has settled, none of them pegged above 0.9.
 - `wallpaper.sh` `--wallpaper`: the matugen recolour on a set wallpaper, the
   crossfade to a second one, and both sides of the opt-in dither key.
 - `wifi.sh` `--wifi`: the network panel against two real hostapd radios:
