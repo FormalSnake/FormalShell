@@ -6,9 +6,9 @@ import qs.Services
 // Bar cell for MediaService's active player (DESIGN.md §3 "Bar"): a music
 // icon, the elided title in sans, and a click that toggles the media panel
 // anchored under this cell, with the same open-panel underline every other
-// widget draws. Hidden entirely when no MPRIS player is registered
-// (Battery.qml's own "no dead slot" rule) rather than a "nothing playing"
-// lie.
+// widget draws. With no source at all it stays as the dimmed icon alone,
+// since the media panel it opens is also where the radio is started: hiding
+// it left no way to put anything on.
 //
 // The icon is the no-art fallback only. Once `MediaService.artUrl` resolves,
 // the cover takes its place at the same slot size ActiveWindow.qml's own app
@@ -108,7 +108,7 @@ Cell {
     // that file's own header comment for why crossing the Loader boundary
     // through the built-in `visible` property specifically breaks its own
     // future reactivity.
-    readonly property bool shown: MediaService.available
+    readonly property bool shown: true
 
     visible: root.shown
 
@@ -117,7 +117,7 @@ Cell {
     // Visualizer.qml's own windowVisible registration. AnimatedCoverFrameSource
     // ANDs in isPlaying/animatedArtUrl/motionEnabled itself, so those gates
     // don't need repeating here.
-    readonly property bool _wantsFrames: root.shown && root.windowVisible
+    readonly property bool _wantsFrames: MediaService.available && root.windowVisible
     property bool _registeredWantsFrames: false
 
     function _syncFrames() {
@@ -143,8 +143,8 @@ Cell {
     // states the M26 Task 9 right-click/scroll actions, otherwise they're
     // undiscoverable.
     tooltipText: {
-        if (!root.shown)
-            return "";
+        if (!MediaService.available)
+            return "NOTHING PLAYING / CLICK FOR THE RADIO";
         var track = MediaService.title !== "" ? MediaService.title : MediaService.identity;
         return "NOW PLAYING / " + (MediaService.artist !== "" ? MediaService.artist + " / " : "") + track + " / RIGHT NEXT / SCROLL PREV NEXT";
     }
@@ -170,7 +170,7 @@ Cell {
             visible: MediaService.artUrl === ""
             name: "music"
             size: Theme.fontSize.body
-            color: root.foreground
+            color: MediaService.available ? root.foreground : root.dimForeground
         }
 
         // Mini cover, the glyph's own slot size (`glyph.implicitHeight`
@@ -226,6 +226,7 @@ Cell {
         // measured width exactly as a single one did.
         Item {
             id: titleSlot
+            visible: MediaService.available
             readonly property string _title: MediaService.title !== "" ? MediaService.title : MediaService.identity
 
             // 1 draws slot A, 0 draws slot B; the Behavior is on the driver

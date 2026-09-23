@@ -359,7 +359,7 @@ Panel {
     sectionCount: 2 + (root._lyricsPresent ? 1 : 0) + (root._menuSection >= 0 ? 1 : 0)
 
     cursorCount: root.cursorSection === 0
-        ? root._transport.length
+        ? (MediaService.available ? root._transport.length : 1)
         : root.cursorSection === 1
             ? root._tracks.length
             : root.cursorSection === root._lyricsSection
@@ -382,7 +382,10 @@ Panel {
     }
 
     onCursorActivated: index => {
-        if (root.cursorSection === 0) {
+        if (root.cursorSection === 0 && !MediaService.available) {
+            if (root.radio)
+                root.radio.open();
+        } else if (root.cursorSection === 0) {
             var id = root._transport[index];
             if (id !== undefined && root._transportEnabled(id))
                 root._pressTransport(id);
@@ -446,10 +449,31 @@ Panel {
             width: root._lyricsPresent ? contentRow._paneWidth : contentRow.width
             spacing: Theme.space.sectionGap
 
-            SectionLabel {
+            // Nothing playing: the radio is the one thing this panel can put
+            // on, so it is offered here rather than only in the header. The
+            // cursor's section 0 is this button while it shows.
+            Item {
+                width: parent.width
                 visible: !MediaService.available
-                leftPadding: Theme.space.controlPaddingX
-                text: "No player"
+                height: Theme.space.controlHeight
+
+                SectionLabel {
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    leftPadding: Theme.space.controlPaddingX
+                    text: "No player"
+                }
+
+                Button {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: root.radio !== null
+                    variant: "outline"
+                    icon: "radio"
+                    text: "Radio"
+                    cursor: root.cursorActive && root.cursorSection === 0
+                    onClicked: root.radio.open()
+                }
             }
 
             // The two menu triggers: the source leading, named by what is

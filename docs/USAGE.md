@@ -2408,8 +2408,8 @@ The media service picks a source that is actually playing over the rest when
 several are there, otherwise the first one, otherwise nothing at all. A
 source is an MPRIS player, the radio while a station is tuned (see Radio
 below), or, picked by hand only, an app playing audio with no MPRIS, which
-offers nothing but its own stream volume. The bar cell is hidden entirely
-with no source present.
+offers nothing but its own stream volume. With no source at all the bar
+cell is a dimmed icon, and the panel it opens offers the radio.
 
 ![The media panel](screenshots/media-hyprland.png)
 
