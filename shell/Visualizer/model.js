@@ -26,7 +26,10 @@
 // VisualizerService.levels to CELL_BAR_COUNT below rather than drawing all
 // 24 at the cell's own DMS-compact size.
 var BAR_COUNT = 24;
-var MAX_LEVEL = 100;
+// 1000 rather than 100: VisualizerService's gain stage divides by a running
+// peak that can sit near the bottom of the range on a quiet track, and at
+// 100 steps a band there only has a handful of values to move through.
+var MAX_LEVEL = 1000;
 
 // The bar cell's own track count: 6 bars at caption size, not 10 at body,
 // the owner wants the cell DMS-compact ("less wide"), and a
@@ -36,18 +39,100 @@ var CELL_BAR_COUNT = 6;
 // Below this level a bar reads as silence and snaps flat. cava's own
 // `ignore` knob would do the same job but has been deprecated since 0.8.0
 // (verified against its 0.10.7 example config), and doing it here keeps the
-// threshold visible next to the curve it interacts with.
-var NOISE_FLOOR = 2;
+// threshold visible next to the curve it interacts with. 5/1000 at cava's
+// sensitivity 200 is the same acoustic level as 2/100 at 800%, where it was
+// measured.
+var NOISE_FLOOR = 5;
 
-// Square root, not linear. A linear level->height map spends most of its
-// range on peaks a real track almost never hits, so a bar sits pinned near
-// zero and barely moves; sqrt lifts the mid-levels where music actually
-// lives. This is the same perceptual curve DMS applies to its own cava
-// values (`Math.sqrt(x * 0.01)` in `Modules/DankBar/Widgets/AudioVisualization.qml`)
-// and is the larger half of why theirs reads livelier, the other half is
-// VisualizerService's cava tuning (fixed sensitivity, monstercat spread).
-function _response(fraction) {
-    return Math.sqrt(fraction);
+// The gain stage (M73). cava runs at a fixed, low sensitivity so a loud
+// master never clips at its ceiling, and the height comes from here
+// instead: every band is divided by `ref`, a peak follower on the frame's
+// loudest raw band, so a loud track and a quiet one both draw with the same
+// headroom. cava's own autosens is not the answer, it drives every passage
+// to full scale, which is the complaint this replaces.
+//
+// Attack 0.12s, so a louder passage stops overdrawing within a few frames
+// rather than pegging for a second. Release is a constant 20dB (10x) fall
+// every 4s, in the log domain rather than an exponential toward the peak: a
+// quiet track after a loud one is back to full height within those 4s
+// whatever the size of the drop, while a half-level dip inside a song
+// still reads as a dip for ~1.2s.
+//
+// AGC_FLOOR caps the gain at AGC_TARGET / AGC_FLOOR. 0.04 sits under the
+// quiet pink-noise passage's own peak at sensitivity 200 (~0.09, a quarter
+// of its ~0.36 reading at 800%), so quiet material still normalizes, and
+// eight times over NOISE_FLOOR, so a band hovering just over the floor draws
+// under a fifth of the column instead of being lifted into motion.
+var AGC_ATTACK_SECONDS = 0.12;
+var AGC_RELEASE_SECONDS = 4;
+var AGC_FLOOR = 0.04;
+
+// Where the running peak draws, before the knee: a steady loud passage's
+// loudest band lands at 0.757 after it, the upper third with a quarter of
+// the column left for transients.
+var AGC_TARGET = 0.8;
+
+// Above AGC_KNEE the height bends toward 1 and never reaches it (unit
+// slope at the knee, so no visible kink): 36% over the running peak draws
+// 0.85, 2x draws 0.93, 3x draws 0.976. Only a transient gets near the top.
+var AGC_KNEE = 0.6;
+
+// A power under 1 on the peak-relative level lifts the mid-levels, kept
+// milder than sqrt so neighbouring bands stay apart once the gain has
+// lifted them: a band at a quarter of the peak draws 0.30 against the
+// peak's 0.757, where sqrt would put it at half the peak's height.
+var RESPONSE_POWER = 0.7;
+
+// Returns the next `ref`. A `ref` of 0 or less is the reset state
+// VisualizerService starts from and returns to when cava stops: it snaps to
+// the first frame's own peak, so every play does not open on a frame
+// divided by the floor. A non-finite or non-positive `dtSeconds` moves
+// nothing past that snap.
+function agcStep(ref, framePeak, dtSeconds) {
+    var peak = (typeof framePeak === "number" && isFinite(framePeak) && framePeak > 0) ? framePeak : 0;
+    if (!(ref > 0))
+        return Math.max(peak, AGC_FLOOR);
+    var next = ref;
+    if (typeof dtSeconds === "number" && isFinite(dtSeconds) && dtSeconds > 0) {
+        if (peak > ref)
+            next = ref + (peak - ref) * (1 - Math.exp(-dtSeconds / AGC_ATTACK_SECONDS));
+        else
+            next = Math.max(peak, ref * Math.pow(10, -dtSeconds / AGC_RELEASE_SECONDS));
+    }
+    return Math.max(next, AGC_FLOOR);
+}
+
+function _knee(z) {
+    if (z <= AGC_KNEE)
+        return z;
+    var span = 1 - AGC_KNEE;
+    return AGC_KNEE + span * (1 - Math.exp(-(z - AGC_KNEE) / span));
+}
+
+// Raw 0..1 fraction -> drawn 0..1 height against the running peak `ref`.
+function normalize(fraction, ref) {
+    if (!(fraction > 0))
+        return 0;
+    var r = ref > AGC_FLOOR ? ref : AGC_FLOOR;
+    return _knee(Math.pow(fraction / r, RESPONSE_POWER) * AGC_TARGET);
+}
+
+function framePeak(fractions) {
+    var peak = 0;
+    var input = fractions || [];
+    for (var i = 0; i < input.length; i++) {
+        if (input[i] > peak)
+            peak = input[i];
+    }
+    return peak;
+}
+
+function levelFrame(fractions, ref) {
+    var input = fractions || [];
+    var result = new Array(input.length);
+    for (var i = 0; i < input.length; i++)
+        result[i] = normalize(input[i], ref);
+    return result;
 }
 
 // All-zero levels, the bar's own dithered-track baseline (DESIGN.md §4
@@ -144,15 +229,14 @@ function parseFrame(line, barCount) {
     return levels;
 }
 
-// level 0..max -> 0..1 fill fraction through the response curve, clamped
-// to 0..1 regardless of how far out of band a malformed or overshooting
-// value lands. A bar's own track height times this fraction is the solid
-// fill's height; the rest of the column stays dither.
+// level 0..max -> raw 0..1 fraction, linear, clamped to 0..1 regardless of
+// how far out of band a malformed or overshooting value lands. The height a
+// bar draws is `normalize` of this, never this directly.
 function levelToFraction(level, maxLevel) {
     var max = maxLevel === undefined ? MAX_LEVEL : maxLevel;
     if (max <= 0 || level < NOISE_FLOOR)
         return 0;
-    var fraction = _response(level / max);
+    var fraction = level / max;
     if (fraction < 0)
         fraction = 0;
     if (fraction > 1)
@@ -181,15 +265,11 @@ function frameToLevels(line, barCount, maxLevel) {
 // so the bands are the shipped default again and the cover palette is
 // gone.
 //
-// Chosen against the sqrt curve above, not the raw cava range: a quarter
-// of MAX_LEVEL already reads half-scale (0.5 fraction, see
-// test_level_to_fraction_applies_the_square_root_response_curve), so a 0.4
-// cut sits around the bottom sixth of the raw range (~16/100): silence
-// and near-silence stay dim, anything with real presence reads as content.
-// 0.85 sits high enough (~72/100 raw) that only the tuned config's own
-// measured loud-passage peaks (▄▅▅▆▇█, VisualizerService.qml's own
-// pink-noise reading) cross it, so accent stays a peak signal, spent, not
-// worn.
+// Chosen against `normalize` above, so both cuts are relative to the
+// running peak rather than to cava's range: 0.4 is a band ~37% of the peak
+// (-8.6dB), anything quieter stays dim. A steady loud passage's loudest band
+// draws 0.757, so 0.85 is only crossed by a band 36% over the running peak:
+// accent stays a transient signal, spent, not worn.
 var LEVEL_DIM_BELOW = 0.4;
 var LEVEL_ACCENT_FROM = 0.85;
 

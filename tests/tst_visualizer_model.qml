@@ -60,25 +60,22 @@ TestCase {
         compare(Model.levelToFraction(100, 100), 1);
     }
 
-    // sqrt, not linear: a quarter of the range reads half-scale. Linear
-    // would put this at 0.25 and leave the fill pinned near empty for
-    // everything a real track actually does.
-    function test_level_to_fraction_applies_the_square_root_response_curve() {
-        compare(Model.levelToFraction(25, 100), 0.5);
-        verify(Math.abs(Model.levelToFraction(50, 100) - Math.sqrt(0.5)) < 1e-9);
+    // Linear: the curve lives in normalize, after the gain stage.
+    function test_level_to_fraction_is_linear() {
+        compare(Model.levelToFraction(250, 1000), 0.25);
     }
 
     // Doing what cava's deprecated `ignore` knob used to: near-silence is
     // flat (zero fill), not a jittering bottom pixel.
     function test_level_to_fraction_snaps_below_noise_floor_to_empty() {
-        compare(Model.levelToFraction(Model.NOISE_FLOOR - 1, 100), 0);
-        verify(Model.levelToFraction(Model.NOISE_FLOOR, 100) !== 0);
+        compare(Model.levelToFraction(Model.NOISE_FLOOR - 1, Model.MAX_LEVEL), 0);
+        verify(Model.levelToFraction(Model.NOISE_FLOOR, Model.MAX_LEVEL) !== 0);
     }
 
     function test_level_to_fraction_clamps_values_above_max() {
         // cava can still overshoot ascii_max_range on a transient even with
         // autosens off.
-        compare(Model.levelToFraction(1000, 100), 1);
+        compare(Model.levelToFraction(5000, 1000), 1);
     }
 
     function test_level_to_fraction_clamps_negative_values() {
@@ -219,5 +216,104 @@ TestCase {
         // constant) should land past 95% of the way there.
         var result = Model.smoothLevels([0], [1], 0.1);
         verify(result[0] > 0.95);
+    }
+
+    // Runs `seconds` of identical frames at cava's own 120fps through the
+    // gain stage and returns the running peak it settles on.
+    function _run(ref, frame, seconds) {
+        var dt = 1 / 120;
+        var steps = Math.round(seconds / dt);
+        for (var i = 0; i < steps; i++)
+            ref = Model.agcStep(ref, Model.framePeak(frame), dt);
+        return ref;
+    }
+
+    function _scaled(shape, gain) {
+        return shape.map(function (v) { return v * gain; });
+    }
+
+    // The complaint: a louder track or a raised volume pegged every column.
+    // The same passage at three input gains settles on the same drawn
+    // height, and under 0.9.
+    function test_agc_levels_one_passage_at_any_gain_to_the_same_height() {
+        var shape = [0.2, 0.5, 1, 0.7, 0.3];
+        var heights = [];
+        var gains = [0.1, 0.3, 0.9];
+        for (var g = 0; g < gains.length; g++) {
+            var frame = _scaled(shape, gains[g]);
+            var ref = _run(0, frame, 2);
+            heights.push(Model.framePeak(Model.levelFrame(frame, ref)));
+        }
+        for (var i = 0; i < heights.length; i++) {
+            verify(heights[i] < 0.9, "gain " + gains[i] + " drew " + heights[i]);
+            verify(heights[i] > 0.67, "gain " + gains[i] + " drew " + heights[i]);
+            verify(Math.abs(heights[i] - heights[0]) < 1e-6);
+        }
+        verify(heights[0] < Model.LEVEL_ACCENT_FROM);
+    }
+
+    function test_agc_quiet_passage_after_a_loud_one_recovers_within_the_release_time() {
+        var loud = [0.8, 0.4];
+        var quiet = [0.08, 0.04];
+        var ref = _run(0, loud, 2);
+        var steady = Model.framePeak(Model.levelFrame(loud, ref));
+        var halfway = _run(ref, quiet, Model.AGC_RELEASE_SECONDS / 2);
+        verify(Model.framePeak(Model.levelFrame(quiet, halfway)) < steady - 0.1);
+        ref = _run(ref, quiet, Model.AGC_RELEASE_SECONDS + 0.1);
+        verify(Math.abs(Model.framePeak(Model.levelFrame(quiet, ref)) - steady) < 0.01);
+    }
+
+    function test_agc_silence_under_the_noise_floor_stays_flat() {
+        var frame = Model.frameToLevels([1, 2, 3, 4].map(function () { return Model.NOISE_FLOOR - 1; }).join(";"), 4, Model.MAX_LEVEL);
+        var ref = _run(0, frame, 5);
+        compare(ref, Model.AGC_FLOOR);
+        compare(Model.levelFrame(frame, ref), [0, 0, 0, 0]);
+    }
+
+    function test_agc_floor_keeps_a_band_just_over_the_noise_floor_low() {
+        var frame = [Model.NOISE_FLOOR / Model.MAX_LEVEL];
+        var ref = _run(0, frame, 5);
+        verify(Model.levelFrame(frame, ref)[0] < 0.2);
+    }
+
+    function test_agc_transient_over_the_running_peak_draws_taller_than_the_steady_level() {
+        var steadyFrame = [0.3, 0.15];
+        var ref = _run(0, steadyFrame, 2);
+        var steady = Model.levelFrame(steadyFrame, ref)[0];
+        var hitFrame = [0.9, 0.15];
+        ref = Model.agcStep(ref, Model.framePeak(hitFrame), 1 / 120);
+        var hit = Model.levelFrame(hitFrame, ref)[0];
+        verify(hit > steady);
+        verify(hit >= Model.LEVEL_ACCENT_FROM);
+        verify(hit < 1);
+        verify(steady < Model.LEVEL_ACCENT_FROM);
+    }
+
+    function test_agc_preserves_band_order_and_contrast() {
+        var frame = [0.05, 0.1, 0.2, 0.4];
+        var ref = _run(0, frame, 2);
+        var drawn = Model.levelFrame(frame, ref);
+        for (var i = 1; i < drawn.length; i++)
+            verify(drawn[i] - drawn[i - 1] > 0.1, "band " + i + ": " + drawn);
+        // A band a quarter of the peak reads dim, the peak does not.
+        compare(Model.levelColorBand(drawn[1]), "dim");
+        compare(Model.levelColorBand(drawn[3]), "content");
+    }
+
+    function test_agc_step_from_reset_snaps_to_the_first_peak() {
+        compare(Model.agcStep(0, 0.5, 1 / 120), 0.5);
+        compare(Model.agcStep(0, 0, 1 / 120), Model.AGC_FLOOR);
+    }
+
+    function test_agc_step_does_not_move_on_a_bad_dt() {
+        compare(Model.agcStep(0.5, 0.9, 0), 0.5);
+        compare(Model.agcStep(0.5, 0.1, NaN), 0.5);
+    }
+
+    function test_normalize_approaches_one_and_never_reaches_it() {
+        var h = Model.normalize(1, 0.1);
+        verify(h > 0.99);
+        verify(h < 1);
+        compare(Model.normalize(0, 0.1), 0);
     }
 }

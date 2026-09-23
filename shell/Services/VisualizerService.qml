@@ -79,6 +79,12 @@ Singleton {
     // value anything draws directly.
     property var _target: Model.baselineLevels()
 
+    // model.js's running peak and the wall clock of the frame that last
+    // advanced it. Both reset with the levels when cava stops, so a new
+    // track starts from its own first frame, not the last one's peak.
+    property real _agcRef: 0
+    property double _agcAt: 0
+
     // Every key below is in cava 0.10.7's own example config (checked there,
     // not from memory), and every one that departs from cava's default does
     // so for a stated reason. The tuning is DMS's (`Services/CavaService.qml`)
@@ -89,15 +95,12 @@ Singleton {
     //   autosens = 0 + sensitivity     autosens continuously renormalizes so
     //     a quiet passage gets boosted to the same full-scale row as a loud
     //     one, which is exactly the "always maxed, never responds" feel.
-    //     Fixed gain instead, so loudness reads as height again. 800% is
-    //     measured, not inherited: pink noise through this exact config lands
-    //     at ▄▅▅▆▇█ for a loud passage (amplitude 0.8) and ▃▃▄▄▄▅ for a quiet
-    //     one (0.3), which spends the glyph range without pegging. DMS's own
-    //     number works out to ~300% here (its 30% reads against a 0..1000
-    //     range it then clamps at 100 in QML), and 300% measures out at
-    //     ▃▃▃▄▄▅ / ▂▂▃▃▃▃, fine for DMS's continuous shader bars, but this
-    //     row only has eight discrete steps and the bottom three are all
-    //     near-flat strokes, so it needs more of the range to read at all.
+    //     Fixed gain instead, low enough that a loud master never clips at
+    //     ascii_max_range, and model.js's own gain stage (`agcStep`) supplies
+    //     the height. Pink noise at amplitude 0.8 measured ~▇█ at 800%, near
+    //     the ceiling with nothing left for a louder track or a raised sink
+    //     volume; 200% puts that passage at a quarter of the range, 12dB of
+    //     headroom before cava clips.
     //   higher_cutoff_freq             12kHz over cava's 10kHz default: pulls
     //     hi-hats and cymbals into the top bar instead of leaving it dead on
     //     most tracks.
@@ -125,7 +128,7 @@ Singleton {
         return "[general]\n" +
             "framerate = 120\n" +
             "autosens = 0\n" +
-            "sensitivity = 800\n" +
+            "sensitivity = 200\n" +
             "bars = " + Model.BAR_COUNT + "\n" +
             "lower_cutoff_freq = 50\n" +
             "higher_cutoff_freq = 12000\n" +
@@ -187,12 +190,20 @@ Singleton {
         running: root._shouldRun
         command: Proc.dieWithParent(["sh", "-c", 'command -v cava >/dev/null 2>&1 || exit 127; exec cava -p "$1"', "sh", root._configPath])
         stdout: SplitParser {
-            onRead: line => root._target = Model.frameToLevels(line, Model.BAR_COUNT, Model.MAX_LEVEL)
+            onRead: line => {
+                const raw = Model.frameToLevels(line, Model.BAR_COUNT, Model.MAX_LEVEL);
+                const now = Date.now();
+                root._agcRef = Model.agcStep(root._agcRef, Model.framePeak(raw), root._agcAt > 0 ? (now - root._agcAt) / 1000 : 0);
+                root._agcAt = now;
+                root._target = Model.levelFrame(raw, root._agcRef);
+            }
         }
         onRunningChanged: {
             if (!cavaProc.running) {
                 root._target = Model.baselineLevels();
                 root.levels = Model.baselineLevels();
+                root._agcRef = 0;
+                root._agcAt = 0;
             }
         }
     }

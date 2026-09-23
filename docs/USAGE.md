@@ -386,12 +386,16 @@ it is. Unlike the panel's spectrum the bar cell stays opt-in, never shown
 until named in `bar.layout`. No `cava` on PATH reads `NO CAVA`.
 
 The generated `cava.conf` is tuned rather than left at defaults, none of it
-configurable: `autosens` off in favour of a fixed 800% sensitivity (auto-gain
-renormalizes a quiet passage to full scale, so nothing appears to respond),
+configurable: `autosens` off in favour of a fixed 200% sensitivity, low
+enough that a loud track does not clip (cava's own auto-gain renormalizes
+every passage to full scale, so nothing appears to respond),
 `monstercat = 1.5` so six bars read as one spectrum, `noise_reduction = 35`
 to catch transients, and a 12kHz top cutoff so the last bar has cymbals to
-draw. Levels map to glyphs by square root, and anything under level 2 snaps
-flat.
+draw. The shell levels cava's output itself: every band is divided by a
+running peak of the loudest band (0.12s attack, falling 20dB every 4s), so
+a loud track and a quiet one both settle with their loudest band around
+three quarters of the column, and only a hit louder than the recent peak
+reaches the top. Anything under 5 of cava's 1000 steps snaps flat.
 
 **Microphone** is one glyph for the default capture source. Click mutes,
 middle click opens the audio panel, and there is no percentage or wheel
