@@ -546,6 +546,23 @@ Singleton {
         }
     }
 
+    // formalshell.service stops with KillMode=process on the owner's hosts,
+    // so a shell restart leaves the last shell's mpv playing on this socket
+    // with nothing left to control it. One connect at startup tells it to
+    // quit; no answer means there was nothing there.
+    Socket {
+        id: leftover
+        path: root.socketPath
+        connected: root.socketPath !== ""
+        onConnectionStateChanged: {
+            if (!leftover.connected)
+                return;
+            leftover.write(JSON.stringify({ command: ["quit"] }) + "\n");
+            leftover.flush();
+            leftover.connected = false;
+        }
+    }
+
     // A Socket whose connect failed keeps its dead QLocalSocket and never
     // retries, so every attempt is a fresh object.
     Timer {

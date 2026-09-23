@@ -8,14 +8,16 @@
 # playing), `media players` listing it with the panel open and NOT listing
 # the radio's own Pipewire stream a second time as an app with no MPRIS, the
 # panel photographed, and its source menu opened with real keys (two Tabs to
-# the menu section, Enter on the trigger) and photographed open. A second
+# the menu section, Enter on the trigger) and photographed open. A player
+# left on the radio's socket before the shell starts (what a restart under
+# KillMode=process leaves) has to be gone once it is up. A second
 # null sink gives the output menu something to offer: `media output` moves
 # the radio there and mpv's own `audio-device` follows, read back off both
 # `radio status` and `media status`. A stop last, with the media source gone
 # after it.
 leg_radio_flag="--radio"
 leg_radio_order=175
-leg_radio_needs="ffmpeg wtype pactl"
+leg_radio_needs="ffmpeg wtype pactl mpv"
 
 need_pactl() {
   if [ -z "${pactl_bin:-}" ]; then
@@ -41,6 +43,8 @@ radio_routed_path="$shot_dir/radio-routed.json"
 radio_routed_media_path="$shot_dir/radio-routed-media.json"
 radio_module_path="$shot_dir/radio-sink-module.txt"
 radio_sink="formalshell-smoke-alt"
+radio_leftover_pid_path="$shot_dir/radio-leftover.pid"
+radio_leftover_after_path="$shot_dir/radio-leftover-after.txt"
 radio_station_id="smoke-radio-1"
 radio_station_name="FormalShell Smoke Radio"
 radio_port=18099
@@ -57,6 +61,11 @@ leg_radio_fixture() {
 EOF
   "$ffmpeg_bin" -nostdin -loglevel error -f lavfi -i "sine=frequency=440:sample_rate=44100" -t 60 \
     -c:a libmp3lame -b:a 128k -y "$radio_track_path"
+  local socket_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/formalshell-radio-atlas"
+  mkdir -p -m 700 "$socket_dir"
+  setsid "$mpv_bin" --no-config --idle=yes --no-terminal \
+    --input-ipc-server="$socket_dir/mpv.sock" > /dev/null 2>&1 < /dev/null &
+  echo $! > "$radio_leftover_pid_path"
 }
 
 leg_radio_drive() {
@@ -67,6 +76,7 @@ leg_radio_drive() {
   -listen 1 "http://127.0.0.1:$radio_port/station.mp3" &
 "$pactl_bin" load-module module-null-sink sink_name=$radio_sink sink_properties=device.description=SmokeAlt > "$radio_module_path"
 sleep 4
+if kill -0 "\$(cat "$radio_leftover_pid_path")" 2>/dev/null; then echo alive; else echo gone; fi > "$radio_leftover_after_path"
 "$qs_bin" ipc -p "$shell_path" call radio play "$radio_station_id" > "$radio_play_path" 2>&1
 SECONDS=0
 while [ "\$SECONDS" -lt 10 ]; do
@@ -93,11 +103,15 @@ sleep 3
 "$qs_bin" ipc -p "$shell_path" call media status > "$radio_stopped_path" 2>&1
 EOF
   add_cleanup "[ -s '$radio_module_path' ] && '$pactl_bin' unload-module \"\$(cat '$radio_module_path')\" 2>/dev/null || true"
+  add_cleanup "kill \"\$(cat '$radio_leftover_pid_path')\" 2>/dev/null || true"
   add_cleanup "pkill -f 'listen 1 http://127.0.0.1:$radio_port' 2>/dev/null || true"
   echo "exec-once = bash $script"
 }
 
 leg_radio_assert() {
+  if ! grep -q "^gone$" "$radio_leftover_after_path" 2>/dev/null; then
+    fail "the mpv left on the radio's socket survived the shell starting"
+  fi
   if ! grep -q "^ok$" "$radio_play_path" 2>/dev/null; then
     fail "radio play did not answer ok, got: $(cat "$radio_play_path" 2>/dev/null)"
   fi
