@@ -53,7 +53,9 @@ import QtQuick
 // from the 100ms lead it already takes on MediaService.position; positive
 // holds the lyrics back, M56). media.visualizer (bool, default true,
 // the media panel's spectrum band; the bar's own visualizer cell stays
-// governed by bar.layout alone, M55).
+// governed by bar.layout alone, M55). media.visualizerStyle (string,
+// default "bars", the spectrum's style id from Visualizer/styles.js; an
+// unknown id draws bars and `visualizer status` reports it, M73).
 // lock.blankAfterSeconds (number, default 30, Lock.qml's idle-blank
 // timeout, seconds, fed straight to IdleMonitor.timeout), lock.
 // fingerprintPamService (string, default "", the PAM service name for

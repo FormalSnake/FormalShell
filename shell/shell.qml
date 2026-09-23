@@ -346,6 +346,7 @@ ShellRoot {
     AirpodsIpc {}
     MediaIpc {}
     RadioIpc {}
+    VisualizerIpc {}
     TrayIpc { trayMenu: trayMenuInstance; trayOverflow: trayOverflowInstance }
     BarIpc { barOverflow: barOverflowInstance }
     LockIpc {}

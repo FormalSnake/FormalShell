@@ -5,6 +5,7 @@ import Quickshell.Io
 import qs.Core
 import qs.Services
 import "../Visualizer/model.js" as Model
+import "../Visualizer/styles.js" as Styles
 import "../Core/proc.js" as Proc
 
 // Shared cava backend for the bar's ASCII visualizer widget (owner ask:
@@ -63,6 +64,35 @@ Singleton {
     // MediaPanel's own half of the gate (M55 D6): bound to `isOpen &&
     // media.visualizer` there, mirroring `_visibleBars`' bar-side count.
     property bool panelWants: false
+
+    // The media panel's spectrum style (M73): `media.visualizerStyle`, an
+    // unknown id drawing `bars`, unless `styleOverride` names one. The
+    // override lives in memory only, for trying styles at runtime over IPC
+    // or a click on the spectrum; the shell never writes settings.json.
+    readonly property string configuredStyle: Config.loaded ? String(Config.get("media.visualizerStyle", "bars")) : "bars"
+    readonly property bool configuredStyleKnown: Styles.isKnown(root.configuredStyle)
+    property string styleOverride: ""
+    readonly property string style: root.styleOverride !== "" ? root.styleOverride
+        : root.configuredStyleKnown ? root.configuredStyle : "bars"
+
+    // An id, `next`, `prev`, or `config` to follow settings.json again.
+    // Answers "" on success, the error line otherwise.
+    function setStyle(name) {
+        if (name === "config") {
+            root.styleOverride = "";
+            return "";
+        }
+        if (name === "next" || name === "prev") {
+            root.styleOverride = Styles.step(root.style, name === "next" ? 1 : -1);
+            return "";
+        }
+        if (!Styles.isKnown(name))
+            return "error: unknown style " + name + " (" + Styles.ids().join("|") + ")";
+        root.styleOverride = name;
+        return "";
+    }
+
+    readonly property bool running: cavaProc.running
 
     readonly property bool _shouldRun: root.state === "available" && MediaService.isPlaying
         && Theme.motionEnabled && (root._visibleBars > 0 || root.panelWants)

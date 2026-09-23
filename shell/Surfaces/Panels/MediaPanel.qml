@@ -3,7 +3,7 @@ import qs.Core
 import qs.Components
 import qs.Services
 import "../../Lyrics/model.js" as Lyrics
-import "../../Visualizer/model.js" as Visualizer
+import "../../Visualizer/styles.js" as Styles
 
 // MPRIS now-playing popout (DESIGN.md §3 "Panel", spec "Panels", M55 A1-A5,
 // M56 P13). Two columns while a provider has synced timing for the track:
@@ -627,15 +627,13 @@ Panel {
                 // The spectrum, inline at the row's trailing end rather than
                 // a band of its own (M55 A2, the owner's own reference:
                 // Apple's now-playing widget keeps its bars beside the
-                // title). The same cava frame the bar cell reads,
-                // downsampled to twelve columns and smoothed toward every
-                // screen frame by VisualizerService (M55 A3), so a 240Hz and
-                // a 144Hz screen both draw the same motion at their own
-                // rate. Empty troughs while the panel is open and the track
-                // is paused are the honest state, the same one the bar cell
-                // draws when its own process isn't running: no extra
-                // handling needed since VisualizerService.levels is already
-                // the all-zero baseline then.
+                // title). The same cava frame the bar cell reads, smoothed
+                // toward every screen frame by VisualizerService (M55 A3),
+                // drawn in the style VisualizerService.style names (M73). A
+                // click steps to the next style and a wheel notch either
+                // way, in memory only. Each style's resting state while the
+                // panel is open and the track is paused is the honest one,
+                // the same all-zero baseline the bar cell draws.
                 Item {
                     id: spectrumInline
                     visible: root._spectrumVisible
@@ -643,45 +641,40 @@ Panel {
                     width: root._spectrumWidth
                     height: Theme.space.controlHeight
 
-                    readonly property var _levels: Visualizer.downsample(VisualizerService.levels, root._spectrumColumns)
-
-                    Row {
+                    VisualizerCanvas {
                         anchors.fill: parent
-                        spacing: Theme.space.xxs
+                        columns: root._spectrumColumns
+                        active: root.isOpen
+                    }
 
-                        Repeater {
-                            model: root._spectrumColumns
+                    MouseArea {
+                        id: spectrumPointer
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
 
-                            // primitive-exempt: one spectrum column's groove, the panel's own
-                            // copy of the bar cell's vertical track.
-                            Rectangle {
-                                id: column
-                                required property int index
+                        readonly property string _tip: Styles.label(VisualizerService.style)
+                        // A touchpad sends a notch in many small deltas.
+                        property real _wheel: 0
 
-                                width: Theme.space.trackThickness
-                                height: parent.height
-                                radius: Math.min(Theme.radiusSm, width / 2)
-                                color: Theme.color.muted
-
-                                readonly property real _level: spectrumInline._levels[column.index] || 0
-                                readonly property string _band: Visualizer.levelColorBand(column._level)
-
-                                // primitive-exempt: the column's fill, bottom-up like the bar
-                                // cell's own track.
-                                Rectangle {
-                                    y: parent.height - height
-                                    width: parent.width
-                                    height: column._level > 0
-                                        ? Math.max(parent.height * column._level, column.radius * 2)
-                                        : 0
-                                    radius: column.radius
-                                    color: column._band === "accent"
-                                        ? Theme.color.primary
-                                        : column._band === "content"
-                                            ? Theme.color.foreground
-                                            : Theme.color.mutedForeground
-                                }
+                        onClicked: VisualizerService.setStyle("next")
+                        onWheel: wheel => {
+                            spectrumPointer._wheel += wheel.angleDelta.y;
+                            while (Math.abs(spectrumPointer._wheel) >= 120) {
+                                VisualizerService.setStyle(spectrumPointer._wheel > 0 ? "prev" : "next");
+                                spectrumPointer._wheel -= spectrumPointer._wheel > 0 ? 120 : -120;
                             }
+                            wheel.accepted = true;
+                        }
+                        onContainsMouseChanged: {
+                            if (spectrumPointer.containsMouse)
+                                TooltipRegistry.show(spectrumPointer, spectrumPointer._tip, "");
+                            else
+                                TooltipRegistry.hide(spectrumPointer);
+                        }
+                        on_TipChanged: {
+                            if (spectrumPointer.containsMouse)
+                                TooltipRegistry.show(spectrumPointer, spectrumPointer._tip, "");
                         }
                     }
                 }
