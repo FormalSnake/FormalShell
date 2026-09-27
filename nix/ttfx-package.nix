@@ -24,6 +24,11 @@ rustPlatform.buildRustPackage rec {
   # falls back to the pure-Rust engine, which is also what aarch64 gets.
   nativeBuildInputs = [ nasm python3 ];
 
+  # The asm objects call libc (getenv, pthread_join) with plain PC32
+  # relocations, which ld rejects in a PIE link. Upstream CI installs no
+  # NASM, so that link has never run there.
+  env.RUSTFLAGS = "-C relocation-model=static";
+
   # tests/easing_goldens.rs asserts ttfx's easing curves are bit-identical to
   # CPython's, sample for sample. On aarch64 glibc one OutExpo sample lands a
   # single ULP away (0.18774760364376453 vs …442 at p=0.03) — libm's own
