@@ -9,7 +9,7 @@ import QtTest
 // starts with nothing to show and later has something (Indicators when the
 // first glyph turns on, Tray registering its first item, NowPlaying
 // finding a player) stayed 0-wide and invisible for the rest of the
-// session (g815, 2026-08-19: a live screen recording and a stay-awake
+// session (g815, 2026-08-19: a live screen recording and a caffeinate
 // toggle were both invisible on their own, and both appeared the moment a
 // pending reminder — the row's one cell with a per-second label, which
 // re-measures itself out of the deadlock — was put beside them).

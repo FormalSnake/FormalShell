@@ -86,7 +86,7 @@ TestCase {
             verify(snap.hasOwnProperty(Toggles.PATHS[i]));
         verify(!snap.hasOwnProperty("bogus"));
         compare(snap["nightlight.active"], true);
-        compare(snap["screensaver.stayAwake"], false);
+        compare(snap["caffeinate.active"], false);
         compare(snap["notifications.dnd"], false);
         compare(snap["theme.dark"], false);
         // Strict === true only, so a truthy non-boolean reads off.
@@ -114,7 +114,7 @@ TestCase {
         compare(Toggles.PATHS.length, 5);
         verify(Toggles.isKnownPath("nightlight.active"));
         verify(Toggles.isKnownPath("overnight.active"));
-        verify(Toggles.isKnownPath("screensaver.stayAwake"));
+        verify(Toggles.isKnownPath("caffeinate.active"));
         verify(Toggles.isKnownPath("notifications.dnd"));
         verify(Toggles.isKnownPath("theme.dark"));
         verify(!Toggles.isKnownPath("bluetooth.powered"));
@@ -135,7 +135,7 @@ TestCase {
     // default-menu.jsonc.
     function test_shipped_toggle_subtree_contract() {
         var tree = Model.buildTree(Model.parseJsonc(_read("../shell/Menu/default-menu.jsonc")), {});
-        var ids = ["toggles.nightlight", "toggles.overnight", "toggles.stay-awake", "toggles.dnd", "toggles.dark-mode"];
+        var ids = ["toggles.nightlight", "toggles.overnight", "toggles.caffeinate", "toggles.dnd", "toggles.dark-mode"];
         for (var i = 0; i < ids.length; i++) {
             var node = tree.nodes[ids[i]];
             verify(node);

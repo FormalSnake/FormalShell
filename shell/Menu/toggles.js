@@ -19,7 +19,7 @@ var PREFIX = "@state:";
 var PATHS = [
     "nightlight.active",     // NightLightService.active
     "overnight.active",      // OvernightService.active
-    "screensaver.stayAwake", // IdleService.stayAwake
+    "caffeinate.active",     // IdleService.caffeinated
     "notifications.dnd",     // NotificationService.dnd
     "theme.dark"             // Core.State.mode === "dark"
 ];

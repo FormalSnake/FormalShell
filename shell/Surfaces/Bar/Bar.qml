@@ -740,7 +740,7 @@ PanelWindow {
             // the same reason: the indicators row's ONE cell with a live
             // label, the reminder countdown, re-measures itself out of the
             // deadlock every second and drags the rest of the row open
-            // behind it, so a live screen recording and a stay-awake toggle
+            // behind it, so a live screen recording and a caffeinate toggle
             // were invisible on their own but both appeared beside a pending
             // reminder (g815, 2026-08-19).
             // tests/tst_bar_entry_reveal.qml pins both halves of that.

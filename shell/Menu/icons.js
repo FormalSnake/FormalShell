@@ -47,7 +47,7 @@ var ROUTE_ICONS = {
     "toggles": "toggle-left",
     "toggles.nightlight": "lightbulb",
     "toggles.overnight": "moon-star",
-    "toggles.stay-awake": "coffee",
+    "toggles.caffeinate": "coffee",
     "toggles.dnd": "bell-off",
     "toggles.dark-mode": "moon",
 

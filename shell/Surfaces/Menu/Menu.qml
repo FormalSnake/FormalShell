@@ -1833,8 +1833,8 @@ PanelWindow {
         case "overnight.toggle":
             OvernightService.toggle();
             break;
-        case "screensaver.stayAwakeToggle":
-            IdleService.toggleStayAwake();
+        case "caffeinate.toggle":
+            IdleService.toggleCaffeinated();
             break;
         case "notifications.toggleDnd":
             NotificationService.setDnd(!NotificationService.dnd);

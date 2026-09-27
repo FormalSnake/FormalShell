@@ -67,7 +67,9 @@ import QtQuick
 // surface: ["hyprlock"], ["loginctl", "lock-session"]; empty keeps the
 // built-in one, M45) and lock.dither (bool, default theme.dither, the retro
 // dither pass over the lock backdrop; off means the plain wallpaper
-// draws, M45). screensaver.timeoutSeconds (number, default
+// draws, M45). caffeinate.onStartup (bool, default false, starts the
+// session with IdleService.caffeinated on; read once at load, like the
+// screensaver timeout). screensaver.timeoutSeconds (number, default
 // 300, IdleService's IdleMonitor.timeout), screensaver.guardMediaPlayback
 // (bool, default true, Screensaver.qml's live guard against auto-activating
 // while MediaService.isPlaying), screensaver.lockAfterSeconds (number,

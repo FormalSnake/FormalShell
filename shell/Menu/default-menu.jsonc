@@ -169,10 +169,10 @@
         "checked": "@state:overnight.active",
         "keepOpen": true
     },
-    "toggles.stay-awake": {
-        "label": "Stay Awake",
-        "action": "@ipc:screensaver.stayAwakeToggle",
-        "checked": "@state:screensaver.stayAwake",
+    "toggles.caffeinate": {
+        "label": "Caffeinate",
+        "action": "@ipc:caffeinate.toggle",
+        "checked": "@state:caffeinate.active",
         "keepOpen": true
     },
     "toggles.dnd": {

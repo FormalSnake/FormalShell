@@ -103,6 +103,11 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   room` reporting a hidden cell in the right region and a now-playing
   budget under 220, the frame read for a whole cell at the region's own
   inner edge, never a cut one.
+- `caffeinate.sh` `--caffeinate`: `caffeinate.onStartup` starting the
+  session caffeinated with its `formalshell:caffeinate` layer surface
+  mapped, the real ext-idle-notify monitor staying non-idle three screensaver
+  timeouts in, and after `caffeinate disable` the surface gone and the same
+  timeout firing the screensaver on its own.
 - `capture.sh` `--capture`: the shell's own region picker (smart pick, tab
   cycling, commit) measured against the compositor's output, the toolbar's
   record commit, and the cancel path.

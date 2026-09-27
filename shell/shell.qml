@@ -21,6 +21,7 @@ import qs.Surfaces.Lock
 import qs.Surfaces.Screensaver
 import qs.Surfaces.Switcher
 import qs.Surfaces.HotCorners
+import qs.Surfaces.Caffeinate
 import qs.Surfaces.Capture
 import qs.Surfaces.Plugins
 import qs.Surfaces.Polkit
@@ -217,6 +218,7 @@ ShellRoot {
     // socket. The launcher handle is for the corners configured with an
     // action string, which resolve exactly as the launcher's own rows do.
     HotCorners { screensaver: screensaver; menu: menuInstance }
+    Caffeinate { id: caffeinateInstance }
 
     // Same "one controller, shown on the focused screen at trigger time"
     // reasoning as Osd, but this one's trigger is a real polkit
@@ -361,6 +363,7 @@ ShellRoot {
     ReminderIpc {}
     NightLightIpc {}
     OvernightIpc {}
+    CaffeinateIpc { caffeinate: caffeinateInstance }
     GalleryIpc { gallery: galleryInstance }
     PluginsIpc {}
 }

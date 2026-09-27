@@ -46,21 +46,27 @@ Singleton {
     property int timeoutSeconds: 300
     readonly property bool isIdle: monitor.isIdle
 
-    // Explicit session-only "keep the screen on" toggle (M-polish batch item
-    // B, omarchy's StayAwake indicator semantics, binds to the toggle
-    // itself, never a media-inferred state), deliberately not persisted:
-    // a shell restart always comes back to false, same as the media guard
-    // it sits alongside. Screensaver.qml's own _autoWant reads this exactly
-    // like its existing guardMediaPlayback term below.
-    property bool stayAwake: false
+    // Caffeinate: while true, Surfaces/Caffeinate holds a Wayland idle
+    // inhibitor, so neither this monitor nor an outside idle daemon on
+    // ext-idle-notify (swayidle, hypridle) sees the session go idle.
+    // Screensaver.qml also gates on it directly, which covers a compositor
+    // that ignores the inhibitor. Never persisted: a restart comes back to
+    // caffeinate.onStartup.
+    property bool caffeinated: false
 
-    function toggleStayAwake() {
-        root.stayAwake = !root.stayAwake;
+    function setCaffeinated(on) {
+        root.caffeinated = on;
+    }
+
+    function toggleCaffeinated() {
+        root.caffeinated = !root.caffeinated;
     }
 
     function _armMonitor() {
         root.timeoutSeconds = Core.Config.get("screensaver.timeoutSeconds", 300);
         monitor.enabled = true;
+        if (Core.Config.get("caffeinate.onStartup", false) === true)
+            root.caffeinated = true;
     }
 
     Component.onCompleted: {

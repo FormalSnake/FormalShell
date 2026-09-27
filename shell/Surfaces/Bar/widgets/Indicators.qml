@@ -6,14 +6,14 @@ import qs.Services
 import "../../../Capture/model.js" as Capture
 
 // Bar region for transient session-state glyphs (DESIGN.md §3 Bar's
-// "indicators slot", spec §Surfaces-1, M10 Task 2): a stay-awake glyph
-// bound ONLY to the explicit IdleService.stayAwake toggle (M-polish batch
-// item B, omarchy's StayAwake indicator semantics, read-only reference at
+// "indicators slot", spec §Surfaces-1, M10 Task 2): a caffeinate glyph
+// bound ONLY to the explicit IdleService.caffeinated toggle (omarchy's
+// StayAwake indicator semantics, read-only reference at
 // omarchy/shell/plugins/bar/indicators/StayAwake.qml: binds to the toggle
 // itself, same md-coffee glyph, click turns it off) and night light off
 // NightLightService.active (M16 Task 6). IdleService's own media-playback
 // guard still holds the screensaver/lock chain exactly as before, but no
-// longer surfaces a glyph here, stayAwake is the only thing this cell
+// longer surfaces a glyph here, caffeinate is the only thing this cell
 // reflects now, so a track playing in the background never shows as an
 // idle-inhibit the user didn't ask for. The DND bell-off glyph this slot
 // carried since M10 moved to BellWidget.qml (M13b Task 2), that cell is
@@ -43,7 +43,7 @@ import "../../../Capture/model.js" as Capture
 Rail {
     id: root
 
-    readonly property bool _stayAwakeActive: IdleService.stayAwake
+    readonly property bool _caffeinateActive: IdleService.caffeinated
     readonly property bool _nightLightActive: NightLightService.active
     readonly property bool _overnightActive: OvernightService.active
     // Live bindings on two more lazily-constructed singletons, same
@@ -55,7 +55,7 @@ Rail {
     // that file's own header comment for why crossing the Loader boundary
     // through the built-in `visible` property specifically breaks its own
     // future reactivity.
-    readonly property bool shown: root._recordingActive || root._clipsshSending || root._reminderPending || root._stayAwakeActive || root._nightLightActive || root._overnightActive
+    readonly property bool shown: root._recordingActive || root._clipsshSending || root._reminderPending || root._caffeinateActive || root._nightLightActive || root._overnightActive
 
     // Bar.qml sets these on the widget it loads; this rail is not a Cell
     // itself, so it hands them to each cell it holds (DESIGN.md §3 Bar).
@@ -156,7 +156,7 @@ Rail {
     }
 
     Cell {
-        id: stayAwakeCell
+        id: caffeinateCell
         ghost: root.ghost
         barEdge: root.barEdge
         barInk: root.barInk
@@ -170,21 +170,21 @@ Rail {
         // does the same.
         width: root.vertical ? root.width : implicitWidth
         height: root.vertical ? implicitHeight : root.height
-        visible: root._stayAwakeActive
+        visible: root._caffeinateActive
         // This cell and the night-light one below say nothing but their
         // glyph, and both appear out of nowhere the moment their state turns
         // on, exactly the case a tooltip earns its place on. Both read "ON"
         // because neither cell exists in the off state at all.
-        tooltipText: "STAY AWAKE ON"
+        tooltipText: "CAFFEINATE ON"
 
         Icon {
             anchors.verticalCenter: parent.verticalCenter
             name: "coffee"
-            color: stayAwakeCell.foreground
+            color: caffeinateCell.foreground
         }
 
         interactive: true
-        onClicked: IdleService.toggleStayAwake()
+        onClicked: IdleService.setCaffeinated(false)
     }
 
     Cell {
@@ -214,8 +214,8 @@ Rail {
     }
 
     // Overnight dims every screen to 1%, so this glyph is often the one
-    // readable thing on them. A click ends it, the way the stay-awake cell
-    // ends stay-awake.
+    // readable thing on them. A click ends it, the way the caffeinate cell
+    // ends caffeinate.
     Cell {
         id: overnightCell
         ghost: root.ghost

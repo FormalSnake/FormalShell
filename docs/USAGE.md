@@ -104,7 +104,7 @@ Fifty binds in three groups. Utilities:
 | `SUPER+CTRL+1..9` | `panel toggleAt n` |
 | `SUPER+comma` / `SHIFT` / `ALT` / `SHIFT+ALT` | `notifications dismissOne` / `dismissAll` / `invokeLast` / `showHistory` |
 | `SUPER+CTRL+comma` | `notifications toggleDnd` |
-| `SUPER+CTRL+I` | `screensaver stayAwakeToggle`, the idle inhibitor |
+| `SUPER+CTRL+I` | `caffeinate toggle`, the idle inhibitor |
 | `SUPER+CTRL+N` | `nightlight toggle` |
 | `SUPER+CTRL+SHIFT+N` | `overnight toggle` |
 | `SUPER+SHIFT+SPACE` | `bar chevron toggle` |
@@ -127,7 +127,7 @@ Three of Omarchy's chords have no matching verb in this shell yet, so they
 are bound to the nearest one: `SUPER+CTRL+SPACE` opens the wallpaper picker
 instead of advancing to the next wallpaper, `SUPER+SHIFT+SPACE` collapses
 the bar's chevron group instead of hiding the whole bar, and `SUPER+CTRL+I`
-toggles Stay Awake, which is the idle inhibitor rather than the screensaver
+toggles caffeinate, which is the idle inhibitor rather than the screensaver
 itself.
 
 ## Bar
@@ -346,7 +346,7 @@ notification center, right click flips DND.
 otherwise. In order: a live screen recording (the one urgent-filled cell
 here, click to stop, elapsed time in the tooltip so a ticking label can't
 relayout the bar), the soonest pending reminder as a countdown (`12:30 / 3`
-once more than one is set, click fires the summary), stay-awake, and night
+once more than one is set, click fires the summary), caffeinate, and night
 light.
 
 **Weather** shows a condition glyph and the rounded current temperature
@@ -478,7 +478,7 @@ Cells that carry one: workspaces (`WORKSPACE 2 / 3 WINDOWS`), audio, battery
 network (`WI-FI / <ssid> 62%`, `NETWORK / WIRED`, `NETWORK / OFFLINE`),
 bluetooth, weather, now playing (artist plus the full title the cell is
 scrolling), bell, every tray item (its own SNI tooltip text, another
-process's words, never reworded), github, tailscale, the stay-awake and
+process's words, never reworded), github, tailscale, the caffeinate and
 night-light glyphs, and `command` modules. Unavailable states ride along as
 themselves: `BLUETOOTH / NO ADAPTER`, `GITHUB / NOT AUTHENTICATED`,
 `WEATHER / UNAVAILABLE`. A cell with nothing to say shows no card.
@@ -1172,15 +1172,15 @@ the output height.
 
 The root `Toggles` node holds five live checkmark rows: night light
 (`toggles.nightlight`, hidden unless `wlsunset` is on PATH), overnight
-(`toggles.overnight`), stay awake
-(`toggles.stay-awake`), do not disturb (`toggles.dnd`) and dark mode
+(`toggles.overnight`), caffeinate
+(`toggles.caffeinate`), do not disturb (`toggles.dnd`) and dark mode
 (`toggles.dark-mode`). Activating one flips it and leaves the menu open, so
 the checkmark changes under the cursor.
 
 Those checkmarks are in-process state, not a polled command. A `checked`
 value prefixed `@state:` is answered from the snapshot the menu already
 holds, so it repaints in the same event loop turn the toggle does. The list
-of legal paths is closed: `nightlight.active`, `overnight.active`, `screensaver.stayAwake`,
+of legal paths is closed: `nightlight.active`, `overnight.active`, `caffeinate.active`,
 `notifications.dnd`, `theme.dark`. Anything else resolves false rather than
 falling through to the command cache, so a typo shows an unchecked box
 instead of a stale one, and a hand-written `menu.jsonc` gets no route into
@@ -1213,7 +1213,7 @@ node nothing declares, so nothing changes and nothing warns.
 | --- | --- |
 | `theme` | `toggles` |
 | `theme.mode-toggle` | `toggles.dark-mode` |
-| `system.stay-awake` | `toggles.stay-awake` |
+| `system.stay-awake` | `toggles.caffeinate` |
 
 A keybind wired to `menu summon theme` degrades the same quiet way, opening
 the menu at root. `menu summon toggles` is the replacement.
@@ -2864,21 +2864,44 @@ whole-surface texture upload, and on a hybrid laptop also a cross-GPU copy
 for outputs the compositor doesn't scan out on the shell's card: lower
 `frameRate` if a multi-monitor session can't keep up.
 
-**Stay awake** is an explicit session-only toggle that holds the whole
-screensaver and auto-lock chain, exactly like the media guard. It is never
-persisted, so a restart always comes back off. The bar's coffee glyph binds
-only to this toggle: a media player keeping the screensaver at bay shows no
-glyph, because you didn't ask for it.
-
 ```sh
 fs screensaver start
 fs screensaver stop
-fs screensaver stayAwakeOn
-fs screensaver stayAwakeOff
-fs screensaver stayAwakeToggle
-fs screensaver status     # {"active":…,"isIdle":…,"guardMediaPlayback":…,"mediaPlaying":…,"stayAwake":…}
+fs screensaver status     # {"active":…,"isIdle":…,"guardMediaPlayback":…,"mediaPlaying":…,"caffeinated":…}
 fs screensaver frameInfo  # {"engine":…,"effect":…,"convergenceFrame":…,"cycles":…}
 ```
+
+## Caffeinate
+
+Caffeinate keeps the session from going idle. While it is on the shell maps
+a 1px transparent layer surface holding a Wayland idle inhibitor
+(idle-inhibit-unstable-v1), so nothing listening on ext-idle-notify sees
+the session idle: not the screensaver, and not an outside `swayidle` or
+`hypridle` that locks or suspends. The screensaver also checks the toggle
+itself, as it does the media guard. The bar shows a coffee glyph while it
+is on; clicking it ends caffeinate. A media player keeping the screensaver
+at bay shows no glyph, because you didn't ask for it.
+
+It is not persisted. A restart comes back to `caffeinate.onStartup`
+(default false), which is how an unattended host stays awake from login:
+
+```jsonc
+{ "caffeinate": { "onStartup": true } }
+```
+
+```nix
+programs.formalshell.settings.caffeinate.onStartup = true;
+```
+
+```sh
+fs caffeinate enable
+fs caffeinate disable
+fs caffeinate toggle
+fs caffeinate status   # {"active":…,"inhibiting":…,"isIdle":…}
+```
+
+`inhibiting` is true once the inhibitor's surface is mapped and the
+compositor has been asked to honour it.
 
 ## Hot corners
 
@@ -2949,7 +2972,7 @@ same code the launcher's own rows go through:
 
 `@ipc:<target>.<function>` (with an optional `:<argument>`) runs in the
 shell's own process. The names are the ones the menu tree already uses:
-`theme.toggleMode`, `nightlight.toggle`, `screensaver.stayAwakeToggle`,
+`theme.toggleMode`, `nightlight.toggle`, `caffeinate.toggle`,
 `notifications.toggleDnd`, `notifications.showHistory`, `reminder.set`,
 `reminder.show`, `reminder.clear`, `clipboard.copy:<id>` and
 `clipssh.send:<alias>`. Anything else is a command line, spawned through

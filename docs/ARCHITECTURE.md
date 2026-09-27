@@ -147,7 +147,7 @@ shell/
     providers.js                 pure JS, .pragma library: appsProvider()/applyProviders()/customPowerButtonEntries()/clipboardProvider()/imageRows()/wallpaperVariants()/wallpaperListing()/captureEntries()
     actions.js                   pure JS, .pragma library: actionBar(): the bottom action bar's primary verb + key hints
     toggles.js                   pure JS, .pragma library: the "@state:" checked-condition allow-list
-                                  (nightlight.active/screensaver.stayAwake/notifications.dnd/theme.dark),
+                                  (nightlight.active/caffeinate.active/notifications.dnd/theme.dark),
                                   snapshot()/resolveState()/checkedFor(): live in-process state beats a
                                   cached Process result, an unlisted path answers false
     default-menu.jsonc           shipped default tree (apps, system/power, toggles, reminder, clipboard)
@@ -280,7 +280,7 @@ shell/
         WeatherWidget.qml         condition icon + rounded temperature, primary underline while its panel is open
         NowPlaying.qml             note icon + elided title, primary underline while its panel is open, hidden entirely with no MPRIS player (exposes `shown`)
         Tray.qml                   SNI tray over Quickshell.Services.SystemTray, a plain strip (exposes `shown`)
-        Indicators.qml              recording / reminder / stay-awake / night-light glyphs, hidden entirely when none holds (exposes `shown`)
+        Indicators.qml              recording / reminder / caffeinate / night-light glyphs, hidden entirely when none holds (exposes `shown`)
         MicWidget.qml               opt-in: default-source mute glyph, honest NO MIC label with no capture device
         KeyboardLayoutWidget.qml    opt-in: 2s per-output poll of `hyprctl devices -j`
                                      through Compositor/keyboard.js (exposes `shown`)
@@ -643,7 +643,7 @@ Model.visibleChildren(nodes, id, condResults)   Search.rank(nodes, query, condRe
 
 **Toggle rows (`Menu/toggles.js`).** The `toggles` subtree's rows carry a
 `checked` of `"@state:<path>"` against a closed allow-list of four paths:
-`nightlight.active`, `screensaver.stayAwake`, `notifications.dnd`,
+`nightlight.active`, `caffeinate.active`, `notifications.dnd`,
 `theme.dark`. Membership is tested by list lookup, never by resolving the
 string against anything, so a path outside the list answers `false` and a
 hand-written `menu.jsonc` has no route into the QML engine through this
@@ -1019,8 +1019,8 @@ urgent cell here, full-bleed accent fill, click to stop, elapsed clock in
 its tooltip rather than in the cell, since a per-second label would
 relayout the bar every tick), then a pending reminder off
 `ReminderService.count` (its `barLabel` countdown in the cell, the message
-in the tooltip), then stay-awake off the
-explicit `IdleService.stayAwake` toggle (click the glyph to turn it off;
+in the tooltip), then caffeinate off the
+explicit `IdleService.caffeinated` toggle (click the glyph to turn it off;
 the media guard that also holds the idle chain shows no glyph of its own),
 then night light off `NightLightService.active`. DND has its own
 always-visible cell in `BellWidget.qml` instead, no second DND state

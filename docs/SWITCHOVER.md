@@ -106,7 +106,7 @@ rather than on a compositor name.
 
 **A `menu.jsonc` written before the toggle hub goes inert silently.**
 `theme` became `toggles`, `theme.mode-toggle` became `toggles.dark-mode`,
-and `system.stay-awake` became `toggles.stay-awake`. An override naming an
+and `system.stay-awake` became `toggles.caffeinate`. An override naming an
 id that no longer exists is not an error: it matches nothing, so your
 customization disappears and the default row renders instead.
 
