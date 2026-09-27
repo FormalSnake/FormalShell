@@ -21,6 +21,7 @@ Singleton {
     property alias emojiUses: adapter.emojiUses
     property alias reminders: adapter.reminders
     property alias batteryShowPercent: adapter.batteryShowPercent
+    property alias overnight: adapter.overnight
 
     // `mode` is optional: the picker's Dark/Light sets pass the set the
     // pick came from so wallpaper and mode land in one write. Mode goes
@@ -118,6 +119,14 @@ Singleton {
         stateFile.writeAdapter();
     }
 
+    // What OvernightService changed and the values to put back, null while
+    // overnight is off. Kept here so a shell restart mid-night can still
+    // restore the morning's brightness.
+    function setOvernight(snapshot) {
+        adapter.overnight = snapshot;
+        stateFile.writeAdapter();
+    }
+
     readonly property string _stateDir: {
         const xdgState = Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state");
         return xdgState + "/formalshell";
@@ -150,6 +159,7 @@ Singleton {
             // and Bartender: adding `chevron` to bar.layout has to visibly do
             // something on first run, or the widget reads as inert.
             property var batteryShowPercent: null
+            property var overnight: null
         }
     }
 }

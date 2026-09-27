@@ -262,6 +262,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   `--deform`'s burst instead.
 - `ocr.sh` `--ocr`: the `capture` target's text and colour verbs against a
   window carrying known text on a known background.
+- `overnight.sh` `--overnight`: overnight enabled and disabled over IPC, the
+  restore record's full shape in `overnight status` (the rig's honest
+  backlight -1, no LEDs, no asusctl), the bar's moon glyph in the frame,
+  and state.json's record gone after disable.
 - `osd.sh` `--osd`: the pill's own entrance off the bottom line sampled frame
   by frame under `debug motionScale`, ink on the output's very last row early
   and a plain pill a `screenPadding` clear of it at rest, then at full speed a

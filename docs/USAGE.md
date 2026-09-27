@@ -106,6 +106,7 @@ Fifty binds in three groups. Utilities:
 | `SUPER+CTRL+comma` | `notifications toggleDnd` |
 | `SUPER+CTRL+I` | `screensaver stayAwakeToggle`, the idle inhibitor |
 | `SUPER+CTRL+N` | `nightlight toggle` |
+| `SUPER+CTRL+SHIFT+N` | `overnight toggle` |
 | `SUPER+SHIFT+SPACE` | `bar chevron toggle` |
 | `SUPER+CTRL+L` | `lock lock` |
 | `PRINT` | `screenshot pick smart default`, the picker with the toolbar |
@@ -1169,8 +1170,9 @@ the output height.
 
 ### Toggles
 
-The root `Toggles` node holds four live checkmark rows: night light
-(`toggles.nightlight`, hidden unless `wlsunset` is on PATH), stay awake
+The root `Toggles` node holds five live checkmark rows: night light
+(`toggles.nightlight`, hidden unless `wlsunset` is on PATH), overnight
+(`toggles.overnight`), stay awake
 (`toggles.stay-awake`), do not disturb (`toggles.dnd`) and dark mode
 (`toggles.dark-mode`). Activating one flips it and leaves the menu open, so
 the checkmark changes under the cursor.
@@ -1178,7 +1180,7 @@ the checkmark changes under the cursor.
 Those checkmarks are in-process state, not a polled command. A `checked`
 value prefixed `@state:` is answered from the snapshot the menu already
 holds, so it repaints in the same event loop turn the toggle does. The list
-of legal paths is closed: `nightlight.active`, `screensaver.stayAwake`,
+of legal paths is closed: `nightlight.active`, `overnight.active`, `screensaver.stayAwake`,
 `notifications.dnd`, `theme.dark`. Anything else resolves false rather than
 falling through to the command cache, so a typo shows an unchecked box
 instead of a stale one, and a hand-written `menu.jsonc` gets no route into
@@ -2737,6 +2739,26 @@ fs nightlight enable
 fs nightlight disable
 fs nightlight toggle
 fs nightlight status   # {"active":…,"temp":…,"lastError":…}
+```
+
+### Overnight
+
+For leaving the machine to build overnight. Enabling it drops a Performance
+power profile to Balanced (power-saver would also set the CPU's energy
+preference to `power` under tuned-ppd, which slows a long build far more
+than it quiets the fans; on an ASUS laptop Balanced is the platform profile
+that sets the fan curve), sets the backlight and every DDC monitor to 1%,
+turns off every LED with no kernel trigger (a keyboard backlight, not the
+Wi-Fi or lock-key LEDs), and with `asusctl` on PATH switches every Aura zone
+off. What it changed is written to `state.json`, so disabling it puts each
+value back even after a shell restart. The bar shows a moon while it is on;
+clicking it ends overnight.
+
+```sh
+fs overnight enable
+fs overnight disable
+fs overnight toggle
+fs overnight status   # {"active":…,"restore":{profile,backlight,ddc,leds,aura}}
 ```
 
 ## Screensaver

@@ -20,6 +20,7 @@ singleton LyricsService LyricsService.qml
 singleton MainOutputService MainOutputService.qml
 singleton MediaService MediaService.qml
 singleton NightLightService NightLightService.qml
+singleton OvernightService OvernightService.qml
 singleton PolkitService PolkitService.qml
 singleton ProcessService ProcessService.qml
 singleton RadioService RadioService.qml

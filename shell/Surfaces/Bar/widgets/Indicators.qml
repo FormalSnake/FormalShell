@@ -45,6 +45,7 @@ Rail {
 
     readonly property bool _stayAwakeActive: IdleService.stayAwake
     readonly property bool _nightLightActive: NightLightService.active
+    readonly property bool _overnightActive: OvernightService.active
     // Live bindings on two more lazily-constructed singletons, same
     // construction-site mechanism the header documents for NightLightService.
     readonly property bool _recordingActive: RecordingService.active
@@ -54,7 +55,7 @@ Rail {
     // that file's own header comment for why crossing the Loader boundary
     // through the built-in `visible` property specifically breaks its own
     // future reactivity.
-    readonly property bool shown: root._recordingActive || root._clipsshSending || root._reminderPending || root._stayAwakeActive || root._nightLightActive
+    readonly property bool shown: root._recordingActive || root._clipsshSending || root._reminderPending || root._stayAwakeActive || root._nightLightActive || root._overnightActive
 
     // Bar.qml sets these on the widget it loads; this rail is not a Cell
     // itself, so it hands them to each cell it holds (DESIGN.md §3 Bar).
@@ -210,5 +211,29 @@ Rail {
         // inversion while it's there.
         interactive: true
         acceptedButtons: Qt.NoButton
+    }
+
+    // Overnight dims every screen to 1%, so this glyph is often the one
+    // readable thing on them. A click ends it, the way the stay-awake cell
+    // ends stay-awake.
+    Cell {
+        id: overnightCell
+        ghost: root.ghost
+        barEdge: root.barEdge
+        barInk: root.barInk
+        barInkShadow: root.barInkShadow
+        width: root.vertical ? root.width : implicitWidth
+        height: root.vertical ? implicitHeight : root.height
+        visible: root._overnightActive
+        tooltipText: "OVERNIGHT ON"
+
+        Icon {
+            anchors.verticalCenter: parent.verticalCenter
+            name: "moon-star"
+            color: overnightCell.foreground
+        }
+
+        interactive: true
+        onClicked: OvernightService.disable()
     }
 }

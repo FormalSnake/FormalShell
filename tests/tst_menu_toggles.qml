@@ -5,7 +5,7 @@ import "../shell/Menu/toggles.js" as Toggles
 
 // Covers shell/Menu/toggles.js plus two drift guards that read shipped files
 // rather than fixtures: the "@state:" allow-list only means anything if
-// ConditionEvaluator.qml's snapshot literal spells the same four paths and
+// ConditionEvaluator.qml's snapshot literal spells the same five paths and
 // the shipped toggle subtree names paths that exist. Reading a file outside the test's
 // own directory needs QML_XHR_ALLOW_FILE_READ=1, set by the qmltestrunner
 // invocations in justfile and flake.nix's qml-tests derivation.
@@ -110,9 +110,10 @@ TestCase {
     }
 
     // Breaks loudly if a path is added without updating Menu.qml and the docs.
-    function test_allow_list_is_exactly_the_four_documented_paths() {
-        compare(Toggles.PATHS.length, 4);
+    function test_allow_list_is_exactly_the_five_documented_paths() {
+        compare(Toggles.PATHS.length, 5);
         verify(Toggles.isKnownPath("nightlight.active"));
+        verify(Toggles.isKnownPath("overnight.active"));
         verify(Toggles.isKnownPath("screensaver.stayAwake"));
         verify(Toggles.isKnownPath("notifications.dnd"));
         verify(Toggles.isKnownPath("theme.dark"));
@@ -134,7 +135,7 @@ TestCase {
     // default-menu.jsonc.
     function test_shipped_toggle_subtree_contract() {
         var tree = Model.buildTree(Model.parseJsonc(_read("../shell/Menu/default-menu.jsonc")), {});
-        var ids = ["toggles.nightlight", "toggles.stay-awake", "toggles.dnd", "toggles.dark-mode"];
+        var ids = ["toggles.nightlight", "toggles.overnight", "toggles.stay-awake", "toggles.dnd", "toggles.dark-mode"];
         for (var i = 0; i < ids.length; i++) {
             var node = tree.nodes[ids[i]];
             verify(node);
@@ -145,7 +146,7 @@ TestCase {
             verify(Toggles.isStateCondition(node.checked));
             verify(Toggles.isKnownPath(Toggles.statePath(node.checked)));
         }
-        compare(tree.nodes["toggles"].childIds.length, 4);
+        compare(tree.nodes["toggles"].childIds.length, 5);
         // Dark mode relocated into the hub; the old theme subtree is gone.
         verify(!tree.nodes["theme.mode-toggle"]);
         verify(!tree.nodes["theme"]);

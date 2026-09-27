@@ -360,6 +360,7 @@ ShellRoot {
     RecordIpc {}
     ReminderIpc {}
     NightLightIpc {}
+    OvernightIpc {}
     GalleryIpc { gallery: galleryInstance }
     PluginsIpc {}
 }

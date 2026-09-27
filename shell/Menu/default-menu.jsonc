@@ -163,6 +163,12 @@
         "keepOpen": true,
         "when": "command -v wlsunset >/dev/null 2>&1"
     },
+    "toggles.overnight": {
+        "label": "Overnight",
+        "action": "@ipc:overnight.toggle",
+        "checked": "@state:overnight.active",
+        "keepOpen": true
+    },
     "toggles.stay-awake": {
         "label": "Stay Awake",
         "action": "@ipc:screensaver.stayAwakeToggle",

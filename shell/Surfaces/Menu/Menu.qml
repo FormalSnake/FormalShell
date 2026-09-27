@@ -1830,6 +1830,9 @@ PanelWindow {
         case "nightlight.toggle":
             NightLightService.toggle();
             break;
+        case "overnight.toggle":
+            OvernightService.toggle();
+            break;
         case "screensaver.stayAwakeToggle":
             IdleService.toggleStayAwake();
             break;

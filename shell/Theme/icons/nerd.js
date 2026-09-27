@@ -31,6 +31,8 @@ var ICONS = {
     "battery-warning": "\u{F0083}",
     "sun": "\u{F0599}",
     "moon": "\u{F0594}",
+    // md-weather_night is already "moon"; the bare crescent keeps them apart.
+    "moon-star": "\u{F0F65}",
     "bell": "\u{F009A}",
     "bell-off": "\u{F009B}",
     "clock": "\u{F0150}",
