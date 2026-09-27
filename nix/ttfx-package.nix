@@ -1,23 +1,28 @@
-# ttfx (github.com/omacom-io/ttfx) — the terminal-text-effect engine behind
+# ttfx (github.com/omacom/ttfx) — the terminal-text-effect engine behind
 # the screensaver's banner animation. Not in nixpkgs as of 2026-08-11.
 #
 # MIT, same as FormalShell; invoked as a separate executable whose ANSI frame
 # stream the screensaver surface parses, never linked into or vendored by
 # shell source.
-{ lib, rustPlatform, fetchFromGitHub }:
+{ lib, rustPlatform, fetchFromGitHub, nasm, python3 }:
 
 rustPlatform.buildRustPackage rec {
   pname = "ttfx";
-  version = "0.3.0";
+  version = "0.4.0";
 
   src = fetchFromGitHub {
-    owner = "omacom-io";
+    owner = "omacom";
     repo = "ttfx";
     rev = "v${version}";
-    hash = "sha256-KsKPtOEkyu172MSzIcu+/dy9JY99Yc0Mxu97GPTqm1Q=";
+    hash = "sha256-JkCo8SYkimaW/4fdJImeBiu0sv7sp5Y9ZKI68ZD7liw=";
   };
 
-  cargoHash = "sha256-srNL1EP2mdm6Gu9WNQqtERAYt7+Kdk6vzUOzzHWgYXQ=";
+  cargoHash = "sha256-U+CxNX/ijI+RdfT5likCbSsYV2w0Fu+hSztU4Y3kwgo=";
+
+  # build.rs assembles the x86-64 engine (asm/) with NASM >= 3.0 and audits
+  # each CPU tier's object with objdump and python3. A missing NASM silently
+  # falls back to the pure-Rust engine, which is also what aarch64 gets.
+  nativeBuildInputs = [ nasm python3 ];
 
   # tests/easing_goldens.rs asserts ttfx's easing curves are bit-identical to
   # CPython's, sample for sample. On aarch64 glibc one OutExpo sample lands a
@@ -29,10 +34,10 @@ rustPlatform.buildRustPackage rec {
   checkFlags = [ "--skip=easing_matches_python_bit_exactly" ];
 
   meta = {
-    description = "Terminal text effects as a single static binary, a Rust port of terminaltexteffects";
-    homepage = "https://github.com/omacom-io/ttfx";
+    description = "Terminal text effects as a single static binary, a Rust and x86-64 assembly port of terminaltexteffects";
+    homepage = "https://github.com/omacom/ttfx";
     license = lib.licenses.mit;
     mainProgram = "ttfx";
-    platforms = lib.platforms.unix;
+    platforms = [ "x86_64-linux" "aarch64-linux" ];
   };
 }

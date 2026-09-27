@@ -1,6 +1,6 @@
 .pragma library
 
-// ttfx (github.com/omacom-io/ttfx, MIT) drives the screensaver's banner
+// ttfx (github.com/omacom/ttfx, MIT) drives the screensaver's banner
 // animation, the same engine omarchy's own screensaver runs, invoked with
 // the same shape of arguments (bin/omarchy-screensaver: centered canvas,
 // centered text, a random effect, no gradient overrides, so every effect
