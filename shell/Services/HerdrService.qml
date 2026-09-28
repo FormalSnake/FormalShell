@@ -70,9 +70,26 @@ Singleton {
         onTriggered: root._runPsWalk()
     }
 
+    // Hyprland's pid only arrives through `lastIpcObject`, which Quickshell
+    // fills from `j/clients` on connect and on refreshToplevels alone, so a
+    // window opened since startup reads pid 0 and its subtree is never
+    // walked. One refresh per such window, not per tick: a window that still
+    // has no pid after it would otherwise re-ask on every title change.
+    property var _pidAsked: ({})
+
     Connections {
         target: CompositorService
         function onWindowsChanged() {
+            var ws = CompositorService.windows;
+            var ask = false;
+            for (var i = 0; i < ws.length; i++) {
+                if (!(Number(ws[i].pid) > 0) && !root._pidAsked[ws[i].id]) {
+                    root._pidAsked[ws[i].id] = true;
+                    ask = true;
+                }
+            }
+            if (ask)
+                CompositorService.refreshWindows();
             _psDebounce.restart();
         }
     }
