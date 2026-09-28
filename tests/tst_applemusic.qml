@@ -19,46 +19,158 @@ TestCase {
         compare(AppleMusic.cachePath("/cache/applemusic-art", "Air", "Moon Safari"), "/cache/applemusic-art/air-moon-safari.mp4");
     }
 
-    // searchUrl
+    // normalizeName
 
-    function test_search_url_targets_itunes_album_search() {
-        var url = AppleMusic.searchUrl("Air", "Moon Safari");
+    function test_normalize_name_lowercases_and_folds_punctuation() {
+        compare(AppleMusic.normalizeName("Tyler, The Creator"), "tyler the creator");
+    }
+
+    function test_normalize_name_strips_trailing_single_suffix() {
+        compare(AppleMusic.normalizeName("Yonkers - Single"), "yonkers");
+    }
+
+    function test_normalize_name_strips_trailing_ep_suffix() {
+        compare(AppleMusic.normalizeName("Cherry Bomb - EP"), "cherry bomb");
+    }
+
+    function test_normalize_name_strips_trailing_edition_tag() {
+        compare(AppleMusic.normalizeName("IGOR (Deluxe)"), "igor");
+        compare(AppleMusic.normalizeName("IGOR [Remastered]"), "igor");
+    }
+
+    function test_normalize_name_strips_tag_and_suffix_in_either_order() {
+        compare(AppleMusic.normalizeName("Anti (Deluxe) - Single"), "anti");
+        compare(AppleMusic.normalizeName("Anti - Single (Deluxe)"), "anti");
+    }
+
+    // artistSearchUrl
+
+    function test_artist_search_url_targets_itunes_artist_search() {
+        var url = AppleMusic.artistSearchUrl("Tyler, The Creator");
         verify(url.indexOf("https://itunes.apple.com/search?") === 0);
         verify(url.indexOf("media=music") >= 0);
-        verify(url.indexOf("entity=album") >= 0);
-        verify(url.indexOf("term=Air%20Moon%20Safari") >= 0);
+        verify(url.indexOf("entity=musicArtist") >= 0);
+        verify(url.indexOf("term=Tyler%2C%20The%20Creator") >= 0);
     }
 
-    function test_search_url_null_without_artist() {
-        compare(AppleMusic.searchUrl("", "Moon Safari"), null);
+    function test_artist_search_url_null_without_artist() {
+        compare(AppleMusic.artistSearchUrl(""), null);
     }
 
-    function test_search_url_null_without_album() {
-        compare(AppleMusic.searchUrl("Air", ""), null);
+    // parseArtistSearchResult: a hit, a rejected same-named artist, a miss,
+    // malformed, http error. Fixture mirrors iTunes' own result for "Tyler,
+    // The Creator", which also surfaces "Tyla" and "Not Tyler, The Creator".
+
+    function _tylerArtistSearchBody() {
+        return JSON.stringify({ results: [
+            { wrapperType: "artist", artistName: "Tyla", artistId: 1508583854 },
+            { wrapperType: "artist", artistName: "Not Tyler, The Creator", artistId: 999888777 },
+            { wrapperType: "artist", artistName: "Tyler, The Creator", artistId: 420368335 }
+        ] });
     }
 
-    // parseSearchResult — a hit, a miss, malformed, http error
-
-    function test_parse_search_result_hit_returns_collection_id() {
-        var r = AppleMusic.parseSearchResult(0, JSON.stringify({ results: [{ collectionId: 1440833449 }] }));
+    function test_parse_artist_search_result_picks_exact_name_match_not_first_hit() {
+        var r = AppleMusic.parseArtistSearchResult(0, _tylerArtistSearchBody(), "Tyler, The Creator");
         compare(r.ok, true);
-        compare(r.collectionId, 1440833449);
+        compare(r.artistId, 420368335);
     }
 
-    function test_parse_search_result_miss_no_results() {
-        var r = AppleMusic.parseSearchResult(0, JSON.stringify({ results: [] }));
+    function test_parse_artist_search_result_rejects_similarly_named_artist() {
+        var body = JSON.stringify({ results: [
+            { wrapperType: "artist", artistName: "Not Tyler, The Creator", artistId: 999888777 }
+        ] });
+        var r = AppleMusic.parseArtistSearchResult(0, body, "Tyler, The Creator");
         compare(r.ok, true);
-        compare(r.collectionId, null);
+        compare(r.artistId, null);
     }
 
-    function test_parse_search_result_malformed_json() {
-        var r = AppleMusic.parseSearchResult(0, "not json{{{");
+    function test_parse_artist_search_result_miss_no_results() {
+        var r = AppleMusic.parseArtistSearchResult(0, JSON.stringify({ results: [] }), "Air");
+        compare(r.ok, true);
+        compare(r.artistId, null);
+    }
+
+    function test_parse_artist_search_result_malformed_json() {
+        var r = AppleMusic.parseArtistSearchResult(0, "not json{{{", "Air");
         compare(r.ok, false);
         compare(r.error, "malformed_json");
     }
 
-    function test_parse_search_result_http_error_on_nonzero_exit() {
-        var r = AppleMusic.parseSearchResult(1, "");
+    function test_parse_artist_search_result_http_error_on_nonzero_exit() {
+        var r = AppleMusic.parseArtistSearchResult(1, "", "Air");
+        compare(r.ok, false);
+        compare(r.error, "http_error");
+    }
+
+    // artistAlbumsUrl
+
+    function test_artist_albums_url_targets_itunes_album_lookup() {
+        var url = AppleMusic.artistAlbumsUrl(420368335);
+        compare(url, "https://itunes.apple.com/lookup?id=420368335&entity=album&limit=200");
+    }
+
+    // parseArtistAlbumsResult: exact match over an edition tag, a normalised
+    // fallback, a " - Single" suffix, the artist entity itself ignored, a
+    // miss, malformed, http error. Fixture mirrors an artist album lookup
+    // that includes both a plain and a "(Deluxe)" reissue of the same album.
+
+    function _tylerAlbumsBody() {
+        return JSON.stringify({ results: [
+            { wrapperType: "artist", artistName: "Tyler, The Creator", artistId: 420368335 },
+            { wrapperType: "collection", collectionName: "Flower Boy", collectionId: 1272757506 },
+            { wrapperType: "collection", collectionName: "IGOR (Deluxe)", collectionId: 1465524276 },
+            { wrapperType: "collection", collectionName: "IGOR", collectionId: 1461407974 },
+            { wrapperType: "collection", collectionName: "CALL ME IF YOU GET LOST", collectionId: 1585047605 }
+        ] });
+    }
+
+    function test_parse_artist_albums_result_picks_exact_match_over_edition_tag() {
+        var r = AppleMusic.parseArtistAlbumsResult(0, _tylerAlbumsBody(), "IGOR");
+        compare(r.ok, true);
+        compare(r.collectionId, 1461407974);
+    }
+
+    function test_parse_artist_albums_result_falls_back_to_normalised_match() {
+        var body = JSON.stringify({ results: [
+            { wrapperType: "collection", collectionName: "IGOR (Deluxe)", collectionId: 1465524276 }
+        ] });
+        var r = AppleMusic.parseArtistAlbumsResult(0, body, "IGOR");
+        compare(r.ok, true);
+        compare(r.collectionId, 1465524276);
+    }
+
+    function test_parse_artist_albums_result_matches_single_suffix() {
+        var body = JSON.stringify({ results: [
+            { wrapperType: "collection", collectionName: "Yonkers - Single", collectionId: 424415818 }
+        ] });
+        var r = AppleMusic.parseArtistAlbumsResult(0, body, "Yonkers");
+        compare(r.ok, true);
+        compare(r.collectionId, 424415818);
+    }
+
+    function test_parse_artist_albums_result_ignores_artist_entity() {
+        var body = JSON.stringify({ results: [
+            { wrapperType: "artist", artistName: "IGOR", artistId: 1 }
+        ] });
+        var r = AppleMusic.parseArtistAlbumsResult(0, body, "IGOR");
+        compare(r.ok, true);
+        compare(r.collectionId, null);
+    }
+
+    function test_parse_artist_albums_result_miss_no_matching_album() {
+        var r = AppleMusic.parseArtistAlbumsResult(0, _tylerAlbumsBody(), "Scum Fuck Flower Boy");
+        compare(r.ok, true);
+        compare(r.collectionId, null);
+    }
+
+    function test_parse_artist_albums_result_malformed_json() {
+        var r = AppleMusic.parseArtistAlbumsResult(0, "not json{{{", "IGOR");
+        compare(r.ok, false);
+        compare(r.error, "malformed_json");
+    }
+
+    function test_parse_artist_albums_result_http_error_on_nonzero_exit() {
+        var r = AppleMusic.parseArtistAlbumsResult(1, "", "IGOR");
         compare(r.ok, false);
         compare(r.error, "http_error");
     }

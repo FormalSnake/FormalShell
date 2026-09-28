@@ -7,9 +7,13 @@ import qs.Services
 import "../Media/applemusic.js" as AppleMusic
 
 // Apple Music animated album covers (M7 Task 2, spec §5): resolves the
-// *currently playing* track's cover through iTunes Search + a scraped
-// web-player token + amp-api's undocumented `editorialVideo` field, ported,
-// with attribution, from AvengeMedia/DankMaterialShell PR #2918 (MIT).
+// *currently playing* track's cover through an iTunes artist search, an
+// album lookup scoped to that artist, a scraped web-player token and
+// amp-api's undocumented `editorialVideo` field, ported, with attribution,
+// from AvengeMedia/DankMaterialShell PR #2918 (MIT). The two-step iTunes
+// lookup (artist search, then that artist's own album list) exists because
+// a plain "artist album" search can rank an unrelated hit first and never
+// surface the real album at all within any reasonable result limit.
 // Isolated and off by default behind `media.appleMusicArt` in settings.json:
 // `_schedule()` bails before touching the network the instant `enabled` is
 // false, so flipping the setting off is a hard stop, not a slow one. Every
@@ -161,14 +165,39 @@ Singleton {
         });
     }
 
+    // Step 1 of 2: resolve the player's artist to an artistId. iTunes'
+    // artist search is a name search, so the first hit is not trustworthy
+    // ("Tyler, The Creator" also surfaces "Tyla" and "Not Tyler, The
+    // Creator"); parseArtistSearchResult only accepts an exact normalised
+    // name match.
     function _search(key, serial) {
-        const url = AppleMusic.searchUrl(MediaService.artist, MediaService.album);
-        root._curl([url], (exitCode, output) => {
+        const artist = MediaService.artist;
+        const album = MediaService.album;
+        root._curl([AppleMusic.artistSearchUrl(artist)], (exitCode, output) => {
             if (serial !== root._serial)
                 return;
-            const parsed = AppleMusic.parseSearchResult(exitCode, output);
+            const parsed = AppleMusic.parseArtistSearchResult(exitCode, output, artist);
             if (!parsed.ok) {
-                console.warn("AppleMusicArtService: itunes search failed:", parsed.error);
+                console.warn("AppleMusicArtService: itunes artist search failed:", parsed.error);
+                return;
+            }
+            if (parsed.artistId === null) {
+                root._store(key, serial, "");
+                return;
+            }
+            root._searchAlbums(key, serial, parsed.artistId, album);
+        });
+    }
+
+    // Step 2 of 2: resolve the album to a collectionId out of that artist's
+    // own album list, again by exact normalised name match.
+    function _searchAlbums(key, serial, artistId, album) {
+        root._curl([AppleMusic.artistAlbumsUrl(artistId)], (exitCode, output) => {
+            if (serial !== root._serial)
+                return;
+            const parsed = AppleMusic.parseArtistAlbumsResult(exitCode, output, album);
+            if (!parsed.ok) {
+                console.warn("AppleMusicArtService: itunes album lookup failed:", parsed.error);
                 return;
             }
             if (parsed.collectionId === null) {

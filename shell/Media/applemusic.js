@@ -3,10 +3,11 @@
 // Pure Apple Music animated-cover glue (M7 Task 2, spec §5's opt-in
 // animated-art feature, ported, with attribution, from
 // AvengeMedia/DankMaterialShell PR #2918, MIT). Owns URL construction,
-// every response-parsing step of the undocumented chain (iTunes Search →
-// scraped web-player token → amp-api `editorialVideo` → HLS master/rendition
-// playlists → the one progressive-mp4 byterange), and the cache-key/prune-
-// decision logic. No Process/XMLHttpRequest/Date.now() in here,
+// every response-parsing step of the undocumented chain (iTunes artist
+// search matched by exact artist name → that artist's album list matched by
+// exact album name → scraped web-player token → amp-api `editorialVideo` →
+// HLS master/rendition playlists → the one progressive-mp4 byterange), and
+// the cache-key/prune-decision logic. No Process/XMLHttpRequest/Date.now() in here,
 // AppleMusicArtService.qml owns every network and disk side effect, this
 // file stays deterministic under test. Every parse function takes the raw
 // process exit code alongside the output text, mirroring openmeteo.js's
@@ -22,18 +23,45 @@ function cachePath(cacheDir, artist, album) {
     return cacheDir + "/" + cacheKey(artist, album) + ".mp4";
 }
 
-function searchUrl(artist, album) {
-    if (!artist || !album)
-        return null;
-    var term = encodeURIComponent(artist + " " + album);
-    return "https://itunes.apple.com/search?media=music&entity=album&limit=1&term=" + term;
+// Loosely matches iTunes' own album-title conventions: case, punctuation and
+// whitespace are folded, and a trailing "- Single"/"- EP" marker or a
+// trailing "(Deluxe)"/"[Remastered]"-style edition tag is stripped (in
+// either order, repeatedly, so "Anti (Deluxe) - Single" and "Anti - Single
+// (Deluxe)" both collapse to "anti"). Used to compare both sides of an
+// artist/album match, never to build a URL.
+function normalizeName(name) {
+    var s = (name || "").trim();
+    var changed = true;
+    while (changed) {
+        changed = false;
+        var withoutTag = s.replace(/\s*[\(\[][^\(\)\[\]]*[\)\]]\s*$/, "").trim();
+        if (withoutTag !== s) {
+            s = withoutTag;
+            changed = true;
+            continue;
+        }
+        var withoutSuffix = s.replace(/\s*-\s*(single|ep)\s*$/i, "").trim();
+        if (withoutSuffix !== s) {
+            s = withoutSuffix;
+            changed = true;
+        }
+    }
+    return s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-// iTunes Search: a hit resolves a collectionId to look editorialVideo up
-// against; a well-formed response with no matching album is a miss
-// (collectionId: null), never an error, there is simply no animated art to
-// find for a track iTunes doesn't carry.
-function parseSearchResult(exitCode, output) {
+function artistSearchUrl(artist) {
+    if (!artist)
+        return null;
+    return "https://itunes.apple.com/search?media=music&entity=musicArtist&limit=5&term=" + encodeURIComponent(artist);
+}
+
+// iTunes' artist search is a name search, not an id lookup, so it returns
+// every artist sharing the term ("Tyler, The Creator" alongside "Not Tyler,
+// The Creator" and "Tyla"). A hit is the result whose normalised artistName
+// equals the player's normalised artist exactly; anything else, including a
+// same-named result the search didn't surface at all, is a miss
+// (artistId: null), never a guess.
+function parseArtistSearchResult(exitCode, output, artist) {
     if (exitCode !== 0)
         return { ok: false, error: "http_error" };
     var data;
@@ -43,8 +71,48 @@ function parseSearchResult(exitCode, output) {
         return { ok: false, error: "malformed_json" };
     }
     var results = data && Array.isArray(data.results) ? data.results : [];
-    var collectionId = results.length > 0 ? results[0].collectionId : null;
-    return { ok: true, collectionId: (collectionId === undefined ? null : collectionId) };
+    var target = normalizeName(artist);
+    for (var i = 0; i < results.length; i++) {
+        var r = results[i];
+        if (r && normalizeName(r.artistName) === target)
+            return { ok: true, artistId: (r.artistId === undefined ? null : r.artistId) };
+    }
+    return { ok: true, artistId: null };
+}
+
+function artistAlbumsUrl(artistId) {
+    return "https://itunes.apple.com/lookup?id=" + artistId + "&entity=album&limit=200";
+}
+
+// The artist lookup echoes the artist itself (wrapperType "artist") ahead of
+// every album (wrapperType "collection"), so only collections are
+// considered. An exact raw collectionName match wins over a normalised one,
+// so a plain "IGOR" search picks the plain edition over a "(Deluxe)"-suffixed
+// reissue sitting earlier in the list. No matching album is a miss
+// (collectionId: null): the artist is real but iTunes doesn't carry this
+// particular album under this title.
+function parseArtistAlbumsResult(exitCode, output, album) {
+    if (exitCode !== 0)
+        return { ok: false, error: "http_error" };
+    var data;
+    try {
+        data = JSON.parse(output);
+    } catch (e) {
+        return { ok: false, error: "malformed_json" };
+    }
+    var results = data && Array.isArray(data.results) ? data.results : [];
+    var target = normalizeName(album);
+    var normalizedMatch = null;
+    for (var i = 0; i < results.length; i++) {
+        var r = results[i];
+        if (!r || r.wrapperType !== "collection")
+            continue;
+        if (r.collectionName === album)
+            return { ok: true, collectionId: r.collectionId };
+        if (normalizedMatch === null && normalizeName(r.collectionName) === target)
+            normalizedMatch = r.collectionId;
+    }
+    return { ok: true, collectionId: normalizedMatch };
 }
 
 function albumPageUrl(collectionId) {
