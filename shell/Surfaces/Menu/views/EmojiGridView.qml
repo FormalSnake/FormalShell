@@ -38,7 +38,12 @@ GridView {
     // flick. Safe here because every delegate in this file is required
     // properties plus bindings off them, with no Component.onCompleted work
     // that a reused item would skip.
-    reuseItems: true
+    // Only while a model is attached: Qt 6.11 hands a delegate pooled under
+    // one model back out under the next with its required properties still
+    // the old model's (tests/tst_grid_reattach.qml), and Menu.qml's
+    // `_attachViews` takes the model away whenever another view is live.
+    // Going false drains the pool, so a reattached view builds fresh.
+    reuseItems: !!root.model
     clip: true
     cellWidth: root.width / root.columns
     cellHeight: root.cellWidth

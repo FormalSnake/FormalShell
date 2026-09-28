@@ -123,7 +123,8 @@ IpcHandler {
             cursorId: menu.cursorId,
             viewCursor: menu.viewCursor(),
             rows: menu.rowCount,
-            cells: menu.cellIds()
+            cells: menu.cellIds(),
+            drawn: menu.drawnCells()
         });
     }
 

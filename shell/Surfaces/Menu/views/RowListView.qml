@@ -58,7 +58,12 @@ ListView {
     // flick. Safe here because every delegate in this file is required
     // properties plus bindings off them, with no Component.onCompleted work
     // that a reused item would skip.
-    reuseItems: true
+    // Only while a model is attached: Qt 6.11 hands a delegate pooled under
+    // one model back out under the next with its required properties still
+    // the old model's (tests/tst_grid_reattach.qml), and Menu.qml's
+    // `_attachViews` takes the model away whenever another view is live.
+    // Going false drains the pool, so a reattached view builds fresh.
+    reuseItems: !!root.model
     clip: true
     // ListView tracks the cursor through its (always present, even with no
     // `highlight` component) highlight item, and the default
@@ -96,6 +101,17 @@ ListView {
         if (root.currentIndex >= 0 && root.model && root.currentIndex < root.model.count)
             return { index: root.currentIndex, id: root.model.get(root.currentIndex).rowId };
         return { index: -1, id: "" };
+    }
+
+    // Each row as its delegate draws it, for `menu status` (AppGridView's
+    // `drawnCells`).
+    function drawnCells() {
+        var out = [];
+        for (var i = 0; i < root.count; i++) {
+            var row = root.itemAtIndex(i);
+            out.push(row ? { id: row.rowId, label: row.modelData.label || "" } : null);
+        }
+        return out;
     }
 
     WheelScroll {

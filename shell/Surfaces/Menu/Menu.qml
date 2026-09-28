@@ -683,6 +683,16 @@ PanelWindow {
         return out;
     }
 
+    // What the live view's delegates draw, for `menu status`: the ids above
+    // are the model's, and a delegate can hold another.
+    function drawnCells() {
+        if (root.viewKind === "appGrid")
+            return appGrid.drawnCells();
+        if (root.viewKind === "rows")
+            return rowListView.drawnCells();
+        return [];
+    }
+
     // On `menu status` (M58 G5): which row or cell the cursor sits on. A
     // frame shows the ring, but only a number says an arrow press moved by
     // one cell rather than by a whole row of them.

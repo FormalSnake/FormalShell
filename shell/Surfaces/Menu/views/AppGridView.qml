@@ -176,6 +176,18 @@ Item {
         return out;
     }
 
+    // Each cell as its delegate draws it, the id it holds and the name it
+    // resolved, for `menu status`: `cells` reads the model, which can be
+    // right while the delegates over it are not.
+    function drawnCells() {
+        var out = [];
+        for (var i = 0; i < grid.count; i++) {
+            var cell = grid.itemAtIndex(i);
+            out.push(cell ? { id: cell.rowId, label: cell.modelData.label || "" } : null);
+        }
+        return out;
+    }
+
     function cancelGlide() {
         wheel.cancel();
     }
@@ -216,8 +228,11 @@ Item {
         // Delegates recycle rather than being destroyed and rebuilt on every
         // flick, the same contract the two grids in Menu.qml take: every
         // delegate here is required properties plus bindings off them, with
-        // no Component.onCompleted work a reused item would skip.
-        reuseItems: true
+        // no Component.onCompleted work a reused item would skip. Only while
+        // a model is attached, as in RowListView: a pool that outlives its
+        // model hands cells back holding the ids of an old sync, which draw
+        // as `blankRow` or as some other app.
+        reuseItems: !!root.cellsModel
         anchors.fill: parent
         clip: true
         model: root.cellsModel

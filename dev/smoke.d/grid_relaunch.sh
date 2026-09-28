@@ -5,9 +5,16 @@
 # and launched, which records the launch, rebuilds the tree as the launcher
 # closes and moves that app to the head of the grid. `menu status`'s
 # `cells` is read on every reopen: eight ids, none of them twice, the
-# launched app first. It summons and closes the launcher on its own clock
-# from t=3, so it does not ride another launcher leg (`--app-grid`,
-# `--menu`): run it on its own.
+# launched app first, and `drawn` agreeing with it: every cell's delegate
+# holding its own model id and drawing a name. Last, a query widened to
+# every staged app and narrowed to one pools the rest, the clipboard route
+# takes the view's model away and the root takes it back. On Qt 6.11 that
+# reused the pooled cells still holding the query's ids, in reverse, over a
+# `cells` that read right: another app's name in a cell, or with a real
+# app list, whose query results mostly sit outside the root's eight, no
+# name and the placeholder icon. It summons and closes the launcher on its
+# own clock from t=3, so it does not ride another launcher leg
+# (`--app-grid`, `--menu`): run it on its own.
 leg_grid_relaunch_flag="--grid-relaunch"
 leg_grid_relaunch_order=27
 leg_grid_relaunch_needs="jq"
@@ -21,6 +28,8 @@ grid_relaunch_second_png="$shot_dir/grid-relaunch-second.png"
 grid_relaunch_rescan_closed_path="$shot_dir/grid-relaunch-status-rescan-closed.json"
 grid_relaunch_rescan_open_path="$shot_dir/grid-relaunch-status-rescan-open.json"
 grid_relaunch_rescan_png="$shot_dir/grid-relaunch-rescan.png"
+grid_relaunch_return_path="$shot_dir/grid-relaunch-status-return.json"
+grid_relaunch_return_png="$shot_dir/grid-relaunch-return.png"
 
 grid_relaunch_entry() {
   local file="$1" name="$2"
@@ -95,12 +104,26 @@ rm -f "$grid_relaunch_dir/formalshell-relaunch-hotel.desktop"
 sleep 3
 "$grim_bin" "$grid_relaunch_rescan_png" > /dev/null 2>&1
 "$qs_bin" ipc -p "$shell_path" call menu status > "$grid_relaunch_rescan_open_path" 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu filter "relaunch" > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call menu filter "relaunch golf" > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call menu summon clipboard > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
+sleep 1
+"$qs_bin" ipc -p "$shell_path" call menu summon "" > /dev/null 2>&1
+sleep 2
+"$grim_bin" "$grid_relaunch_return_png" > /dev/null 2>&1
+"$qs_bin" ipc -p "$shell_path" call menu status > "$grid_relaunch_return_path" 2>&1
 EOF
   echo "exec-once = bash $script"
 }
 
 grid_relaunch_check() {
-  local f="$1" what="$2" head="$3" cells count unique
+  local f="$1" what="$2" head="$3" cells count unique drawn
   [ -s "$f" ] || fail "no grid-relaunch status at $f"
   cells=$("$jq_bin" -c '.cells' "$f" 2>/dev/null)
   count=$("$jq_bin" '.cells | length' "$f")
@@ -110,6 +133,13 @@ grid_relaunch_check() {
   fi
   if [ -n "$head" ] && [ "$("$jq_bin" -r '.cells[0]' "$f")" != "$head" ]; then
     fail "$what: expected $head first, got $cells"
+  fi
+  drawn=$("$jq_bin" -c '[.drawn[] | if . == null then null else .id end]' "$f")
+  if [ "$drawn" != "$cells" ]; then
+    fail "$what: the cells draw $drawn over a model holding $cells"
+  fi
+  if [ "$("$jq_bin" '[.drawn[] | select(. == null or .label == "")] | length' "$f")" != "0" ]; then
+    fail "$what: a cell draws no name: $("$jq_bin" -c '.drawn' "$f")"
   fi
   echo "SMOKE_GRID_RELAUNCH $what: $cells"
 }
@@ -121,5 +151,7 @@ leg_grid_relaunch_assert() {
   grid_relaunch_check "$grid_relaunch_second_path" "after juliet" "apps.formalshell-relaunch-juliet"
   grid_relaunch_check "$grid_relaunch_rescan_closed_path" "rescan while closed" "apps.formalshell-relaunch-juliet"
   grid_relaunch_check "$grid_relaunch_rescan_open_path" "rescan while open" "apps.formalshell-relaunch-juliet"
+  grid_relaunch_check "$grid_relaunch_return_path" "back from the clipboard" "apps.formalshell-relaunch-juliet"
   echo "SMOKE_GRID_RELAUNCH_PNG $grid_relaunch_rescan_png"
+  echo "SMOKE_GRID_RELAUNCH_RETURN_PNG $grid_relaunch_return_png"
 }
