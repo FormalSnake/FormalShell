@@ -99,9 +99,32 @@
 # of its own, so every line held longer than that wiped in seven seconds
 # whatever it was held for, which is exactly what a real line-synced track
 # is made of.
+#
+# The latency claim (owner, 2026-09-28): on a Bluetooth sink the sound
+# reaches the ear 150ms to 300ms after the position the player reports, so
+# lyrics timed off that position run ahead of what is heard. Track1 is moved
+# onto a pw-loopback sink that declares 250ms of latency the way a bluez5
+# sink declares its codec and transport delay, and three paused samples
+# around line1's start (one before the move, two 60ms apart after it) show
+# `media lyrics` reading 250ms off mpv's own stream and the lit line moving
+# by that much, with the frames agreeing.
 leg_lyrics_flag="--lyrics"
 leg_lyrics_order=175
-leg_lyrics_needs="mpv ffmpeg convert jq wlrctl"
+leg_lyrics_needs="mpv ffmpeg convert jq wlrctl pipewire"
+
+need_pipewire() {
+  if [ -z "${pw_dump_bin:-}" ]; then
+    local dir
+    if command -v pw-loopback >/dev/null 2>&1; then
+      dir=$(dirname "$(command -v pw-loopback)")
+    else
+      dir=$(nix build --no-link --print-out-paths 'nixpkgs#pipewire^out')/bin
+    fi
+    pw_dump_bin="$dir/pw-dump"
+    pw_cli_bin="$dir/pw-cli"
+    pw_loopback_bin="$dir/pw-loopback"
+  fi
+}
 
 lyrics_track1_path="$shot_dir/lyrics-track1.flac"
 lyrics_track2_path="$shot_dir/lyrics-track2.flac"
@@ -153,6 +176,15 @@ lyrics_rows_path="$shot_dir/lyrics-rows.txt"
 lyrics_burst_index_path="$shot_dir/lyrics-burst-index.txt"
 lyrics_burst_profile_path="$shot_dir/lyrics-burst-profile.txt"
 lyrics_sock1_path="$shot_dir/lyrics-mpv1.sock"
+lyrics_lat_sink="formalshell-smoke-lat"
+lyrics_lat_pid_path="$shot_dir/lyrics-lat-loopback.pid"
+lyrics_lat_route_json_path="$shot_dir/lyrics-lat-route.json"
+lyrics_lat_before_png_path="$shot_dir/lyrics-lat-before.png"
+lyrics_lat_before_json_path="$shot_dir/lyrics-lat-before.json"
+lyrics_lat_held_png_path="$shot_dir/lyrics-lat-held.png"
+lyrics_lat_held_json_path="$shot_dir/lyrics-lat-held.json"
+lyrics_lat_lit_png_path="$shot_dir/lyrics-lat-lit.png"
+lyrics_lat_lit_json_path="$shot_dir/lyrics-lat-lit.json"
 lyrics_lib_path="$shot_dir/lyrics-lib.sh"
 lyrics_marker_seeded="$shot_dir/lyrics-marker-seeded"
 lyrics_marker_open1="$shot_dir/lyrics-marker-open1"
@@ -180,7 +212,7 @@ leg_lyrics_timing() {
   # for a window inside one 26s turn of its own pattern. The first number is
   # when the run's own frame is taken, which is also when the session is torn
   # down, so it has to outlast everything the chain below drives.
-  leg_timing 260 700 2
+  leg_timing 300 700 2
 }
 
 leg_lyrics_fixture() {
@@ -701,12 +733,74 @@ lyrics_wait_position "$lyrics_wrap_early_json_path" 27.5
 lyrics_mpv "$lyrics_sock1_path" '{"command":["seek",30.6,"absolute"]}'
 lyrics_wait_position "$lyrics_wrap_late_json_path" 30.6
 "$grim_bin" "$lyrics_wrap_late_png_path" > /dev/null 2>&1
+
+# The output latency, three paused frames around line1's start at 15s. The
+# wait is on the exact position rather than lyrics_wait_position's window,
+# since the two later samples sit 60ms apart.
+lyrics_wait_exact() {
+  local out_json="\$1" want="\$2" waited=0
+  while [ "\$waited" -lt 30 ]; do
+    "$qs_bin" ipc -p "$shell_path" call media lyrics > "\$out_json" 2>&1
+    if "$jq_bin" -e ".position > (\$want - 0.005) and .position < (\$want + 0.005)" "\$out_json" > /dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.5
+    waited=\$((waited + 1))
+  done
+  return 1
+}
+
+lyrics_lat_frame() {
+  lyrics_mpv "$lyrics_sock1_path" "{\"command\":[\"seek\",\$1,\"absolute\"]}"
+  lyrics_wait_exact "\$2" "\$1"
+  sleep 1.5
+  "$grim_bin" "\$3" > /dev/null 2>&1
+  "$qs_bin" ipc -p "$shell_path" call media lyrics > "\$2" 2>&1
+}
+
+# 14.95s on the plain sink: line1 is lit, 50ms inside the lead.
+lyrics_lat_frame 14.95 "$lyrics_lat_before_json_path" "$lyrics_lat_before_png_path"
+
+# Then a sink declaring 250ms between its input and the ear, the way a bluez5
+# sink declares its codec and transport delay: a pw-loopback carrying a real
+# 0.25s delay, with a ProcessLatency of the same size set on its sink side,
+# since a loopback's own target.delay is not reported. mpv plays for the
+# route change, so its stream is up and linked when the shell reads it.
+lyrics_mpv "$lyrics_sock1_path" '{"command":["set_property","pause",false]}'
+setsid "$pw_loopback_bin" -n "$lyrics_lat_sink" -d 0.25 \
+  -i "{ media.class=Audio/Sink node.name=$lyrics_lat_sink node.description=SmokeLatency }" \
+  > /dev/null 2>&1 < /dev/null &
+echo \$! > "$lyrics_lat_pid_path"
+node=""
+SECONDS=0
+while [ -z "\$node" ] && [ "\$SECONDS" -lt 10 ]; do
+  node=\$("$pw_dump_bin" 2>/dev/null | "$jq_bin" -r '.[] | select(.type == "PipeWire:Interface:Node" and .info.props["node.name"] == "$lyrics_lat_sink") | .id' | head -1)
+  [ -n "\$node" ] || sleep 0.5
+done
+"$pw_cli_bin" set-param "\$node" ProcessLatency '{ ns = 250000000 }' > /dev/null 2>&1
+lyrics_mpv "$lyrics_sock1_path" '{"command":["set_property","audio-device","pipewire/$lyrics_lat_sink"]}'
+SECONDS=0
+while [ "\$SECONDS" -lt 20 ]; do
+  "$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_lat_route_json_path" 2>&1
+  "$jq_bin" -e '.latency.ms >= 200' "$lyrics_lat_route_json_path" > /dev/null 2>&1 && break
+  sleep 0.5
+done
+lyrics_mpv "$lyrics_sock1_path" '{"command":["set_property","pause",true]}'
+sleep 1
+
+# 15.12s: led to 14.97 under the hold, still line0. 15.18s: led to 15.03,
+# line1. So the line moved by the latency, give or take 30ms.
+lyrics_lat_frame 15.12 "$lyrics_lat_held_json_path" "$lyrics_lat_held_png_path"
+lyrics_lat_frame 15.18 "$lyrics_lat_lit_json_path" "$lyrics_lat_lit_png_path"
+
+lyrics_mpv "$lyrics_sock1_path" '{"command":["set_property","audio-device","auto"]}'
+kill "\$(cat "$lyrics_lat_pid_path")" 2>/dev/null
 lyrics_mpv "$lyrics_sock1_path" '{"command":["set_property","pause",false]}'
 EOF
 
   write_script "$kill_script" <<EOF
 #!/usr/bin/env bash
-for pidfile in "$lyrics_pid1_path" "$lyrics_pid2_path" "$lyrics_pid3_path"; do
+for pidfile in "$lyrics_pid1_path" "$lyrics_pid2_path" "$lyrics_pid3_path" "$lyrics_lat_pid_path"; do
   [ -f "\$pidfile" ] && kill "\$(cat "\$pidfile")" 2>/dev/null
 done
 true
@@ -1442,4 +1536,46 @@ print("%d %d" % (lit, len(peaks) - lit - 1))
     done < <(printf '%s\n' "$tail_peaks")
   done
   echo "SMOKE_LYRICS_BURST_SETTLED a=$(grep '^a-' "$lyrics_burst_profile_path" | tail -5 | awk '{ print $2 }' | tr '\n' ' ')b=$(grep '^b-' "$lyrics_burst_profile_path" | tail -5 | awk '{ print $2 }' | tr '\n' ' ')"
+
+  # The output latency. The shell reads 250ms off the stream mpv plays on
+  # once it is routed through the delayed sink, and the lit line moves by
+  # it: line1 is lit at 14.95 on the plain sink, still line0 at 15.12 on the
+  # delayed one and line1 again at 15.18. The frames agree: the held one is
+  # a different pane, the lit one the same pane as before the move.
+  local lat_phase lat_json lat_png
+  for lat_phase in before held lit; do
+    eval "lat_json=\$lyrics_lat_${lat_phase}_json_path; lat_png=\$lyrics_lat_${lat_phase}_png_path"
+    [ -s "$lat_json" ] || fail "no media lyrics status for the $lat_phase latency sample"
+    [ -f "$lat_png" ] || fail "no frame for the $lat_phase latency sample"
+    echo "SMOKE_LYRICS_LAT_$(printf '%s' "$lat_phase" | tr '[:lower:]' '[:upper:]') $lat_png"
+    "$jq_bin" -c '{position, active, activeTime: .lines[.active].time, latency, hold}' "$lat_json"
+  done
+  echo "SMOKE_LYRICS_LAT_ROUTE $lyrics_lat_route_json_path"
+  if ! "$jq_bin" -e '.latency.ms < 50 and .lines[.active].time == 15' "$lyrics_lat_before_json_path" > /dev/null 2>&1; then
+    fail "on the plain sink line1 was not lit at 14.95 with no latency held: $("$jq_bin" -c '{position, active, latency, hold}' "$lyrics_lat_before_json_path")"
+  fi
+  for lat_phase in held lit; do
+    eval "lat_json=\$lyrics_lat_${lat_phase}_json_path"
+    if ! "$jq_bin" -e '.latency.via == "stream" and .latency.ms >= 240 and .latency.ms <= 260' "$lat_json" > /dev/null 2>&1; then
+      fail "the $lat_phase sample did not read the delayed sink's 250ms off mpv's stream: $("$jq_bin" -c '{latency, hold}' "$lat_json")"
+    fi
+  done
+  if ! "$jq_bin" -e '.lines[.active].time == 2' "$lyrics_lat_held_json_path" > /dev/null 2>&1; then
+    fail "line1 lit at 15.12 under a 250ms hold, so the lyrics ran ahead of the sink: $("$jq_bin" -c '{position, active, hold}' "$lyrics_lat_held_json_path")"
+  fi
+  if ! "$jq_bin" -e '.lines[.active].time == 15' "$lyrics_lat_lit_json_path" > /dev/null 2>&1; then
+    fail "line1 still unlit at 15.18 under a 250ms hold, so the hold overshot: $("$jq_bin" -c '{position, active, hold}' "$lyrics_lat_lit_json_path")"
+  fi
+  local lat_crop lat_body lat_held_body lat_lit_body lat_held_diff lat_lit_diff
+  read -r lat_crop lat_body < <(lyrics_pane_crop "$lyrics_lat_before_png_path")
+  lat_held_body=$(lyrics_burst_body "$lyrics_lat_held_png_path")
+  lat_lit_body=$(lyrics_burst_body "$lyrics_lat_lit_png_path")
+  lat_held_diff=$("$convert_bin" "$lat_body" "$lat_held_body" -crop "$lat_crop" +repage \
+    -compose difference -composite -colorspace Gray -threshold 10% -format '%[fx:mean*w*h]' info: 2>/dev/null)
+  lat_lit_diff=$("$convert_bin" "$lat_body" "$lat_lit_body" -crop "$lat_crop" +repage \
+    -compose difference -composite -colorspace Gray -threshold 10% -format '%[fx:mean*w*h]' info: 2>/dev/null)
+  echo "SMOKE_LYRICS_LAT_FRAMES crop $lat_crop changed px: held=$lat_held_diff lit=$lat_lit_diff"
+  if ! awk -v h="${lat_held_diff:-0}" -v l="${lat_lit_diff:-0}" 'BEGIN { exit !(h > 500 && l * 4 < h) }'; then
+    fail "the frames do not follow the hold: before/held changed $lat_held_diff px, before/lit $lat_lit_diff"
+  fi
 }

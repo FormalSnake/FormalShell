@@ -66,6 +66,12 @@ IpcHandler {
                 available: BrightnessService.available,
                 percent: BrightnessService.percent
             },
+            lyrics: {
+                latency: LyricsService.latency,
+                offsetAuto: LyricsService.offsetAuto,
+                offsetMs: LyricsService.offsetMs,
+                hold: LyricsService.holdSeconds
+            },
             herdr: {
                 stateByWindow: HerdrService.stateByWindow,
                 stateByKey: HerdrService.stateByKey

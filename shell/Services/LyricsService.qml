@@ -2,9 +2,11 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import Quickshell.Services.Pipewire
 import qs.Core as Core
 import qs.Services
 import "../Lyrics/model.js" as Lyrics
+import "../Media/model.js" as MediaModel
 
 // Auto-fetched lyrics for the media panel's karaoke-like block (M56 Task 2,
 // spec P2/P3/P10/P11/P14, replacing M55's lrclib-only chain). Isolated
@@ -61,14 +63,23 @@ Singleton {
     readonly property bool blurEnabled: Core.Config.loaded && Core.Config.get("media.lyricsBlur", true)
     readonly property int blurStrength: Core.Config.loaded ? root._clampedConfigInt("media.lyricsBlurStrength", 100, 0, 200) : 100
     readonly property int offsetMs: Core.Config.loaded ? root._clampedConfigInt("media.lyricsOffsetMs", 0, -5000, 5000) : 0
-    readonly property real offsetSeconds: root.offsetMs / 1000
+    readonly property bool offsetAuto: !Core.Config.loaded || Core.Config.get("media.lyricsOffsetAuto", true) !== false
+
+    // What the ear is behind the player by, {ms, via}, out of `pw-dump`
+    // (`Lyrics.latencyGraph`). The MPRIS position is where the player's
+    // decoder is, and on a Bluetooth sink the sound it stands for is still a
+    // codec and a radio link away, often 150ms to 300ms. kopuz reads the
+    // same gap off its own audio callback's playback timestamp; a shell
+    // playing nothing itself reads it off PipeWire's graph instead.
+    property var latency: ({ ms: 0, via: "none" })
+    readonly property real holdSeconds: Lyrics.holdSeconds(root.offsetAuto, root.latency.ms, root.offsetMs)
 
     // The position the pane draws against and `media lyrics` answers from,
     // both off this one property so the lit line one reports is the lit line
-    // the other draws. `Lyrics.ledPosition` owns the lead and the offset's
+    // the other draws. `Lyrics.ledPosition` owns the lead and the hold's
     // sign; MediaService.position is refreshed per frame by the media
     // panel's own clock while a synced track plays.
-    readonly property real positionSeconds: Lyrics.ledPosition(MediaService.position, root.offsetSeconds)
+    readonly property real positionSeconds: Lyrics.ledPosition(MediaService.position, root.holdSeconds)
 
     // Whether the lyrics column still follows the song (spec P9/P11). The
     // panel writes it (a wheel takes it off; its resync button, the keyboard
@@ -124,6 +135,84 @@ Singleton {
 
     onEnabledChanged: root._resolve()
     onKeyChanged: root._resolve()
+
+    // The latency is read whenever what the player plays through could have
+    // changed (a new default sink, a stream linked somewhere else, another
+    // player picked) and every ten seconds while a synced track plays, since
+    // a Bluetooth sink revises its own transport delay mid-stream. Only a
+    // synced track with the auto hold on asks at all.
+    readonly property bool _latencyWanted: root.offsetAuto && root.state === "synced"
+    property bool _latencyBusy: false
+
+    on_LatencyWantedChanged: {
+        if (root._latencyWanted)
+            latencyHold.restart();
+        else if (!root.offsetAuto)
+            root.latency = { ms: 0, via: "none" };
+    }
+
+    Connections {
+        target: Pipewire
+        function onDefaultAudioSinkChanged() {
+            if (root._latencyWanted)
+                latencyHold.restart();
+        }
+    }
+
+    Connections {
+        target: Pipewire.linkGroups
+        function onValuesChanged() {
+            if (root._latencyWanted)
+                latencyHold.restart();
+        }
+    }
+
+    Connections {
+        target: MediaService
+        function onActiveIdChanged() {
+            if (root._latencyWanted)
+                latencyHold.restart();
+        }
+    }
+
+    // Link groups come and go in bursts while a stream is being set up; one
+    // read once they settle covers the lot.
+    Timer {
+        id: latencyHold
+        interval: 300
+        onTriggered: root._readLatency()
+    }
+
+    Timer {
+        interval: 10000
+        repeat: true
+        running: root._latencyWanted && MediaService.isPlaying
+        onTriggered: root._readLatency()
+    }
+
+    function _readLatency() {
+        if (root._latencyBusy)
+            return;
+        root._latencyBusy = true;
+        root._run(["pw-dump"], (exitCode, text) => {
+            root._latencyBusy = false;
+            if (!root.offsetAuto)
+                return;
+            const graph = exitCode === 0 ? Lyrics.latencyGraph(text) : null;
+            const row = MediaService.players.find(function (r) {
+                return r.id === MediaService.activeId;
+            });
+            const streamIds = !graph || !row ? [] : graph.streams.filter(function (s) {
+                return MediaModel.streamOwner(s.keys, [row]) !== "";
+            }).map(function (s) {
+                return s.id;
+            });
+            const sink = MediaService.outputId || (Pipewire.defaultAudioSink ? Pipewire.defaultAudioSink.name : "");
+            const next = Lyrics.outputLatency(graph, streamIds, sink);
+            if (next.ms !== root.latency.ms || next.via !== root.latency.via)
+                root.latency = next;
+        });
+    }
 
     // spec P14: a lookup starts one second after the key settles, panel
     // open or closed, rather than waiting on the panel to be opened at

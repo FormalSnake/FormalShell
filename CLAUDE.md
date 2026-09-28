@@ -217,7 +217,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   holds, the instrumental note over a gap a track with no end stamps leaves
   and empty again once the song is past it, and the same two words held for
   10s and for 3s each wiping to the fraction of the row its own span is
-  through.
+  through. Then the player moved onto a pw-loopback sink declaring 250ms of
+  latency, a bluez5 sink's shape, and the lit line held back by exactly
+  that, read off `media lyrics` and three paused frames around one line's
+  start.
 - `lyrics_blur.sh` `--lyrics-blur`: one real MPRIS player, `media.lyricsBlur`'s
   default true against a settings retarget to false, a crop over a far
   unlit row read by edge energy and lower with the blur on, the active

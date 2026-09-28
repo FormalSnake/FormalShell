@@ -157,7 +157,9 @@ IpcHandler {
     // position, rather than cached on the service, so they're always current
     // as of the call.
     // `follow` is the pane's own wheel-takeover state, which lives on
-    // LyricsService because this handler can reach no panel.
+    // LyricsService because this handler can reach no panel. `latency` is
+    // the output latency read off PipeWire and `hold` the seconds the lit
+    // set is held back by in all, that plus `media.lyricsOffsetMs`.
     function lyrics(): string {
         const lines = LyricsService.lines;
         const main = Lyrics.mainLineIndices(lines);
@@ -174,7 +176,9 @@ IpcHandler {
             lines: lines,
             active: active,
             secondary: secondary,
-            position: MediaService.position
+            position: MediaService.position,
+            latency: LyricsService.latency,
+            hold: LyricsService.holdSeconds
         });
     }
 }

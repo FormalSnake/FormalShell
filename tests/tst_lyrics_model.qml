@@ -845,6 +845,103 @@ TestCase {
         compare(Lyrics.chunkProgress(words, 0, undefined, Lyrics.ledPosition(5, 0.3)), 0);
     }
 
+    // holdSeconds / latencyGraph / outputLatency
+
+    function test_hold_is_the_latency_plus_the_manual_nudge() {
+        fuzzyCompare(Lyrics.holdSeconds(true, 250, 0), 0.25, 1e-9);
+        fuzzyCompare(Lyrics.holdSeconds(true, 250, -50), 0.2, 1e-9);
+    }
+
+    function test_hold_without_auto_is_the_manual_nudge_alone() {
+        fuzzyCompare(Lyrics.holdSeconds(false, 250, 120), 0.12, 1e-9);
+        compare(Lyrics.holdSeconds(undefined, 250, undefined), 0);
+    }
+
+    function test_a_hold_moves_the_lit_line_by_the_latency() {
+        var lines = [_line(10, 14), _line(14, 18)];
+        var main = Lyrics.mainLineIndices(lines);
+        var hold = Lyrics.holdSeconds(true, 250, 0);
+
+        compare(Lyrics.activeMainLineIndex(lines, main, Lyrics.ledPosition(10, 0)), 0);
+        compare(Lyrics.activeMainLineIndex(lines, main, Lyrics.ledPosition(10, hold)), -1);
+        compare(Lyrics.activeMainLineIndex(lines, main, Lyrics.ledPosition(10.15, hold)), 0);
+    }
+
+    function _port(node, quantum, rate, ns) {
+        return { id: 900 + node, type: "PipeWire:Interface:Port",
+            info: { direction: "output", props: { "node.id": node }, params: { Latency: [
+                { direction: "Input", minQuantum: quantum, maxQuantum: quantum, minRate: rate, maxRate: rate, minNs: ns, maxNs: ns },
+                { direction: "Output", minQuantum: 0, maxQuantum: 0, minRate: 0, maxRate: 0, minNs: 5e9, maxNs: 5e9 }] } } };
+    }
+
+    function _dump(extra) {
+        var objects = [
+            { id: 40, type: "PipeWire:Interface:Metadata", props: { "metadata.name": "settings" },
+              metadata: [{ key: "clock.rate", value: 48000 }, { key: "clock.quantum", value: 1024 }] },
+            { id: 41, type: "PipeWire:Interface:Metadata", props: { "metadata.name": "default" },
+              metadata: [{ key: "default.audio.sink", value: { name: "alsa_output.pci" } }] },
+            { id: 33, type: "PipeWire:Interface:Node", info: { props: { "media.class": "Audio/Sink", "node.name": "alsa_output.pci" } } },
+            { id: 52, type: "PipeWire:Interface:Node", info: { props: { "media.class": "Audio/Sink", "node.name": "bluez_output.AA" } } },
+            { id: 69, type: "PipeWire:Interface:Node", info: { props: { "media.class": "Stream/Output/Audio",
+                "application.name": "mpv", "node.name": "mpv" } } },
+            _port(33, 1, 0, 0),
+            _port(52, 0, 0, 180000000),
+            _port(69, 0, 0, 180000000),
+            _port(69, 0, 0, 180000000)
+        ];
+        return JSON.stringify(objects.concat(extra || []));
+    }
+
+    function test_latency_graph_lists_streams_with_their_owner_keys() {
+        var g = Lyrics.latencyGraph(_dump());
+        compare(g.streams.length, 1);
+        compare(g.streams[0].id, 69);
+        compare(g.streams[0].keys[0], "mpv");
+        compare(g.defaultSink, "alsa_output.pci");
+        compare(g.sinks["bluez_output.AA"], 52);
+    }
+
+    function test_a_bluetooth_stream_reads_its_ns_latency() {
+        var g = Lyrics.latencyGraph(_dump());
+        compare(Lyrics.outputLatency(g, [69], ""), { ms: 180, via: "stream" });
+    }
+
+    function test_a_quantum_latency_reads_in_graph_clock_frames() {
+        var g = Lyrics.latencyGraph(_dump());
+        compare(Lyrics.outputLatency(g, [], "alsa_output.pci"), { ms: 21, via: "sink" });
+    }
+
+    function test_a_forced_quantum_wins_over_the_default() {
+        var g = Lyrics.latencyGraph(JSON.stringify([
+            { id: 40, type: "PipeWire:Interface:Metadata", props: { "metadata.name": "settings" },
+              metadata: [{ key: "clock.rate", value: 48000 }, { key: "clock.quantum", value: 1024 },
+                  { key: "clock.force-quantum", value: 4800 }] },
+            { id: 33, type: "PipeWire:Interface:Node", info: { props: { "media.class": "Audio/Sink", "node.name": "s" } } },
+            _port(33, 1, 480, 0)
+        ]));
+        compare(Lyrics.outputLatency(g, [], "s"), { ms: 110, via: "sink" });
+    }
+
+    function test_no_stream_falls_back_to_the_named_sink_then_the_default() {
+        var g = Lyrics.latencyGraph(_dump());
+        compare(Lyrics.outputLatency(g, [77], "bluez_output.AA"), { ms: 180, via: "sink" });
+        compare(Lyrics.outputLatency(g, [], "gone"), { ms: 21, via: "sink" });
+    }
+
+    function test_an_unreadable_dump_is_no_latency() {
+        compare(Lyrics.latencyGraph("not json"), null);
+        compare(Lyrics.outputLatency(null, [69], "x"), { ms: 0, via: "none" });
+        compare(Lyrics.outputLatency(Lyrics.latencyGraph("[]"), [], ""), { ms: 0, via: "none" });
+    }
+
+    function test_a_misreported_latency_is_capped() {
+        var g = Lyrics.latencyGraph(JSON.stringify([
+            { id: 33, type: "PipeWire:Interface:Node", info: { props: { "media.class": "Audio/Sink", "node.name": "s" } } },
+            _port(33, 0, 0, 9e9)
+        ]));
+        compare(Lyrics.outputLatency(g, [], "s").ms, Lyrics.OUTPUT_LATENCY_MAX_MS);
+    }
+
     // lineActiveAt / activeMainLineIndex / backgroundLineBound / activeSecondaryLines
     // (kopuz's own test cases, ported by name)
 

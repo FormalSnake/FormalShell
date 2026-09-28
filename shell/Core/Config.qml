@@ -48,10 +48,13 @@ import QtQuick
 // the lyrics pane's depth-of-field blur on every line but the lit one; off
 // leaves the M55 opacity ramp doing the depth alone, M56). media.
 // lyricsBlurStrength (number, default 100, clamped 0-200, a percent scale
-// on the blur ramp's own px cap, M56). media.lyricsOffsetMs (number,
+// on the blur ramp's own px cap, M56). media.lyricsOffsetAuto (bool,
+// default true, holds the lyrics back by the output sink's own latency as
+// PipeWire reports it, a Bluetooth codec and transport delay included;
+// kopuz's lyrics_offset_auto). media.lyricsOffsetMs (number,
 // default 0, clamped -5000..5000, adjusts LyricsService's lit-line clock
-// from the 100ms lead it already takes on MediaService.position; positive
-// holds the lyrics back, M56). media.visualizer (bool, default true,
+// from the 100ms lead it already takes on MediaService.position, on top of
+// that latency; positive holds the lyrics back, M56). media.visualizer (bool, default true,
 // the media panel's spectrum band; the bar's own visualizer cell stays
 // governed by bar.layout alone, M55). media.visualizerStyle (string,
 // default "bars", the spectrum's style id from Visualizer/styles.js; an

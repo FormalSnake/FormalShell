@@ -13,8 +13,9 @@ import "../../Lyrics/model.js" as Lyrics
 // Several lines are lit at once (spec P5): the active main line, plus every
 // background or duet line whose own timing still covers the position. The
 // position they all read is `LyricsService.positionSeconds`, the player's
-// clock led by the model's own lead with `media.lyricsOffsetMs` on top, and
-// the model answers the set; nothing here decides what is lit.
+// clock led by the model's own lead and held back by the output latency plus
+// `media.lyricsOffsetMs`, and the model answers the set; nothing here decides
+// what is lit.
 //
 // Every line draws its chunks, lit or not (M69): a lit line is the same
 // chunks with the sung copy masked over them, never a second form of the

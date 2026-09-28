@@ -761,13 +761,132 @@ function synthesiseWords(lines) {
 }
 
 // The one position the lit set, the wipe and the interlude ramp are all read
-// against: the player's clock led by POSITION_LEAD_SECONDS, then
-// `media.lyricsOffsetMs` on top of the lead, positive holding the lyrics
-// back. Every caller goes through here, so the pane and `media lyrics` can
-// never disagree about which line is lit.
+// against: the player's clock led by POSITION_LEAD_SECONDS, then held back
+// by `holdSeconds`, the output's latency plus `media.lyricsOffsetMs`,
+// positive holding the lyrics back. Every caller goes through here, so the
+// pane and `media lyrics` can never disagree about which line is lit.
 function ledPosition(position, offsetSeconds) {
     var offset = Number(offsetSeconds);
     return position + POSITION_LEAD_SECONDS - (isFinite(offset) ? offset : 0);
+}
+
+// The hold `ledPosition` takes: the output's own latency while
+// `media.lyricsOffsetAuto` is on (kopuz's lyrics_offset_auto, default true),
+// with `media.lyricsOffsetMs` added on top either way. kopuz makes the two
+// exclusive; here the manual key predates the auto one and is a nudge off the
+// lead, so it keeps meaning the same thing with the latency under it.
+function holdSeconds(auto, latencyMs, manualMs) {
+    var latency = Number(latencyMs);
+    var manual = Number(manualMs);
+    return ((auto === true && isFinite(latency) ? latency : 0) + (isFinite(manual) ? manual : 0)) / 1000;
+}
+
+// A latency past this is a misreport rather than a sink: the longest
+// Bluetooth path PipeWire describes is well under half of it.
+var OUTPUT_LATENCY_MAX_MS = 2000;
+
+// `pw-dump`'s whole graph, cut down to what the output latency needs:
+// every playback stream with the names MediaModel.streamOwner matches a
+// player on, each node's downstream latency in ms, sinks by node.name, and
+// the default sink's name out of the "default" metadata.
+//
+// A port's Latency param with direction "Input" is the latency from that
+// port to the ear, PipeWire's own sum over everything downstream of it: a
+// bluez5 sink puts its packet, codec and transport delay there (media-sink.c
+// set_latency), and a link carries it up to the stream feeding it, through
+// any loopback or filter chain in between. It is quantum + rate + ns, the
+// first two in frames of the graph clock, so the settings metadata's
+// quantum and rate turn them into time; a forced value wins, as it does in
+// the graph itself.
+function latencyGraph(text) {
+    var objects;
+    try {
+        objects = JSON.parse(text);
+    } catch (e) {
+        return null;
+    }
+    if (!Array.isArray(objects))
+        return null;
+    var clock = { rate: 48000, quantum: 1024, forceRate: 0, forceQuantum: 0 };
+    var defaultSink = "";
+    for (var m = 0; m < objects.length; m++) {
+        var meta = objects[m];
+        if (!meta || meta.type !== "PipeWire:Interface:Metadata" || !Array.isArray(meta.metadata))
+            continue;
+        var metaName = meta.props ? meta.props["metadata.name"] : "";
+        for (var k = 0; k < meta.metadata.length; k++) {
+            var entry = meta.metadata[k] || {};
+            if (metaName === "settings") {
+                var n = Number(entry.value);
+                if (entry.key === "clock.rate" && n > 0) clock.rate = n;
+                else if (entry.key === "clock.quantum" && n > 0) clock.quantum = n;
+                else if (entry.key === "clock.force-rate" && n > 0) clock.forceRate = n;
+                else if (entry.key === "clock.force-quantum" && n > 0) clock.forceQuantum = n;
+            } else if (metaName === "default" && entry.key === "default.audio.sink" && entry.value) {
+                defaultSink = String(entry.value.name || "");
+            }
+        }
+    }
+    var rate = clock.forceRate || clock.rate;
+    var quantum = clock.forceQuantum || clock.quantum;
+
+    var graph = { streams: [], sinks: {}, latency: {}, defaultSink: defaultSink };
+    for (var i = 0; i < objects.length; i++) {
+        var o = objects[i];
+        if (!o || !o.info)
+            continue;
+        var props = o.info.props || {};
+        if (o.type === "PipeWire:Interface:Node") {
+            var cls = String(props["media.class"] || "");
+            if (cls === "Stream/Output/Audio")
+                graph.streams.push({ id: o.id, keys: [props["application.name"], props["application.process.binary"],
+                    props["application.id"], props["node.name"]] });
+            else if (cls === "Audio/Sink" && props["node.name"])
+                graph.sinks[String(props["node.name"])] = o.id;
+        } else if (o.type === "PipeWire:Interface:Port") {
+            var params = o.info.params && Array.isArray(o.info.params.Latency) ? o.info.params.Latency : [];
+            for (var p = 0; p < params.length; p++) {
+                var l = params[p] || {};
+                if (l.direction !== "Input")
+                    continue;
+                var ms = ((Number(l.minQuantum) || 0) * quantum / rate + (Number(l.minRate) || 0) / rate) * 1000
+                    + (Number(l.minNs) || 0) / 1e6;
+                var node = props["node.id"];
+                if (graph.latency[node] === undefined || ms > graph.latency[node])
+                    graph.latency[node] = ms;
+            }
+        }
+    }
+    return graph;
+}
+
+// What the ear is behind the player by, for the playback streams `streamIds`
+// names (the lyric's player's own, off `latencyGraph`'s `streams`), else for
+// the sink `sinkName`, else the graph's default sink: {ms, via}, `via` being
+// "stream", "sink" or "none". The streams are read first because theirs is
+// the whole path to the sink they are actually routed to; the sink stands in
+// while the player has no stream up (paused past its own teardown, say).
+function outputLatency(graph, streamIds, sinkName) {
+    if (!graph)
+        return { ms: 0, via: "none" };
+    function clamp(ms) {
+        return Math.round(Math.max(0, Math.min(OUTPUT_LATENCY_MAX_MS, ms)));
+    }
+    var best = -1;
+    for (var i = 0; i < (streamIds || []).length; i++) {
+        var ms = graph.latency[streamIds[i]];
+        if (ms !== undefined && ms > best)
+            best = ms;
+    }
+    if (best >= 0)
+        return { ms: clamp(best), via: "stream" };
+    var names = [String(sinkName || ""), graph.defaultSink];
+    for (var n = 0; n < names.length; n++) {
+        var id = graph.sinks[names[n]];
+        if (names[n] !== "" && id !== undefined && graph.latency[id] !== undefined)
+            return { ms: clamp(graph.latency[id]), via: "sink" };
+    }
+    return { ms: 0, via: "none" };
 }
 
 // The foreground lines (main_line_indices): every non-background line, or

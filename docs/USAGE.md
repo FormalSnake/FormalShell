@@ -2491,8 +2491,12 @@ and, with `media.lyricsBlur` on (default true), blurs by its distance from
 the lit one; `media.lyricsBlurStrength` (0 to 200, default 100) scales that
 blur. The pane reads 100ms ahead of the position the player reports, since
 that position is a sample the shell extrapolates and the frame drawn from it
-lands a refresh or two later; `media.lyricsOffsetMs` (-5000 to 5000, default
-0) adjusts the whole pane from there, positive holding the lyrics back.
+lands a refresh or two later, and then holds back by the latency of the
+output the player is on, read off PipeWire, so a Bluetooth headset's codec
+and transport delay (often 150ms to 300ms) no longer puts the words ahead of
+the sound; `media.lyricsOffsetAuto: false` turns that off. `media.lyricsOffsetMs`
+(-5000 to 5000, default 0) adjusts the whole pane from there, positive
+holding the lyrics back.
 Clicking a line seeks there; Up and Down walk the lines from the keyboard
 and Enter seeks. Hovering never moves
 the column, but a wheel over the pane scrolls it instead of the song,
