@@ -341,28 +341,41 @@ function parseDeezerBpm(body) {
     }
 }
 
-// One `count`-long 0..1 frame at `seconds` into the track: a kick on every
-// beat weighted to the low bands, a hat on every off-beat weighted to the
-// high ones, the downbeat of each four-beat bar hit harder, and a slow
-// per-band drift so no two frames between beats are the same. `channel`
-// (0 mix, -1 left, 1 right) shifts the drift so the stereo style's halves
-// differ. Deterministic in its inputs, so a paused track holds its frame.
+// A stable 0..1 value per integer, so a given beat or sixteenth always
+// draws the same way and a paused track holds its frame.
+function _hash(n) {
+    var x = Math.sin(n * 12.9898) * 43758.5453;
+    return x - Math.floor(x);
+}
+
+// One `count`-long 0..1 frame at `seconds` into the track, built like a
+// drum pattern over a spectrum: a kick on every beat in the low bands, a
+// snare on beats two and four in the mids, hats on every sixteenth in the
+// highs, each hit a sharp attack and a fast decay at its own random
+// strength, plus per-band jitter that changes every sixteenth. `channel`
+// (0 mix, -1 left, 1 right) reseeds the randomness so the stereo style's
+// halves differ.
 function beatFrame(seconds, bpm, count, channel) {
     var tempo = bpm > 0 ? bpm : FALLBACK_BPM;
     var beats = Math.max(0, seconds) * tempo / 60;
-    var phase = beats - Math.floor(beats);
-    var offPhase = (beats + 0.5) - Math.floor(beats + 0.5);
-    var accent = Math.floor(beats) % 4 === 0 ? 1 : 0.75;
-    var kick = Math.exp(-phase * 7) * accent;
-    var hat = Math.exp(-offPhase * 12);
-    var shift = (channel || 0) * 0.9;
+    var beat = Math.floor(beats);
+    var phase = beats - beat;
+    var sixteenths = beats * 4;
+    var sixteenth = Math.floor(sixteenths);
+    var sixteenthPhase = sixteenths - sixteenth;
+    var seed = (channel || 0) * 7919;
+    var kick = Math.exp(-phase * 10) * (0.7 + 0.3 * _hash(beat + seed));
+    var snare = beat % 2 === 1 ? Math.exp(-phase * 8) * (0.8 + 0.2 * _hash(beat * 3 + seed)) : 0;
+    var hat = Math.exp(-sixteenthPhase * 18) * (0.5 + 0.5 * _hash(sixteenth * 5 + seed));
     var frame = new Array(count);
     for (var i = 0; i < count; i++) {
         var x = count > 1 ? i / (count - 1) : 0;
-        var low = Math.pow(1 - x, 1.5);
-        var high = Math.pow(x, 1.2);
-        var drift = 0.5 + 0.5 * Math.sin(seconds * (1.1 + i * 0.29) + i * 1.7 + shift);
-        var v = 0.12 + 0.2 * drift * (1 - 0.5 * x) + 0.6 * low * kick + 0.35 * high * hat + 0.15 * kick * (1 - low);
+        var low = Math.pow(Math.max(0, 1 - x * 2.5), 1.2);
+        var mid = Math.exp(-Math.pow((x - 0.45) / 0.18, 2));
+        var high = Math.pow(x, 1.5);
+        var jitter = _hash(sixteenth * 31 + i + seed);
+        var drift = 0.5 + 0.5 * Math.sin(seconds * (1.1 + i * 0.29) + i * 1.7);
+        var v = 0.04 + 0.9 * low * kick + 0.75 * mid * snare + 0.7 * high * hat + 0.12 * jitter + 0.06 * drift;
         frame[i] = Math.min(1, Math.max(0, v));
     }
     return frame;

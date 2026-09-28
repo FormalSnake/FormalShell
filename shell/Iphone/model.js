@@ -520,3 +520,42 @@ function isActionable(entry, currentSession) {
         return true;
     return _int(entry.session) === current;
 }
+
+// AMS carries no artwork, so the phone's cover is looked up on iTunes'
+// search by title and artist. Only a result by the same artist counts (a
+// "Waves" by anyone else is not this track's cover); one on the same album
+// wins over the first. The 100px thumbnail URL takes any size in its last
+// path segment, so it is asked for at 600px. "" for no usable result.
+function artworkSearchUrl(artist, title) {
+    var query = (_str(title) + " " + _str(artist)).trim();
+    return "https://itunes.apple.com/search?term=" + encodeURIComponent(query) + "&entity=song&limit=10";
+}
+
+function pickArtwork(body, artist, album) {
+    var results;
+    try {
+        results = JSON.parse(body).results;
+    } catch (e) {
+        return "";
+    }
+    if (!Array.isArray(results))
+        return "";
+    var wantArtist = _str(artist).toLowerCase();
+    var wantAlbum = _str(album).toLowerCase();
+    if (wantArtist === "")
+        return "";
+    var first = "";
+    for (var i = 0; i < results.length; i++) {
+        var r = results[i] || {};
+        var have = _str(r.artistName).toLowerCase();
+        var url = _str(r.artworkUrl100);
+        if (url === "" || have === "" || (have.indexOf(wantArtist) === -1 && wantArtist.indexOf(have) === -1))
+            continue;
+        url = url.replace(/\/\d+x\d+bb\.(jpg|png)$/, "/600x600bb.$1");
+        if (wantAlbum !== "" && _str(r.collectionName).toLowerCase() === wantAlbum)
+            return url;
+        if (first === "")
+            first = url;
+    }
+    return first;
+}

@@ -110,6 +110,49 @@ Singleton {
     // -1 unknown; AMS reports the player's own 0..1 volume, not a step size,
     // so `MediaService.setVolume` can only ever pick a direction (Task 4).
     property real mediaVolume: -1
+    // iTunes' cover for the track (IphoneModel.pickArtwork), "" until one
+    // is found or when none matches; looked up once per track per session.
+    property string mediaArtUrl: ""
+    property var _artCache: ({})
+    property int _artSerial: 0
+    readonly property string _artKey: root.mediaTitle !== "" && root.mediaArtist !== ""
+        ? root.mediaArtist + "\n" + root.mediaTitle + "\n" + root.mediaAlbum : ""
+
+    on_ArtKeyChanged: {
+        root._artSerial++;
+        if (root._artKey === "" || root._artKey in root._artCache) {
+            root.mediaArtUrl = root._artKey === "" ? "" : root._artCache[root._artKey];
+            return;
+        }
+        root.mediaArtUrl = "";
+        var serial = root._artSerial;
+        var key = root._artKey;
+        var artist = root.mediaArtist;
+        var album = root.mediaAlbum;
+        var proc = artProc.createObject(root, { command: ["curl", "-sS", "--fail", "--max-time", "5",
+            IphoneModel.artworkSearchUrl(artist, root.mediaTitle)] });
+        proc.done.connect(body => {
+            var url = IphoneModel.pickArtwork(body, artist, album);
+            var cache = root._artCache;
+            cache[key] = url;
+            root._artCache = cache;
+            if (serial === root._artSerial)
+                root.mediaArtUrl = url;
+            proc.destroy();
+        });
+        proc.running = true;
+    }
+
+    Component {
+        id: artProc
+        Process {
+            signal done(string body)
+            stdout: StdioCollector {
+                id: artCollector
+            }
+            onExited: exitCode => done(exitCode === 0 ? artCollector.text : "")
+        }
+    }
 
     // AMS pushes `elapsed` only on a playback-info change (a rate/track
     // change), the same "position doesn't tick" contract MPRIS documents

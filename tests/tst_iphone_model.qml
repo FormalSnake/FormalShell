@@ -426,4 +426,26 @@ TestCase {
         compare(IM.isActionable(phone({ deviceHandle: "" }), 77), false);
         compare(IM.isActionable(null, 77), false);
     }
+
+    function test_artwork_search_url_puts_title_first() {
+        compare(IM.artworkSearchUrl("Daft Punk", "Get Lucky"),
+            "https://itunes.apple.com/search?term=Get%20Lucky%20Daft%20Punk&entity=song&limit=10");
+    }
+
+    function test_pick_artwork_prefers_the_album_and_upsizes() {
+        var body = JSON.stringify({ results: [
+            { artistName: "Someone Else", collectionName: "RAM", artworkUrl100: "https://x/a.jpg/100x100bb.jpg" },
+            { artistName: "Daft Punk", collectionName: "Get Lucky (Remix)", artworkUrl100: "https://x/b.jpg/100x100bb.jpg" },
+            { artistName: "Daft Punk, Pharrell Williams", collectionName: "Random Access Memories", artworkUrl100: "https://x/c.jpg/100x100bb.jpg" }
+        ] });
+        compare(IM.pickArtwork(body, "Daft Punk", "Random Access Memories"), "https://x/c.jpg/600x600bb.jpg");
+        compare(IM.pickArtwork(body, "Daft Punk", "Unknown"), "https://x/b.jpg/600x600bb.jpg");
+    }
+
+    function test_pick_artwork_needs_the_same_artist() {
+        var body = JSON.stringify({ results: [{ artistName: "Other", artworkUrl100: "https://x/a.jpg/100x100bb.jpg" }] });
+        compare(IM.pickArtwork(body, "Fixture Band", "Fixture Album"), "");
+        compare(IM.pickArtwork("nope", "Fixture Band", ""), "");
+        compare(IM.pickArtwork(body, "", ""), "");
+    }
 }

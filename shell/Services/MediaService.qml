@@ -38,9 +38,9 @@ import "../Media/model.js" as MediaModel
 // is auto.
 //
 // The phone offers no seek, no cover art and no arbitrary volume, only
-// play/pause/toggle/next/prev/volup/voldown: `canSeek` stays false and
-// `artUrl` stays "" for it, honest gaps rather than a fake scrub bar or a
-// blank square, and `setVolume` picks a direction and issues one step
+// play/pause/toggle/next/prev/volup/voldown: `canSeek` stays false, the
+// cover is iTunes' own for the same artist's track (IphoneService
+// `mediaArtUrl`, "" when nothing matches), and `setVolume` picks a direction and issues one step
 // rather than pretending AMS took an absolute value. AirPlay offers less
 // still: UxPlay reports no play/pause state and takes no remote command at
 // all, so it carries no transport, no seek and no volume of its own --
@@ -194,6 +194,7 @@ Singleton {
         : root._iphone ? IphoneService.mediaAlbum
         : root._airplay ? AirplayService.album : ""
     readonly property string artUrl: root.activePlayer ? root.activePlayer.trackArtUrl
+        : root._iphone ? IphoneService.mediaArtUrl
         : root._airplay ? AirplayService.coverUrl : ""
     // `xesam:url` has no dedicated MprisPlayer property (only trackArtUrl
     // does); it comes straight out of the raw metadata map (LyricsService's
