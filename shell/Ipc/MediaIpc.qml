@@ -135,6 +135,7 @@ IpcHandler {
             title: MediaService.title,
             artist: MediaService.artist,
             album: MediaService.album,
+            artUrl: MediaService.artUrl,
             isPlaying: MediaService.isPlaying,
             position: MediaService.position,
             length: MediaService.length,
