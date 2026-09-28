@@ -107,9 +107,24 @@ if [ "\$host" != fakehost ]; then
   printf 'refused %s\n' "\$host" >> "$spaces_ssh_calls_path"
   exit 255
 fi
+# A real remote whose bash, run by sshd, sources a ~/.bashrc that starts
+# an interactive fish on the channel's stdin. Short of -n or --norc that fish
+# waits for an EOF the shell's open stdin pipe never sends.
+case " \$* " in
+  *" -n "*|*" bash --norc "*) ;;
+  *) cat > /dev/null ;;
+esac
+# One line the size and shape herdr 0.9.1 really prints for eight agents
+# (~4.5KB, a non-ASCII title glyph in each), only the first one's status
+# driven.
+agent() {
+  printf '{"agent":"claude","agent_session":{"agent":"claude","kind":"id","source":"herdr:claude","value":"764b8a38-bc42-4d6b-8c85-73ca5a24831%s"},"agent_status":"%s","cwd":"/home/rig/src/project-%s","focused":false,"foreground_cwd":"/home/rig/src/project-%s","pane_id":"w65215ab3bb4281:p%s","revision":11,"state_change_seq":856,"tab_id":"w65215ab3bb4281:t%s","terminal_id":"term_65c177d9ebde6%s","terminal_title":"◑ Fixture agent %s on a long running task","terminal_title_stripped":"Fixture agent %s on a long running task","workspace_id":"w65215ab3bb4281"}' "\$1" "\$2" "\$1" "\$1" "\$1" "\$1" "\$1" "\$1" "\$1"
+}
 while :; do
   state=\$(cat "$spaces_remote_state_path" 2>/dev/null)
-  printf '{"result":{"type":"agent_list","agents":[{"pane_id":"p1","agent":"claude","agent_status":"%s"}]}}\n' "\${state:-idle}"
+  agents=\$(agent 1 "\${state:-idle}")
+  for i in 2 3 4 5 6 7 8; do agents="\$agents,\$(agent "\$i" idle)"; done
+  printf '{"id":"cli:agent:list","result":{"type":"agent_list","agents":[%s]}}\n' "\$agents"
   sleep 2
 done
 EOF

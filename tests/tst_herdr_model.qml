@@ -242,12 +242,21 @@ TestCase {
         compare(cmd[0], "ssh");
         compare(cmd[cmd.length - 2], "mac");
         var remoteCmd = cmd[cmd.length - 1];
-        compare(remoteCmd.indexOf("bash -c '") === 0, true);
+        compare(remoteCmd.indexOf("bash --norc -c '") === 0, true);
         // fish's own escaping never leaves a bare, unescaped single quote
         // inside the wrapper: every `'` in the body is preceded by `\`.
-        var body = remoteCmd.slice("bash -c '".length, -1);
+        var body = remoteCmd.slice("bash --norc -c '".length, -1);
         var bareQuote = /(^|[^\\])'/.test(body);
         compare(bareQuote, false);
+    }
+
+    // Quickshell never closes a child's stdin, and bash under sshd sources
+    // ~/.bashrc even for `-c`; one that starts fish there blocked the loop
+    // on e1504g before it printed a single line.
+    function test_poll_command_remote_never_waits_on_stdin_or_bashrc() {
+        var cmd = HerdrModel.pollCommand({ remote: "mac", session: "" });
+        compare(cmd.indexOf("-n") > 0 && cmd.indexOf("-n") < cmd.indexOf("mac"), true);
+        compare(cmd[cmd.length - 1].indexOf("bash --norc -c ") === 0, true);
     }
 
     function test_poll_command_remote_resolves_herdr_three_ways() {

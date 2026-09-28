@@ -224,17 +224,22 @@ function _remoteScript(session) {
 // round trip otherwise. The ssh options mirror dualsense-herdr's own
 // robustness (BatchMode so a prompt fails instead of hanging,
 // ServerAlive* so a dead link is noticed rather than left half-open).
+// Quickshell keeps the child's stdin pipe open for its whole life, and bash
+// run by sshd sources ~/.bashrc even under `-c`: one that starts an
+// interactive fish leaves it reading that stdin forever, and the loop after
+// it never runs. `-n` hands the remote an EOF and `--norc` skips the rc file,
+// so neither a blocking nor a chatty .bashrc reaches the poll.
 function pollCommand(client) {
     var remote = client && client.remote ? String(client.remote) : "";
     var session = client && client.session ? String(client.session) : "";
     if (remote === "")
         return ["sh", "-c", _localScript(session)];
-    return ["ssh",
+    return ["ssh", "-n",
         "-o", "BatchMode=yes",
         "-o", "ClearAllForwardings=yes",
         "-o", "ConnectTimeout=10",
         "-o", "ServerAliveInterval=15",
         "-o", "ServerAliveCountMax=2",
         remote,
-        "bash -c " + fishQuote(_remoteScript(session))];
+        "bash --norc -c " + fishQuote(_remoteScript(session))];
 }
