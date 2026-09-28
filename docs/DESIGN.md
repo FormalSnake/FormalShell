@@ -551,26 +551,35 @@ the strip already carries both. Hover, cursor, active, selected,
 destructive and warning draw as they do anywhere else. A cell whose panel is
 open draws a 2px `primary` line along its bottom edge.
 
-The workspace cell is Spaces (M74, after omarchy-spaces): one slot per
-workspace, each its label (the workspace's name or ordinal, mono) followed
-by the icons of its windows in screen order, through the same app-icon
-chain the switcher uses. Slots 1 to `workspaces.persistent` always show,
-empty or not. The workspace on screen always shows its icons and sits
-wider for it; the others show theirs per `workspaces.showApps` (`hover` by
-default). One pill in the `cell` role's `active` fill sits under the focused
-slot and travels on a switch, stretching over the slot's own length; on it
-the focused window's icon is lit and the rest dimmed. A hovered slot takes
-the `cell` hover wash, an urgent one a `destructive` label that pulses once.
-Past `workspaces.maxIcons` the rest are a `+n` count. A window whose herdr
-agent is working, waiting or done carries a badge on its icon (a spinner, a
-pulsing alert in `destructive`, a check in `primary`), and a slot with an
+The workspace cell is Spaces (M74, after omarchy-spaces): a row of chips,
+one per workspace, each its ordinal (mono, never the compositor's name for
+it) followed by the icons of its windows in screen order, through the same
+app-icon chain the switcher uses. A chip is the cell's thickness across; an
+icon sits on a plate `xs` in from the chip's edge, the plate's corner
+concentric with the chip's. Chips 1 to `workspaces.persistent` always show,
+empty or not, and every occupied chip shows its icons
+(`workspaces.showApps`: `all` by default, `active` or `hover` to narrow
+it). An occupied chip rests on the `cell` hover wash and takes the press
+wash under the pointer; an empty one draws nothing until hovered. The
+focused chip is one fill in the `cell` role's `selected` state that
+travels on a switch, stretching over the chip's own length; on it the
+focused window's icon sits on a hover-wash plate and the rest are dimmed.
+An urgent chip takes a `destructive` number that pulses once. Past
+`workspaces.maxIcons` the rest are a `+n` count. A window whose herdr agent
+is working, waiting or done carries a badge on its icon (a spinner, a
+pulsing alert in `destructive`, a check in `primary`), and a chip with an
 agent waiting on it breathes `destructive` until it is looked at. Clicking
-a slot goes there, clicking an icon focuses that window, and the wheel
-steps slots. Resting on another slot for the tooltip's delay hangs a card
-off it (a panel, joined like any other) drawing each of that workspace's
-windows as a box at its own place on the output, icon and title in it; the
-card follows the pointer between slots and closes once the pointer is on
-neither. `workspaces peek <n>` opens the same card over IPC.
+a chip goes there, clicking an icon focuses that window, and the wheel
+steps chips. Resting on another occupied chip for the tooltip's delay hangs
+a card off it (a panel, joined like any other): the workspace and its
+window count over a miniature of the output with each window drawn live at
+its own place (a `ScreencopyView` on its toplevel, rounded like any
+picture, its icon in the corner), and a footer naming the window under the
+pointer. A window the compositor sends no frame for is drawn as its
+schematic `Cell` instead. The card takes no keyboard when the pointer
+opened it, follows the pointer between chips and closes once the pointer
+is on neither. `workspaces peek <n>` opens the same card over IPC, as an
+ordinary panel.
 
 The tray's place on the bar is a dots toggle, and the icons themselves live
 in a second bar hanging off it. The strip can carry them instead

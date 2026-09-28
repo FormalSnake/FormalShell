@@ -257,6 +257,20 @@ Scope {
         Hyprland.refreshToplevels();
     }
 
+    // HyprlandToplevel.wayland (pinned quickshell 43d4fa9,
+    // src/wayland/hyprland/ipc/hyprland_toplevel.hpp:33), null until the
+    // foreign-toplevel handle for that address has been matched. Read inside
+    // a binding, both the list and the handle are tracked, so a late match
+    // re-evaluates the caller.
+    function toplevelHandle(id) {
+        var tls = Hyprland.toplevels.values;
+        for (var i = 0; i < tls.length; i++) {
+            if (tls[i].address === id)
+                return tls[i].wayland;
+        }
+        return null;
+    }
+
     function focusWorkspace(id) {
         if (Hyprland.usingLua)
             Hyprland.dispatch("hl.dsp.focus({ workspace = " + root._luaValue(id) + " })");

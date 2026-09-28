@@ -139,10 +139,11 @@ function slotWindows(windows, workspaceId, maxIcons) {
     };
 }
 
-// What a slot is called: the workspace's own name when the compositor
-// carries one, its ordinal otherwise.
+// What a slot is called: its ordinal, always. A Hyprland `default_name`
+// is config (often a glyph and a word) and the chip already says what is
+// on the workspace with its icons.
 function label(ws) {
-    return ws.name && ws.name !== "" ? String(ws.name) : String(ws.idx);
+    return String(ws.idx);
 }
 
 // Every slot this bar draws, windows included. `current` is the workspace
@@ -171,9 +172,10 @@ function slots(workspaces, windows, outputName, opts) {
     });
 }
 
-// Whether a slot shows its icons. `mode` is `workspaces.showApps`: `all`,
-// `active` (the current slot only) or `hover` (the current slot, and any
-// other while the pointer is on it). An unknown mode reads as `hover`.
+// Whether a slot shows its icons. `mode` is `workspaces.showApps`: `all`
+// (the default, every occupied slot), `active` (the current slot only) or
+// `hover` (the current slot, and any other while the pointer is on it). An
+// unknown mode reads as `hover`.
 function showsApps(mode, current, hovered) {
     if (mode === "all")
         return true;

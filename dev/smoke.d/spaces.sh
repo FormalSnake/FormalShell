@@ -25,24 +25,32 @@
 # path was taken at all.
 #
 # What is read, in order:
-# - `workspaces status`: every window listed under its own slot with its
-#   icon resolved, the blocked and working agents on the right icons, the
-#   plain window with none, and the slot on screen wider than a bare one.
+# - `workspaces status`: every window listed under its own chip with its
+#   icon resolved and shown (icons on every occupied chip, not just the
+#   one on screen), every chip labelled with its ordinal, the blocked and
+#   working agents on the right icons, the plain window with none, and the
+#   chip on screen wider than a bare one.
 # - `debug dump`'s herdr block agreeing: both windows in stateByWindow,
 #   both client keys in stateByKey.
 # - The frame: the blocked icon's badge, read as the difference between the
-#   slot with herdr answering blocked and the same slot once it answers
-#   idle, red-dominant and inside that icon's own box. The idle dump drops
-#   the window from stateByWindow, which is the "nothing for idle" half.
+#   chip with herdr answering blocked and the same chip once it answers
+#   idle, red-dominant and inside that icon's own box (the icon's rect out
+#   of `workspaces status`). The idle dump drops the window from
+#   stateByWindow, which is the "nothing for idle" half.
 # - A wheel notch over workspace 1's slot (wlrctl, a real axis event) moving
 #   focus to workspace 2 and a notch back returning it, off hyprctl. A
 #   notch is `scroll 15`: Qt reads wlrctl's continuous axis at 8 per unit,
 #   so the 10 wheel.sh sends is an angleDelta of 80, short of the 120 the
 #   cell sums to before it steps.
-# - `workspaces peek 2` opening the preview on workspace 2 with two window
-#   boxes, photographed, then closed.
-# - A real pointer parked on workspace 2's slot opening the same preview
-#   after the hover delay, and moving off it closing it again.
+# - `workspaces peek 2` opening the preview on workspace 2 with both of its
+#   windows drawn live (the thumbnails' ScreencopyViews holding a frame),
+#   taking the keyboard as any panel does; photographed, then closed.
+# - A real pointer parked on workspace 2's chip opening the same preview
+#   after the hover delay without taking the keyboard, and staying open
+#   while the pointer keeps moving over the chip, which is what a hand on a
+#   real mouse does and what a card that primes Exclusive focus fails:
+#   Hyprland pulls the pointer onto a layer that maps Exclusive and hands
+#   it back on the next motion. Moving off it closes it again.
 leg_spaces_flag="--spaces"
 leg_spaces_order=196
 leg_spaces_needs="foot jq convert wlrctl"
@@ -60,6 +68,7 @@ spaces_status_two_path="$shot_dir/spaces-status-two.json"
 spaces_status_peek_path="$shot_dir/spaces-status-peek.json"
 spaces_status_hover_path="$shot_dir/spaces-status-hover.json"
 spaces_status_left_path="$shot_dir/spaces-status-left.json"
+spaces_status_moved_path="$shot_dir/spaces-status-moved.json"
 spaces_dump_path="$shot_dir/spaces-dump.json"
 spaces_dump_idle_path="$shot_dir/spaces-dump-idle.json"
 spaces_peek_reply_path="$shot_dir/spaces-peek-reply.txt"
@@ -231,6 +240,12 @@ park \$(centre 1 "$spaces_status_one_path")
 sleep 2
 call workspaces status > "$spaces_status_hover_path" 2>&1
 "$grim_bin" "$spaces_hover_png" > /dev/null 2>&1
+for step in 3 -3 3 -3 3 -3 3 -3 3 -3; do
+  "$wlrctl_bin" pointer move "\$step" 0 >> "$spaces_dispatch_path" 2>&1
+  sleep 0.15
+done
+sleep 0.5
+call workspaces status > "$spaces_status_moved_path" 2>&1
 park 960 900
 sleep 2
 call workspaces status > "$spaces_status_left_path" 2>&1
@@ -252,7 +267,8 @@ leg_spaces_assert() {
   local f blocked working plain blocked_id working_id slot_one slot_bare
   [ -f "$spaces_done_path" ] || fail "the spaces drive never finished; last dispatch output: $(tail -n 5 "$spaces_dispatch_path" 2>/dev/null)"
   for f in "$spaces_status_one_path" "$spaces_dump_path" "$spaces_dump_idle_path" \
-    "$spaces_status_two_path" "$spaces_status_peek_path" "$spaces_status_hover_path" "$spaces_status_left_path"; do
+    "$spaces_status_two_path" "$spaces_status_peek_path" "$spaces_status_hover_path" \
+    "$spaces_status_moved_path" "$spaces_status_left_path"; do
     [ -s "$f" ] || fail "no read produced at $f"
   done
   cat "$spaces_status_one_path"; echo
@@ -268,7 +284,12 @@ leg_spaces_assert() {
   fi
   [ -s "$spaces_herdr_calls_path" ] || fail "the local herdr client was never polled"
 
-  # Icons: every fixture window under its own slot, each resolved.
+  # Chips: the ordinal on every one, whatever the compositor names it.
+  "$jq_bin" -e '.slots | all(.label == (.idx | tostring))' "$spaces_status_one_path" > /dev/null \
+    || fail "a chip is labelled with something other than its ordinal: $("$jq_bin" -c '[.slots[] | .label]' "$spaces_status_one_path")"
+
+  # Icons: every fixture window under its own chip, each resolved, and
+  # shown on every chip that holds a window, not only the one on screen.
   blocked=$(spaces_icon "$spaces_status_one_path" blocked)
   working=$(spaces_icon "$spaces_status_one_path" working)
   plain=$(spaces_icon "$spaces_status_one_path" plain)
@@ -283,6 +304,8 @@ leg_spaces_assert() {
   for f in "$blocked" "$sibling" "$working" "$plain"; do
     [ "$(echo "$f" | "$jq_bin" -r .icon)" = true ] || fail "a fixture window resolved no icon: $f"
   done
+  "$jq_bin" -e '[.slots[] | select(.icons | length > 0) | .appsShown] | all' "$spaces_status_one_path" > /dev/null \
+    || fail "an occupied chip hides its icons: $("$jq_bin" -c '[.slots[] | {idx, appsShown}]' "$spaces_status_one_path")"
   "$jq_bin" -e '.slots[0].icons | map(select(.appId == "formalshell-smoke-iconic")) | length == 1' "$spaces_status_one_path" > /dev/null \
     || fail "the base fixture window is not under workspace 1's slot"
 
@@ -330,15 +353,13 @@ leg_spaces_assert() {
   echo "SMOKE_SPACES_HOVER $spaces_hover_png"
   echo "SMOKE_SPACES_LEFT $spaces_left_png"
 
-  # The badge in the frame: what changed in workspace 1's slot when herdr
+  # The badge in the frame: what changed in workspace 1's chip when herdr
   # went from blocked to idle, which has to sit on the blocked icon and be
-  # red. Icons are right-aligned in the slot, `md` in from its end, 16 wide
-  # with 2 between.
-  local geo sx sy sw sh n at icon_left diff_box dx dw red_on red_off
+  # red. The icon's own rect comes out of the status read.
+  local geo sx sy sw sh icon_left icon_width diff_box dx dw red_on red_off
   read -r sx sy sw sh < <("$jq_bin" -r '.slots[0].rect | "\(.x) \(.y) \(.width) \(.height)"' "$spaces_status_one_path")
-  n=$("$jq_bin" -r '.slots[0].icons | length' "$spaces_status_one_path")
-  at=$(echo "$blocked" | "$jq_bin" -r .at)
-  icon_left=$((sx + sw - 6 - (n - at) * 16 - (n - 1 - at) * 2))
+  icon_left=$(echo "$blocked" | "$jq_bin" -r .rect.x)
+  icon_width=$(echo "$blocked" | "$jq_bin" -r .rect.width)
   geo="${sw}x${sh}+${sx}+${sy}"
   mkdir -p "$spaces_crop_dir"
   $convert_bin "$spaces_blocked_png" -crop "$geo" +repage "$spaces_crop_dir/slot-blocked.png" \
@@ -354,8 +375,8 @@ leg_spaces_assert() {
   [ -n "$dx" ] && [ "${dw:-0}" -gt 0 ] && [ "$diff_box" != "0x0+0+0" ] \
     || fail "workspace 1's slot looks the same with herdr blocked and idle: no badge drawn"
   dx=$((dx + sx))
-  if [ "$dx" -lt $((icon_left - 3)) ] || [ $((dx + dw)) -gt $((icon_left + 16 + 4)) ]; then
-    fail "the badge change spans x=$dx..$((dx + dw)), outside the blocked icon at $icon_left..$((icon_left + 16))"
+  if [ "$dx" -lt $((icon_left - 3)) ] || [ $((dx + dw)) -gt $((icon_left + icon_width + 4)) ]; then
+    fail "the badge change spans x=$dx..$((dx + dw)), outside the blocked icon at $icon_left..$((icon_left + icon_width))"
   fi
   # Redness as the mean of red over the other two, read off both frames in
   # the same box. The badge pulses between 0.4 and 1, so a fixed colour
@@ -378,12 +399,29 @@ leg_spaces_assert() {
 
   # The preview, by IPC and by pointer.
   cat "$spaces_peek_reply_path"
-  "$jq_bin" -c .preview "$spaces_status_peek_path" "$spaces_status_hover_path" "$spaces_status_left_path"
+  "$jq_bin" -c .preview "$spaces_status_peek_path" "$spaces_status_hover_path" "$spaces_status_moved_path" "$spaces_status_left_path"
   grep -q '^ok$' "$spaces_peek_reply_path" || fail "workspaces peek 2 did not answer ok: $(cat "$spaces_peek_reply_path")"
-  "$jq_bin" -e '.preview.open and .preview.idx == 2 and .preview.windows == 2' "$spaces_status_peek_path" > /dev/null \
-    || fail "peek 2 did not open workspace 2's preview with two boxes: $("$jq_bin" -c .preview "$spaces_status_peek_path")"
-  "$jq_bin" -e '.preview.open and .preview.idx == 2' "$spaces_status_hover_path" > /dev/null \
-    || fail "a pointer parked on workspace 2's slot did not open its preview: $("$jq_bin" -c .preview "$spaces_status_hover_path")"
+  "$jq_bin" -e '.preview.open and .preview.idx == 2 and .preview.windows == 2 and .preview.keyboard' "$spaces_status_peek_path" > /dev/null \
+    || fail "peek 2 did not open workspace 2's preview with two windows and the keyboard: $("$jq_bin" -c .preview "$spaces_status_peek_path")"
+  "$jq_bin" -e '.preview.captured == 2' "$spaces_status_peek_path" > /dev/null \
+    || fail "peek 2's thumbnails are not both live window captures: $("$jq_bin" -c .preview "$spaces_status_peek_path")"
+  "$jq_bin" -e '.preview.open and .preview.idx == 2 and .preview.captured == 2 and (.preview.keyboard | not)' "$spaces_status_hover_path" > /dev/null \
+    || fail "a pointer parked on workspace 2's chip did not open its live preview without the keyboard: $("$jq_bin" -c .preview "$spaces_status_hover_path")"
+  "$jq_bin" -e '.preview.open and .preview.idx == 2' "$spaces_status_moved_path" > /dev/null \
+    || fail "the preview closed while the pointer kept moving over workspace 2's chip: $("$jq_bin" -c .preview "$spaces_status_moved_path")"
+
+  # The card and the chip row, cropped for reading.
+  local card chips
+  card=$("$jq_bin" -r '.preview.rect | "\(.width)x\(.height)+\(.x)+\(.y)"' "$spaces_status_peek_path")
+  chips=$("$jq_bin" -r '[.slots[].rect] | "\((map(.x + .width) | max) - (map(.x) | min) + 8)x\((map(.y + .height) | max) - (map(.y) | min) + 8)+\((map(.x) | min) - 4)+\((map(.y) | min) - 4)"' "$spaces_status_one_path")
+  $convert_bin "$spaces_peek_png" -crop "$card" +repage "$spaces_crop_dir/peek-card.png" \
+    || fail "could not crop the preview card at $card"
+  $convert_bin "$spaces_hover_png" -crop "$card" +repage "$spaces_crop_dir/hover-card.png" || true
+  $convert_bin "$spaces_blocked_png" -crop "$chips" +repage -scale 300% "$spaces_crop_dir/chips.png" \
+    || fail "could not crop the chip row at $chips"
+  echo "SMOKE_SPACES_PEEK_CARD $spaces_crop_dir/peek-card.png"
+  echo "SMOKE_SPACES_HOVER_CARD $spaces_crop_dir/hover-card.png"
+  echo "SMOKE_SPACES_CHIPS $spaces_crop_dir/chips.png"
   "$jq_bin" -e '.preview.open | not' "$spaces_status_left_path" > /dev/null \
     || fail "moving the pointer off the slot left the preview open: $("$jq_bin" -c .preview "$spaces_status_left_path")"
 }

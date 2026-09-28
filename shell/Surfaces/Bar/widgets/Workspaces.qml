@@ -7,36 +7,36 @@ import "../../../Bar/workspaces.js" as WorkspacesModel
 
 // Portions from omarchy-spaces (MIT, Copyright 2026 Tornike Gomareli)
 
-// The workspace row, Spaces (DESIGN.md §3 Bar, M74): one cell holding a slot
-// per workspace on this bar's output, each a label (the workspace's name or
-// its ordinal, mono) followed by the icons of the windows on it, with a
-// single pill layered under the focused slot. Which slots show, in what
-// order, and which windows each one lists is ../../../Bar/workspaces.js's
-// call; the icons come off AppIconService, the same chain the switcher's
-// tiles use, and the agent badges off HerdrService.
+// The workspace row, Spaces (DESIGN.md §3 Bar, M74): one chip per workspace
+// on this bar's output, each its ordinal (mono) followed by the icons of the
+// windows on it, laid out the way omarchy-spaces' own pill delegate is. Which
+// chips show, in what order, and which windows each one lists is
+// ../../../Bar/workspaces.js's call; the icons come off AppIconService, the
+// same chain the switcher's tiles use, and the agent badges off
+// HerdrService.
 //
-// The slot on screen (`current`) always shows its icons and so sits wider
-// than the rest; `workspaces.showApps` decides the others (`hover`, the
-// default: while the pointer is on one; `all`; `active`: never). On the
-// focused slot the window holding focus is lit and the rest are dimmed.
-// Hovering any other slot for the tooltip's own delay opens its preview
-// (Surfaces/Panels/WorkspacePreview.qml), a schematic of where its windows
-// sit.
+// Every occupied chip shows its icons (`workspaces.showApps`, `all` by
+// default; `active` and `hover` narrow it). An occupied chip sits on the
+// `cell` role's hover wash, the one under the pointer on its press wash, an
+// empty one on nothing. On the focused chip the window holding focus sits
+// on a plate of the same wash and the rest are dimmed. Resting on another
+// occupied chip for the tooltip's own delay opens its preview
+// (Surfaces/Panels/WorkspacePreview.qml), live thumbnails of its windows.
 //
-// The pill is one item that moves rather than a fill each slot owns (M48):
-// a switch reads as the pill travelling from the old slot to the new one.
-// Its two edges take different clocks (`emphasized` for the edge arriving,
-// twice that for the edge leaving), so the pill stretches across the gap
-// and closes up behind itself. Slots differ in length now, so each end of
-// the pill is its own pair of edges chasing the same end of the target
-// slot, and whichever of a pair is ahead falls out of min/max rather than
+// The focused chip's own fill is one item that moves rather than a fill
+// each chip owns (M48): a switch reads as the fill travelling from the old
+// chip to the new one. Its two edges take different clocks (`emphasized`
+// for the edge arriving, twice that for the edge leaving), so it stretches
+// across the gap and closes up behind itself. Chips differ in length, so
+// each end is its own pair of edges chasing the same end of the target
+// chip, and whichever of a pair is ahead falls out of min/max rather than
 // needing the direction. Both are zeroed by `motion.enabled=false` like
-// every other transition, and at zero the pill simply appears on its slot.
+// every other transition, and at zero the fill simply appears on its chip.
 //
-// On a left or right bar nothing turns: slots stack down the strip, a
-// slot's icons stack under its label, and the label stands upright, like
-// every other cell's content (Bar/layout.js's labelRotation). The same
-// pill runs along the strip's own axis.
+// On a left or right bar nothing turns: chips stack down the strip, a
+// chip's icons stack under its number, and the number stands upright, like
+// every other cell's content (Bar/layout.js's labelRotation). The same fill
+// runs along the strip's own axis.
 Cell {
     id: root
 
@@ -51,7 +51,7 @@ Cell {
         return isFinite(n) ? Math.max(low, Math.min(high, n)) : fallback;
     }
 
-    readonly property string _showApps: String(Config.get("workspaces.showApps", "hover"))
+    readonly property string _showApps: String(Config.get("workspaces.showApps", "all"))
     readonly property int _maxIcons: root._int(Config.get("workspaces.maxIcons", 8), 1, 20, 8)
     readonly property int _persistent: root._int(Config.get("workspaces.persistent", 5), 0, 10, 5)
     readonly property bool _agents: Config.get("workspaces.agents", true) !== false
@@ -105,27 +105,32 @@ Cell {
         return -1;
     }
 
-    // --- Geometry. A slot is the cell's thickness less an `xs` either side
-    // across, and its own content plus `md` at both ends along, never
-    // shorter than it is thick, so a bare label is a square rather than a
-    // sliver.
-    readonly property real _slotThickness: Theme.space.barCellHeight - Theme.space.xs * 2
-    readonly property real _slotPad: Theme.space.md
-    readonly property real _slotGap: Theme.space.xs
+    // --- Geometry, after the plugin's delegate: a chip is the bar's cell
+    // thickness across, an icon sits on a plate `xs` in from the chip's
+    // edges and `xxs` round the icon, and the number is `md` from the
+    // chip's start. A bare number is never narrower than the chip is thick,
+    // so an empty workspace is a square.
+    readonly property real _chipThickness: Theme.space.barCellHeight
+    readonly property real _plateSize: root._chipThickness - Theme.space.xs * 2
+    readonly property real _iconSize: root._plateSize - Theme.space.xxs * 2
+    readonly property real _chipPad: Theme.space.md
+    readonly property real _chipGap: Theme.space.xs
     readonly property real _labelGap: Theme.space.sm
-    readonly property real _iconSize: Theme.space.lg * 2
     readonly property real _iconGap: Theme.space.xxs
     readonly property real _badgeSize: Theme.fontSize.caption
+    // Concentric with the plate `xs` inside it.
+    readonly property int _chipRadius: Theme.box("cell").radius
+    readonly property int _plateRadius: Math.max(0, root._chipRadius - Theme.space.xs)
 
-    // Each slot's settled length, in order, and where each starts. Read off
-    // the slots' own targets rather than their animated extents, so the
-    // pill travels to where the slot is going instead of chasing it there.
+    // Each chip's settled length, in order, and where each starts. Read off
+    // the chips' own targets rather than their animated extents, so the fill
+    // travels to where the chip is going instead of chasing it there.
     property var _extents: []
 
     function _start(index) {
         var at = 0;
         for (var i = 0; i < index && i < root._extents.length; i++)
-            at += root._extents[i] + root._slotGap;
+            at += root._extents[i] + root._chipGap;
         return at;
     }
 
@@ -147,14 +152,20 @@ Cell {
     on_FocusedIndexChanged: pill._syncTarget()
     on_ExtentsChanged: pill._syncTarget()
 
-    // Which slot the pointer is over. -1 means none.
+    // Which chip the pointer is over. -1 means none.
     property int _hoveredIndex: -1
 
     // --- Preview (Surfaces/Panels/WorkspacePreview.qml). The pointer opens
     // it after the tooltip's own delay (Components/TooltipGroup.qml, 400ms);
-    // once one is up, moving to another slot moves the card with no second
-    // wait, the way a tooltip hands off inside its grace.
+    // once one is up, moving to another chip moves the card with no second
+    // wait, the way a tooltip hands off inside its grace. The number and the
+    // icons are one target for this: the chip's HoverHandler stays hovered
+    // under an icon's own MouseArea.
     readonly property bool _previewUp: !!root.preview && root.preview.isOpen && root.preview.fromPointer
+
+    function _previews(ws) {
+        return root._previewEnabled && !!root.preview && !ws.current && ws.windows.length > 0;
+    }
 
     Timer {
         id: hoverTimer
@@ -162,18 +173,18 @@ Cell {
         interval: 400
         onTriggered: {
             var item = hoverTimer.slotItem;
-            if (item && item.hovered && !item.ws.current && root._previewEnabled && root.preview)
+            if (item && item.hovered && root._previews(item.ws))
                 root.preview.show(item, item.ws, true);
         }
     }
 
     function _slotEntered(item) {
-        if (!root._previewEnabled || !root.preview)
+        if (!root.preview)
             return;
-        if (item.ws.current) {
+        if (!root._previews(item.ws)) {
             hoverTimer.stop();
             if (root._previewUp)
-                root.preview.close();
+                root.preview.release();
             return;
         }
         if (root._previewUp) {
@@ -205,7 +216,7 @@ Cell {
             CompositorService.focusWorkspaceAt(ws.idx);
     }
 
-    // `workspaces peek <n>` (Ipc/WorkspacesIpc.qml): the slot whose ordinal
+    // `workspaces peek <n>` (Ipc/WorkspacesIpc.qml): the chip whose ordinal
     // is `n`, previewed with no pointer to follow.
     function peek(n) {
         for (var i = 0; i < root.slots.length; i++) {
@@ -220,15 +231,26 @@ Cell {
         return false;
     }
 
-    // `workspaces status`: the slots as this cell resolved them, with each
-    // icon's agent state and each slot's settled length, which is how the
-    // rig tells the wide slot from the rest without reading pixels. `rect`
-    // is the slot in its bar window's own coordinates, where the rig parks a
-    // real pointer.
+    // `workspaces status`: the chips as this cell resolved them, with each
+    // icon's agent state and each chip's settled length, which is how the
+    // rig tells the chips apart without reading pixels. Every `rect` is in
+    // the bar window's own coordinates, where the rig parks a real pointer
+    // and crops its frames.
+    function _rectOf(item) {
+        if (!item)
+            return { x: 0, y: 0, width: 0, height: 0 };
+        var origin = item.mapToItem(null, 0, 0);
+        return {
+            x: Math.round(origin.x),
+            y: Math.round(origin.y),
+            width: Math.round(item.width),
+            height: Math.round(item.height)
+        };
+    }
+
     function status() {
         return root.slots.map(function (ws, i) {
             var item = slotRepeater.itemAt(i);
-            var origin = item ? item.mapToItem(null, 0, 0) : Qt.point(0, 0);
             return {
                 id: ws.id,
                 idx: ws.idx,
@@ -239,20 +261,16 @@ Cell {
                 placeholder: ws.placeholder,
                 appsShown: item ? item.showsApps : false,
                 extent: root._extents[i] || 0,
-                rect: {
-                    x: Math.round(origin.x),
-                    y: Math.round(origin.y),
-                    width: item ? Math.round(item.width) : 0,
-                    height: item ? Math.round(item.height) : 0
-                },
+                rect: root._rectOf(item),
                 overflow: ws.overflow,
-                icons: ws.windows.map(function (w) {
+                icons: ws.windows.map(function (w, at) {
                     return {
                         id: w.id,
                         appId: w.appId,
                         focused: w.isFocused,
                         icon: AppIconService.forWindow(w) !== "",
-                        agent: root._agentState(w.id)
+                        agent: root._agentState(w.id),
+                        rect: root._rectOf(item ? item.iconAt(at) : null)
                     };
                 })
             };
@@ -263,13 +281,13 @@ Cell {
         return root._agents && windowId !== "" ? (HerdrService.stateByWindow[windowId] || "") : "";
     }
 
-    // A wheel notch steps one slot, wrapping. A touchpad reports a notch as
+    // A wheel notch steps one chip, wrapping. A touchpad reports a notch as
     // many small deltas, so they are summed to a notch's worth first.
     property real _wheelSum: 0
 
     interactive: true
     acceptedButtons: Qt.NoButton
-    // The slots answer the pointer themselves; a wash over the whole row
+    // The chips answer the pointer themselves; a wash over the whole row
     // would say the row is one target.
     hovered: false
 
@@ -287,38 +305,51 @@ Cell {
             root._go(root.slots[next]);
     }
 
+    // A composed ghost box carrying one wash: the chips and the icon plate
+    // are fills a theme already describes (its pointer washes), laid on
+    // shapes the cell owns.
+    function _washed(color) {
+        var composed = {};
+        var base = Theme.box("cell", "ghost");
+        for (var key in base)
+            composed[key] = base[key];
+        composed.wash = color;
+        return composed;
+    }
+
     Item {
         id: strip
         x: root.vertical ? (parent.width - strip.width) / 2 : 0
         y: root.vertical ? 0 : (parent.height - strip.height) / 2
-        // The grid's own size, slots mid-glide included, so the cell's
+        // The grid's own size, chips mid-glide included, so the cell's
         // length travels with them and needs no width Behavior of its own.
         width: slotGrid.width
         height: slotGrid.height
 
-        // The moving pill, under the slots. `lead*` and `trail*` chase the
-        // same end of the same slot at different speeds; the pill spans the
-        // outermost of each pair.
+        // The focused chip's fill, under the chips. `lead*` and `trail*`
+        // chase the same end of the same chip at different speeds; the fill
+        // spans the outermost of each pair.
         Box {
             id: pill
             role: "cell"
-            // The table's own active fill, with no border: the pill is a
-            // fill travelling between slots, not a box around one.
+            // The table's own selected fill, with no border: a raised chip,
+            // omarchy-spaces' `subtle` active style, and a fill travelling
+            // between chips rather than a box around one.
             box: {
                 var composed = {};
-                var base = Theme.box("cell", "active");
+                var base = Theme.box("cell", "selected");
                 for (var key in base)
                     composed[key] = base[key];
                 composed.border = null;
                 return composed;
             }
-            radius: Theme.pillRadius(root._slotThickness)
+            radius: root._chipRadius
 
             // Focus leaving this output (another monitor took it) is the
-            // pill leaving a surface, not travelling: it fades out where it
-            // stood and fades back in at whatever slot focus returns to. The
+            // fill leaving a surface, not travelling: it fades out where it
+            // stood and fades back in at whatever chip focus returns to. The
             // travel Behaviors below are disarmed while nothing is drawn, so
-            // a re-entry lands at its slot instead of running there from a
+            // a re-entry lands at its chip instead of running there from a
             // stale one.
             readonly property bool _here: root._focusedIndex >= 0
             opacity: pill._here ? 1 : 0
@@ -349,12 +380,12 @@ Cell {
 
             x: root.vertical ? 0 : pill._from
             y: root.vertical ? pill._from : 0
-            width: root.vertical ? root._slotThickness : pill._to - pill._from
-            height: root.vertical ? pill._to - pill._from : root._slotThickness
+            width: root.vertical ? root._chipThickness : pill._to - pill._from
+            height: root.vertical ? pill._to - pill._from : root._chipThickness
 
             // Both edges of a pair on `emphasized`, the trailing one over
             // twice the clock (M54 D2, caelestia's ActiveIndicator): the
-            // leading edge reaches the new slot while the trailing edge is
+            // leading edge reaches the new chip while the trailing edge is
             // still leaving the old one. The one place in the shell that
             // spells a duration of its own, because the relationship between
             // the two edges IS the effect and a second token would be a name
@@ -380,14 +411,14 @@ Cell {
         Grid {
             id: slotGrid
             columns: root.vertical ? 1 : Math.max(1, slotRepeater.count)
-            columnSpacing: root._slotGap
-            rowSpacing: root._slotGap
+            columnSpacing: root._chipGap
+            rowSpacing: root._chipGap
 
             Repeater {
                 id: slotRepeater
                 // A count rather than the array itself: the model is a fresh
                 // array on every focus change, and a Repeater handed one
-                // rebuilds every delegate, which would snap every slot's
+                // rebuilds every delegate, which would snap every chip's
                 // length instead of letting the ones that changed travel.
                 model: root.slots.length
                 onItemAdded: root._remeasure()
@@ -408,7 +439,11 @@ Cell {
                     readonly property int shownIcons: slot.showsApps ? slot.ws.windows.length : 0
                     readonly property bool showsOverflow: slot.showsApps && slot.ws.overflow > 0
 
-                    // An agent on this workspace waiting on the user: the slot
+                    function iconAt(at) {
+                        return at < iconRepeater.count ? iconRepeater.itemAt(at) : null;
+                    }
+
+                    // An agent on this workspace waiting on the user: the chip
                     // pulses until it is looked at, unless it is the one on
                     // screen already.
                     readonly property bool waiting: root._agents && !slot.ws.current
@@ -416,18 +451,21 @@ Cell {
 
                     readonly property real _labelAlong: root.vertical ? label.implicitHeight : label.implicitWidth
                     readonly property real _iconsAlong: slot.shownIcons > 0
-                        ? slot.shownIcons * root._iconSize + (slot.shownIcons - 1) * root._iconGap
+                        ? slot.shownIcons * root._plateSize + (slot.shownIcons - 1) * root._iconGap
                         : 0
                     readonly property real _chipAlong: slot.showsOverflow
                         ? (root.vertical ? chip.implicitHeight : chip.implicitWidth) + root._iconGap
                         : 0
                     readonly property real contentAlong: slot._labelAlong
                         + (slot._iconsAlong > 0 ? root._labelGap + slot._iconsAlong + slot._chipAlong : 0)
-                    readonly property real targetAlong: Math.max(root._slotThickness,
-                        slot.contentAlong + root._slotPad * 2)
+                    // The icons' own plates already carry `xs` of air, so the
+                    // chip's end past the last one is `xs` rather than the
+                    // number's full `md`.
+                    readonly property real targetAlong: Math.max(root._chipThickness,
+                        slot.contentAlong + root._chipPad + (slot._iconsAlong > 0 ? Theme.space.xs : root._chipPad))
                     onTargetAlongChanged: root._remeasure()
 
-                    // The length the slot is drawn at: its target, gliding
+                    // The length the chip is drawn at: its target, gliding
                     // there on the same arm switch every bar cell's own width
                     // takes.
                     property real along: slot.targetAlong
@@ -436,31 +474,30 @@ Cell {
                         Anim {}
                     }
 
-                    width: root.vertical ? root._slotThickness : slot.along
-                    height: root.vertical ? slot.along : root._slotThickness
+                    width: root.vertical ? root._chipThickness : slot.along
+                    height: root.vertical ? slot.along : root._chipThickness
 
-                    // The pointer's own answer that this is a target. The
-                    // focused slot takes none: the pill is already there.
+                    // The chip's own fill: a quiet wash while it holds
+                    // windows, a stronger one under the pointer, nothing on
+                    // an empty one at rest. The focused chip leaves it to the
+                    // travelling fill under it.
                     Box {
                         anchors.fill: parent
                         role: "cell"
-                        radius: Theme.pillRadius(root._slotThickness)
-                        box: {
-                            var composed = {};
-                            var base = Theme.box("cell", "ghost");
-                            for (var key in base)
-                                composed[key] = base[key];
-                            composed.wash = slot.hovered && !slot.ws.isFocused ? Theme.box("cell", "hover").wash : null;
-                            return composed;
-                        }
+                        radius: root._chipRadius
+                        box: root._washed(slot.ws.isFocused
+                            ? null
+                            : slot.hovered
+                                ? (slot.occupied ? Theme.pressFill : Theme.hoverFill)
+                                : (slot.occupied ? Theme.hoverFill : null))
                     }
 
                     // primitive-exempt: an agent waiting, a pulse over the
-                    // slot's own shape rather than a bordered box.
+                    // chip's own shape rather than a bordered box.
                     Rectangle {
                         id: waitGlow
                         anchors.fill: parent
-                        radius: Theme.pillRadius(root._slotThickness)
+                        radius: root._chipRadius
                         color: Theme.color.destructive
                         visible: slot.waiting
                         opacity: 0.2
@@ -482,9 +519,6 @@ Cell {
                         onClicked: root._go(slot.ws)
                     }
 
-                    // A HoverHandler rather than the MouseArea's own hover:
-                    // it keeps reporting while the pointer is over an icon,
-                    // whose own MouseArea sits above this one.
                     HoverHandler {
                         id: slotHover
                         onHoveredChanged: {
@@ -500,7 +534,7 @@ Cell {
                     }
 
                     // Laid out at the settled length and clipped to the drawn
-                    // one, so icons are uncovered as the slot opens rather than
+                    // one, so icons are uncovered as the chip opens rather than
                     // squeezed into it.
                     Item {
                         anchors.fill: parent
@@ -513,18 +547,21 @@ Cell {
                             rowSpacing: root._labelGap
                             horizontalItemAlignment: Grid.AlignHCenter
                             verticalItemAlignment: Grid.AlignVCenter
-                            x: root.vertical ? (parent.width - content.width) / 2 : (slot.targetAlong - slot.contentAlong) / 2
-                            y: root.vertical ? (slot.targetAlong - slot.contentAlong) / 2 : (parent.height - content.height) / 2
+                            x: root.vertical ? (parent.width - content.width) / 2
+                                : (slot._iconsAlong > 0 ? root._chipPad : (slot.targetAlong - slot.contentAlong) / 2)
+                            y: root.vertical
+                                ? (slot._iconsAlong > 0 ? root._chipPad : (slot.targetAlong - slot.contentAlong) / 2)
+                                : (parent.height - content.height) / 2
 
                             Text {
                                 id: label
                                 text: slot.ws.label
                                 font.family: Theme.fontFamilyMono
                                 font.pixelSize: Theme.fontSize.body
-                                font.weight: root.bandInk ? Theme.weight.semibold : Theme.weight.medium
+                                font.weight: slot.ws.isFocused || root.bandInk ? Theme.weight.semibold : Theme.weight.medium
                                 horizontalAlignment: Text.AlignHCenter
                                 color: slot.ws.isFocused
-                                    ? Theme.color.primaryForeground
+                                    ? Theme.color.accentForeground
                                     : slot.ws.isUrgent
                                         ? Theme.color.destructive
                                         : (slot.occupied || slot.ws.current) ? root.foreground : root.dimForeground
@@ -549,8 +586,11 @@ Cell {
                                 columns: root.vertical ? 1 : Math.max(1, slot.shownIcons + (slot.showsOverflow ? 1 : 0))
                                 columnSpacing: root._iconGap
                                 rowSpacing: root._iconGap
+                                horizontalItemAlignment: Grid.AlignHCenter
+                                verticalItemAlignment: Grid.AlignVCenter
 
                                 Repeater {
+                                    id: iconRepeater
                                     model: slot.shownIcons
 
                                     Item {
@@ -561,16 +601,29 @@ Cell {
                                         readonly property string source: iconItem.win ? AppIconService.forWindow(iconItem.win) : ""
                                         readonly property string agent: root._agentState(iconItem.winId)
                                         readonly property bool hovered: iconPointer.containsMouse
+                                        readonly property bool focusedHere: slot.ws.isFocused && !!iconItem.win && iconItem.win.isFocused
 
-                                        width: root._iconSize
-                                        height: root._iconSize
+                                        width: root._plateSize
+                                        height: root._plateSize
 
-                                        // On the focused slot, the window holding
-                                        // focus is lit and the rest step back.
-                                        readonly property bool lit: !slot.ws.isFocused || (iconItem.win && iconItem.win.isFocused) || iconItem.hovered
+                                        // The focused window's plate, and the
+                                        // hovered icon's on any chip.
+                                        Box {
+                                            anchors.fill: parent
+                                            role: "cell"
+                                            radius: root._plateRadius
+                                            box: root._washed(iconItem.focusedHere || iconItem.hovered ? Theme.hoverFill : null)
+                                        }
+
+                                        // On the focused chip, every window but
+                                        // the one holding focus steps back.
+                                        property real _dim: slot.ws.isFocused && !iconItem.focusedHere && !iconItem.hovered ? 0.5 : 1
+                                        Behavior on _dim {
+                                            Anim { kind: "effects" }
+                                        }
 
                                         // Arrives faded up rather than cut in,
-                                        // on the arm switch the slot's length
+                                        // on the arm switch the chip's length
                                         // takes.
                                         property real _in: root.animateSize ? 0 : 1
                                         Component.onCompleted: iconItem._in = 1
@@ -579,14 +632,11 @@ Cell {
                                             Anim { kind: "effects" }
                                         }
 
-                                        property real _lit: iconItem.lit ? 1 : 0.5
-                                        Behavior on _lit {
-                                            Anim { kind: "effects" }
-                                        }
-
                                         Item {
-                                            anchors.fill: parent
-                                            opacity: iconItem._in * iconItem._lit
+                                            anchors.centerIn: parent
+                                            width: root._iconSize
+                                            height: root._iconSize
+                                            opacity: iconItem._in * iconItem._dim
 
                                             Picture {
                                                 id: appIcon
@@ -681,8 +731,11 @@ Cell {
                                                 if (iconItem.winId !== "")
                                                     CompositorService.focusWindow(iconItem.winId);
                                             }
+                                            // No tooltip while the preview is up:
+                                            // the card already names every window
+                                            // it shows, and the two would stack.
                                             onContainsMouseChanged: {
-                                                if (iconPointer.containsMouse && iconItem.winId !== "")
+                                                if (iconPointer.containsMouse && iconItem.winId !== "" && !root._previewUp)
                                                     TooltipRegistry.show(iconItem, root._iconTooltip(iconItem.winId, iconItem.agent), root.barEdge);
                                                 else
                                                     TooltipRegistry.hide(iconItem);
@@ -712,13 +765,17 @@ Cell {
         }
     }
 
+    // The preview opening under a parked pointer takes the tooltip down
+    // with it.
+    on_PreviewUpChanged: if (root._previewUp) TooltipRegistry.hide(null)
+
     readonly property var _agentWords: ({
         working: "Agent working",
         blocked: "Agent waiting on you",
         done: "Agent done"
     })
 
-    // The window's title read live (the slot model carries no titles), with
+    // The window's title read live (the chip model carries no titles), with
     // herdr's word on its agent after it.
     function _iconTooltip(windowId, agent) {
         var win = CompositorService.windowById(windowId);

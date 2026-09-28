@@ -102,6 +102,12 @@ QtObject {
     // since the last one.
     function refreshWindows() {}
 
+    // The window's Quickshell.Wayland Toplevel, what a ScreencopyView takes
+    // as its capture source (the Spaces preview's live thumbnails). Null
+    // wherever the compositor exposes no such handle, which the caller
+    // draws as an honest schematic instead.
+    function toplevelHandle(id) { return null }
+
     // Output management (DisplayPanel). `outputs` above is the read model;
     // these are the writes, and both capability flags exist so the panel can
     // render an honest unavailable cell instead of a control that would

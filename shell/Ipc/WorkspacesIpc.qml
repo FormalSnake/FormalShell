@@ -5,10 +5,13 @@ import qs.Core
 
 // `qs ipc call workspaces peek <n>|status`, the Spaces cell's own target
 // (M74). `peek` opens the preview of workspace `n` (its ordinal, the number
-// on the slot) off the cell on the focused output, which is the pointer's
-// hover open for a keybind or the rig. `status` is the slots that cell
+// on the chip) off the cell on the focused output, which is the pointer's
+// hover open for a keybind or the rig. `status` is the chips that cell
 // resolved, for the rig to read the icons and agent badges off rather than
-// pixels. Both answer an error string when no bar carries a Spaces cell.
+// pixels, and the preview's state: how many of its thumbnails carry real
+// window pixels, whether it took the keyboard, and its rect in output
+// coordinates. Both answer an error string when no bar carries a Spaces
+// cell.
 IpcHandler {
     id: root
     target: "workspaces"
@@ -53,7 +56,17 @@ IpcHandler {
             preview: {
                 open: !!root.preview && root.preview.isOpen,
                 idx: root.preview && root.preview.isOpen ? root.preview.idx : -1,
-                windows: root.preview && root.preview.isOpen ? root.preview.cursorCount : 0
+                windows: root.preview && root.preview.isOpen ? root.preview.cursorCount : 0,
+                captured: root.preview && root.preview.isOpen ? root.preview.capturedCount() : 0,
+                keyboard: !!root.preview && root.preview.isOpen && root.preview.takesKeyboard,
+                rect: root.preview && root.preview.isOpen
+                    ? {
+                        x: Math.round(root.preview.frameRect.x),
+                        y: Math.round(root.preview.frameRect.y),
+                        width: Math.round(root.preview.frameRect.width),
+                        height: Math.round(root.preview.frameRect.height)
+                    }
+                    : null
             }
         });
     }

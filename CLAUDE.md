@@ -353,11 +353,15 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   rect plus a `radiusXl` fillet at either end, and the pixel where the line
   stops and the arc starts.
 - `spaces.sh` `--spaces`: the Spaces cell over windows on two workspaces,
-  each listed with its icon under its own slot in `workspaces status` and
-  the slot on screen wider than a bare one; a real wheel notch over the
-  cell moving focus there and back; `workspaces peek 2` and a real pointer
-  parked on that slot both opening its preview with two boxes, and the
-  pointer leaving closing it; and herdr badges read off shimmed clients
+  each listed with its icon under its own chip in `workspaces status`, every
+  occupied chip showing its icons and every chip its ordinal, and the chip
+  on screen wider than a bare one; a real wheel notch over the cell moving
+  focus there and back; `workspaces peek 2` and a real pointer parked on
+  that chip both opening its preview with both windows captured live (the
+  hover open without taking the keyboard, and staying open while the
+  pointer keeps moving over the chip), and the pointer leaving closing it;
+  the card and the chip row cropped for reading; and herdr badges read off
+  shimmed clients
   (`herdr --remote fakehost` answered by an `ssh` shim, a local `herdr`
   answering `working`), agreeing in `debug dump`, `workspaces status` and
   the frame, where the blocked `!` is red and gone once herdr says idle.
@@ -609,7 +613,11 @@ behavior on hosts where a real owner exists.
   draws instead of a `Card`. Never
   reintroduce a `ScreencopyView`-based capture anywhere (see
   `LockSurface.qml`'s header comment: it crashes the whole shell outright,
-  a fail-open on a security-critical surface).
+  a fail-open on a security-critical surface). The one exception (owner,
+  2026-09-28): the Spaces preview's per-window thumbnails
+  (`Surfaces/Panels/WorkspacePreview.qml`), a `ScreencopyView` on each
+  window's toplevel handle, live only while that card is open. The lock
+  surface and everything else stay banned.
 - License MIT. Every file substantially ported from DankMaterialShell keeps
   a `// Portions from DankMaterialShell (MIT, Copyright 2025 Avenge Media LLC)`
   header line.

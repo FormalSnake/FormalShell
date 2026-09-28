@@ -72,6 +72,7 @@ Singleton {
     function powerOffMonitors() { backend.powerOffMonitors() }
     function powerOnMonitors() { backend.powerOnMonitors() }
     function refreshWindows() { backend.refreshWindows() }
+    function toplevelHandle(id) { return backend.toplevelHandle(id) }
 
     readonly property bool windowParkingAvailable: backend.windowParkingAvailable
     function parkWindow(id) { backend.parkWindow(id) }

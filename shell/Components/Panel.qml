@@ -111,6 +111,13 @@ PanelWindow {
     // actually acquires keyboard focus, true once the surface can settle on
     // OnDemand without losing it.
     property bool _focusPrimed: false
+    // Off for a card the pointer opened by resting on something (the Spaces
+    // preview): it takes no keyboard at all. Hyprland hands pointer focus to
+    // any layer that maps Exclusive, whatever its input region
+    // (LayerSurface.cpp onMap, 0.56), so a hover card priming the way every
+    // other panel does pulls the pointer off the cell it is hovering and
+    // steals the keyboard from the window being typed in.
+    property bool takesKeyboard: true
     default property alias content: contentColumn.data
 
     // --- Keyboard cursor -------------------------------------------------
@@ -736,7 +743,7 @@ PanelWindow {
     // dismissing this panel from another output. Omarchy hit and documented
     // exactly this (its `shell/Ui/KeyboardPanel.qml` header comment); the
     // prime window is kept short so that grab is never perceptible.
-    WlrLayershell.keyboardFocus: root.isOpen
+    WlrLayershell.keyboardFocus: root.isOpen && root.takesKeyboard
         ? (root._focusPrimed ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive)
         : WlrKeyboardFocus.None
 

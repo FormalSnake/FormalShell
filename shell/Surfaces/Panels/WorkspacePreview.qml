@@ -1,5 +1,7 @@
 import QtQuick
 import Quickshell
+import Quickshell.Wayland
+import Quickshell.Widgets
 import qs.Core
 import qs.Components
 import qs.Compositor
@@ -9,22 +11,27 @@ import "../../Bar/workspaces.js" as WorkspacesModel
 // Portions from omarchy-spaces (MIT, Copyright 2026 Tornike Gomareli)
 
 // The Spaces cell's workspace preview (M74, DESIGN.md §3 Bar): a card
-// hanging off a workspace slot with each of that workspace's windows drawn
-// as a box at its own place on the output, scaled down, carrying its icon
-// and title. Click a box (or Enter on the cursor) to focus that window.
+// hanging off a workspace chip titled with the workspace and its window
+// count, holding a miniature of the output with each window at its own
+// place, drawn live, and a footer naming the window under the pointer.
+// Click a window (or Enter on the cursor) to focus it.
 //
-// Schematic on purpose. omarchy-spaces draws live ScreencopyViews here,
-// which this shell never uses anywhere (LockSurface.qml's header: it takes
-// the whole shell down), and a box per window is the part of the picture
-// that says where things are.
+// The thumbnails are ScreencopyViews on each window's toplevel handle,
+// through hyprland-toplevel-export-v1, live while the card is open and torn
+// down with the window when it closes. This is the one ScreencopyView in the
+// shell (owner, 2026-09-28): LockSurface.qml's header is why none may ever
+// sit on or near the lock. A window with no handle, or one the compositor
+// has not sent a frame for, is drawn as a schematic box instead, its icon
+// and title on the cell fill.
 //
 // Two ways in, and they close differently. The pointer (`show(..., true)`,
-// the slot's own hover delay) narrows this window's input to the card
-// alone, so the bar under the rest of the output keeps its hover and a
-// pointer walking along the slots moves the card between them; it closes
-// once the pointer is on neither the slot nor the card. `workspaces peek`
-// over IPC has no pointer to follow, so it is an ordinary panel: Escape or
-// a click outside.
+// the chip's own hover delay) opens a card that takes no keyboard at all
+// (Panel's `takesKeyboard`) and narrows this window's input to the card's
+// resting rect, so the bar keeps its hover and a pointer walking along the
+// chips moves the card between them; it closes once the pointer is on
+// neither a chip that previews nor the card. `workspaces peek` over IPC has
+// no pointer to follow, so it is an ordinary panel: Escape or a click
+// outside.
 //
 // Not in PanelIpc's registry: without a workspace to show there is nothing
 // to open, so `workspaces peek <n>` is the summon path.
@@ -32,7 +39,8 @@ Panel {
     id: root
 
     showHeader: false
-    panelWidth: Theme.space.popupWidthDefault
+    panelWidth: Theme.space.popupWidthWide
+    takesKeyboard: !root.fromPointer
 
     // The Bar/workspaces.js slot on show, never bound: the card keeps the
     // workspace it was opened on while the bar's model republishes under it.
@@ -62,22 +70,31 @@ Panel {
         closeTimer.stop();
         root.slot = slotData;
         root.fromPointer = pointer === true;
+        root._onSlot = root.fromPointer;
         root.cursorIndex = 0;
+        root.hoveredId = "";
         // Hyprland's rects go stale between refreshes (BackendBase's
-        // refreshWindows), and every box here is placed by one.
+        // refreshWindows), and every thumbnail is placed by one.
         CompositorService.refreshWindows();
         root.openFrom(slotItem);
     }
 
-    // The pointer is back on the slot, or on the card.
+    // Where the pointer is, as the chips and the card report it. Two flags
+    // rather than one hover: the pointer crosses from a chip to the card
+    // over the `barMargin` between them, and the two windows report their
+    // leave and enter in either order.
+    property bool _onSlot: false
+
+    // The pointer is on a chip that previews (the one shown, or the next
+    // one taking the card over).
     function hold() {
+        root._onSlot = true;
         closeTimer.stop();
     }
 
-    // The pointer left the slot. The card is `barMargin` off the cell, so
-    // the pointer crossing that band on its way into the card is a leave
-    // too; the grace covers the crossing.
+    // The pointer left the chip, or is on one that does not preview.
     function release() {
+        root._onSlot = false;
         if (root.isOpen && root.fromPointer)
             closeTimer.restart();
     }
@@ -85,12 +102,14 @@ Panel {
     Timer {
         id: closeTimer
         interval: 200
-        onTriggered: if (!cardHover.hovered) root.close()
+        onTriggered: if (!root._onSlot && !cardHover.hovered) root.close()
     }
 
     // Input on the card alone while the pointer drives it (see the header),
     // and nowhere while a handoff cuts this card for the next one, which is
-    // Panel's own rule.
+    // Panel's own rule. The resting rect rather than the drawn one: the card
+    // emerges from under the bar's line, and a region following it would sit
+    // over the chip the pointer is on for the length of the emerge.
     mask: root.handingOver ? passThrough : (root.fromPointer ? cardRegion : null)
 
     Region {
@@ -99,10 +118,10 @@ Panel {
 
     Region {
         id: cardRegion
-        x: root.frameRect.x
-        y: root.frameRect.y
-        width: root.frameRect.width
-        height: root.frameRect.height
+        x: root._frameX
+        y: root._frameY
+        width: root._morphWidth
+        height: root._morphHeight
     }
 
     // On the whole window rather than the card: with the mask above the
@@ -114,9 +133,9 @@ Panel {
         enabled: root.fromPointer
         onHoveredChanged: {
             if (cardHover.hovered)
-                root.hold();
-            else
-                root.release();
+                closeTimer.stop();
+            else if (root.isOpen && root.fromPointer)
+                closeTimer.restart();
         }
     }
 
@@ -130,13 +149,20 @@ Panel {
         ? ({ x: root._screen.x, y: root._screen.y, width: root._screen.width, height: root._screen.height })
         : null
 
+    // The miniature is the output's own shape at the card's content width;
+    // the windows are laid out `xs` inside it.
     readonly property real _miniWidth: root._contentWidth
     readonly property real _miniHeight: root._area && root._area.width > 0
         ? Math.round(root._miniWidth * root._area.height / root._area.width)
         : Math.round(root._miniWidth * 9 / 16)
+    readonly property real _miniInset: Theme.space.xs
 
     readonly property var _layout: WorkspacesModel.previewLayout(root._windows, root._area,
-        root._miniWidth, root._miniHeight, Theme.space.controlHeight)
+        root._miniWidth - root._miniInset * 2, root._miniHeight - root._miniInset * 2,
+        Theme.space.controlHeight)
+
+    // The window the pointer is on, for the footer.
+    property string hoveredId: ""
 
     cursorCount: root._layout.length
     onCursorActivated: index => root._focus(index)
@@ -149,6 +175,18 @@ Panel {
         root.close();
     }
 
+    // How many thumbnails are drawing real window pixels, for
+    // `workspaces status`.
+    function capturedCount() {
+        var n = 0;
+        for (var i = 0; i < thumbRepeater.count; i++) {
+            var thumb = thumbRepeater.itemAt(i);
+            if (thumb && thumb.captured)
+                n++;
+        }
+        return n;
+    }
+
     // The workspace closes its own preview by becoming the one on screen.
     Connections {
         target: CompositorService
@@ -158,94 +196,187 @@ Panel {
         }
     }
 
-    SectionLabel {
+    // The title row: the workspace on the left, its window count on the
+    // right, one `controlHeight` tall like any panel header.
+    Item {
         width: parent.width
-        text: root.slot ? "Workspace " + root.slot.label : ""
-        count: root._windows.length
+        height: Theme.space.controlHeight
+
+        Text {
+            anchors.left: parent.left
+            anchors.right: countLabel.left
+            anchors.rightMargin: Theme.space.iconGap
+            anchors.verticalCenter: parent.verticalCenter
+            text: root.slot ? "Workspace " + root.slot.label : ""
+            elide: Text.ElideRight
+            color: Theme.color.foreground
+            font.family: Theme.fontFamilySans
+            font.pixelSize: Theme.fontSize.subtitle
+            font.weight: Theme.weight.semibold
+        }
+
+        SectionLabel {
+            id: countLabel
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            text: root._windows.length + (root._windows.length === 1 ? " window" : " windows")
+        }
     }
 
-    Item {
+    // The miniature: the output's own frame, the windows inside it.
+    Box {
         id: mini
         visible: root._layout.length > 0
+        role: "cell"
+        state: "rest"
         width: root._miniWidth
         height: root._miniHeight
 
         Repeater {
+            id: thumbRepeater
             model: root._layout.length
 
-            // A window's own box, drawn as any other row is: a `Cell`,
-            // `selected` on the one that holds focus, the keyboard's ring
-            // on the cursor. `xxs` in from its neighbours, since two tiled
-            // windows share an edge on screen and two borders drawn on one
-            // line read as one.
-            Cell {
-                id: box
+            Item {
+                id: thumb
                 required property int index
-                readonly property var place: root._layout[box.index] || ({ id: "", x: 0, y: 0, width: 0, height: 0 })
-                readonly property var win: CompositorService.windowById(box.place.id)
-                readonly property string iconSource: box.win ? AppIconService.forWindow(box.win) : ""
+                readonly property var place: root._layout[thumb.index] || ({ id: "", x: 0, y: 0, width: 0, height: 0 })
+                readonly property var win: CompositorService.windowById(thumb.place.id)
+                readonly property string iconSource: thumb.win ? AppIconService.forWindow(thumb.win) : ""
+                readonly property bool captured: capture.hasContent
+                readonly property bool lit: thumbPointer.containsMouse || thumb.cursor
+                // What Panel's cursor halo finds a row by.
+                readonly property bool cursor: root.cursorActive && root.cursorIndex === thumb.index
+                readonly property real radius: Theme.coverRadius(Math.min(thumb.width, thumb.height))
 
-                x: box.place.x + Theme.space.xxs
-                y: box.place.y + Theme.space.xxs
-                width: Math.max(0, box.place.width - Theme.space.xxs * 2)
-                height: Math.max(0, box.place.height - Theme.space.xxs * 2)
+                // `xxs` in from its neighbours: two tiled windows share an
+                // edge on screen, and two borders on one line read as one.
+                x: root._miniInset + thumb.place.x + Theme.space.xxs
+                y: root._miniInset + thumb.place.y + Theme.space.xxs
+                width: Math.max(0, thumb.place.width - Theme.space.xxs * 2)
+                height: Math.max(0, thumb.place.height - Theme.space.xxs * 2)
+                z: thumb.place.floating ? 1 : 0
 
-                selected: !!box.win && box.win.isFocused
-                cursor: root.cursorActive && root.cursorIndex === box.index
-                interactive: true
-                onClicked: root._focus(box.index)
+                // The schematic, under the capture and in its place until
+                // the first frame lands: the window's own box, `selected` on
+                // the one holding focus, its icon and title in it.
+                Cell {
+                    id: box
+                    anchors.fill: parent
+                    visible: !thumb.captured
+                    selected: !!thumb.win && thumb.win.isFocused
+                    cursor: thumb.cursor
 
-                readonly property real _iconSize: Math.min(Theme.space.huge * 2, box.width / 2, box.height / 2)
+                    readonly property real _iconSize: Math.min(Theme.space.huge * 2, box.width / 2, box.height / 2)
 
-                Column {
-                    anchors.centerIn: parent
-                    spacing: Theme.space.xs
+                    Column {
+                        anchors.centerIn: parent
+                        spacing: Theme.space.xs
 
-                    Item {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        width: box._iconSize
-                        height: box._iconSize
+                        Item {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: box._iconSize
+                            height: box._iconSize
 
-                        Picture {
-                            id: boxIcon
-                            anchors.fill: parent
-                            visible: box.iconSource !== "" && boxIcon.status !== Image.Error
-                            source: box.iconSource
-                            sourceSize.width: box._iconSize * (root._screen ? root._screen.devicePixelRatio : 1)
-                            sourceSize.height: box._iconSize * (root._screen ? root._screen.devicePixelRatio : 1)
-                            fillMode: Image.PreserveAspectFit
+                            Picture {
+                                id: boxIcon
+                                anchors.fill: parent
+                                visible: thumb.iconSource !== "" && boxIcon.status !== Image.Error
+                                source: thumb.iconSource
+                                sourceSize.width: box._iconSize * 2
+                                sourceSize.height: box._iconSize * 2
+                                fillMode: Image.PreserveAspectFit
+                            }
+
+                            Icon {
+                                anchors.centerIn: parent
+                                visible: !boxIcon.visible
+                                name: "app-window"
+                                size: box._iconSize * 0.75
+                                color: box.dimForeground
+                            }
                         }
 
-                        // Nothing in AppIconService's chain answered: the
-                        // generic window mark, dim, as the switcher draws it.
-                        Icon {
-                            anchors.centerIn: parent
-                            visible: !boxIcon.visible
-                            name: "app-window"
-                            size: box._iconSize * 0.75
-                            color: box.dimForeground
+                        // Dropped rather than squeezed on a box too short to
+                        // carry it; the icon still says which window it is.
+                        Text {
+                            visible: box.height >= box._iconSize + Theme.space.xs + implicitHeight + Theme.space.md * 2
+                            width: Math.max(0, box.width - Theme.space.md * 2)
+                            horizontalAlignment: Text.AlignHCenter
+                            text: thumb.win ? thumb.win.title : ""
+                            elide: Text.ElideRight
+                            color: box.foreground
+                            font.family: Theme.fontFamilySans
+                            font.pixelSize: Theme.fontSize.caption
                         }
                     }
+                }
 
-                    // Dropped rather than squeezed on a box too short to
-                    // carry it; the icon still says which window it is.
-                    Text {
-                        visible: box.height >= box._iconSize + Theme.space.xs + implicitHeight + Theme.space.md * 2
-                        width: Math.max(0, box.width - Theme.space.md * 2)
-                        horizontalAlignment: Text.AlignHCenter
-                        text: box.win ? box.win.title : ""
-                        elide: Text.ElideRight
-                        color: box.foreground
-                        font.family: Theme.fontFamilySans
-                        font.pixelSize: Theme.fontSize.caption
+                // The window itself, rounded the way any picture is
+                // (Theme.coverRadius), its border lit in `ring` under the
+                // pointer or the cursor.
+                ClippingRectangle {
+                    anchors.fill: parent
+                    color: "transparent"
+                    radius: thumb.radius
+                    border.width: Theme.borderWidth
+                    border.color: thumb.lit ? Theme.color.ring : Theme.color.border
+                    contentInsideBorder: true
+                    opacity: thumb.captured ? 1 : 0
+
+                    Behavior on opacity {
+                        Anim { kind: "effects" }
                     }
+
+                    ScreencopyView {
+                        id: capture
+                        anchors.fill: parent
+                        captureSource: (root.isOpen || root.visible) ? CompositorService.toplevelHandle(thumb.place.id) : null
+                        live: root.isOpen
+                    }
+                }
+
+                // The app's icon in the corner, so a small thumbnail is
+                // still a window you can name.
+                Box {
+                    visible: thumb.captured && thumb.iconSource !== ""
+                        && thumb.width > Theme.space.controlHeight * 2 && thumb.height > Theme.space.controlHeight * 1.5
+                    role: "cell"
+                    state: "rest"
+                    anchors.left: parent.left
+                    anchors.bottom: parent.bottom
+                    anchors.margins: Theme.space.sm
+                    width: Theme.space.controlHeight - Theme.space.sm
+                    height: width
+
+                    Picture {
+                        anchors.centerIn: parent
+                        width: parent.width - Theme.space.sm * 2
+                        height: width
+                        source: thumb.iconSource
+                        sourceSize.width: width * 2
+                        sourceSize.height: height * 2
+                        fillMode: Image.PreserveAspectFit
+                    }
+                }
+
+                MouseArea {
+                    id: thumbPointer
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onContainsMouseChanged: {
+                        if (thumbPointer.containsMouse)
+                            root.hoveredId = thumb.place.id;
+                        else if (root.hoveredId === thumb.place.id)
+                            root.hoveredId = "";
+                    }
+                    onClicked: root._focus(thumb.index)
                 }
             }
         }
     }
 
-    // A workspace with nothing on it, or one the compositor has not created
-    // yet (a persistent placeholder): one dim cell saying so.
+    // A workspace with nothing on it: one dim cell saying so.
     Box {
         visible: root._layout.length === 0
         role: "cell"
@@ -257,5 +388,17 @@ Panel {
             anchors.centerIn: parent
             text: "No windows"
         }
+    }
+
+    // The window under the pointer, or what the card is for.
+    Text {
+        readonly property var hovered: root.hoveredId !== "" ? CompositorService.windowById(root.hoveredId) : null
+        width: parent.width
+        horizontalAlignment: Text.AlignHCenter
+        elide: Text.ElideRight
+        text: hovered ? (hovered.title || hovered.appId) : "Click a window to jump to it"
+        color: hovered ? Theme.color.foreground : Theme.color.mutedForeground
+        font.family: Theme.fontFamilySans
+        font.pixelSize: Theme.fontSize.caption
     }
 }

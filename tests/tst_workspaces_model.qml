@@ -202,7 +202,8 @@ TestCase {
         compare(model[0].label, "1");
         compare(model[0].current, true);
         compare(model[0].isUrgent, false);
-        compare(model[1].label, "web");
+        compare(model[1].label, "3");
+        compare(model[1].name, "web");
         compare(model[1].current, false);
         compare(model[1].isUrgent, true);
         compare(model[1].windows.length, 1);
