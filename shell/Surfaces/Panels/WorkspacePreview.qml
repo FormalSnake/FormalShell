@@ -11,8 +11,8 @@ import "../../Bar/workspaces.js" as WorkspacesModel
 // Portions from omarchy-spaces (MIT, Copyright 2026 Tornike Gomareli)
 
 // The Spaces cell's workspace preview (M74, DESIGN.md §3 Bar): a card
-// hanging off a workspace chip titled with the workspace and its window
-// count, holding a miniature of the output with each window at its own
+// hanging off a workspace's bar cell, under the panel header naming the
+// workspace and its window count, holding a miniature of the output with each window at its own
 // place, drawn live, and a footer naming the window under the pointer.
 // Click a window (or Enter on the cursor) to focus it.
 //
@@ -25,11 +25,11 @@ import "../../Bar/workspaces.js" as WorkspacesModel
 // and title on the cell fill.
 //
 // Two ways in, and they close differently. The pointer (`show(..., true)`,
-// the chip's own hover delay) opens a card that takes no keyboard at all
+// the cell's own hover delay) opens a card that takes no keyboard at all
 // (Panel's `takesKeyboard`) and narrows this window's input to the card's
 // resting rect, so the bar keeps its hover and a pointer walking along the
-// chips moves the card between them; it closes once the pointer is on
-// neither a chip that previews nor the card. `workspaces peek` over IPC has
+// cells moves the card between them; it closes once the pointer is on
+// neither a cell that previews nor the card. `workspaces peek` over IPC has
 // no pointer to follow, so it is an ordinary panel: Escape or a click
 // outside.
 //
@@ -38,7 +38,8 @@ import "../../Bar/workspaces.js" as WorkspacesModel
 Panel {
     id: root
 
-    showHeader: false
+    panelTitle: root.slot ? "Workspace " + root.slot.label : ""
+    panelIcon: "layout-grid"
     panelWidth: Theme.space.popupWidthWide
     takesKeyboard: !root.fromPointer
 
@@ -79,20 +80,20 @@ Panel {
         root.openFrom(slotItem);
     }
 
-    // Where the pointer is, as the chips and the card report it. Two flags
-    // rather than one hover: the pointer crosses from a chip to the card
+    // Where the pointer is, as the cells and the card report it. Two flags
+    // rather than one hover: the pointer crosses from a cell to the card
     // over the `barMargin` between them, and the two windows report their
     // leave and enter in either order.
     property bool _onSlot: false
 
-    // The pointer is on a chip that previews (the one shown, or the next
+    // The pointer is on a cell that previews (the one shown, or the next
     // one taking the card over).
     function hold() {
         root._onSlot = true;
         closeTimer.stop();
     }
 
-    // The pointer left the chip, or is on one that does not preview.
+    // The pointer left the cell, or is on one that does not preview.
     function release() {
         root._onSlot = false;
         if (root.isOpen && root.fromPointer)
@@ -109,7 +110,7 @@ Panel {
     // and nowhere while a handoff cuts this card for the next one, which is
     // Panel's own rule. The resting rect rather than the drawn one: the card
     // emerges from under the bar's line, and a region following it would sit
-    // over the chip the pointer is on for the length of the emerge.
+    // over the cell the pointer is on for the length of the emerge.
     mask: root.handingOver ? passThrough : (root.fromPointer ? cardRegion : null)
 
     Region {
@@ -196,31 +197,9 @@ Panel {
         }
     }
 
-    // The title row: the workspace on the left, its window count on the
-    // right, one `controlHeight` tall like any panel header.
-    Item {
-        width: parent.width
-        height: Theme.space.controlHeight
-
-        Text {
-            anchors.left: parent.left
-            anchors.right: countLabel.left
-            anchors.rightMargin: Theme.space.iconGap
-            anchors.verticalCenter: parent.verticalCenter
-            text: root.slot ? "Workspace " + root.slot.label : ""
-            elide: Text.ElideRight
-            color: Theme.color.foreground
-            font.family: Theme.fontFamilySans
-            font.pixelSize: Theme.fontSize.subtitle
-            font.weight: Theme.weight.semibold
-        }
-
-        SectionLabel {
-            id: countLabel
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            text: root._windows.length + (root._windows.length === 1 ? " window" : " windows")
-        }
+    // The workspace's window count beside the header's own title.
+    titleActions: SectionLabel {
+        text: root._windows.length + (root._windows.length === 1 ? " window" : " windows")
     }
 
     // The miniature: the output's own frame, the windows inside it.
@@ -376,11 +355,9 @@ Panel {
         }
     }
 
-    // A workspace with nothing on it: one dim cell saying so.
-    Box {
+    // A workspace with nothing on it: one dim line saying so, no box.
+    Item {
         visible: root._layout.length === 0
-        role: "cell"
-        state: "rest"
         width: root._miniWidth
         height: Theme.space.controlHeight
 
