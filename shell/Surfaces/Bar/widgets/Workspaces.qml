@@ -2,318 +2,718 @@ import QtQuick
 import qs.Core
 import qs.Components
 import qs.Compositor
+import qs.Services
 import "../../../Bar/workspaces.js" as WorkspacesModel
 
-// The workspace row (DESIGN.md §3 Bar): one cell holding a dot per visible
-// workspace on this bar's output, with a single `primary` pill layered over
-// them marking the focused one. Which workspaces show and in what order
-// (sorted by the backend's `idx` ordinal, empty non-active ones hidden,
-// all-workspaces fallback when none match `outputName`) is
-// ../../../Bar/workspaces.js's call.
+// Portions from omarchy-spaces (MIT, Copyright 2026 Tornike Gomareli)
+
+// The workspace row, Spaces (DESIGN.md §3 Bar, M74): one cell holding a slot
+// per workspace on this bar's output, each a label (the workspace's name or
+// its ordinal, mono) followed by the icons of the windows on it, with a
+// single pill layered under the focused slot. Which slots show, in what
+// order, and which windows each one lists is ../../../Bar/workspaces.js's
+// call; the icons come off AppIconService, the same chain the switcher's
+// tiles use, and the agent badges off HerdrService.
 //
-// The pill is one item that moves rather than a per-dot width (M48): the
-// dots hold fixed slots and never reflow, and a switch reads as the pill
-// travelling from the old slot to the new one. Its two edges take different
-// durations (`standard` for the edge arriving, `emphasized` for the edge
-// leaving), so the pill stretches across the gap and closes up behind
-// itself, which is what makes the travel legible rather than a jump. Both
-// are zeroed by `motion.enabled=false` like every other transition, and at
-// zero the pill simply appears at the new slot.
+// The slot on screen (`current`) always shows its icons and so sits wider
+// than the rest; `workspaces.showApps` decides the others (`hover`, the
+// default: while the pointer is on one; `all`; `active`: never). On the
+// focused slot the window holding focus is lit and the rest are dimmed.
+// Hovering any other slot for the tooltip's own delay opens its preview
+// (Surfaces/Panels/WorkspacePreview.qml), a schematic of where its windows
+// sit.
 //
-// Hover grows whichever shape is answering the pointer: the pill on the
-// focused slot, a plain dot everywhere else. The dot under the pill never
-// grows on its own, so the row only ever has to fit one grown shape at a
-// time, and the row is `Theme.space.lg` tall (the grown size) rather than
-// `_dotSize` so that shape never clips against it.
+// The pill is one item that moves rather than a fill each slot owns (M48):
+// a switch reads as the pill travelling from the old slot to the new one.
+// Its two edges take different clocks (`emphasized` for the edge arriving,
+// twice that for the edge leaving), so the pill stretches across the gap
+// and closes up behind itself. Slots differ in length now, so each end of
+// the pill is its own pair of edges chasing the same end of the target
+// slot, and whichever of a pair is ahead falls out of min/max rather than
+// needing the direction. Both are zeroed by `motion.enabled=false` like
+// every other transition, and at zero the pill simply appears on its slot.
+//
+// On a left or right bar nothing turns: slots stack down the strip, a
+// slot's icons stack under its label, and the label stands upright, like
+// every other cell's content (Bar/layout.js's labelRotation). The same
+// pill runs along the strip's own axis.
 Cell {
     id: root
 
     property string outputName: ""
+    // shell.qml's single WorkspacePreview, through Bar.qml.
+    property var preview: null
+
+    // --- Settings (workspaces.*). Look is the theme's; these are what the
+    // cell holds, never how it draws it.
+    function _int(value, low, high, fallback) {
+        var n = Math.round(Number(value));
+        return isFinite(n) ? Math.max(low, Math.min(high, n)) : fallback;
+    }
+
+    readonly property string _showApps: String(Config.get("workspaces.showApps", "hover"))
+    readonly property int _maxIcons: root._int(Config.get("workspaces.maxIcons", 8), 1, 20, 8)
+    readonly property int _persistent: root._int(Config.get("workspaces.persistent", 5), 0, 10, 5)
+    readonly property bool _agents: Config.get("workspaces.agents", true) !== false
+    readonly property bool _previewEnabled: Config.get("workspaces.preview", true) !== false
 
     // Maintained rather than a raw binding on CompositorService.workspaces/
     // windows: HyprlandBackend.qml keeps windows apart from workspaces so a
-    // title-only tick can't republish the workspace list (its own header
-    // comment says so), but visibleModel() reads both, so a raw binding here
-    // would rebuild every dot on every title change anyway. Recomputed on
-    // both inputs and published only when the resolved model actually
-    // differs, closing that gap.
-    property var visibleWorkspaces: []
-    property string _visibleWorkspacesJson: "[]"
+    // title-only tick can't republish the workspace list, but slots() reads
+    // both. Recomputed on either input and published only when the resolved
+    // model actually differs, which a title or a rect never makes it do
+    // (workspaces.js keeps both out of it).
+    property var slots: []
+    property string _slotsJson: "[]"
 
-    function _updateVisibleWorkspaces() {
-        var next = WorkspacesModel.visibleModel(
-            CompositorService.workspaces, CompositorService.windows, root.outputName);
+    function _updateSlots() {
+        var next = WorkspacesModel.slots(CompositorService.workspaces, CompositorService.windows,
+            root.outputName, { persistent: root._persistent, maxIcons: root._maxIcons });
         var json = JSON.stringify(next);
-        if (json === root._visibleWorkspacesJson)
+        if (json === root._slotsJson)
             return;
-        root._visibleWorkspacesJson = json;
-        root.visibleWorkspaces = next;
+        root._slotsJson = json;
+        root.slots = next;
+        var all = [];
+        for (var i = 0; i < next.length; i++)
+            all = all.concat(next[i].windows);
+        AppIconService.probe(all);
     }
 
-    onOutputNameChanged: root._updateVisibleWorkspaces()
-    Component.onCompleted: root._updateVisibleWorkspaces()
-
-    // A workspace opening or closing changes how many slots this cell holds:
-    // glide the extent instead of shoving the rest of the region instantly
-    // (DESIGN.md §1 "Motion"), on the same arm switch every other bar cell's
-    // width Behavior takes.
-    Behavior on implicitWidth {
-        enabled: root.animateSize
-        Anim {}
+    onOutputNameChanged: root._updateSlots()
+    on_MaxIconsChanged: root._updateSlots()
+    on_PersistentChanged: root._updateSlots()
+    Component.onCompleted: {
+        root._updateSlots();
+        if (root.preview)
+            root.preview.addCell(root);
     }
+    Component.onDestruction: if (root.preview) root.preview.removeCell(root)
+    onPreviewChanged: if (root.preview) root.preview.addCell(root)
 
     Connections {
         target: CompositorService
-        function onWorkspacesChanged() { root._updateVisibleWorkspaces(); }
-        function onWindowsChanged() { root._updateVisibleWorkspaces(); }
+        function onWorkspacesChanged() { root._updateSlots(); }
+        function onWindowsChanged() { root._updateSlots(); }
     }
 
     readonly property int _focusedIndex: {
-        for (var i = 0; i < root.visibleWorkspaces.length; i++) {
-            if (root.visibleWorkspaces[i].isFocused)
+        for (var i = 0; i < root.slots.length; i++) {
+            if (root.slots[i].isFocused)
                 return i;
         }
         return -1;
     }
 
-    readonly property var _focused: root._focusedIndex >= 0
-        ? root.visibleWorkspaces[root._focusedIndex]
-        : null
+    // --- Geometry. A slot is the cell's thickness less an `xs` either side
+    // across, and its own content plus `md` at both ends along, never
+    // shorter than it is thick, so a bare label is a square rather than a
+    // sliver.
+    readonly property real _slotThickness: Theme.space.barCellHeight - Theme.space.xs * 2
+    readonly property real _slotPad: Theme.space.md
+    readonly property real _slotGap: Theme.space.xs
+    readonly property real _labelGap: Theme.space.sm
+    readonly property real _iconSize: Theme.space.lg * 2
+    readonly property real _iconGap: Theme.space.xxs
+    readonly property real _badgeSize: Theme.fontSize.caption
 
-    on_FocusedIndexChanged: pill._syncTarget()
-    onVisibleWorkspacesChanged: pill._syncTarget()
+    // Each slot's settled length, in order, and where each starts. Read off
+    // the slots' own targets rather than their animated extents, so the
+    // pill travels to where the slot is going instead of chasing it there.
+    property var _extents: []
 
-    // Counted the same way workspaces.js decides a workspace is occupied at
-    // all: by workspaceId over the windows list, ids compared as the opaque
-    // strings they are.
-    readonly property int _focusedWindows: root._focused
-        ? CompositorService.windows.filter(function (w) {
-            return w.workspaceId === root._focused.id;
-        }).length
-        : 0
-
-    // Every slot is the pill's own width, so the row's geometry never
-    // depends on which workspace is focused and the pill has a fixed
-    // destination to travel to.
-    readonly property real _slotWidth: Theme.space.xxl
-    readonly property real _slotSpacing: Theme.space.xs
-    readonly property real _dotSize: Theme.space.md
-
-    // The row's own height, sized to whichever shape is grown by hover
-    // (the dot's own grown size), not to the resting dot.
-    readonly property real _rowHeight: Theme.space.lg
-
-    // Which slot the pointer is over, kept on the root since the Repeater's
-    // delegates have no ids to reach each other by. -1 means no slot.
-    property int _hoveredIndex: -1
-
-    // The dot row is the one lockup on a vertical bar that turns as a whole
-    // (Bar/layout.js's labelRotation covers what turning is for): dots and
-    // a pill have no upright reading of their own, so turning them is the
-    // same picture drawn the other way round rather than a readout on its
-    // side, and the travelling pill keeps one set of geometry either way.
-    //
-    // A left bar turns anticlockwise, which would put the first workspace
-    // at the bottom; the row is reversed there so the workspaces still read
-    // top to bottom, the same order the bar's own regions run in. A right
-    // bar turns the other way and needs no reversal.
-    readonly property bool _reversed: root.labelRotation < 0
-
-    function _slotX(index) {
-        var slot = root._reversed ? root.visibleWorkspaces.length - 1 - index : index;
-        return slot * (root._slotWidth + root._slotSpacing);
+    function _start(index) {
+        var at = 0;
+        for (var i = 0; i < index && i < root._extents.length; i++)
+            at += root._extents[i] + root._slotGap;
+        return at;
     }
 
+    function _measureSlots() {
+        var next = [];
+        for (var i = 0; i < slotRepeater.count; i++) {
+            var item = slotRepeater.itemAt(i);
+            next.push(item ? item.targetAlong : 0);
+        }
+        if (JSON.stringify(next) !== JSON.stringify(root._extents))
+            root._extents = next;
+        pill._syncTarget();
+    }
+
+    function _remeasure() {
+        Qt.callLater(root._measureSlots);
+    }
+
+    on_FocusedIndexChanged: pill._syncTarget()
+    on_ExtentsChanged: pill._syncTarget()
+
+    // Which slot the pointer is over. -1 means none.
+    property int _hoveredIndex: -1
+
+    // --- Preview (Surfaces/Panels/WorkspacePreview.qml). The pointer opens
+    // it after the tooltip's own delay (Components/TooltipGroup.qml, 400ms);
+    // once one is up, moving to another slot moves the card with no second
+    // wait, the way a tooltip hands off inside its grace.
+    readonly property bool _previewUp: !!root.preview && root.preview.isOpen && root.preview.fromPointer
+
+    Timer {
+        id: hoverTimer
+        property Item slotItem: null
+        interval: 400
+        onTriggered: {
+            var item = hoverTimer.slotItem;
+            if (item && item.hovered && !item.ws.current && root._previewEnabled && root.preview)
+                root.preview.show(item, item.ws, true);
+        }
+    }
+
+    function _slotEntered(item) {
+        if (!root._previewEnabled || !root.preview)
+            return;
+        if (item.ws.current) {
+            hoverTimer.stop();
+            if (root._previewUp)
+                root.preview.close();
+            return;
+        }
+        if (root._previewUp) {
+            if (root.preview.slot && root.preview.slot.idx === item.ws.idx)
+                root.preview.hold();
+            else
+                root.preview.show(item, item.ws, true);
+            return;
+        }
+        hoverTimer.slotItem = item;
+        hoverTimer.restart();
+    }
+
+    function _slotLeft(item) {
+        if (hoverTimer.slotItem === item)
+            hoverTimer.stop();
+        if (root._previewUp)
+            root.preview.release();
+    }
+
+    function _go(ws) {
+        if (root.preview && root.preview.isOpen)
+            root.preview.close();
+        if (ws.current && ws.isFocused)
+            return;
+        if (ws.id !== "")
+            CompositorService.focusWorkspace(ws.id);
+        else
+            CompositorService.focusWorkspaceAt(ws.idx);
+    }
+
+    // `workspaces peek <n>` (Ipc/WorkspacesIpc.qml): the slot whose ordinal
+    // is `n`, previewed with no pointer to follow.
+    function peek(n) {
+        for (var i = 0; i < root.slots.length; i++) {
+            if (root.slots[i].idx === n) {
+                var item = slotRepeater.itemAt(i);
+                if (!item || !root.preview)
+                    return false;
+                root.preview.show(item, root.slots[i], false);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // `workspaces status`: the slots as this cell resolved them, with each
+    // icon's agent state and each slot's settled length, which is how the
+    // rig tells the wide slot from the rest without reading pixels.
+    function status() {
+        return root.slots.map(function (ws, i) {
+            var item = slotRepeater.itemAt(i);
+            return {
+                id: ws.id,
+                idx: ws.idx,
+                label: ws.label,
+                active: ws.current,
+                focused: ws.isFocused,
+                urgent: ws.isUrgent,
+                placeholder: ws.placeholder,
+                appsShown: item ? item.showsApps : false,
+                extent: root._extents[i] || 0,
+                overflow: ws.overflow,
+                icons: ws.windows.map(function (w) {
+                    return {
+                        id: w.id,
+                        appId: w.appId,
+                        focused: w.isFocused,
+                        icon: AppIconService.forWindow(w) !== "",
+                        agent: root._agentState(w.id)
+                    };
+                })
+            };
+        });
+    }
+
+    function _agentState(windowId) {
+        return root._agents && windowId !== "" ? (HerdrService.stateByWindow[windowId] || "") : "";
+    }
+
+    // A wheel notch steps one slot, wrapping. A touchpad reports a notch as
+    // many small deltas, so they are summed to a notch's worth first.
+    property real _wheelSum: 0
+
     interactive: true
+    acceptedButtons: Qt.NoButton
+    // The slots answer the pointer themselves; a wash over the whole row
+    // would say the row is one target.
+    hovered: false
 
-    // A row of dots says which workspace is live but nothing about what is
-    // on it, and the occupancy filter means the numbers can skip.
-    tooltipText: root._focused
-        ? "WORKSPACE " + (root._focused.name !== "" ? root._focused.name : String(root._focused.idx))
-            + " / " + root._focusedWindows + (root._focusedWindows === 1 ? " WINDOW" : " WINDOWS")
-        : "WORKSPACES / " + root.visibleWorkspaces.length
+    onWheeled: wheel => {
+        var delta = wheel.angleDelta.y !== 0 ? wheel.angleDelta.y : wheel.angleDelta.x;
+        if (delta === 0)
+            return;
+        wheel.accepted = true;
+        root._wheelSum += delta;
+        if (Math.abs(root._wheelSum) < 120)
+            return;
+        var next = WorkspacesModel.stepIndex(root.slots.length, root._focusedIndex, root._wheelSum < 0 ? 1 : -1);
+        root._wheelSum = 0;
+        if (next >= 0)
+            root._go(root.slots[next]);
+    }
 
-    // The slot swaps the box, since a rotated item still measures by the
-    // box it had before the turn.
     Item {
-        anchors.verticalCenter: parent.verticalCenter
-        width: root.vertical ? strip.height : strip.width
-        height: root.vertical ? strip.width : strip.height
+        id: strip
+        x: root.vertical ? (parent.width - strip.width) / 2 : 0
+        y: root.vertical ? 0 : (parent.height - strip.height) / 2
+        // The grid's own size, slots mid-glide included, so the cell's
+        // length travels with them and needs no width Behavior of its own.
+        width: slotGrid.width
+        height: slotGrid.height
 
-        Item {
-            id: strip
-            anchors.centerIn: parent
-            rotation: root.labelRotation
-            width: dotRow.width
-            height: root._rowHeight
+        // The moving pill, under the slots. `lead*` and `trail*` chase the
+        // same end of the same slot at different speeds; the pill spans the
+        // outermost of each pair.
+        Box {
+            id: pill
+            role: "cell"
+            // The table's own active fill, with no border: the pill is a
+            // fill travelling between slots, not a box around one.
+            box: {
+                var composed = {};
+                var base = Theme.box("cell", "active");
+                for (var key in base)
+                    composed[key] = base[key];
+                composed.border = null;
+                return composed;
+            }
+            radius: Theme.pillRadius(root._slotThickness)
 
-            Row {
-                id: dotRow
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: root._slotSpacing
-                layoutDirection: root._reversed ? Qt.RightToLeft : Qt.LeftToRight
+            // Focus leaving this output (another monitor took it) is the
+            // pill leaving a surface, not travelling: it fades out where it
+            // stood and fades back in at whatever slot focus returns to. The
+            // travel Behaviors below are disarmed while nothing is drawn, so
+            // a re-entry lands at its slot instead of running there from a
+            // stale one.
+            readonly property bool _here: root._focusedIndex >= 0
+            opacity: pill._here ? 1 : 0
+            visible: pill.opacity > 0
 
-                // Move alone, no `add` (M53 D2's layout rule, DESIGN.md §3
-                // Bar): the dots hold fixed slots, and the model above is a
-                // fresh array on every focus change, which a Repeater
-                // answers by rebuilding every delegate. An `add` here would
-                // therefore fade the whole row up on a plain workspace
-                // switch, which is a rebuild narrated as an arrival rather
-                // than the one thing that actually moved, the pill.
-                move: MoveTransition {}
+            Behavior on opacity {
+                Anim { kind: "effects" }
+            }
 
-                Repeater {
-                    model: root.visibleWorkspaces
+            property real targetStart: 0
+            property real targetEnd: 0
 
-                    Item {
-                        id: slot
-                        required property int index
-                        required property var modelData
-                        readonly property var ws: modelData
+            function _syncTarget() {
+                if (root._focusedIndex < 0 || root._focusedIndex >= root._extents.length)
+                    return;
+                var start = root._start(root._focusedIndex);
+                pill.targetStart = start;
+                pill.targetEnd = start + root._extents[root._focusedIndex];
+            }
 
-                        width: root._slotWidth
-                        height: root._rowHeight
+            property real leadStart: pill.targetStart
+            property real trailStart: pill.targetStart
+            property real leadEnd: pill.targetEnd
+            property real trailEnd: pill.targetEnd
 
-                        readonly property bool urgent: slot.ws.isUrgent
-                        onUrgentChanged: if (slot.urgent) urgentPulse.restart()
+            readonly property real _from: Math.min(pill.leadStart, pill.trailStart)
+            readonly property real _to: Math.max(pill.leadEnd, pill.trailEnd)
 
-                        // primitive-exempt: one workspace dot, an indicator at the size dots
-                        // are, not a bordered box.
-                        Rectangle {
-                            id: dot
-                            anchors.centerIn: parent
-                            // The pointer's own answer that this is a target,
-                            // a step the dot grows on hover. The focused slot's
-                            // dot sits still: the pill over it is what answers
-                            // the hover there instead.
-                            width: (pointer.containsMouse && !slot.ws.isFocused) ? Theme.space.lg : root._dotSize
-                            height: dot.width
-                            radius: Theme.pillRadius(dot.height)
-                            color: slot.ws.isUrgent
-                                ? Theme.color.destructive
-                                : (slot.ws.isFocused ? Theme.color.primary : Theme.color.mutedForeground)
+            x: root.vertical ? 0 : pill._from
+            y: root.vertical ? pill._from : 0
+            width: root.vertical ? root._slotThickness : pill._to - pill._from
+            height: root.vertical ? pill._to - pill._from : root._slotThickness
 
-                            Behavior on width {
-                                Anim { kind: "spatialFast" }
-                            }
+            // Both edges of a pair on `emphasized`, the trailing one over
+            // twice the clock (M54 D2, caelestia's ActiveIndicator): the
+            // leading edge reaches the new slot while the trailing edge is
+            // still leaving the old one. The one place in the shell that
+            // spells a duration of its own, because the relationship between
+            // the two edges IS the effect and a second token would be a name
+            // with one caller.
+            Behavior on leadStart {
+                enabled: pill.visible && root.animateSize
+                Anim { kind: "emphasized" }
+            }
+            Behavior on leadEnd {
+                enabled: pill.visible && root.animateSize
+                Anim { kind: "emphasized" }
+            }
+            Behavior on trailStart {
+                enabled: pill.visible && root.animateSize
+                Anim { kind: "emphasized"; duration: Theme.motion.emphasized * 2 }
+            }
+            Behavior on trailEnd {
+                enabled: pill.visible && root.animateSize
+                Anim { kind: "emphasized"; duration: Theme.motion.emphasized * 2 }
+            }
+        }
 
-                            // The dot under the pill takes the pill's own colour
-                            // so the two read as one shape while the pill is
-                            // arriving, and fades back once it has left.
-                            Behavior on color {
-                                CAnim {}
-                            }
+        Grid {
+            id: slotGrid
+            columns: root.vertical ? 1 : Math.max(1, slotRepeater.count)
+            columnSpacing: root._slotGap
+            rowSpacing: root._slotGap
 
-                            // One pulse when a workspace turns urgent, not a
-                            // loop: the destructive colour is the standing
-                            // state, the pulse is the thing that just happened.
-                            SequentialAnimation {
-                                id: urgentPulse
-                                Anim { target: dot; property: "opacity"; to: 0.3; kind: "effects" }
-                                Anim { target: dot; property: "opacity"; to: 1; kind: "effectsSlow" }
-                            }
+            Repeater {
+                id: slotRepeater
+                // A count rather than the array itself: the model is a fresh
+                // array on every focus change, and a Repeater handed one
+                // rebuilds every delegate, which would snap every slot's
+                // length instead of letting the ones that changed travel.
+                model: root.slots.length
+                onItemAdded: root._remeasure()
+                onItemRemoved: root._remeasure()
 
+                Item {
+                    id: slot
+                    required property int index
+                    readonly property var ws: root.slots[slot.index] || ({
+                        id: "", idx: 0, label: "", current: false, isFocused: false,
+                        isUrgent: false, placeholder: true, windows: [], overflow: 0
+                    })
+
+                    readonly property bool hovered: slotHover.hovered
+                    readonly property bool occupied: slot.ws.windows.length > 0
+                    readonly property bool showsApps: slot.occupied
+                        && WorkspacesModel.showsApps(root._showApps, slot.ws.current, slot.hovered)
+                    readonly property int shownIcons: slot.showsApps ? slot.ws.windows.length : 0
+                    readonly property bool showsOverflow: slot.showsApps && slot.ws.overflow > 0
+
+                    // An agent on this workspace waiting on the user: the slot
+                    // pulses until it is looked at, unless it is the one on
+                    // screen already.
+                    readonly property bool waiting: root._agents && !slot.ws.current
+                        && slot.ws.windows.some(function (w) { return HerdrService.stateByWindow[w.id] === "blocked"; })
+
+                    readonly property real _labelAlong: root.vertical ? label.implicitHeight : label.implicitWidth
+                    readonly property real _iconsAlong: slot.shownIcons > 0
+                        ? slot.shownIcons * root._iconSize + (slot.shownIcons - 1) * root._iconGap
+                        : 0
+                    readonly property real _chipAlong: slot.showsOverflow
+                        ? (root.vertical ? chip.implicitHeight : chip.implicitWidth) + root._iconGap
+                        : 0
+                    readonly property real contentAlong: slot._labelAlong
+                        + (slot._iconsAlong > 0 ? root._labelGap + slot._iconsAlong + slot._chipAlong : 0)
+                    readonly property real targetAlong: Math.max(root._slotThickness,
+                        slot.contentAlong + root._slotPad * 2)
+                    onTargetAlongChanged: root._remeasure()
+
+                    // The length the slot is drawn at: its target, gliding
+                    // there on the same arm switch every bar cell's own width
+                    // takes.
+                    property real along: slot.targetAlong
+                    Behavior on along {
+                        enabled: root.animateSize
+                        Anim {}
+                    }
+
+                    width: root.vertical ? root._slotThickness : slot.along
+                    height: root.vertical ? slot.along : root._slotThickness
+
+                    // The pointer's own answer that this is a target. The
+                    // focused slot takes none: the pill is already there.
+                    Box {
+                        anchors.fill: parent
+                        role: "cell"
+                        radius: Theme.pillRadius(root._slotThickness)
+                        box: {
+                            var composed = {};
+                            var base = Theme.box("cell", "ghost");
+                            for (var key in base)
+                                composed[key] = base[key];
+                            composed.wash = slot.hovered && !slot.ws.isFocused ? Theme.box("cell", "hover").wash : null;
+                            return composed;
                         }
+                    }
 
-                        // A dot is too small to aim at, so its own target reaches
-                        // out to the cell's padding band. Declared inside the slot
-                        // rather than on the cell: the cell holds several of these
-                        // and each focuses a different workspace.
-                        MouseArea {
-                            id: pointer
-                            anchors.fill: parent
-                            anchors.topMargin: -Theme.space.md
-                            anchors.bottomMargin: -Theme.space.md
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: CompositorService.focusWorkspace(slot.ws.id)
-                            onContainsMouseChanged: {
-                                if (pointer.containsMouse)
-                                    root._hoveredIndex = slot.index;
-                                else if (root._hoveredIndex === slot.index)
+                    // primitive-exempt: an agent waiting, a pulse over the
+                    // slot's own shape rather than a bordered box.
+                    Rectangle {
+                        id: waitGlow
+                        anchors.fill: parent
+                        radius: Theme.pillRadius(root._slotThickness)
+                        color: Theme.color.destructive
+                        visible: slot.waiting
+                        opacity: 0.2
+
+                        // The breathing pulse (Theme.motion.pulseDuration,
+                        // DESIGN.md §1's continuous-motion carve-out), for as
+                        // long as the agent waits.
+                        SequentialAnimation on opacity {
+                            running: slot.waiting
+                            loops: Animation.Infinite
+                            NumberAnimation { to: 0.45; duration: Theme.motion.pulseDuration; easing.type: Theme.motion.pulseEasing }
+                            NumberAnimation { to: 0.2; duration: Theme.motion.pulseDuration; easing.type: Theme.motion.pulseEasing }
+                        }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root._go(slot.ws)
+                    }
+
+                    // A HoverHandler rather than the MouseArea's own hover:
+                    // it keeps reporting while the pointer is over an icon,
+                    // whose own MouseArea sits above this one.
+                    HoverHandler {
+                        id: slotHover
+                        onHoveredChanged: {
+                            if (slotHover.hovered) {
+                                root._hoveredIndex = slot.index;
+                                root._slotEntered(slot);
+                            } else {
+                                if (root._hoveredIndex === slot.index)
                                     root._hoveredIndex = -1;
+                                root._slotLeft(slot);
                             }
                         }
                     }
-                }
-            }
 
-            // The moving pill. `lead` and `trail` chase the same slot at
-            // different speeds, so the span between them opens on the way out
-            // and closes on the way in; which of the two is the leading edge
-            // falls out of the arithmetic rather than needing the direction.
-            // primitive-exempt: the focused-workspace indicator itself. A moving
-            // pill is not a surface, and nothing else in the shell draws one.
-            Rectangle {
-                id: pill
-                anchors.verticalCenter: parent.verticalCenter
-                radius: Theme.pillRadius(pill.height)
-                color: Theme.color.primary
+                    // Laid out at the settled length and clipped to the drawn
+                    // one, so icons are uncovered as the slot opens rather than
+                    // squeezed into it.
+                    Item {
+                        anchors.fill: parent
+                        clip: slot.along < slot.targetAlong
 
-                // Focus leaving this output (another monitor took it) is the
-                // pill leaving a surface, not travelling: it fades out where
-                // it stood and fades back in at whatever slot focus returns
-                // to. `target` is held at the last focused slot meanwhile,
-                // and the travel Behaviors below are disarmed while nothing
-                // is drawn, so a re-entry lands at its slot instead of
-                // running there from a stale one.
-                readonly property bool _here: root._focusedIndex >= 0
-                opacity: pill._here ? 1 : 0
-                visible: pill.opacity > 0
+                        Grid {
+                            id: content
+                            columns: root.vertical ? 1 : 2
+                            columnSpacing: root._labelGap
+                            rowSpacing: root._labelGap
+                            horizontalItemAlignment: Grid.AlignHCenter
+                            verticalItemAlignment: Grid.AlignVCenter
+                            x: root.vertical ? (parent.width - content.width) / 2 : (slot.targetAlong - slot.contentAlong) / 2
+                            y: root.vertical ? (slot.targetAlong - slot.contentAlong) / 2 : (parent.height - content.height) / 2
 
-                Behavior on opacity {
-                    Anim { kind: "effects" }
-                }
+                            Text {
+                                id: label
+                                text: slot.ws.label
+                                font.family: Theme.fontFamilyMono
+                                font.pixelSize: Theme.fontSize.body
+                                font.weight: root.bandInk ? Theme.weight.semibold : Theme.weight.medium
+                                horizontalAlignment: Text.AlignHCenter
+                                color: slot.ws.isFocused
+                                    ? Theme.color.primaryForeground
+                                    : slot.ws.isUrgent
+                                        ? Theme.color.destructive
+                                        : (slot.occupied || slot.ws.current) ? root.foreground : root.dimForeground
 
-                // The pointer's own answer that this is a target, same as a
-                // plain dot's, since the focused slot's dot never grows: this
-                // is the shape that has to carry the hover state instead.
-                readonly property bool hovered: root._focusedIndex >= 0
-                    && root._hoveredIndex === root._focusedIndex
+                                Behavior on color {
+                                    CAnim {}
+                                }
 
-                // Held apart from `lead`/`trail` below so hovering never
-                // disturbs the pace those two set for the travel animation.
-                property real growth: pill.hovered ? (Theme.space.lg - root._dotSize) : 0
+                                // One pulse when a workspace turns urgent, not a
+                                // loop: the destructive colour is the standing
+                                // state, the pulse is the thing that just happened.
+                                SequentialAnimation {
+                                    id: urgentPulse
+                                    Anim { target: label; property: "opacity"; to: 0.3; kind: "effects" }
+                                    Anim { target: label; property: "opacity"; to: 1; kind: "effectsSlow" }
+                                }
+                            }
 
-                Behavior on growth {
-                    Anim { kind: "spatialFast" }
-                }
+                            Grid {
+                                id: icons
+                                visible: slot.shownIcons > 0
+                                columns: root.vertical ? 1 : Math.max(1, slot.shownIcons + (slot.showsOverflow ? 1 : 0))
+                                columnSpacing: root._iconGap
+                                rowSpacing: root._iconGap
 
-                height: root._dotSize + pill.growth
+                                Repeater {
+                                    model: slot.shownIcons
 
-                property real target: 0
+                                    Item {
+                                        id: iconItem
+                                        required property int index
+                                        readonly property var win: slot.ws.windows[iconItem.index] || null
+                                        readonly property string winId: iconItem.win ? iconItem.win.id : ""
+                                        readonly property string source: iconItem.win ? AppIconService.forWindow(iconItem.win) : ""
+                                        readonly property string agent: root._agentState(iconItem.winId)
+                                        readonly property bool hovered: iconPointer.containsMouse
 
-                function _syncTarget() {
-                    if (root._focusedIndex >= 0)
-                        pill.target = root._slotX(root._focusedIndex);
-                }
+                                        width: root._iconSize
+                                        height: root._iconSize
 
-                Component.onCompleted: pill._syncTarget()
+                                        // On the focused slot, the window holding
+                                        // focus is lit and the rest step back.
+                                        readonly property bool lit: !slot.ws.isFocused || (iconItem.win && iconItem.win.isFocused) || iconItem.hovered
 
-                property real lead: pill.target
-                property real trail: pill.target
+                                        // Arrives faded up rather than cut in,
+                                        // on the arm switch the slot's length
+                                        // takes.
+                                        property real _in: root.animateSize ? 0 : 1
+                                        Component.onCompleted: iconItem._in = 1
+                                        Behavior on _in {
+                                            enabled: root.animateSize
+                                            Anim { kind: "effects" }
+                                        }
 
-                x: Math.min(pill.lead, pill.trail) - pill.growth / 2
-                width: Math.abs(pill.lead - pill.trail) + root._slotWidth + pill.growth
+                                        property real _lit: iconItem.lit ? 1 : 0.5
+                                        Behavior on _lit {
+                                            Anim { kind: "effects" }
+                                        }
 
-                // Both edges on `emphasized`, the trailing one over twice
-                // the clock (M54 D2, caelestia's ActiveIndicator): the
-                // leading edge reaches the new slot while the trailing edge
-                // is still leaving the old one, so the pill stretches across
-                // the gap and closes up behind itself. The one place in the
-                // shell that spells a duration of its own, because the
-                // relationship between the two edges IS the effect and a
-                // second token would be a name with one caller.
-                Behavior on lead {
-                    enabled: pill.visible
-                    Anim { kind: "emphasized" }
-                }
+                                        Item {
+                                            anchors.fill: parent
+                                            opacity: iconItem._in * iconItem._lit
 
-                Behavior on trail {
-                    enabled: pill.visible
-                    Anim { kind: "emphasized"; duration: Theme.motion.emphasized * 2 }
+                                            Picture {
+                                                id: appIcon
+                                                anchors.fill: parent
+                                                visible: iconItem.source !== "" && appIcon.status !== Image.Error
+                                                source: iconItem.source
+                                                sourceSize.width: root._iconSize * 2
+                                                sourceSize.height: root._iconSize * 2
+                                                fillMode: Image.PreserveAspectFit
+                                            }
+
+                                            // Nothing in the chain answered: the
+                                            // generic window mark, as the switcher
+                                            // draws it.
+                                            Icon {
+                                                anchors.centerIn: parent
+                                                visible: !appIcon.visible
+                                                name: "app-window"
+                                                size: root._iconSize
+                                                color: label.color
+                                            }
+                                        }
+
+                                        // herdr's word on the agent in this
+                                        // window (Services/HerdrService.qml): a
+                                        // spinner while it works, a pulsing
+                                        // alert while it waits on the user, a
+                                        // check once it is done. Nothing at all
+                                        // for idle, unknown, or no herdr.
+                                        Item {
+                                            id: badge
+                                            visible: iconItem.agent !== ""
+                                            anchors.right: parent.right
+                                            anchors.top: parent.top
+                                            anchors.rightMargin: -Theme.space.xxs
+                                            anchors.topMargin: -Theme.space.xxs
+                                            width: root._badgeSize
+                                            height: root._badgeSize
+
+                                            // primitive-exempt: the badge's own
+                                            // backing disc, which keeps the glyph
+                                            // readable over the app icon under it.
+                                            Rectangle {
+                                                anchors.fill: parent
+                                                radius: Theme.pillRadius(badge.width)
+                                                color: Theme.color.background
+                                            }
+
+                                            Icon {
+                                                id: badgeGlyph
+                                                anchors.centerIn: parent
+                                                width: badge.width
+                                                height: badge.height
+                                                size: badge.width
+                                                name: iconItem.agent === "working"
+                                                    ? "loader-circle"
+                                                    : iconItem.agent === "blocked" ? "circle-alert" : "circle-check"
+                                                color: iconItem.agent === "blocked"
+                                                    ? Theme.color.destructive
+                                                    : iconItem.agent === "done" ? Theme.color.primary : Theme.color.foreground
+
+                                                // A spinner turns on the breathing
+                                                // pulse's own clock, and not at all
+                                                // under motion.enabled=false.
+                                                RotationAnimator on rotation {
+                                                    running: badge.visible && iconItem.agent === "working" && Theme.motionEnabled
+                                                    from: 0
+                                                    to: 360
+                                                    duration: Theme.motion.pulseDuration
+                                                    loops: Animation.Infinite
+                                                }
+                                            }
+
+                                            SequentialAnimation on opacity {
+                                                running: badge.visible && iconItem.agent === "blocked"
+                                                loops: Animation.Infinite
+                                                alwaysRunToEnd: true
+                                                NumberAnimation { to: 0.4; duration: Theme.motion.pulseDuration; easing.type: Theme.motion.pulseEasing }
+                                                NumberAnimation { to: 1.0; duration: Theme.motion.pulseDuration; easing.type: Theme.motion.pulseEasing }
+                                            }
+                                        }
+
+                                        MouseArea {
+                                            id: iconPointer
+                                            anchors.fill: parent
+                                            anchors.margins: -root._iconGap / 2
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                if (root.preview && root.preview.isOpen)
+                                                    root.preview.close();
+                                                if (iconItem.winId !== "")
+                                                    CompositorService.focusWindow(iconItem.winId);
+                                            }
+                                            onContainsMouseChanged: {
+                                                if (iconPointer.containsMouse && iconItem.winId !== "")
+                                                    TooltipRegistry.show(iconItem, root._iconTooltip(iconItem.winId, iconItem.agent), root.barEdge);
+                                                else
+                                                    TooltipRegistry.hide(iconItem);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Windows past `workspaces.maxIcons`, counted.
+                                Text {
+                                    id: chip
+                                    visible: slot.showsOverflow
+                                    text: "+" + slot.ws.overflow
+                                    color: label.color
+                                    font.family: Theme.fontFamilyMono
+                                    font.pixelSize: Theme.fontSize.caption
+                                    font.weight: Theme.weight.medium
+                                }
+                            }
+                        }
+                    }
+
+                    readonly property bool urgent: slot.ws.isUrgent
+                    onUrgentChanged: if (slot.urgent) urgentPulse.restart()
                 }
             }
         }
+    }
+
+    readonly property var _agentWords: ({
+        working: "Agent working",
+        blocked: "Agent waiting on you",
+        done: "Agent done"
+    })
+
+    // The window's title read live (the slot model carries no titles), with
+    // herdr's word on its agent after it.
+    function _iconTooltip(windowId, agent) {
+        var win = CompositorService.windowById(windowId);
+        var title = win ? (win.title || win.appId || "") : "";
+        return agent !== "" ? title + " / " + root._agentWords[agent] : title;
     }
 }

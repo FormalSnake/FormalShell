@@ -264,6 +264,15 @@ Scope {
             Hyprland.dispatch("workspace " + id);
     }
 
+    // Hyprland's `idx` is its numeric workspace id (model.js), and its
+    // `workspace` dispatcher creates the workspace when none exists yet.
+    function focusWorkspaceAt(idx) {
+        var n = Math.floor(Number(idx));
+        if (!(n >= 1))
+            return;
+        root.focusWorkspace(String(n));
+    }
+
     function focusWindow(id) {
         var selector = root._windowSelector(id);
         if (Hyprland.usingLua)

@@ -75,6 +75,8 @@ PanelWindow {
     property var systemUpdatePanel: null
     property var displayPanel: null
     property var monitorPanel: null
+    // shell.qml's single WorkspacePreview, the Spaces cell's hover card.
+    property var workspacePreview: null
     property var trayMenu: null
     property var trayOverflow: null
     // The chevron's second bar (Surfaces/Bar/BarOverflow.qml), shared by
@@ -391,6 +393,7 @@ PanelWindow {
         id: workspacesComponent
         Workspaces {
             outputName: bar.screen ? bar.screen.name : ""
+            preview: bar.workspacePreview
         }
     }
     Component {

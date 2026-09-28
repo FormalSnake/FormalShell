@@ -119,6 +119,7 @@ ShellRoot {
                 systemUpdatePanel: systemUpdatePanelInstance
                 displayPanel: displayPanelInstance
                 monitorPanel: monitorPanelInstance
+                workspacePreview: workspacePreviewInstance
                 trayMenu: trayMenuInstance
                 trayOverflow: trayOverflowInstance
                 barOverflow: barOverflowInstance
@@ -249,6 +250,10 @@ ShellRoot {
     SystemUpdatePanel { id: systemUpdatePanelInstance }
     PanelSlot { id: displayPanelInstance; DisplayPanel {} }
     PanelSlot { id: monitorPanelInstance; MonitorPanel { menu: menuInstance } }
+    // The Spaces cell's preview card. Built here rather than in a slot:
+    // every bar's cell registers itself with it on creation, which is how
+    // WorkspacesIpc finds the cell on the focused output.
+    WorkspacePreview { id: workspacePreviewInstance }
     RegionPicker { id: regionPickerInstance }
 
     // Same "one controller, opened on the focused screen at trigger time"
@@ -325,6 +330,7 @@ ShellRoot {
     NotificationsIpc { center: notificationsCenter }
     OsdIpc { osd: osd }
     SwitcherIpc { switcher: switcherLoader.item }
+    WorkspacesIpc { preview: workspacePreviewInstance }
     // The static eighteen merged with every plugin surface that has
     // registered itself. Plugin keys carry manifest.js's "plugin:" prefix, so
     // a plugin can never shadow a builtin name and PanelIpc needs no

@@ -47,6 +47,10 @@ QtObject {
     signal configReloaded(bool failed)
 
     function focusWorkspace(id) {}
+    // A workspace by its `idx` rather than its id, for a slot the bar keeps
+    // on screen before the compositor has any workspace there
+    // (Bar/workspaces.js's persistent placeholders): there is no id to name.
+    function focusWorkspaceAt(idx) {}
     function focusWindow(id) {}
     function closeWindow(id) {}
     function spawn(argv) {} // argv: list<string>, no shell interpolation

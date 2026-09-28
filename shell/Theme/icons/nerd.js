@@ -174,7 +174,11 @@ var ICONS = {
     "circle-off": "\u{F073A}",       // md-cancel
     "ear": "\u{F07C5}",              // md-ear_hearing
     "ear-off": "\u{F0A45}",          // md-ear_hearing_off
-    "audio-waveform": "\u{F147D}"    // md-waveform
+    "audio-waveform": "\u{F147D}",   // md-waveform
+
+    // M74: the Spaces cell's herdr agent badges.
+    "loader-circle": "\u{F0772}",    // md-loading
+    "circle-check": "\u{F05E0}"      // md-check_circle
 };
 
 var FAMILY = "";

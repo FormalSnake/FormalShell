@@ -1,13 +1,12 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
 # --workspaces proves the bar's workspace indicator is ONE pill that travels
-# rather than a per-dot width (M48). The dots hold fixed slots, so the only
-# thing that may move between two settled frames is the pill.
+# rather than a fill each slot owns (M48). Since Spaces (M74) the slot on
+# screen also opens wide for its icons, so between two settled frames the
+# pill and the two slots it left and reached are what moves.
 #
-# A second foot window is spawned on workspace 2 first: workspaces.js hides
-# an empty unfocused workspace, so without it the second dot would vanish on
-# the way back and the frames would be comparing different rows rather than
-# the same row with the pill in two places.
+# A second foot window is spawned on workspace 2 first, so the slot it
+# leaves has an icon of its own to fold away rather than only a label.
 #
 # `hyprctl dispatch workspace 1` then fires and the run takes a burst of
 # frames across the pill's own travel, plus a settled one three seconds on.
@@ -24,7 +23,7 @@
 # The burst frames also carry the picture the assertions do not claim: the
 # pill's two edges run `emphasized`, the trailing one over twice that clock
 # (M54 D2), so between roughly a quarter and a whole clock past the switch
-# the pill is one shape stretched across both dots rather than a pill at
+# the pill is one shape stretched across both slots rather than a pill at
 # either end. That is what the crops are for reading by eye. It is left out
 # of the assertions on purpose: a nested software-rendered session cannot
 # promise which frame a screencopy commits, and the durations themselves are
@@ -39,8 +38,9 @@ workspaces_settled_path="$shot_dir/workspaces-settled.png"
 workspaces_dispatch_path="$shot_dir/workspaces-dispatch.txt"
 workspaces_crop_dir="$shot_dir/workspaces-crops"
 # The workspace cell alone, at the left end of the bar's left region, past
-# the launcher cell beside it.
-workspaces_crop_geometry="50x24+48+8"
+# the launcher cell beside it: five persistent slots with one of them open,
+# short of the active-window cell after it.
+workspaces_crop_geometry="150x24+52+8"
 # The pill's own clock (Theme.motion.emphasized, M54 D2/D11) and the delay
 # this rig costs between the dispatch and the shell's first frame carrying
 # it, both in milliseconds. Every burst frame is that delay plus a fraction

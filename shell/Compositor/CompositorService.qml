@@ -65,6 +65,7 @@ Singleton {
     signal configReloaded(bool failed)
 
     function focusWorkspace(id) { backend.focusWorkspace(id) }
+    function focusWorkspaceAt(idx) { backend.focusWorkspaceAt(idx) }
     function focusWindow(id) { backend.focusWindow(id) }
     function closeWindow(id) { backend.closeWindow(id) }
     function spawn(argv) { backend.spawn(argv) }
