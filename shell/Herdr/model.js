@@ -68,14 +68,17 @@ function parseClient(args) {
     return { key: key, remote: remote, session: session };
 }
 
-// Walks the `pid ppid args` table down from each window pid (BFS,
-// shallowest match wins, a plain terminal never nests one herdr inside
-// another) and returns the first herdr client found in that subtree.
-// `byWindow` maps a window pid to its client's key, the shape the plan
-// describes; a window with none anywhere under it is simply absent.
-// `clients` carries the `{remote, session}` behind every key that turned
-// up at all, since HerdrService needs that to build the key's own poll
-// command and the key string alone doesn't losslessly decode back to it.
+// Walks the `pid ppid args` table down from each window pid (BFS) and
+// collects every herdr client in that subtree, not descending into a
+// client's own children (a client nested inside another client's pane is
+// that outer client's business). `byWindow` maps a window pid to its client
+// keys, shallowest first; a pid with none anywhere under it is simply
+// absent. One pid can carry several: a terminal like ghostty or a foot
+// server draws every window from one process, so its subtree holds the
+// clients of all of them, and windowKeys below decides which window is
+// which. `clients` carries the `{remote, session}` behind every key that
+// turned up at all, since HerdrService needs that to build the key's own
+// poll command and the key string alone doesn't losslessly decode back to it.
 function clientsByWindow(psRows, windowPids) {
     var rows = Array.isArray(psRows) ? psRows : [];
     var byPid = {};
@@ -93,20 +96,22 @@ function clientsByWindow(psRows, windowPids) {
     var pids = Array.isArray(windowPids) ? windowPids : [];
     for (var w = 0; w < pids.length; w++) {
         var wp = Number(pids[w]);
-        if (!isFinite(wp) || wp <= 0)
+        if (!isFinite(wp) || wp <= 0 || byWindow[wp])
             continue;
 
         var visited = {};
         visited[wp] = true;
         var queue = [wp];
-        var found = null;
+        var keys = [];
         while (queue.length > 0) {
             var pid = queue.shift();
             var row = byPid[pid];
-            if (row) {
-                found = parseClient(row.args);
-                if (found)
-                    break;
+            var found = row ? parseClient(row.args) : null;
+            if (found) {
+                if (keys.indexOf(found.key) < 0)
+                    keys.push(found.key);
+                clients[found.key] = { remote: found.remote, session: found.session };
+                continue;
             }
             var kids = childrenOf[pid] || [];
             for (var k = 0; k < kids.length; k++) {
@@ -116,12 +121,71 @@ function clientsByWindow(psRows, windowPids) {
                 }
             }
         }
-        if (found) {
-            byWindow[wp] = found.key;
-            clients[found.key] = { remote: found.remote, session: found.session };
-        }
+        if (keys.length > 0)
+            byWindow[wp] = keys;
     }
     return { byWindow: byWindow, clients: clients };
+}
+
+// ---- window titles ----------------------------------------------------------
+
+// The titles a herdr client can give its outer terminal under herdr's
+// default `ui.window_title`, "{hostname}: {workspace}", rendered on the
+// server: one per workspace label that server has. A server configured with
+// another title (or none) matches nothing here, which only matters for a
+// window that needs its title to tell it apart (windowKeys).
+function defaultTitles(hostname, labels) {
+    if (typeof hostname !== "string" || hostname === "" || !Array.isArray(labels))
+        return [];
+    var out = [];
+    for (var i = 0; i < labels.length; i++) {
+        if (typeof labels[i] === "string" && labels[i] !== "")
+            out.push(hostname + ": " + labels[i]);
+    }
+    return out;
+}
+
+// `windows`: `[{id, pid, title}]`, `keysByPid`: clientsByWindow's
+// `byWindow`, `titlesByKey`: key -> defaultTitles() for that key's server.
+// Returns window id -> key. Neither Hyprland nor the terminal exposes which
+// of a process's windows owns which pty, so the pid alone settles a window
+// only when it is that pid's one window and one client sits under it.
+// Anything else is ambiguous (several windows on one ghostty or foot
+// server, or several clients under one window) and the window takes a key
+// only when its title is exactly one candidate's rendered title and no
+// other candidate's; otherwise it gets nothing rather than a guess.
+function windowKeys(windows, keysByPid, titlesByKey) {
+    var ws = Array.isArray(windows) ? windows : [];
+    var byPid = keysByPid || {};
+    var titles = titlesByKey || {};
+    var windowsOnPid = {};
+    var i;
+    for (i = 0; i < ws.length; i++) {
+        var p = Number(ws[i].pid);
+        windowsOnPid[p] = (windowsOnPid[p] || 0) + 1;
+    }
+
+    var out = {};
+    for (i = 0; i < ws.length; i++) {
+        var pid = Number(ws[i].pid);
+        var keys = byPid[pid];
+        if (!Array.isArray(keys) || keys.length === 0)
+            continue;
+        if (windowsOnPid[pid] === 1 && keys.length === 1) {
+            out[ws[i].id] = keys[0];
+            continue;
+        }
+        var title = typeof ws[i].title === "string" ? ws[i].title : "";
+        var matched = [];
+        for (var k = 0; k < keys.length; k++) {
+            var t = titles[keys[k]];
+            if (title !== "" && Array.isArray(t) && t.indexOf(title) >= 0)
+                matched.push(keys[k]);
+        }
+        if (matched.length === 1)
+            out[ws[i].id] = matched[0];
+    }
+    return out;
 }
 
 // ---- agent list -------------------------------------------------------------
@@ -132,18 +196,41 @@ function clientsByWindow(psRows, windowPids) {
 // JSON, the poll loop's own `echo null` stand-in for a failed call, a reply
 // with no `result.agents` array.
 function parseList(line) {
-    if (typeof line !== "string" || line.trim() === "")
-        return null;
-    var parsed;
-    try {
-        parsed = JSON.parse(line);
-    } catch (e) {
-        return null;
-    }
+    var parsed = _parseJson(line);
     if (!parsed || typeof parsed !== "object" || !parsed.result)
         return null;
     var agents = parsed.result.agents;
     return Array.isArray(agents) ? agents : null;
+}
+
+function _parseJson(line) {
+    if (typeof line !== "string" || line.trim() === "")
+        return null;
+    try {
+        return JSON.parse(line);
+    } catch (e) {
+        return null;
+    }
+}
+
+// Sorts one poll loop line into what it carries: `{hostname}` off the
+// loop's own `hostname <name>` preamble, `{labels}` off a `workspace list`
+// reply, and `{agents}` (parseList, null included) for everything else, so
+// a line nobody recognises still reads as a failed agent list.
+function parsePollLine(line) {
+    if (typeof line === "string" && line.indexOf("hostname ") === 0)
+        return { hostname: line.slice("hostname ".length).trim() };
+    var parsed = _parseJson(line);
+    var ws = parsed && typeof parsed === "object" && parsed.result ? parsed.result.workspaces : null;
+    if (Array.isArray(ws)) {
+        var labels = [];
+        for (var i = 0; i < ws.length; i++) {
+            if (ws[i] && typeof ws[i].label === "string")
+                labels.push(ws[i].label);
+        }
+        return { labels: labels };
+    }
+    return { agents: parseList(line) };
 }
 
 // blocked > working > done > "" (idle/unknown draw nothing): the one badge
@@ -198,10 +285,18 @@ function _herdrArgs(session) {
     return session ? " --session " + shellQuote(session) : "";
 }
 
-function _localScript(session) {
-    return "command -v herdr >/dev/null 2>&1 || exit 127; " +
-        "while :; do herdr" + _herdrArgs(session) + " agent list 2>/dev/null || echo null; " +
+// The hostname line and `workspace list` feed defaultTitles(); a failed
+// `workspace list` prints nothing, so only a failed `agent list` ever reads
+// as the `null` that clears a key's state.
+function _loopBody(herdr, session) {
+    return 'echo "hostname $(uname -n)"; ' +
+        "while :; do " + herdr + _herdrArgs(session) + " agent list 2>/dev/null || echo null; " +
+        herdr + _herdrArgs(session) + " workspace list 2>/dev/null; " +
         "sleep " + POLL_INTERVAL_SECONDS + "; done";
+}
+
+function _localScript(session) {
+    return "command -v herdr >/dev/null 2>&1 || exit 127; " + _loopBody("herdr", session);
 }
 
 // The remote login shell may be fish with a minimal PATH (no herdr on it
@@ -213,9 +308,7 @@ function _remoteScript(session) {
     return 'h=$(command -v herdr 2>/dev/null); ' +
         'if [ -z "$h" ] && [ -x "$HOME/.nix-profile/bin/herdr" ]; then h="$HOME/.nix-profile/bin/herdr"; fi; ' +
         'if [ -z "$h" ] && [ -x "/etc/profiles/per-user/$USER/bin/herdr" ]; then h="/etc/profiles/per-user/$USER/bin/herdr"; fi; ' +
-        'if [ -z "$h" ]; then exit 127; fi; ' +
-        'while :; do "$h"' + _herdrArgs(session) + ' agent list 2>/dev/null || echo null; ' +
-        'sleep ' + POLL_INTERVAL_SECONDS + '; done';
+        'if [ -z "$h" ]; then exit 127; fi; ' + _loopBody('"$h"', session);
 }
 
 // `client`: `{remote, session}` (clientsByWindow's `clients` map holds

@@ -90,7 +90,7 @@ TestCase {
             { pid: 102, ppid: 101, args: "herdr" }      // the client, two levels down
         ];
         var result = HerdrModel.clientsByWindow(rows, [100]);
-        compare(result.byWindow, { 100: "local" });
+        compare(result.byWindow, { 100: ["local"] });
         compare(result.clients, { local: { remote: "", session: "" } });
     }
 
@@ -101,7 +101,7 @@ TestCase {
             { pid: 102, ppid: 101, args: "herdr --session inner" }
         ];
         var result = HerdrModel.clientsByWindow(rows, [100]);
-        compare(result.byWindow, { 100: "local:outer" });
+        compare(result.byWindow, { 100: ["local:outer"] });
     }
 
     function test_clients_by_window_no_client_in_subtree() {
@@ -122,7 +122,7 @@ TestCase {
             { pid: 201, ppid: 200, args: "herdr --remote mac" }
         ];
         var result = HerdrModel.clientsByWindow(rows, [100, 200]);
-        compare(result.byWindow, { 100: "remote:mac", 200: "remote:mac" });
+        compare(result.byWindow, { 100: ["remote:mac"], 200: ["remote:mac"] });
         compare(Object.keys(result.clients).length, 1);
     }
 
@@ -138,7 +138,95 @@ TestCase {
             { pid: 102, ppid: 101, args: "herdr client" }
         ];
         var result = HerdrModel.clientsByWindow(rows, [100]);
-        compare(result.byWindow, { 100: "remote:mac" });
+        compare(result.byWindow, { 100: ["remote:mac"] });
+    }
+
+    function test_clients_by_window_collects_every_client_under_a_shared_pid() {
+        // A ghostty server: every window's shell is a child of the one pid.
+        var rows = [
+            { pid: 100, ppid: 1, args: "ghostty" },
+            { pid: 101, ppid: 100, args: "fish" },
+            { pid: 102, ppid: 101, args: "herdr --remote mac" },
+            { pid: 103, ppid: 102, args: "herdr client" },
+            { pid: 111, ppid: 100, args: "fish" },
+            { pid: 112, ppid: 111, args: "herdr" }
+        ];
+        var result = HerdrModel.clientsByWindow(rows, [100, 100]);
+        compare(result.byWindow, { 100: ["remote:mac", "local"] });
+        compare(Object.keys(result.clients).sort(), ["local", "remote:mac"]);
+    }
+
+    // defaultTitles / windowKeys: which of a pid's windows a key belongs to.
+
+    function test_default_titles() {
+        compare(HerdrModel.defaultTitles("MacBook-Pro-2.local", ["nativebrowser", "~", ""]),
+            ["MacBook-Pro-2.local: nativebrowser", "MacBook-Pro-2.local: ~"]);
+        compare(HerdrModel.defaultTitles("", ["a"]), []);
+        compare(HerdrModel.defaultTitles("host", undefined), []);
+    }
+
+    function test_window_keys_lone_window_needs_no_title() {
+        var keys = HerdrModel.windowKeys([{ id: "a", pid: 100, title: "anything" }], { 100: ["local"] }, {});
+        compare(keys, { a: "local" });
+    }
+
+    function test_window_keys_shared_pid_takes_only_the_titled_window() {
+        var windows = [
+            { id: "herdr", pid: 100, title: "MacBook-Pro-2.local: nativebrowser" },
+            { id: "shell", pid: 100, title: "~/Developer/FormalShell" }
+        ];
+        var titles = { "remote:mac": HerdrModel.defaultTitles("MacBook-Pro-2.local", ["nativebrowser", "nix"]) };
+        compare(HerdrModel.windowKeys(windows, { 100: ["remote:mac"] }, titles), { herdr: "remote:mac" });
+    }
+
+    function test_window_keys_shared_pid_without_titles_badges_nothing() {
+        var windows = [
+            { id: "herdr", pid: 100, title: "MacBook-Pro-2.local: nativebrowser" },
+            { id: "shell", pid: 100, title: "fish" }
+        ];
+        compare(HerdrModel.windowKeys(windows, { 100: ["remote:mac"] }, {}), {});
+    }
+
+    function test_window_keys_title_match_is_exact() {
+        var windows = [
+            { id: "a", pid: 100, title: "MacBook-Pro-2.local: nativebrowser (2)" },
+            { id: "b", pid: 100, title: "macbook-pro-2.local: nativebrowser" },
+            { id: "c", pid: 100, title: "MacBook-Pro-2: nativebrowser" }
+        ];
+        var titles = { "remote:mac": HerdrModel.defaultTitles("MacBook-Pro-2.local", ["nativebrowser"]) };
+        compare(HerdrModel.windowKeys(windows, { 100: ["remote:mac"] }, titles), {});
+    }
+
+    function test_window_keys_two_clients_under_one_window_split_by_title() {
+        var windows = [
+            { id: "one", pid: 100, title: "e1504g: nix" },
+            { id: "two", pid: 100, title: "mac: nix" }
+        ];
+        var titles = {
+            local: HerdrModel.defaultTitles("e1504g", ["nix"]),
+            "remote:mac": HerdrModel.defaultTitles("mac", ["nix"])
+        };
+        compare(HerdrModel.windowKeys(windows, { 100: ["local", "remote:mac"] }, titles),
+            { one: "local", two: "remote:mac" });
+    }
+
+    function test_window_keys_title_both_candidates_render_is_ambiguous() {
+        var windows = [{ id: "a", pid: 100, title: "mac: nix" }];
+        var titles = {
+            "remote:mac": HerdrModel.defaultTitles("mac", ["nix"]),
+            "remote:mac:work": HerdrModel.defaultTitles("mac", ["nix"])
+        };
+        compare(HerdrModel.windowKeys(windows, { 100: ["remote:mac", "remote:mac:work"] }, titles), {});
+    }
+
+    // parsePollLine.
+
+    function test_parse_poll_line_kinds() {
+        compare(HerdrModel.parsePollLine("hostname MacBook-Pro-2.local"), { hostname: "MacBook-Pro-2.local" });
+        compare(HerdrModel.parsePollLine('{"id":"cli:workspace:list","result":{"type":"workspace_list","workspaces":[{"label":"nix"},{"label":"~"}]}}'),
+            { labels: ["nix", "~"] });
+        compare(HerdrModel.parsePollLine('{"result":{"agents":[{"agent_status":"working"}]}}').agents.length, 1);
+        compare(HerdrModel.parsePollLine("null"), { agents: null });
     }
 
     // parseList.
@@ -257,6 +345,14 @@ TestCase {
         var cmd = HerdrModel.pollCommand({ remote: "mac", session: "" });
         compare(cmd.indexOf("-n") > 0 && cmd.indexOf("-n") < cmd.indexOf("mac"), true);
         compare(cmd[cmd.length - 1].indexOf("bash --norc -c ") === 0, true);
+    }
+
+    function test_poll_command_reports_hostname_and_workspaces() {
+        var local = HerdrModel.pollCommand({ remote: "", session: "" })[2];
+        compare(local.indexOf('echo "hostname $(uname -n)"') >= 0, true);
+        compare(local.indexOf("herdr workspace list 2>/dev/null;") >= 0, true);
+        var remote = HerdrModel.pollCommand({ remote: "mac", session: "work" });
+        compare(remote[remote.length - 1].indexOf("workspace list") >= 0, true);
     }
 
     function test_poll_command_remote_resolves_herdr_three_ways() {

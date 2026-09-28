@@ -35,10 +35,17 @@ Singleton {
     // subtree currently resolves to.
     property var stateByKey: ({})
 
-    // pid -> key, from the last `ps` walk. Kept so a poll line landing
+    // pid -> [key], from the last `ps` walk. Kept so a poll line landing
     // between two window-list ticks can still recompute stateByWindow off
     // the mapping that's still current.
-    property var _windowKeyByPid: ({})
+    property var _keysByPid: ({})
+    // key -> the titles its server renders under herdr's default
+    // window_title (Herdr/model.js's defaultTitles), and the hostname and
+    // labels they are built from. Only a window sharing its pid with others
+    // needs these to be told apart (model.js's windowKeys).
+    property var _titlesByKey: ({})
+    property var _hostnameByKey: ({})
+    property var _labelsByKey: ({})
     // key -> Process, one per client currently backed by at least one window.
     property var _pollers: ({})
     // key -> current backoff (ms) and the epoch ms a dead-but-wanted poller
@@ -90,6 +97,9 @@ Singleton {
             }
             if (ask)
                 CompositorService.refreshWindows();
+            // A title change can settle a shared-pid window on its own, with
+            // no process having come or gone.
+            root._recomputeStateByWindow();
             _psDebounce.restart();
         }
     }
@@ -117,7 +127,7 @@ Singleton {
         // possibly stale, mapping in place.
         var rows = exitCode === 0 ? HerdrModel.parsePsRows(text) : [];
         var result = HerdrModel.clientsByWindow(rows, root._windowPids);
-        root._windowKeyByPid = result.byWindow;
+        root._keysByPid = result.byWindow;
         root._reconcilePollers(result.clients);
         root._recomputeStateByWindow();
     }
@@ -195,6 +205,11 @@ Singleton {
             var stateNext = Object.assign({}, root.stateByKey);
             delete stateNext[key];
             root.stateByKey = stateNext;
+            delete root._hostnameByKey[key];
+            delete root._labelsByKey[key];
+            var titlesNext = Object.assign({}, root._titlesByKey);
+            delete titlesNext[key];
+            root._titlesByKey = titlesNext;
             dead.destroy();
         }
 
@@ -222,8 +237,22 @@ Singleton {
         backoffNext[key] = root._baseBackoffMs;
         root._backoffMs = backoffNext;
 
-        var agents = HerdrModel.parseList(line);
-        var state = agents ? HerdrModel.aggregate(agents) : "";
+        var parsed = HerdrModel.parsePollLine(line);
+        if (parsed.hostname !== undefined || parsed.labels !== undefined) {
+            if (parsed.hostname !== undefined)
+                root._hostnameByKey[key] = parsed.hostname;
+            else
+                root._labelsByKey[key] = parsed.labels;
+            var titles = HerdrModel.defaultTitles(root._hostnameByKey[key], root._labelsByKey[key]);
+            if ((root._titlesByKey[key] || []).join("\n") === titles.join("\n"))
+                return;
+            var titlesNext = Object.assign({}, root._titlesByKey);
+            titlesNext[key] = titles;
+            root._titlesByKey = titlesNext;
+            root._recomputeStateByWindow();
+            return;
+        }
+        var state = parsed.agents ? HerdrModel.aggregate(parsed.agents) : "";
         if (root.stateByKey[key] === state)
             return;
         var stateNext = Object.assign({}, root.stateByKey);
@@ -234,15 +263,13 @@ Singleton {
 
     function _recomputeStateByWindow() {
         var out = {};
-        var ws = CompositorService.windows;
-        for (var i = 0; i < ws.length; i++) {
-            var key = root._windowKeyByPid[Number(ws[i].pid)];
-            if (!key)
-                continue;
-            var state = root.stateByKey[key];
+        var keys = HerdrModel.windowKeys(CompositorService.windows, root._keysByPid, root._titlesByKey);
+        for (var id in keys) {
+            var state = root.stateByKey[keys[id]];
             if (state)
-                out[ws[i].id] = state;
+                out[id] = state;
         }
-        root.stateByWindow = out;
+        if (JSON.stringify(out) !== JSON.stringify(root.stateByWindow))
+            root.stateByWindow = out;
     }
 }

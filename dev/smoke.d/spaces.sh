@@ -6,8 +6,11 @@
 # waits on herdr polls and a real pointer instead, so the two timelines
 # would only get in each other's way.
 #
-# Fixture: the base window plus a foot on workspace 1 whose process tree
-# carries `herdr --remote fakehost`, and two foots on workspace 2, one
+# Fixture: the base window plus two windows of one foot server on
+# workspace 1, sharing its pid the way every ghostty window does: one
+# carries `herdr --remote fakehost` under the title herdr's default
+# window_title renders for it, the other a plain shell. Two foots on
+# workspace 2, one
 # carrying a bare `herdr` and one carrying nothing. `herdr` is a PATH shim:
 # as a client it execs an interactive bash under the argv a real client has
 # (the script itself reads as `bash .../herdr` in ps, which is not a
@@ -50,6 +53,7 @@ spaces_ssh_calls_path="$shot_dir/spaces-ssh-calls.txt"
 spaces_herdr_calls_path="$shot_dir/spaces-herdr-calls.txt"
 spaces_remote_state_path="$shot_dir/spaces-remote-state"
 spaces_dispatch_path="$shot_dir/spaces-dispatch.txt"
+spaces_foot_socket="$shot_dir/formalshell-spaces-foot.sock"
 spaces_done_path="$shot_dir/spaces-done"
 spaces_status_one_path="$shot_dir/spaces-status-one.json"
 spaces_status_two_path="$shot_dir/spaces-status-two.json"
@@ -90,6 +94,16 @@ if [ "\${1:-}" = agent ]; then
   printf '%s\n' '{"result":{"type":"agent_list","agents":[{"pane_id":"p1","agent":"claude","agent_status":"working"}]}}'
   exit 0
 fi
+if [ "\${1:-}" = workspace ]; then
+  printf '%s\n' '{"id":"cli:workspace:list","result":{"type":"workspace_list","workspaces":[{"label":"rig","number":1}]}}'
+  exit 0
+fi
+# "{hostname}: {workspace}" as fakehost's server would render it. The VM's
+# own bashrc titles every prompt user@host: cwd, so this client's bash gets
+# a home whose .bashrc, read last, puts herdr's title back each prompt.
+if [ "\$*" = "--remote fakehost" ]; then
+  export HOME="$spaces_shim_dir/remote-client-home"
+fi
 exec -a "herdr\${*:+ \$*}" bash
 EOF
   cat > "$spaces_shim_dir/ssh" <<EOF
@@ -120,13 +134,20 @@ esac
 agent() {
   printf '{"agent":"claude","agent_session":{"agent":"claude","kind":"id","source":"herdr:claude","value":"764b8a38-bc42-4d6b-8c85-73ca5a24831%s"},"agent_status":"%s","cwd":"/home/rig/src/project-%s","focused":false,"foreground_cwd":"/home/rig/src/project-%s","pane_id":"w65215ab3bb4281:p%s","revision":11,"state_change_seq":856,"tab_id":"w65215ab3bb4281:t%s","terminal_id":"term_65c177d9ebde6%s","terminal_title":"◑ Fixture agent %s on a long running task","terminal_title_stripped":"Fixture agent %s on a long running task","workspace_id":"w65215ab3bb4281"}' "\$1" "\$2" "\$1" "\$1" "\$1" "\$1" "\$1" "\$1" "\$1"
 }
+echo "hostname fakehost-server"
 while :; do
   state=\$(cat "$spaces_remote_state_path" 2>/dev/null)
   agents=\$(agent 1 "\${state:-idle}")
   for i in 2 3 4 5 6 7 8; do agents="\$agents,\$(agent "\$i" idle)"; done
   printf '{"id":"cli:agent:list","result":{"type":"agent_list","agents":[%s]}}\n' "\$agents"
+  printf '%s\n' '{"id":"cli:workspace:list","result":{"type":"workspace_list","workspaces":[{"label":"other","number":1},{"label":"rig","number":2}]}}'
   sleep 2
 done
+EOF
+  mkdir -p "$spaces_shim_dir/remote-client-home"
+  cat > "$spaces_shim_dir/remote-client-home/.bashrc" <<'EOF'
+PS1='$ '
+PROMPT_COMMAND='printf "\033]2;fakehost-server: rig\007"'
 EOF
   chmod +x "$spaces_shim_dir/herdr" "$spaces_shim_dir/ssh"
   # clipssh.sh's route onto the shell's PATH: the rig's own environment is
@@ -136,7 +157,7 @@ EOF
   # One entry and one flat icon per fixture app id, so every window has an
   # icon of its own and none of them is red, which the badge read relies on.
   mkdir -p "$iso_home/.local/share/applications" "$iso_home/.local/share/icons/hicolor/48x48/apps"
-  for name in blocked:'#3A7BD5' working:'#3AAA5D' plain:'#8A8A8A'; do
+  for name in blocked:'#3A7BD5' sibling:'#9A6AD5' working:'#3AAA5D' plain:'#8A8A8A'; do
     colour=${name#*:}
     name=${name%%:*}
     cat > "$iso_home/.local/share/applications/formalshell-spaces-$name.desktop" <<EOF
@@ -166,11 +187,19 @@ park() {
   "$wlrctl_bin" pointer move "\$1" "\$2" >> "$spaces_dispatch_path" 2>&1
 }
 sleep 4
-"$hyprctl_bin" dispatch exec "[workspace 1 silent] $foot_bin --app-id=formalshell-spaces-blocked herdr --remote fakehost" > "$spaces_dispatch_path" 2>&1
+"$hyprctl_bin" dispatch exec "$foot_bin --server=$spaces_foot_socket" > "$spaces_dispatch_path" 2>&1
+sleep 1
+"$hyprctl_bin" dispatch exec "${foot_bin%/*}/footclient --server-socket=$spaces_foot_socket --app-id=formalshell-spaces-blocked herdr --remote fakehost" >> "$spaces_dispatch_path" 2>&1
+"$hyprctl_bin" dispatch exec "${foot_bin%/*}/footclient --server-socket=$spaces_foot_socket --app-id=formalshell-spaces-sibling sh -c 'sleep 300'" >> "$spaces_dispatch_path" 2>&1
 "$hyprctl_bin" dispatch exec "[workspace 2 silent] $foot_bin --app-id=formalshell-spaces-working herdr" >> "$spaces_dispatch_path" 2>&1
 sleep 2
 "$hyprctl_bin" dispatch exec "[workspace 2 silent] $foot_bin --app-id=formalshell-spaces-plain sh -c 'sleep 300'" >> "$spaces_dispatch_path" 2>&1
-sleep 8
+sleep 2
+# A footclient window belongs to the server's pid, which exec's window rules
+# never see, so both are moved by class instead.
+"$hyprctl_bin" dispatch movetoworkspacesilent "1,class:^(formalshell-spaces-blocked)\$" >> "$spaces_dispatch_path" 2>&1
+"$hyprctl_bin" dispatch movetoworkspacesilent "1,class:^(formalshell-spaces-sibling)\$" >> "$spaces_dispatch_path" 2>&1
+sleep 6
 call workspaces status > "$spaces_status_one_path" 2>&1
 call debug dump > "$spaces_dump_path" 2>&1
 "$grim_bin" "$spaces_blocked_png" > /dev/null 2>&1
@@ -243,12 +272,15 @@ leg_spaces_assert() {
   blocked=$(spaces_icon "$spaces_status_one_path" blocked)
   working=$(spaces_icon "$spaces_status_one_path" working)
   plain=$(spaces_icon "$spaces_status_one_path" plain)
-  echo "blocked: $blocked"; echo "working: $working"; echo "plain: $plain"
+  sibling=$(spaces_icon "$spaces_status_one_path" sibling)
+  echo "blocked: $blocked"; echo "sibling: $sibling"; echo "working: $working"; echo "plain: $plain"
   echo "herdr in debug dump: $("$jq_bin" -c .herdr "$spaces_dump_path")"
+  "$jq_bin" -c '.windows[] | select(.appId | startswith("formalshell-spaces-")) | {appId, pid, title}' "$spaces_dump_path"
   [ "$(echo "$blocked" | "$jq_bin" -r .slot)" = 0 ] || fail "the blocked window is not under workspace 1's slot: $blocked"
   [ "$(echo "$working" | "$jq_bin" -r .slot)" = 1 ] || fail "the working window is not under workspace 2's slot: $working"
   [ "$(echo "$plain" | "$jq_bin" -r .slot)" = 1 ] || fail "the plain window is not under workspace 2's slot: $plain"
-  for f in "$blocked" "$working" "$plain"; do
+  [ "$(echo "$sibling" | "$jq_bin" -r .slot)" = 0 ] || fail "the sibling window is not under workspace 1's slot: $sibling"
+  for f in "$blocked" "$sibling" "$working" "$plain"; do
     [ "$(echo "$f" | "$jq_bin" -r .icon)" = true ] || fail "a fixture window resolved no icon: $f"
   done
   "$jq_bin" -e '.slots[0].icons | map(select(.appId == "formalshell-smoke-iconic")) | length == 1' "$spaces_status_one_path" > /dev/null \
@@ -258,7 +290,15 @@ leg_spaces_assert() {
   [ "$(echo "$blocked" | "$jq_bin" -r .agent)" = blocked ] || fail "the remote client's window carries no blocked badge: $blocked"
   [ "$(echo "$working" | "$jq_bin" -r .agent)" = working ] || fail "the local client's window carries no working badge: $working"
   [ "$(echo "$plain" | "$jq_bin" -r .agent)" = "" ] || fail "a window with no herdr in its tree carries a badge: $plain"
+  [ "$(echo "$sibling" | "$jq_bin" -r .agent)" = "" ] \
+    || fail "the plain window sharing the herdr window's pid carries its badge: $sibling"
   blocked_id=$(echo "$blocked" | "$jq_bin" -r .id)
+  sibling_id=$(echo "$sibling" | "$jq_bin" -r .id)
+  pids=$("$jq_bin" -r --arg a "$blocked_id" --arg b "$sibling_id" '[.windows[] | select(.id == $a or .id == $b) | .pid] | unique | map(tostring) | join(" ")' "$spaces_dump_path")
+  echo "blocked and sibling pids: $pids"
+  case "$pids" in ""|*" "*) fail "the blocked and sibling windows do not share one pid: '$pids'" ;; esac
+  [ "$("$jq_bin" -r --arg id "$sibling_id" '.herdr.stateByWindow[$id] // ""' "$spaces_dump_path")" = "" ] \
+    || fail "debug dump's stateByWindow badges the sibling $sibling_id"
   working_id=$(echo "$working" | "$jq_bin" -r .id)
   [ "$("$jq_bin" -r --arg id "$blocked_id" '.herdr.stateByWindow[$id] // ""' "$spaces_dump_path")" = blocked ] \
     || fail "debug dump's stateByWindow has no blocked entry for $blocked_id"
