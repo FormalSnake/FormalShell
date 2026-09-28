@@ -339,7 +339,8 @@ PanelWindow {
     }
 
     // The two cells whose text runs free and scrolls at a budget, in the
-    // order they give ground (spec D7): the track first, then the title.
+    // order they keep it (spec D7): the track first, the title giving
+    // ground before it.
     readonly property var _labelNames: ["nowPlaying", "activeWindow"]
 
     function _labelEntries() {
@@ -352,8 +353,10 @@ PanelWindow {
         return out;
     }
 
-    // Every label's want in one binding, so a title that changes while it
-    // is capped (and so moves nothing else on the strip) still refits.
+    // Every label's want and cap in one binding, so a title that changes
+    // while it is capped (and so moves nothing else on the strip) still
+    // refits, and so does a focus change whose app name moves the title's
+    // cap.
     // `itemAt` is no dependency of its own, so the counts stand in for the
     // delegates arriving.
     readonly property string _labelWants: {
@@ -361,7 +364,7 @@ PanelWindow {
         var entries = bar._labelEntries();
         var wants = [];
         for (var i = 0; i < entries.length; i++)
-            wants.push(entries[i].item.naturalLabelWidth);
+            wants.push(entries[i].item.naturalLabelWidth + "/" + entries[i].item.labelCap);
         return count + ":" + wants.join(",");
     }
 
@@ -378,7 +381,8 @@ PanelWindow {
                 region: entries[i].region,
                 extent: entries[i].item.labelExtent,
                 natural: entries[i].item.naturalLabelWidth,
-                cap: entries[i].item.labelCap
+                cap: entries[i].item.labelCap,
+                min: entries[i].item.labelMin
             });
         }
         var budgets = Layout.labelBudgets(bar._along, bar._strip.edgeInset, Theme.space.sm, {
@@ -437,10 +441,12 @@ PanelWindow {
 
     function _labelState(entry) {
         if (!entry)
-            return { budget: -1, natural: 0, extent: 0, scrolling: false };
+            return { budget: -1, natural: 0, extent: 0, cap: 0, min: 0, scrolling: false };
         var budget = entry.item.labelBudget;
         return {
             budget: isFinite(budget) ? budget : -1,
+            cap: entry.item.labelCap,
+            min: entry.item.labelMin,
             natural: entry.item.naturalLabelWidth,
             extent: entry.item.labelExtent,
             scrolling: entry.item.labelScrolling

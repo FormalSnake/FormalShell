@@ -185,61 +185,52 @@ function fitExtent(extents, gap, room) {
     return { extent: extent, count: count };
 }
 
-// Hands `room` out over `wants` in give order: the deficit comes off the
-// first entry until it is empty, then the next. The last entry, the one
-// that gives ground last, may also take whatever the room has left over, up
-// to its own cap, so a title that grows between two refits has somewhere to
-// grow into. Only the one: two entries both handed the same leftover
-// overfill the strip until the next refit, and the fit hides a whole cell
-// for it.
-function _share(wants, caps, room) {
-    var total = 0;
-    var i;
-    for (i = 0; i < wants.length; i++)
-        total += wants[i];
-    var free = Math.max(0, room);
-    var deficit = Math.max(0, total - free);
-    var surplus = Math.max(0, free - total);
-    var out = [];
-    for (i = 0; i < wants.length; i++) {
-        var cut = Math.min(wants[i], deficit);
-        deficit -= cut;
-        var last = i === wants.length - 1;
-        out.push(cut > 0 ? wants[i] - cut : last ? Math.min(caps[i], wants[i] + surplus) : wants[i]);
-    }
-    return out;
-}
-
 // What each free-running label on the strip may draw (DESIGN.md §3 Bar,
 // spec D7): the now-playing track and the window title, the two cells whose
 // text has no fixed length and scrolls once it hits this number.
 //
 // `rails` is each region's current extent along the strip, labels
-// included; `labels` is [{region, extent, natural, cap}] in give order,
-// the first one giving ground first. `extent` is what the label draws now,
-// `natural` what it would draw uncapped. Taking each label's own extent
-// back out of its rail makes the answer independent of the labels' current
-// sizes, so handing it out settles in one step instead of chasing itself.
+// included; `labels` is [{region, extent, natural, cap, min}] in keep
+// order, the first one keeping its text longest. `extent` is what the
+// label draws now, `natural` what it would draw uncapped, `cap` its own
+// ceiling and `min` the least it is left with. Taking each label's own
+// extent back out of its rail makes the answer independent of the labels'
+// current sizes, so handing it out settles in one step instead of chasing
+// itself.
 //
-// Two ceilings, the lower wins. The strip's: every label together gets
-// what is left once every cell and gap is paid for, so a label shrinks
-// before an end region hides a whole cell. And for a label in an end
-// region, that region's own half: the room between its cells and the
-// centre region sitting at the middle, so a long title stops short of the
-// clock instead of shoving it off centre. A label in the centre has no
-// half of its own and takes the strip's ceiling alone.
+// Three passes:
+// 1. Minimums, out of the room the cells leave and never past it, so a
+//    label gives way before an end region hides a whole cell. Each label
+//    is first sure of its minimum or an even share of that room, whichever
+//    is less, then the minimums fill up in keep order: on a strip too short
+//    for both, the two split what there is rather than one keeping its
+//    whole minimum while the other gets nothing.
+// 2. One common level on top: each label draws up to the level or its own
+//    want, at the highest level where every label fits the strip and the
+//    centre region still sits at the middle. The room splits evenly until
+//    a label is satisfied, so neither is squeezed while the other holds
+//    more than its share. When the cells and minimums alone already push
+//    the centre off the middle, only the strip bounds the level.
+// 3. A label in an end region stops where the centre actually sits: the
+//    middle, or wherever the other end region's cells push it, and only
+//    at the other region once nothing holds the centre anyway. Past the
+//    level it may take what room its region still has, up to its want, and
+//    the last label up to its cap, so a title that grows between two
+//    refits has somewhere to grow into. Only the last: two labels both
+//    handed the same leftover overfill the strip until the next refit.
 function labelBudgets(along, edgeInset, gap, rails, labels) {
+    var n = labels.length;
     var out = [];
     var i;
     if (!(along > 0)) {
-        for (i = 0; i < labels.length; i++)
+        for (i = 0; i < n; i++)
             out.push(Number.POSITIVE_INFINITY);
         return out;
     }
     var fixed = { left: rails.left || 0, center: rails.center || 0, right: rails.right || 0 };
     var wants = [];
     var caps = [];
-    for (i = 0; i < labels.length; i++) {
+    for (i = 0; i < n; i++) {
         var label = labels[i];
         fixed[label.region] -= label.extent > 0 ? label.extent : 0;
         caps.push(label.cap > 0 ? label.cap : 0);
@@ -248,34 +239,111 @@ function labelBudgets(along, edgeInset, gap, rails, labels) {
     for (var r = 0; r < REGIONS.length; r++)
         fixed[REGIONS[r]] = Math.max(0, fixed[REGIONS[r]]);
 
-    var strip = along - edgeInset * 2 - gap * 2 - fixed.left - fixed.center - fixed.right;
-    var shared = _share(wants, caps, strip);
+    var inner = along - edgeInset * 2 - gap * 2;
+    var room = inner - fixed.left - fixed.center - fixed.right;
 
-    var centre = fixed.center;
-    for (i = 0; i < labels.length; i++) {
-        if (labels[i].region === "center")
-            centre += Math.min(wants[i], shared[i]);
+    var live = 0;
+    for (i = 0; i < n; i++) {
+        if (wants[i] > 0)
+            live++;
     }
-    var half = (along - centre) / 2 - edgeInset - gap;
+    var even = live > 0 ? Math.max(0, room) / live : 0;
+    var leasts = [];
+    var floors = [];
+    var spent = 0;
+    for (i = 0; i < n; i++) {
+        leasts.push(Math.min(wants[i], labels[i].min > 0 ? labels[i].min : 0));
+        floors.push(Math.min(leasts[i], even));
+        spent += floors[i];
+    }
+    for (i = 0; i < n; i++) {
+        var more = Math.min(leasts[i] - floors[i], Math.max(0, room - spent));
+        floors[i] += more;
+        spent += more;
+    }
 
-    for (i = 0; i < labels.length; i++)
-        out.push(shared[i]);
-    var ends = ["left", "right"];
-    for (var e = 0; e < ends.length; e++) {
+    function atLevel(level) {
+        var b = [];
+        for (var k = 0; k < n; k++)
+            b.push(Math.max(floors[k], Math.min(wants[k], level)));
+        return b;
+    }
+    function totals(b) {
+        var t = { left: fixed.left, center: fixed.center, right: fixed.right };
+        for (var k = 0; k < n; k++)
+            t[labels[k].region] += b[k];
+        return t;
+    }
+    function fits(b) {
+        var sum = 0;
+        for (var k = 0; k < n; k++)
+            sum += b[k];
+        return sum <= room;
+    }
+    function centred(b) {
+        var t = totals(b);
+        return t.center + 2 * Math.max(t.left, t.right) <= inner;
+    }
+    var holdCentre = centred(floors);
+    function holds(level) {
+        var b = atLevel(level);
+        return fits(b) && (!holdCentre || centred(b));
+    }
+
+    var top = 0;
+    for (i = 0; i < n; i++)
+        top = Math.max(top, Math.ceil(wants[i]));
+    var lo = 0;
+    if (holds(top)) {
+        lo = top;
+    } else if (holds(0)) {
+        var hi = top;
+        while (hi - lo > 1) {
+            var mid = Math.floor((lo + hi) / 2);
+            if (holds(mid))
+                lo = mid;
+            else
+                hi = mid;
+        }
+    }
+    var level = atLevel(lo);
+    for (i = 0; i < n; i++)
+        out.push(level[i]);
+
+    // The centre's own start and end, held to the middle only while pass 2
+    // could hold it there.
+    var t = totals(level);
+    var start = along - edgeInset - gap - t.right - t.center;
+    var end = edgeInset + gap + t.left + t.center;
+    if (holdCentre) {
+        start = Math.min((along - t.center) / 2, start);
+        end = Math.max((along + t.center) / 2, end);
+    }
+    var ends = {
+        left: start - gap - edgeInset - fixed.left,
+        right: along - edgeInset - gap - end - fixed.right
+    };
+    for (var e in ends) {
+        var avail = ends[e];
         var at = [];
-        var endWants = [];
-        var endCaps = [];
-        for (i = 0; i < labels.length; i++) {
-            if (labels[i].region !== ends[e])
+        for (i = 0; i < n; i++) {
+            if (labels[i].region !== e)
                 continue;
             at.push(i);
-            endWants.push(Math.min(wants[i], shared[i]));
-            endCaps.push(caps[i]);
+            out[i] = Math.min(out[i], avail);
+            avail -= out[i];
         }
-        var own = _share(endWants, endCaps, half - fixed[ends[e]]);
-        for (var k = 0; k < at.length; k++)
-            out[at[k]] = Math.min(out[at[k]], own[k]);
+        for (var k = 0; k < at.length; k++) {
+            var j = at[k];
+            var grow = Math.min((j === n - 1 ? caps[j] : wants[j]) - out[j], avail);
+            if (grow > 0) {
+                out[j] += grow;
+                avail -= grow;
+            }
+        }
     }
+    for (i = 0; i < n; i++)
+        out[i] = Math.max(0, out[i]);
     return out;
 }
 

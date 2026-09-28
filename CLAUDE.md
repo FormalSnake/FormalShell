@@ -118,7 +118,12 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   budget its region has with the marquee running, no cell hidden, and no
   two cell rects intersecting, cut by a clip or past the strip's ends,
   settled and in 24 samples taken while focus switches to a short title
-  and back. Rides `--bar-position <edge>`, which pins the edge in this
+  and back. A real mpv plays a long-titled track throughout: both labels
+  keep a non-zero budget, the track at least its minimum or an even share
+  and the title no more than the track while the track is short, and the
+  centre's middle within 2px of the strip's where the cells let it be.
+  Then settings.json rewritten to the title cell alone, the title
+  stopping at its own ceiling with the marquee running. Rides `--bar-position <edge>`, which pins the edge in this
   leg's own `bar` key.
 - `caffeinate.sh` `--caffeinate`: `caffeinate.onStartup` starting the
   session caffeinated with its `formalshell:caffeinate` layer surface

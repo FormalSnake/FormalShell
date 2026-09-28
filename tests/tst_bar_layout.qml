@@ -572,13 +572,14 @@ TestCase {
         compare(b[0], a[0]);
     }
 
-    function test_labelBudgets_now_playing_gives_ground_first() {
+    function test_labelBudgets_title_yields_before_the_track() {
         // 520px left for labels once every cell and gap is paid: the track
-        // gives its whole 220 before the title gives anything.
-        var track = { region: "center", extent: 220, natural: 400, cap: 220 };
-        var b = Layout.labelBudgets(1920, 12, 8, { left: 600, center: 280, right: 1200 }, [track, title(500, 2000)]);
-        compare(b[0], 0);
-        compare(b[1], 520);
+        // keeps its whole 220 and the title scrolls in the 300 after it.
+        var track = { region: "center", extent: 220, natural: 400, cap: 220, min: 160 };
+        var t = { region: "left", extent: 500, natural: 2000, cap: Number.POSITIVE_INFINITY, min: 88 };
+        var b = Layout.labelBudgets(1920, 12, 8, { left: 600, center: 280, right: 1200 }, [track, t]);
+        compare(b[0], 220);
+        compare(b[1], 300);
     }
 
     function test_labelBudgets_only_the_last_label_takes_the_leftover() {
@@ -595,6 +596,66 @@ TestCase {
         var b = Layout.labelBudgets(1000, 12, 8, { left: 300, center: 160, right: 900 }, [track, title(200, 2000)]);
         compare(b[0], 0);
         compare(b[1], 0);
+    }
+
+    function test_labelBudgets_minimums_give_way_before_a_cell_hides() {
+        var track = { region: "center", extent: 100, natural: 400, cap: 220, min: 160 };
+        var t = { region: "left", extent: 200, natural: 2000, cap: 230, min: 88 };
+        var b = Layout.labelBudgets(1000, 12, 8, { left: 300, center: 160, right: 900 }, [track, t]);
+        compare(b[0], 0);
+        compare(b[1], 0);
+    }
+
+    function test_labelBudgets_short_room_splits_evenly() {
+        // 76px for labels, under either minimum: half each.
+        var track = { region: "center", extent: 0, natural: 400, cap: 220, min: 160 };
+        var t = { region: "left", extent: 0, natural: 2000, cap: 230, min: 88 };
+        var b = Layout.labelBudgets(1920, 12, 8, { left: 800, center: 200, right: 804 }, [track, t]);
+        compare(b[0], 38);
+        compare(b[1], 38);
+    }
+
+    function test_labelBudgets_track_minimum_before_the_title_grows() {
+        // 200px for labels: an even 100 each, the title needs only its 88,
+        // and the 12 left tops the track up; the title grows no further.
+        var track = { region: "center", extent: 0, natural: 400, cap: 220, min: 160 };
+        var t = { region: "left", extent: 0, natural: 2000, cap: 230, min: 88 };
+        var b = Layout.labelBudgets(1920, 12, 8, { left: 800, center: 200, right: 680 }, [track, t]);
+        compare(b[0], 112);
+        compare(b[1], 88);
+    }
+
+    // The owner's laptop: a 1460 top bar, launcher, workspaces and the
+    // title's cell on the left (300 without its title), the clock and the
+    // track's cell in the centre (193 without its title), a right region of
+    // 480, and a browser tab title far past its 230 ceiling. The track
+    // draws all of its 172 and the title scrolls in what the centred
+    // centre leaves it, ending one gap short of the clock.
+    function owner(trackNatural) {
+        var track = { region: "center", extent: 0, natural: trackNatural, cap: 219, min: 160 };
+        var t = { region: "left", extent: 385, natural: 1400, cap: 230, min: 88 };
+        return Layout.labelBudgets(1460, 12, 8, { left: 685, center: 193, right: 480 }, [track, t]);
+    }
+
+    function test_labelBudgets_owner_long_title_keeps_the_track() {
+        var b = owner(172);
+        compare(b[0], 172);
+        compare(b[1], 227.5);
+        var centre = 193 + b[0];
+        compare((1460 - centre) / 2, 12 + 300 + b[1] + 8);
+    }
+
+    function test_labelBudgets_owner_two_long_labels_split_evenly() {
+        var b = owner(400);
+        compare(b[0], 209);
+        compare(b[1], 209);
+        verify(193 + b[0] + 2 * Math.max(300 + b[1], 480) <= 1460 - 40);
+    }
+
+    function test_labelBudgets_title_stops_at_its_ceiling_on_an_empty_strip() {
+        var t = { region: "left", extent: 100, natural: 2000, cap: 230, min: 88 };
+        var b = Layout.labelBudgets(1920, 12, 8, { left: 200, center: 100, right: 200 }, [t]);
+        compare(b[0], 230);
     }
 
     function test_labelBudgets_right_region_label_is_the_mirror() {

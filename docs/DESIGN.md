@@ -600,12 +600,20 @@ sometimes here and sometimes there, so nothing on the strip moves when a
 track starts playing.
 
 A crowded strip gives up room in a fixed order rather than clipping a cell
-in half. The now-playing track gives ground first: its title shrinks, down
-to the cover or icon alone with the title still in its tooltip, before
-anything else on the bar moves. The window title gives next. It has no
-fixed ceiling: it takes the room its own region actually has, up to where
-the centre sits at the middle of the strip, and scrolls once its text
-outgrows that. Past that, what still does not fit hides
+in half. The two free-running labels, the now-playing track and the window
+title, share what the cells leave, and each scrolls once its text outgrows
+its share. A playing track keeps a readable minimum (about twenty
+characters) and the title a shorter one, both only out of room the cells
+leave: on a strip too short for both, each is first sure of an even share,
+then the track's minimum fills before the title's grows. Past the
+minimums the two split the rest evenly, a label that
+needs less handing its surplus to the other, up to where the centre still
+sits at the middle of the strip. The window title never grows past a
+ceiling of its own: the whole cell stops at `popupWidthNarrow`, about
+thirty characters of title beside a short app name, however much room the
+strip has. Once an end region's cells alone push the centre off the
+middle, the middle stops bounding anything and the strip does. Past that,
+what still does not fit hides
 whole cells from an end region's own inner edge, the one nearest the
 centre, never the one against the screen edge; a cell comes back the
 instant the room does. The chevron takes no part in any of this: it stays

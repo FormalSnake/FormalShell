@@ -27,12 +27,13 @@ import qs.Services
 // necessary but not sufficient: `media.animatedBarCover` (on by default)
 // is what lets this cell's refcount reach the gate.
 //
-// M55 D7: this cell is the strip's first give, before an end region ever
-// loses a whole cell. Bar.qml's label refit narrows the title's own budget
-// as the strip runs short of room (Bar/layout.js's labelBudgets, which
-// shares it with the window title); at a budget of 0 the label is gone but
-// the cover or icon stays, and the full title is still in the tooltip this
-// cell already carries.
+// M55 D7: Bar.qml's label refit narrows the title's own budget as the strip
+// runs short of room (Bar/layout.js's labelBudgets, which shares it with the
+// window title). The window title gives first, down to its own minimum,
+// while this label holds `labelMin`; on a strip too short for both
+// minimums the two split what room there is, and at a budget of 0 the
+// label is gone but the cover or icon stays, the full title still in the
+// tooltip this cell already carries.
 Cell {
     id: root
 
@@ -40,6 +41,9 @@ Cell {
     // Bar.qml's own cap: 220 or 15% of the strip, whichever is smaller.
     property real stripCap: 220
     readonly property real labelCap: Math.min(220, root.stripCap)
+    // About twenty characters at the body size, the same width the window
+    // title's app name stops at.
+    readonly property real labelMin: Math.min(root.labelCap, Theme.space.popupWidthNarrow / 2)
     // Assigned by Bar.qml's label refit, never bound: the budget is worked
     // out from this cell's own extent, so a binding would close a loop.
     // Infinity until a bar has measured a strip, and wherever none hands one

@@ -32,7 +32,14 @@ Cell {
     // default holds wherever no bar hands one out (the chevron's second
     // bar), where there is no strip to run out of.
     property real labelBudget: Theme.space.popupWidthWide
-    readonly property real labelCap: Number.POSITIVE_INFINITY
+    // The whole cell stops at popupWidthNarrow however much room the strip
+    // has, so the title's ceiling is what its icon, app name and padding
+    // leave of that: about thirty characters beside a short app name. Read
+    // off `_alongExtent`, the cell's settled length, not the implicit size
+    // its Behavior below is still gliding.
+    readonly property real labelCap: Math.max(0, Theme.space.popupWidthNarrow
+        - (root._alongExtent - (root.vertical ? titleSlot.height : titleSlot.width)))
+    readonly property real labelMin: Theme.space.barCellWidth * 2
     // What the title draws along the strip now and would draw uncapped,
     // the two numbers the refit reads. Zero while hidden, so an absent cell
     // claims no room.

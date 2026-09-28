@@ -6,13 +6,13 @@
 # wants its full 220px budget at the same time the right region wants more
 # room than the strip has (spec D7, M55 Task 5's own room rule). Two claims,
 # read off `bar room` (Ipc/BarIpc.qml): the now-playing cell gives ground
-# first (`nowPlaying.budget` under 220), and what still does not fit hides
-# whole cells from the right region's own inner edge rather than cutting one
-# in half (`regions.right.hidden` at least 1). The frame is read by hand for
-# the same claim: a whole cell sitting at the boundary, never a sliced one,
-# and held against the rects `bar room` reports: no two drawn cells
-# intersect and none is cut by its region clip (bar_title.sh's
-# bar_cells_defects).
+# before a cell hides (`nowPlaying.budget` under 220), and what still does
+# not fit hides whole cells from the right region's own inner edge rather
+# than cutting one in half (`regions.right.hidden` at least 1). The frame is
+# read by hand for the same claim: a whole cell sitting at the boundary,
+# never a sliced one, and held against the rects `bar room` reports: no
+# two drawn cells intersect and none is cut by its region clip
+# (bar_title.sh's bar_cells_defects).
 leg_bar_room_flag="--bar-room"
 leg_bar_room_order=195
 leg_bar_room_needs="mpv ffmpeg jq"
