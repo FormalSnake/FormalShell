@@ -94,6 +94,15 @@ IpcHandler {
                 scanning: LocalsendService.scanning,
                 busy: LocalsendService.busy
             },
+            airplay: {
+                enabled: AirplayService.enabled,
+                installed: AirplayService.installed,
+                running: AirplayService.running,
+                active: AirplayService.active,
+                client: AirplayService.client,
+                title: AirplayService.title,
+                hasCover: AirplayService.hasCover
+            },
             bar: root._bars(),
             join: root._join(),
             // The chrome numbers a leg would otherwise have to restate: the

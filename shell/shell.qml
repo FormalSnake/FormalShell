@@ -363,6 +363,7 @@ ShellRoot {
     AirpodsIpc {}
     IphoneIpc {}
     LocalsendIpc {}
+    AirplayIpc {}
     MediaIpc {}
     RadioIpc {}
     VisualizerIpc {}

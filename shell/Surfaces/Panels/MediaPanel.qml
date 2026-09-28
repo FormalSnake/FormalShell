@@ -188,7 +188,9 @@ Panel {
     // them, so the list is built rather than fixed and the cursor addresses
     // whatever actually rendered.
     readonly property var _transport: {
-        if (!MediaService.available || MediaService.activeKind === "stream")
+        // AirPlay gets no row at all, same as an app stream: UxPlay takes
+        // no remote command, so every button here would be inert.
+        if (!MediaService.available || MediaService.activeKind === "stream" || MediaService.activeKind === "airplay")
             return [];
         var out = ["previous", "playpause", "next"];
         if (MediaService.shuffleSupported)
@@ -236,6 +238,8 @@ Panel {
             return "radio";
         if (kind === "iphone")
             return "smartphone";
+        if (kind === "airplay")
+            return "airplay";
         if (kind === "stream")
             return "audio-lines";
         return "music";

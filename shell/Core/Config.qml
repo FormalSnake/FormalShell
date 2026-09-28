@@ -367,6 +367,12 @@ import QtQuick
 // where received files land; the receive directory is also what the
 // arrival toast's Show in Folder action opens. Neither key is read while
 // receive is off. Resolved by shell/Services/LocalsendService.qml.
+// airplay.enable (bool, default false): AirplayService's own `uxplay`
+// child, a receiver with the owner's fixed legacy ports and mirroring
+// window (nixos-module's airplay.enable opens those ports and turns on
+// avahi publishing). Off by default: it's a whole extra network service.
+// airplay.name (string, default "" -> this machine's hostname): the name
+// it advertises. Resolved by shell/Services/AirplayService.qml.
 Singleton {
     id: root
 

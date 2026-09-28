@@ -50,12 +50,17 @@ Rail {
     // construction-site mechanism the header documents for NightLightService.
     readonly property bool _recordingActive: RecordingService.active
     readonly property bool _clipsshSending: ClipsshService.busy
+    // Same lazily-constructed-singleton mechanism as caffeinate/night light
+    // above: this binding is what first touches AirplayService, so
+    // `airplay.enable` actually starts the receiver even on a session that
+    // never opens the media panel.
+    readonly property bool _airplayActive: AirplayService.active
     readonly property bool _reminderPending: ReminderService.count > 0
     // Read by Bar.qml's regionDelegate instead of `visible` directly, see
     // that file's own header comment for why crossing the Loader boundary
     // through the built-in `visible` property specifically breaks its own
     // future reactivity.
-    readonly property bool shown: root._recordingActive || root._clipsshSending || root._reminderPending || root._caffeinateActive || root._nightLightActive || root._overnightActive
+    readonly property bool shown: root._recordingActive || root._clipsshSending || root._airplayActive || root._reminderPending || root._caffeinateActive || root._nightLightActive || root._overnightActive
 
     // Bar.qml sets these on the widget it loads; this rail is not a Cell
     // itself, so it hands them to each cell it holds (DESIGN.md §3 Bar).
@@ -116,6 +121,34 @@ Rail {
             name: "terminal"
             color: clipsshCell.foreground
         }
+    }
+
+    // A client streaming AirPlay. `airplay.enable` is a settings.json key
+    // (read-only, spec's hard rule), so there is no toggle to put on this
+    // cell or on the launcher's toggle hub (Menu/toggles.js's PATHS is a
+    // closed allow-list of runtime-flippable state, and this isn't any);
+    // it says what's connected and nothing more, same as night light below.
+    Cell {
+        id: airplayCell
+        ghost: root.ghost
+        barEdge: root.barEdge
+        barInk: root.barInk
+        barInkShadow: root.barInkShadow
+        width: root.vertical ? root.width : implicitWidth
+        height: root.vertical ? implicitHeight : root.height
+        visible: root._airplayActive
+        // The device name is the phone's own word for itself.
+        tooltipVerbatim: true
+        tooltipText: "AIRPLAY" + (AirplayService.client !== "" ? " FROM " + AirplayService.client : "")
+
+        Icon {
+            anchors.verticalCenter: parent.verticalCenter
+            name: "airplay"
+            color: airplayCell.foreground
+        }
+
+        interactive: true
+        acceptedButtons: Qt.NoButton
     }
 
     Cell {

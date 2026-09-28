@@ -24,12 +24,14 @@ import "../Media/model.js" as MediaModel
 // `xesam:userRating` is read-only metadata and MPRIS has no set-rating call
 // at all, so a like button would be a per-app D-Bus dialect, not a feature.
 //
-// Four kinds of source share one row list (`players`), and every property
+// Five kinds of source share one row list (`players`), and every property
 // below reads the active one whatever its kind: an MPRIS player; the radio
 // (RadioService, `id: "radio"`), listed while a station is tuned; the
 // phone's own now-playing (IphoneService, `id: "iphone"`, M75 Task 4), an
 // Apple Media Service GATT client Task 4's plan describes, listed only
-// while the phone is connected and has actually reported a track; and an
+// while the phone is connected and has actually reported a track;
+// AirPlay's own receiver (AirplayService, `id: "airplay"`, M75 Task 6),
+// listed only while a client is streaming and has sent metadata; and an
 // app playing audio with no MPRIS at all (`stream:<node id>`), listed only
 // while the media panel is open or one is picked, and only ever picked by
 // hand, since the most it offers is its own stream volume. `selectedId` ""
@@ -39,7 +41,11 @@ import "../Media/model.js" as MediaModel
 // play/pause/toggle/next/prev/volup/voldown: `canSeek` stays false and
 // `artUrl` stays "" for it, honest gaps rather than a fake scrub bar or a
 // blank square, and `setVolume` picks a direction and issues one step
-// rather than pretending AMS took an absolute value.
+// rather than pretending AMS took an absolute value. AirPlay offers less
+// still: UxPlay reports no play/pause state and takes no remote command at
+// all, so it carries no transport, no seek and no volume of its own --
+// every playback/volume ternary below simply never names it, the same
+// silent-no-op shape an app `stream` row already gets.
 //
 // The output a source plays on is read off Pipewire's link groups and moved
 // with `pactl move-sink-input` (quickshell has no move of its own); the radio
@@ -79,6 +85,15 @@ Singleton {
     // queued has no now-playing to speak of.
     readonly property var _iphoneRows: (IphoneService.connected && IphoneService.mediaAvailable && IphoneService.mediaTitle !== "")
         ? [{ id: "iphone", kind: "iphone", identity: "iPhone", isPlaying: IphoneService.mediaPlayback === "playing" }]
+        : []
+
+    // A row only once a client has actually sent a track, not merely while
+    // connected: the dacp file appears the instant AirPlay negotiates, well
+    // before the phone's own app has queued anything. `isPlaying: false`
+    // rather than a guess -- UxPlay reports no pause state at all, see the
+    // header.
+    readonly property var _airplayRows: (AirplayService.active && AirplayService.title !== "")
+        ? [{ id: "airplay", kind: "airplay", identity: "AirPlay", isPlaying: false }]
         : []
 
     readonly property bool _streamsLive: root.routingWanted || root.selectedId.indexOf("stream:") === 0
@@ -121,12 +136,13 @@ Singleton {
 
     // Plain rows, built here so every live property read happens inside this
     // binding rather than inside Media/model.js. The pick itself is pure.
-    readonly property var players: MediaModel.withLabels(root._mprisRows.concat(root._radioRows, root._iphoneRows, root._streamRows))
+    readonly property var players: MediaModel.withLabels(root._mprisRows.concat(root._radioRows, root._iphoneRows, root._airplayRows, root._streamRows))
 
     readonly property string activeId: MediaModel.pickPlayerId(root.players, root.selectedId)
     readonly property string activeKind: root.activeId === "" ? ""
         : root.activeId === "radio" ? "radio"
         : root.activeId === "iphone" ? "iphone"
+        : root.activeId === "airplay" ? "airplay"
         : root.activeId.indexOf("stream:") === 0 ? "stream" : "mpris"
     readonly property string activeLabel: {
         for (var i = 0; i < root.players.length; i++)
@@ -156,28 +172,36 @@ Singleton {
     readonly property bool _radio: root.activeKind === "radio"
     readonly property var _station: root._radio ? RadioService.station : null
     readonly property bool _iphone: root.activeKind === "iphone"
+    readonly property bool _airplay: root.activeKind === "airplay"
 
-    readonly property bool available: root.activePlayer !== null || root._radio || root._iphone || root._activeStream !== null
+    readonly property bool available: root.activePlayer !== null || root._radio || root._iphone || root._airplay || root._activeStream !== null
     // An MPRIS player and the phone both carry a real position and length;
-    // the radio is live and an app stream says nothing about either. The
-    // phone's own duration is 0 until AMS reports one (no track, or a live
-    // source with no fixed length), which reads the same as "no timeline".
+    // the radio is live, AirPlay reports neither, and an app stream says
+    // nothing about either. The phone's own duration is 0 until AMS
+    // reports one (no track, or a live source with no fixed length), which
+    // reads the same as "no timeline".
     readonly property bool hasTimeline: root.activePlayer !== null || (root._iphone && IphoneService.mediaDuration > 0)
     readonly property string title: root.activePlayer ? root.activePlayer.trackTitle
         : root._station ? (RadioService.trackTitle || String(root._station.name || ""))
         : root._iphone ? IphoneService.mediaTitle
+        : root._airplay ? AirplayService.title
         : root._activeStream ? (root._activeStream.title || root._activeStream.label) : ""
     readonly property string artist: root.activePlayer ? root.activePlayer.trackArtist
         : root._station && RadioService.trackTitle !== "" ? String(root._station.name || "")
-        : root._iphone ? IphoneService.mediaArtist : ""
+        : root._iphone ? IphoneService.mediaArtist
+        : root._airplay ? AirplayService.artist : ""
     readonly property string album: root.activePlayer ? root.activePlayer.trackAlbum
-        : root._iphone ? IphoneService.mediaAlbum : ""
-    readonly property string artUrl: root.activePlayer ? root.activePlayer.trackArtUrl : ""
+        : root._iphone ? IphoneService.mediaAlbum
+        : root._airplay ? AirplayService.album : ""
+    readonly property string artUrl: root.activePlayer ? root.activePlayer.trackArtUrl
+        : root._airplay ? AirplayService.coverUrl : ""
     // `xesam:url` has no dedicated MprisPlayer property (only trackArtUrl
     // does); it comes straight out of the raw metadata map (LyricsService's
     // sibling-.lrc lookup, spec P2.1).
     readonly property string url: root.activePlayer && root.activePlayer.metadata ? (root.activePlayer.metadata["xesam:url"] || "") : ""
     readonly property string identity: root.activePlayer ? root.activePlayer.identity : root.activeLabel
+    // AirPlay falls through to the final `false`, same as an app `stream`:
+    // UxPlay reports no pause state, so there is nothing truer to say.
     readonly property bool isPlaying: root.activePlayer ? root.activePlayer.isPlaying
         : root._radio ? !RadioService.paused
         : root._iphone ? IphoneService.mediaPlayback === "playing" : false

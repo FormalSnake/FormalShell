@@ -83,6 +83,17 @@ in
     localsend.enable = lib.mkEnableOption ''
       the firewall opening for LocalsendService's receiver: TCP+UDP 53317
     '';
+
+    # M75 Task 6: AirplayService's `uxplay` child needs both mDNS
+    # advertising (so an iPhone's control centre actually lists it) and its
+    # fixed legacy ports open. Matches what the owner's hand-rolled
+    # `kyan.airplay`/avahi setup on g815 did today, folded into this module
+    # so a consumer needs no separate avahi config of their own.
+    airplay.enable = lib.mkEnableOption ''
+      avahi mDNS publishing and UxPlay's legacy fixed ports (TCP
+      7000/7001/7100, UDP 6000/6001/7011, the set `-p` with no argument
+      opens) for AirplayService's receiver
+    '';
   };
 
   config = lib.mkMerge [
@@ -176,6 +187,22 @@ in
     (lib.mkIf cfg.localsend.enable {
       networking.firewall.allowedTCPPorts = [ 53317 ];
       networking.firewall.allowedUDPPorts = [ 53317 ];
+    })
+
+    (lib.mkIf cfg.airplay.enable {
+      services.avahi = {
+        enable = lib.mkDefault true;
+        nssmdns4 = lib.mkDefault true;
+        publish = {
+          enable = lib.mkDefault true;
+          userServices = lib.mkDefault true;
+        };
+      };
+      # UxPlay's `-p`: legacy fixed ports (uxplay.cpp's own argument
+      # parsing, checked against its source at HEAD), the set the owner's
+      # replaced `kyan.airplay` unit already ran with.
+      networking.firewall.allowedTCPPorts = [ 7000 7001 7100 ];
+      networking.firewall.allowedUDPPorts = [ 6000 6001 7011 ];
     })
   ];
 }
