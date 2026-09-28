@@ -461,6 +461,15 @@ Singleton {
             id: writeFileProc
             property var _onDone
             property bool _sawExit: false
+            // Content fed on stdin when stdinEnabled is set; clearing the
+            // flag closes the write channel so `cat` sees EOF.
+            property string _stdin: ""
+            onStarted: {
+                if (!writeFileProc.stdinEnabled)
+                    return;
+                writeFileProc.write(writeFileProc._stdin);
+                writeFileProc.stdinEnabled = false;
+            }
             // A missing `sh` synthesizes the same nonzero-exit-code shape
             // every _onDone callback already handles (warn and carry on),
             // so no call site needs its own FailedToStart branch.
@@ -609,13 +618,41 @@ Singleton {
         readTemplatesProc.running = true;
     }
 
+    // Each copy goes through stdin, one Process per file: an argv entry is
+    // capped at 128 KiB (MAX_ARG_STRLEN), and elementary's kvantum
+    // theme.svg.tmpl alone is ~150 KB, so passing the copies as arguments
+    // failed the exec and left every pinned run without output.
     function _writeTemplateCopies(pairs, onDone) {
         var proc = writeFileProcComponent.createObject(root, {
-            _onDone: onDone
+            _onDone: function (exitCode) {
+                if (exitCode !== 0) {
+                    onDone(exitCode);
+                    return;
+                }
+                root._writeTemplateCopy(pairs, 0, onDone);
+            }
         });
-        proc.command = ["sh", "-c",
-            'mkdir -p "$1" || exit 1; rm -f "$1"/*.tmpl; shift; while [ "$#" -ge 2 ]; do printf \'%s\' "$2" > "$1" || exit 1; shift 2; done',
-            "sh", root._pinnedDir].concat(pairs);
+        proc.command = ["sh", "-c", 'mkdir -p "$1" && rm -f "$1"/*.tmpl', "sh", root._pinnedDir];
+        proc.running = true;
+    }
+
+    function _writeTemplateCopy(pairs, i, onDone) {
+        if (i >= pairs.length) {
+            onDone(0);
+            return;
+        }
+        var proc = writeFileProcComponent.createObject(root, {
+            _onDone: function (exitCode) {
+                if (exitCode !== 0) {
+                    onDone(exitCode);
+                    return;
+                }
+                root._writeTemplateCopy(pairs, i + 2, onDone);
+            },
+            _stdin: pairs[i + 1],
+            stdinEnabled: true
+        });
+        proc.command = ["sh", "-c", 'cat > "$1"', "sh", pairs[i]];
         proc.running = true;
     }
 
