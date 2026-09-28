@@ -32,29 +32,9 @@ import "../Localsend/model.js" as LocalsendModel
 // needs no special case here: the directory watch below already toasts it
 // like any other received file.
 //
-// `recv` logs an accept but never a "saved" line (internal/localsend/
-// recv/handlers.go), so the toast comes from watching the receive
-// directory for a filename that wasn't there last poll, not from parsing
-// stdout/stderr for a completion line that doesn't exist.
-//
-// Confirmed bug in this CLI's `send` (rev 7865fb1c, found running the real
-// loopback check this task asked for: a real `recv` plus a real `send --ip
-// 127.0.0.1` against it, both on this pinned build): every prepare-upload
-// fails with "PreUpload Invalid body" (HTTP 400,
-// internal/localsend/constants/errors.go's ErrInvalidBody), because
-// ForwardSender.preUploadReq() (internal/localsend/send/fwdsend.go) calls
-// `req.SetBodyRaw(metaJson)` and never sets a Content-Type header, so
-// fiber's `c.BodyParser` on the receiving end (internal/localsend/recv/
-// handlers.go's preUploadHandler, the same handler this CLI's own `recv`
-// runs) can't tell the body is JSON and rejects it outright. `recv` itself
-// is unaffected (a real client sets its own Content-Type correctly), only
-// this CLI's own outbound `send` is broken as packaged, which is exactly
-// the deprecated-CLI risk the plan flagged and asked Task 7's dedicated
-// loopback leg to re-check. `_sendPaths` below still runs `send` as
-// documented rather than hand-rolling the HTTP client here to route around
-// an upstream bug; `sendOutcome` at least turns the failure into an honest
-// toast ("localsend-cli exited 0" but ERROR-logged) instead of a silent
-// no-op.
+// The toast comes from watching the receive directory for a filename that
+// wasn't there last poll rather than from `recv`'s `Recv file file=<name>`
+// log line, so the Open action points at what actually landed on disk.
 Singleton {
     id: root
 

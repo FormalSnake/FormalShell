@@ -28,6 +28,14 @@ buildGoModule rec {
 
   vendorHash = "sha256-2F5zoXbHUb+b6m3L7xIBBHNFMacnJuuH+c4Ut/hFRjs=";
 
+  # preUploadReq posts its JSON body with no Content-Type, and a fiber
+  # receiver's BodyParser (this CLI's own `recv`) rejects that with a 400
+  # "PreUpload Invalid body", so every send fails.
+  postPatch = ''
+    substituteInPlace internal/localsend/send/fwdsend.go \
+      --replace-fail 'req.SetBodyRaw(metaJson)' 'req.Header.SetContentType("application/json"); req.SetBodyRaw(metaJson)'
+  '';
+
   meta = {
     description = "Headless LocalSend v2 protocol client: peer scan, file send, unattended receive";
     homepage = "https://github.com/0w0mewo/localsend-cli";
