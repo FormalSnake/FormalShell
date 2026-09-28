@@ -19,7 +19,7 @@
 # combine with --chevron or --bar-layout, which write the same key.
 #
 # It also RIDES a leg that photographs its own frames on the moved strip
-# (--join, --menu-emerge, --panel-morph), which is the only way those legs
+# (--join, --bar-title, --menu-emerge, --panel-morph), which is the only way those legs
 # reach an edge other than the top without a copy of each of them per
 # position. Riding, this leg pins the edge and nothing else: the layout is
 # the rider's own or the default, the chevron and the panel open (which would
@@ -46,7 +46,7 @@ bar_position_dump_path="$shot_dir/bar-position-dump.json"
 # A rider owning the `bar` key writes the position itself; every other rider
 # takes it from here and the default layout with it.
 bar_position_layout_owner() {
-  leg_on join
+  leg_on join || leg_on bar_title
 }
 
 bar_position_rider() {

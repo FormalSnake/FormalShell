@@ -11,9 +11,9 @@ import qs.Services
 // leads in foreground; the window title follows dimmed. Both are words, so
 // both are sans. No entry resolves: falls back to the dim raw appId, the
 // foreground title and no icon. No focused window: hidden. The app name
-// elides and the title marquee-scrolls once the combined label would exceed
-// maxWidth, which the whole pill (padding included) is capped to, the bar
-// setting it to a quarter of its own width under a hard ceiling. Text
+// elides past a fixed width, and the title marquee-scrolls once it outgrows
+// `labelBudget`, the room Bar.qml works out the strip actually has for it
+// (Bar/layout.js's labelBudgets). Text
 // colours resolve through `foreground`/`dimForeground` rather than
 // hardcoded roles, so a filled cell carries every one of them.
 //
@@ -25,8 +25,20 @@ import qs.Services
 Cell {
     id: root
 
-    property real maxWidth: 320
     property var panel: null
+
+    // Assigned by Bar.qml's label refit, never bound: the budget is worked
+    // out from this cell's own extent, so a binding would close a loop. The
+    // default holds wherever no bar hands one out (the chevron's second
+    // bar), where there is no strip to run out of.
+    property real labelBudget: Theme.space.popupWidthWide
+    readonly property real labelCap: Number.POSITIVE_INFINITY
+    // What the title draws along the strip now and would draw uncapped,
+    // the two numbers the refit reads. Zero while hidden, so an absent cell
+    // claims no room.
+    readonly property real labelExtent: root.shown ? titleText.width : 0
+    readonly property real naturalLabelWidth: root.shown ? titleText._fullWidth : 0
+    readonly property bool labelScrolling: titleText._marquee
 
     readonly property bool _panelOpen: root.panel ? root.panel.isOpen : false
     // Set from Bar.qml (`windowVisible: bar.visible`) so the title marquee
@@ -55,9 +67,10 @@ Cell {
     readonly property bool shown: root.focusedWindow !== null
     visible: root.shown
 
-    // `maxWidth` is the whole pill's ceiling, so the row content gets it
-    // minus the cell's own control padding.
-    readonly property real _contentMaxWidth: Math.max(0, root.maxWidth - Theme.space.controlPaddingX * 2)
+    // The app name's own ceiling. Fixed rather than a share of the budget:
+    // the title is what gives ground, and a name that shrank with it would
+    // leave the cell unable to say which app it is.
+    readonly property real _nameMaxWidth: Theme.space.popupWidthNarrow / 2
 
     // Focus/title changes resize this cell (window switch, title rename),
     // animate the extent instead of shoving the bar's other widgets
@@ -76,8 +89,6 @@ Cell {
     CellRow {
         id: row
         spacing: Theme.space.xxs
-        width: root.vertical ? implicitWidth : Math.min(implicitWidth, root._contentMaxWidth)
-        height: root.vertical ? Math.min(implicitHeight, root._contentMaxWidth) : implicitHeight
         clip: true
 
         // The bar's one image-icon exception (DESIGN.md §3 "Bar"), sized to
@@ -180,12 +191,11 @@ Cell {
                 font.family: Theme.fontFamilySans
                 font.pixelSize: Theme.fontSize.body
                 font.weight: Theme.weight.medium
-                // Never more than half the row's own budget: an entry name (or
-                // a raw appId in the no-entry fallback) long enough to eat the
-                // whole thing otherwise starves the title of every pixel and
-                // gets hard-cut mid-glyph by the row's own clip, since a Row
-                // won't shrink it.
-                width: Math.min(implicitWidth, root._contentMaxWidth * 0.5)
+                // An entry name (or a raw appId in the no-entry fallback)
+                // long enough to eat the whole cell otherwise starves the
+                // title and gets hard-cut mid-glyph by the row's own clip,
+                // since a Row won't shrink it.
+                width: Math.min(implicitWidth, root._nameMaxWidth)
                 elide: Text.ElideRight
             }
 
@@ -198,7 +208,7 @@ Cell {
                 font.family: Theme.fontFamilySans
                 font.pixelSize: Theme.fontSize.body
                 font.weight: Theme.weight.medium
-                width: Math.min(implicitWidth, root._contentMaxWidth * 0.5)
+                width: Math.min(implicitWidth, root._nameMaxWidth)
                 elide: Text.ElideRight
             }
         }
@@ -230,14 +240,7 @@ Cell {
                 color: root.desktopEntry ? root.dimForeground : root.foreground
                 leftPadding: root.vertical ? 0 : Theme.space.md
                 windowVisible: root.windowVisible
-                maxWidth: {
-                    var used = 0;
-                    if (appIcon.visible)
-                        used += appIcon.width + row.spacing;
-                    if (nameSlot.visible)
-                        used += nameSlot.width + row.spacing;
-                    return Math.max(0, root._contentMaxWidth - used);
-                }
+                maxWidth: root.labelBudget
             }
         }
     }

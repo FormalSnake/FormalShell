@@ -28,31 +28,25 @@ import qs.Services
 // is what lets this cell's refcount reach the gate.
 //
 // M55 D7: this cell is the strip's first give, before an end region ever
-// loses a whole cell. `slackAlong`/`stripCap` below narrow the title's own
-// budget as the strip runs short of room, same idiom as Tray.qml's own
-// `slackAlong`; at a budget of 0 the label is gone but the cover or icon
-// stays, and the full title is still in the tooltip this cell already
-// carries.
+// loses a whole cell. Bar.qml's label refit narrows the title's own budget
+// as the strip runs short of room (Bar/layout.js's labelBudgets, which
+// shares it with the window title); at a budget of 0 the label is gone but
+// the cover or icon stays, and the full title is still in the tooltip this
+// cell already carries.
 Cell {
     id: root
 
     property var panel: null
-    // Bar.qml's own pre-slack cap: 220 or 15% of the strip, whichever is
-    // smaller. `maxWidth` below folds this together with the room the
-    // strip actually has left; this alone is what Bar.qml can work out
-    // without knowing whether anything else on the strip is short of room.
+    // Bar.qml's own cap: 220 or 15% of the strip, whichever is smaller.
     property real stripCap: 220
-    // Room the strip has left over along its own axis, handed in by
-    // Bar.qml exactly as Tray.qml's own `slackAlong` is: the tray's own
-    // `_refit` header comment carries the full reasoning this mirrors.
-    // Infinity means nobody has measured a strip yet, and is not a budget.
-    property real slackAlong: Number.POSITIVE_INFINITY
-    // The widget's own answer (M55 D7), assigned by `_refit()` below and
-    // never bound: `stripCap` and `slackAlong` above are Bar.qml's inputs,
-    // this is what the title marquee actually gets. Read externally by
-    // `bar room` (`labelBudget` below); the label itself reads it as
-    // `maxWidth` since it needs the resolved number, not the room.
-    property real maxWidth: 220
+    readonly property real labelCap: Math.min(220, root.stripCap)
+    // Assigned by Bar.qml's label refit, never bound: the budget is worked
+    // out from this cell's own extent, so a binding would close a loop.
+    // Infinity until a bar has measured a strip, and wherever none hands one
+    // out (the chevron's second bar); the cap alone holds then.
+    property real labelBudget: Number.POSITIVE_INFINITY
+    // What the title marquee actually gets, read by `bar room`.
+    readonly property real maxWidth: Math.min(root.labelCap, root.labelBudget)
     // Set from Bar.qml (`windowVisible: bar.visible`) so the marquee below
     // can gate on the bar's own PanelWindow actually being on screen, a
     // hidden-window ticker is exactly the CPU cost DESIGN.md's motion
@@ -60,48 +54,12 @@ Cell {
     // other embedding still animates.
     property bool windowVisible: true
 
-    // --- Room (M55 D7) ----------------------------------------------------
-    //
-    // The same one-way pass Tray.qml's own `_refit` runs, for the same
-    // reason: the budget below reads this cell's own current rendered
-    // extent, which a BINDING on `maxWidth` would then move, closing a
-    // loop QML would abort. Assigning instead settles in one step, since
-    // extent + slack is invariant, whatever the label gives up the strip's
-    // slack gains straight back.
-    //
-    // Floored at 0 rather than left negative: a label that has given up
-    // its whole budget still has a cover or an icon, and reads
-    // `_labelBudget` as "nothing left" rather than as a number to react to
-    // further.
-    property real _labelBudget: Number.POSITIVE_INFINITY
-    readonly property real labelBudget: root._labelBudget
-    // The currently displayed title's own unclamped width, for `bar room`:
-    // what the label actually wants, against `labelBudget` for what it was
-    // given.
-    readonly property real naturalLabelWidth: titleSlot._front ? titleSlot._front._fullWidth : 0
-
-    function _refit() {
-        // Infinity is "nobody has measured a strip yet"; the label keeps
-        // today's behaviour (`stripCap` alone) rather than answering a
-        // budget worked out against a strip that isn't there.
-        root._labelBudget = isFinite(root.slackAlong)
-            ? Math.max(0, (root.vertical ? titleSlot.height : titleSlot.width) + root.slackAlong)
-            : Number.POSITIVE_INFINITY;
-        root.maxWidth = Math.min(220, root.stripCap, root._labelBudget);
-    }
-
-    Timer {
-        id: refitTimer
-        // Long enough to outlast the bar chevron's own collapse/reveal
-        // (Tray.qml's identical timer carries the full reasoning): a
-        // refit mid-animation would read a strip that hasn't settled yet.
-        interval: Theme.motion.spatial + 32
-        onTriggered: root._refit()
-    }
-
-    onSlackAlongChanged: refitTimer.restart()
-    onStripCapChanged: refitTimer.restart()
-    onNaturalLabelWidthChanged: refitTimer.restart()
+    // What the title draws along the strip now and would draw uncapped,
+    // the two numbers the refit reads. Zero with no source, where the
+    // title slot is hidden and claims no room.
+    readonly property real labelExtent: titleSlot.visible ? (root.vertical ? titleSlot.height : titleSlot.width) : 0
+    readonly property real naturalLabelWidth: titleSlot.visible && titleSlot._front ? titleSlot._front._fullWidth : 0
+    readonly property bool labelScrolling: titleSlot.visible && titleSlot._front ? titleSlot._front._marquee : false
 
     readonly property bool _panelOpen: root.panel ? root.panel.isOpen : false
     // Read by Bar.qml's regionDelegate instead of `visible` directly, see
@@ -128,10 +86,7 @@ Cell {
     }
 
     on_WantsFramesChanged: root._syncFrames()
-    Component.onCompleted: {
-        root._syncFrames();
-        refitTimer.restart();
-    }
+    Component.onCompleted: root._syncFrames()
     Component.onDestruction: {
         if (root._registeredWantsFrames)
             AnimatedCoverFrameSource.setBarWantsFrames(true, false);

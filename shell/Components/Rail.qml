@@ -23,6 +23,13 @@ Grid {
     // alone.
     property bool animate: true
 
+    // Whether `move` below runs at all, separate from `animate`, which the
+    // bar's cells read as their own arm switch. A strip whose children
+    // already animate their own extents turns this off: a neighbour gliding
+    // to its new slot on a second clock sits under a cell that grew in one
+    // frame for as long as the glide takes (Bar.qml's regions).
+    property bool glide: true
+
     rows: root.vertical ? -1 : 1
     columns: root.vertical ? 1 : -1
     verticalItemAlignment: Grid.AlignVCenter
@@ -42,5 +49,5 @@ Grid {
     // cells stuck invisible for the rest of the session that way. A slot
     // that wants to fade in carries its own presence instead, on a Behavior
     // nothing else writes (Bar.qml's region delegate).
-    move: MoveTransition { enabled: root.animate }
+    move: MoveTransition { enabled: root.animate && root.glide }
 }

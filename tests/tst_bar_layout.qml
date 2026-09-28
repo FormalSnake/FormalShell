@@ -541,4 +541,71 @@ TestCase {
     function test_fitExtent_negative_room_is_nothing() {
         compare(JSON.stringify(Layout.fitExtent([10, 20], 5, -5)), JSON.stringify({ extent: 0, count: 0 }));
     }
+
+    // labelBudgets: the room the track and the title may draw in. A 1920
+    // strip with a 12px end inset and an 8px gap, the rig's own numbers.
+    function title(extent, natural) {
+        return { region: "left", extent: extent, natural: natural, cap: Number.POSITIVE_INFINITY };
+    }
+
+    function test_labelBudgets_unmeasured_strip_is_no_answer() {
+        var b = Layout.labelBudgets(0, 12, 8, { left: 0, center: 0, right: 0 }, [title(0, 300)]);
+        compare(b.length, 1);
+        verify(!isFinite(b[0]));
+    }
+
+    function test_labelBudgets_end_label_stops_at_the_centred_centre() {
+        // Centre 100 wide at the middle starts at 910; the left cells end at
+        // 12 + 100, so the title has 910 - 8 - 112 = 790 before the gap.
+        var b = Layout.labelBudgets(1920, 12, 8, { left: 400, center: 100, right: 200 }, [title(300, 2000)]);
+        compare(b[0], 790);
+    }
+
+    function test_labelBudgets_short_label_keeps_room_to_grow() {
+        var b = Layout.labelBudgets(1920, 12, 8, { left: 400, center: 100, right: 200 }, [title(300, 300)]);
+        compare(b[0], 790);
+    }
+
+    function test_labelBudgets_do_not_depend_on_the_labels_own_extent() {
+        var a = Layout.labelBudgets(1920, 12, 8, { left: 400, center: 100, right: 200 }, [title(300, 2000)]);
+        var b = Layout.labelBudgets(1920, 12, 8, { left: 890, center: 100, right: 200 }, [title(790, 2000)]);
+        compare(b[0], a[0]);
+    }
+
+    function test_labelBudgets_now_playing_gives_ground_first() {
+        // 520px left for labels once every cell and gap is paid: the track
+        // gives its whole 220 before the title gives anything.
+        var track = { region: "center", extent: 220, natural: 400, cap: 220 };
+        var b = Layout.labelBudgets(1920, 12, 8, { left: 600, center: 280, right: 1200 }, [track, title(500, 2000)]);
+        compare(b[0], 0);
+        compare(b[1], 520);
+    }
+
+    function test_labelBudgets_only_the_last_label_takes_the_leftover() {
+        // Both fit with room to spare; the track keeps what it draws and the
+        // title alone may grow into the rest, so the two never both spend it.
+        var track = { region: "center", extent: 100, natural: 100, cap: 220 };
+        var b = Layout.labelBudgets(1920, 12, 8, { left: 400, center: 200, right: 200 }, [track, title(300, 300)]);
+        compare(b[0], 100);
+        compare(b[1], 740);
+    }
+
+    function test_labelBudgets_nothing_when_the_cells_alone_overflow() {
+        var track = { region: "center", extent: 100, natural: 400, cap: 220 };
+        var b = Layout.labelBudgets(1000, 12, 8, { left: 300, center: 160, right: 900 }, [track, title(200, 2000)]);
+        compare(b[0], 0);
+        compare(b[1], 0);
+    }
+
+    function test_labelBudgets_right_region_label_is_the_mirror() {
+        var right = { region: "right", extent: 300, natural: 2000, cap: Number.POSITIVE_INFINITY };
+        var b = Layout.labelBudgets(1920, 12, 8, { left: 200, center: 100, right: 400 }, [right]);
+        compare(b[0], 790);
+    }
+
+    function test_labelBudgets_centre_label_takes_its_own_cap() {
+        var track = { region: "center", extent: 50, natural: 400, cap: 220 };
+        var b = Layout.labelBudgets(1920, 12, 8, { left: 200, center: 110, right: 200 }, [track]);
+        compare(b[0], 220);
+    }
 }

@@ -316,46 +316,156 @@ PanelWindow {
     readonly property int _rightTotal: Layout.fitExtent(bar._rightExtents, Theme.space.sm, Number.POSITIVE_INFINITY).count
     readonly property int _centerTotal: Layout.fitExtent(bar._centerExtents, Theme.space.sm, Number.POSITIVE_INFINITY).count
 
-    // The loaded widget behind bar.layout's one "nowPlaying" entry, wherever
-    // a user put it, or null with none configured. Walks `bar._layout`
-    // itself, the same array each region's Repeater already binds as
-    // `model`, rather than assuming a region: bar.layout is free to put the
-    // entry anywhere, or nowhere.
+    // The loaded widget behind bar.layout's one entry of `name`, with the
+    // region it sits in, or null with none configured or the entry held in
+    // a chevron's second bar. Walks `bar._layout` itself, the same array
+    // each region's Repeater already binds as `model`, rather than assuming
+    // a region: bar.layout is free to put the entry anywhere, or nowhere.
     readonly property var _regionRepeaters: ({ left: leftRepeater, center: centerRepeater, right: rightRepeater })
 
-    function _nowPlayingWidget() {
+    function _widgetEntry(name) {
         for (var r = 0; r < Layout.REGIONS.length; r++) {
             var region = Layout.REGIONS[r];
             var entries = bar._layout.regions[region];
             for (var i = 0; i < entries.length; i++) {
-                if (entries[i].kind === "builtin" && entries[i].name === "nowPlaying") {
-                    var slot = bar._regionRepeaters[region].itemAt(i);
-                    return slot ? slot.loadedItem : null;
-                }
+                if (entries[i].kind !== "builtin" || entries[i].name !== name || entries[i].collapsible)
+                    continue;
+                var slot = bar._regionRepeaters[region].itemAt(i);
+                return slot && slot.loadedItem ? { region: region, item: slot.loadedItem } : null;
             }
         }
         return null;
     }
 
+    // The two cells whose text runs free and scrolls at a budget, in the
+    // order they give ground (spec D7): the track first, then the title.
+    readonly property var _labelNames: ["nowPlaying", "activeWindow"]
+
+    function _labelEntries() {
+        var out = [];
+        for (var i = 0; i < bar._labelNames.length; i++) {
+            var entry = bar._widgetEntry(bar._labelNames[i]);
+            if (entry)
+                out.push(entry);
+        }
+        return out;
+    }
+
+    // Every label's want in one binding, so a title that changes while it
+    // is capped (and so moves nothing else on the strip) still refits.
+    // `itemAt` is no dependency of its own, so the counts stand in for the
+    // delegates arriving.
+    readonly property string _labelWants: {
+        var count = leftRepeater.count + centerRepeater.count + rightRepeater.count;
+        var entries = bar._labelEntries();
+        var wants = [];
+        for (var i = 0; i < entries.length; i++)
+            wants.push(entries[i].item.naturalLabelWidth);
+        return count + ":" + wants.join(",");
+    }
+
+    // One pass over every label at once (Bar/layout.js's labelBudgets), so
+    // the track and the title share the room rather than both spending the
+    // same slack. Assigned rather than bound, the same one-way pass the
+    // tray's own `_refit` runs: each budget is worked out from its label's
+    // current extent, which a binding would then move.
+    function _refitLabels() {
+        var entries = bar._labelEntries();
+        var labels = [];
+        for (var i = 0; i < entries.length; i++) {
+            labels.push({
+                region: entries[i].region,
+                extent: entries[i].item.labelExtent,
+                natural: entries[i].item.naturalLabelWidth,
+                cap: entries[i].item.labelCap
+            });
+        }
+        var budgets = Layout.labelBudgets(bar._along, bar._strip.edgeInset, Theme.space.sm, {
+            left: bar._vertical ? leftRail.implicitHeight : leftRail.implicitWidth,
+            center: bar._vertical ? centerRegion.implicitHeight : centerRegion.implicitWidth,
+            right: bar._vertical ? rightRail.implicitHeight : rightRail.implicitWidth
+        }, labels);
+        for (i = 0; i < entries.length; i++)
+            entries[i].item.labelBudget = budgets[i];
+    }
+
+    Timer {
+        id: labelRefit
+        // Past the cells' own width Behaviors and the chevron's collapse, so
+        // the pass reads a strip that has settled rather than one mid-glide.
+        interval: Theme.motion.spatial + 32
+        onTriggered: bar._refitLabels()
+    }
+
+    on_SlackChanged: labelRefit.restart()
+    on_AlongChanged: labelRefit.restart()
+    on_LabelWantsChanged: labelRefit.restart()
+
+    // Where every cell on the strip is drawn, in the strip's own
+    // coordinates and cut to its region's clip, so a rig leg can hold the
+    // rects against each other rather than eyeball a frame. `whole` is
+    // false for a cell the clip cuts into.
+    function _cellRects() {
+        var out = [];
+        var regions = [["left", leftRepeater, leftRegion], ["center", centerRepeater, null], ["right", rightRepeater, rightRegion]];
+        for (var r = 0; r < regions.length; r++) {
+            var clipBox = regions[r][2]
+                ? regions[r][2].mapToItem(stripArea, 0, 0, regions[r][2].width, regions[r][2].height)
+                : Qt.rect(0, 0, stripArea.width, stripArea.height);
+            for (var i = 0; i < regions[r][1].count; i++) {
+                var slot = regions[r][1].itemAt(i);
+                if (!slot || !slot.visible || slot.modelData.collapsible)
+                    continue;
+                var box = slot.mapToItem(stripArea, 0, 0, slot.width, slot.height);
+                var x0 = Math.max(box.x, clipBox.x, 0);
+                var y0 = Math.max(box.y, clipBox.y, 0);
+                var x1 = Math.min(box.x + box.width, clipBox.x + clipBox.width, stripArea.width);
+                var y1 = Math.min(box.y + box.height, clipBox.y + clipBox.height, stripArea.height);
+                if (x1 <= x0 || y1 <= y0)
+                    continue;
+                out.push({
+                    region: regions[r][0],
+                    name: Layout.entryName(slot.modelData),
+                    x: x0, y: y0, width: x1 - x0, height: y1 - y0,
+                    whole: x0 === box.x && y0 === box.y && x1 === box.x + box.width && y1 === box.y + box.height
+                });
+            }
+        }
+        return out;
+    }
+
+    function _labelState(entry) {
+        if (!entry)
+            return { budget: -1, natural: 0, extent: 0, scrolling: false };
+        var budget = entry.item.labelBudget;
+        return {
+            budget: isFinite(budget) ? budget : -1,
+            natural: entry.item.naturalLabelWidth,
+            extent: entry.item.labelExtent,
+            scrolling: entry.item.labelScrolling
+        };
+    }
+
     // `bar room` (Ipc/BarIpc.qml, spec D7/D9): the slack, each region's own
-    // cell and hidden counts, and the now-playing cell's own label budget,
-    // for this one bar. A hidden count of 0 across every run is the room
-    // rule holding; the smoke leg crowds the strip until it isn't.
+    // cell and hidden counts, both label budgets, and every drawn cell's
+    // rect, for this one bar. A hidden count of 0 across every run is the
+    // room rule holding; the rig legs crowd the strip until it isn't.
     function roomState() {
-        var nowPlaying = bar._nowPlayingWidget();
         return {
             screen: bar.modelData ? bar.modelData.name : "",
             edge: bar._position,
+            along: bar._along,
+            edgeInset: bar._strip.edgeInset,
+            gap: Theme.space.sm,
             slack: bar._along > 0 ? bar._slack : 0,
             regions: {
                 left: { cells: bar._leftTotal, hidden: bar._leftTotal - bar._leftFit.count },
                 center: { cells: bar._centerTotal, hidden: 0 },
                 right: { cells: bar._rightTotal, hidden: bar._rightTotal - bar._rightFit.count }
             },
-            nowPlaying: {
-                budget: nowPlaying ? nowPlaying.labelBudget : -1,
-                natural: nowPlaying ? nowPlaying.naturalLabelWidth : 0
-            }
+            nowPlaying: bar._labelState(bar._widgetEntry("nowPlaying")),
+            activeWindow: bar._labelState(bar._widgetEntry("activeWindow")),
+            cells: bar._cellRects()
         };
     }
 
@@ -400,11 +510,6 @@ PanelWindow {
         id: activeWindowComponent
         ActiveWindow {
             panel: bar.appMenuPanel
-            // A quarter of the bar under a hard px ceiling. The previous
-            // flat 40% handed this one cell over a thousand pixels of a
-            // wide display before the title's marquee engaged at all, so
-            // "the title is too long" was the cap, not the marquee.
-            maxWidth: Math.min(bar._along * 0.25, Theme.space.popupWidthWide)
             // Gates the title marquee off while the bar's own PanelWindow
             // isn't on screen, same rationale as NowPlaying's own
             // windowVisible below.
@@ -423,15 +528,8 @@ PanelWindow {
             panel: bar.mediaPanel
             // The widget's own default cap, scaled down on a strip too
             // short to afford it: a vertical bar is a third of a wide
-            // bar's length. `maxWidth` itself is the widget's own, worked
-            // out against this cap and `slackAlong` below (M55 D7); binding
-            // straight to it would fight the widget's own assignment.
+            // bar's length. What the room leaves of it is `_refitLabels`'s.
             stripCap: Math.min(220, bar._along * 0.15)
-            // The now-playing cell gives ground before an end region loses
-            // a whole cell (M55 D7): the same room the tray reads
-            // (`_slack` above), infinite until the strip has a measured
-            // length of its own.
-            slackAlong: bar._along > 0 ? bar._slack : Number.POSITIVE_INFINITY
             // M16 Task 11: gates the marquee off while the bar's own
             // PanelWindow isn't on screen.
             windowVisible: bar.visible
@@ -664,7 +762,7 @@ PanelWindow {
             // on one property.
             readonly property bool _present: entrySlot._shown && !entrySlot.modelData.collapsible
 
-            // The loaded widget itself, `bar._nowPlayingWidget()`'s own way
+            // The loaded widget itself, `bar._widgetEntry()`'s own way
             // in past the Loader: an external id can't reach `entryLoader`
             // from outside this Component, so the slot hands its own load
             // out under a name that can.
@@ -900,10 +998,9 @@ PanelWindow {
         // of the strip and `right` its end whichever way it runs.
         //
         // Room along the strip is shared in a fixed order (DESIGN.md §3 Bar,
-        // spec D7). The now-playing cell gives ground first, on its own
-        // (widgets/NowPlaying.qml's `_refit`, fed the same `_slack` the tray
-        // reads below): its label shrinks before anything else on the strip
-        // moves. The centre sits at the middle while it can, and slides
+        // spec D7). The two free-running labels give ground first, the track
+        // before the window title (`_refitLabels` above): they shrink and
+        // scroll before anything else on the strip moves. The centre sits at the middle while it can, and slides
         // toward the shorter end once the two end regions together with it
         // outgrow the strip, the start region winning over the end one, same
         // as before. What still does not fit past that clamp hides WHOLE
@@ -916,6 +1013,17 @@ PanelWindow {
         // chevron is unrelated to any of this: still config-only, still
         // collapsing whatever bar.layout put on its governed side, whether
         // the strip is crowded or not.
+        //
+        // No region box, clip or offset carries a Behavior of its own, and no
+        // rail glides its children on `move`: every one of them is worked out
+        // from the rails' current extents, so the one clock anything along
+        // the strip moves on is each cell's own size (Cell.qml's width
+        // Behavior, the slot's presence). A second clock on a box let it
+        // disagree with the cells it holds for the whole glide: the centre
+        // travelling over the end region's first cell, a clip cutting into a
+        // cell the fit had already made room for, and a rail's neighbour
+        // sliding under a cell that had grown in one frame (VM, 2026-09-28,
+        // --bar-title on a left bar).
         //
         // Placed by x/y rather than anchors on purpose: the edge can change
         // while the regions exist (settings.json lands after the first frame),
@@ -937,25 +1045,10 @@ PanelWindow {
             width: bar._vertical ? leftRail.implicitWidth : bar._leftFit.extent
             height: bar._vertical ? bar._leftFit.extent : leftRail.implicitHeight
 
-            // The start region is pinned to the strip's own start, so only
-            // its far edge moves when a cell inside it opens or closes: the
-            // clip travels with the rail instead of stepping to the new
-            // extent in one frame while the cells behind it glide (M54 D10).
-            // Both axes, since which one the region runs along is the bar's
-            // edge.
-            Behavior on width {
-                enabled: bar._revealed
-                Anim {}
-            }
-
-            Behavior on height {
-                enabled: bar._revealed
-                Anim {}
-            }
-
             Rail {
                 id: leftRail
                 vertical: bar._vertical
+                glide: false
                 spacing: Theme.space.sm
 
                 Repeater {
@@ -981,23 +1074,8 @@ PanelWindow {
             readonly property real _along: Math.max(centerRegion._floor, Math.min(centerRegion._middle, centerRegion._ceiling))
             x: bar._vertical ? bar._strip.cellInset : centerRegion._along
             y: bar._vertical ? centerRegion._along : bar._strip.cellInset
+            glide: false
             spacing: Theme.space.sm
-
-            // The clamp above re-decides where the centre sits every time a
-            // cell either side of it changes extent, so the region travels
-            // to the answer instead of arriving at it (DESIGN.md §1 Motion,
-            // M53 D2). The binding is untouched: a Behavior animates the
-            // value the binding produces. Both axes, since which one the
-            // clamp runs along is the bar's edge.
-            Behavior on x {
-                enabled: bar._revealed
-                Anim {}
-            }
-
-            Behavior on y {
-                enabled: bar._revealed
-                Anim {}
-            }
 
             Repeater {
                 id: centerRepeater
@@ -1018,50 +1096,15 @@ PanelWindow {
             width: bar._vertical ? rightRail.implicitWidth : bar._rightFit.extent
             height: bar._vertical ? bar._rightFit.extent : rightRail.implicitHeight
 
-            // The end region is placed off its own extent, so a cell opening
-            // or closing inside it moves the whole box: the box travels and
-            // the strip's end stays put, rather than every cell in the
-            // region jumping a slot (M53 D2).
-            Behavior on x {
-                enabled: bar._revealed
-                Anim {}
-            }
-
-            Behavior on y {
-                enabled: bar._revealed
-                Anim {}
-            }
-
-            Behavior on width {
-                enabled: bar._revealed
-                Anim {}
-            }
-
-            Behavior on height {
-                enabled: bar._revealed
-                Anim {}
-            }
-
             // Held against the region's own end, so what the clip removes is
-            // the start of the rail, on the centre's side. The offset rides
-            // the same clock the box does, so the rail keeps its grip on
-            // that end through the travel instead of sliding inside the clip.
+            // the start of the rail, on the centre's side.
             Rail {
                 id: rightRail
                 vertical: bar._vertical
+                glide: false
                 x: bar._vertical ? 0 : rightRegion.width - rightRail.width
                 y: bar._vertical ? rightRegion.height - rightRail.height : 0
                 spacing: Theme.space.sm
-
-                Behavior on x {
-                    enabled: bar._revealed
-                    Anim {}
-                }
-
-                Behavior on y {
-                    enabled: bar._revealed
-                    Anim {}
-                }
 
                 Repeater {
                     id: rightRepeater

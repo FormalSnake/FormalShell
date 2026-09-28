@@ -9,7 +9,10 @@
 # first (`nowPlaying.budget` under 220), and what still does not fit hides
 # whole cells from the right region's own inner edge rather than cutting one
 # in half (`regions.right.hidden` at least 1). The frame is read by hand for
-# the same claim: a whole cell sitting at the boundary, never a sliced one.
+# the same claim: a whole cell sitting at the boundary, never a sliced one,
+# and held against the rects `bar room` reports: no two drawn cells
+# intersect and none is cut by its region clip (bar_title.sh's
+# bar_cells_defects).
 leg_bar_room_flag="--bar-room"
 leg_bar_room_order=195
 leg_bar_room_needs="mpv ffmpeg jq"
@@ -109,6 +112,11 @@ leg_bar_room_assert() {
   fi
   if ! awk -v b="${budget:--1}" 'BEGIN { exit !(b >= 0 && b < 220) }'; then
     fail "bar room does not report a now-playing budget under 220 while the right region is crowded, got budget=$budget (natural=$natural)"
+  fi
+  local defects
+  defects=$(bar_cells_defects "$bar_room_json_path")
+  if [ -n "$defects" ]; then
+    fail "cells on the crowded strip do not sit clear of each other: $defects"
   fi
   if [ ! -f "$bar_room_png_path" ]; then
     fail "no bar-room screenshot produced"

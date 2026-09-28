@@ -183,6 +183,100 @@ function fitExtent(extents, gap, room) {
     return { extent: extent, count: count };
 }
 
+// Hands `room` out over `wants` in give order: the deficit comes off the
+// first entry until it is empty, then the next. The last entry, the one
+// that gives ground last, may also take whatever the room has left over, up
+// to its own cap, so a title that grows between two refits has somewhere to
+// grow into. Only the one: two entries both handed the same leftover
+// overfill the strip until the next refit, and the fit hides a whole cell
+// for it.
+function _share(wants, caps, room) {
+    var total = 0;
+    var i;
+    for (i = 0; i < wants.length; i++)
+        total += wants[i];
+    var free = Math.max(0, room);
+    var deficit = Math.max(0, total - free);
+    var surplus = Math.max(0, free - total);
+    var out = [];
+    for (i = 0; i < wants.length; i++) {
+        var cut = Math.min(wants[i], deficit);
+        deficit -= cut;
+        var last = i === wants.length - 1;
+        out.push(cut > 0 ? wants[i] - cut : last ? Math.min(caps[i], wants[i] + surplus) : wants[i]);
+    }
+    return out;
+}
+
+// What each free-running label on the strip may draw (DESIGN.md §3 Bar,
+// spec D7): the now-playing track and the window title, the two cells whose
+// text has no fixed length and scrolls once it hits this number.
+//
+// `rails` is each region's current extent along the strip, labels
+// included; `labels` is [{region, extent, natural, cap}] in give order,
+// the first one giving ground first. `extent` is what the label draws now,
+// `natural` what it would draw uncapped. Taking each label's own extent
+// back out of its rail makes the answer independent of the labels' current
+// sizes, so handing it out settles in one step instead of chasing itself.
+//
+// Two ceilings, the lower wins. The strip's: every label together gets
+// what is left once every cell and gap is paid for, so a label shrinks
+// before an end region hides a whole cell. And for a label in an end
+// region, that region's own half: the room between its cells and the
+// centre region sitting at the middle, so a long title stops short of the
+// clock instead of shoving it off centre. A label in the centre has no
+// half of its own and takes the strip's ceiling alone.
+function labelBudgets(along, edgeInset, gap, rails, labels) {
+    var out = [];
+    var i;
+    if (!(along > 0)) {
+        for (i = 0; i < labels.length; i++)
+            out.push(Number.POSITIVE_INFINITY);
+        return out;
+    }
+    var fixed = { left: rails.left || 0, center: rails.center || 0, right: rails.right || 0 };
+    var wants = [];
+    var caps = [];
+    for (i = 0; i < labels.length; i++) {
+        var label = labels[i];
+        fixed[label.region] -= label.extent > 0 ? label.extent : 0;
+        caps.push(label.cap > 0 ? label.cap : 0);
+        wants.push(Math.max(0, Math.min(label.natural > 0 ? label.natural : 0, caps[i])));
+    }
+    for (var r = 0; r < REGIONS.length; r++)
+        fixed[REGIONS[r]] = Math.max(0, fixed[REGIONS[r]]);
+
+    var strip = along - edgeInset * 2 - gap * 2 - fixed.left - fixed.center - fixed.right;
+    var shared = _share(wants, caps, strip);
+
+    var centre = fixed.center;
+    for (i = 0; i < labels.length; i++) {
+        if (labels[i].region === "center")
+            centre += Math.min(wants[i], shared[i]);
+    }
+    var half = (along - centre) / 2 - edgeInset - gap;
+
+    for (i = 0; i < labels.length; i++)
+        out.push(shared[i]);
+    var ends = ["left", "right"];
+    for (var e = 0; e < ends.length; e++) {
+        var at = [];
+        var endWants = [];
+        var endCaps = [];
+        for (i = 0; i < labels.length; i++) {
+            if (labels[i].region !== ends[e])
+                continue;
+            at.push(i);
+            endWants.push(Math.min(wants[i], shared[i]));
+            endCaps.push(caps[i]);
+        }
+        var own = _share(endWants, endCaps, half - fixed[ends[e]]);
+        for (var k = 0; k < at.length; k++)
+            out[at[k]] = Math.min(out[at[k]], own[k]);
+    }
+    return out;
+}
+
 var CUSTOM_PREFIX = "custom:";
 
 // Must stay byte-identical to shell/Plugins/manifest.js's own PLUGIN_PREFIX:

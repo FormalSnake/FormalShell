@@ -102,7 +102,15 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `bar_room.sh` `--bar-room`: a strip crowded past its own length, `bar
   room` reporting a hidden cell in the right region and a now-playing
   budget under 220, the frame read for a whole cell at the region's own
-  inner edge, never a cut one.
+  inner edge, never a cut one, and every drawn cell rect `bar room`
+  reports clear of every other.
+- `bar_title.sh` `--bar-title`: a window title far longer than the strip
+  in a crowded bar, read off `bar room`: the title drawn at exactly the
+  budget its region has with the marquee running, no cell hidden, and no
+  two cell rects intersecting, cut by a clip or past the strip's ends,
+  settled and in 24 samples taken while focus switches to a short title
+  and back. Rides `--bar-position <edge>`, which pins the edge in this
+  leg's own `bar` key.
 - `caffeinate.sh` `--caffeinate`: `caffeinate.onStartup` starting the
   session caffeinated with its `formalshell:caffeinate` layer surface
   mapped, the real ext-idle-notify monitor staying non-idle three screensaver

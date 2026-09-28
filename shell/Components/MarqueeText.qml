@@ -47,7 +47,11 @@ Item {
 
     readonly property real _fullWidth: root.leftPadding + measureText.implicitWidth
     readonly property bool _overflow: root._fullWidth > root.maxWidth
-    readonly property bool _marquee: root._overflow && Theme.motionEnabled && root.windowVisible
+    // Nothing to scroll through a viewport with no width: a bar label whose
+    // budget went to 0 has handed its room back, and an empty title only
+    // overflows by its own padding.
+    readonly property bool _marquee: root._overflow && root.text !== "" && root.maxWidth > root.leftPadding
+        && Theme.motionEnabled && root.windowVisible
     // Blank between the two copies, sized off the text rather than the
     // spacing scale: at marqueePxPerSec a space.xl gap passes in a third of
     // a second, so the wrap reads as the title running into itself instead

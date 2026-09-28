@@ -600,12 +600,18 @@ track starts playing.
 A crowded strip gives up room in a fixed order rather than clipping a cell
 in half. The now-playing track gives ground first: its title shrinks, down
 to the cover or icon alone with the title still in its tooltip, before
-anything else on the bar moves. Past that, what still does not fit hides
+anything else on the bar moves. The window title gives next. It has no
+fixed ceiling: it takes the room its own region actually has, up to where
+the centre sits at the middle of the strip, and scrolls once its text
+outgrows that. Past that, what still does not fit hides
 whole cells from an end region's own inner edge, the one nearest the
 centre, never the one against the screen edge; a cell comes back the
 instant the room does. The chevron takes no part in any of this: it stays
 config-only, collapsing whatever bar.layout put on its governed side
-whether the strip is crowded or not.
+whether the strip is crowded or not. Along the strip only the cells
+themselves animate their size; the regions, their clips and the centre's
+position follow those sizes frame by frame with no motion of their own,
+so no two cells ever sit on top of each other mid-glide.
 
 **Wingpanel band** (`bar.kind: wingpanel`, the pantheon habit). No strip
 card, no hairline, no cell borders: the band's paint is read off the
