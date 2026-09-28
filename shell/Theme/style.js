@@ -40,6 +40,13 @@
 // rather than a control, so it has no pointer states, and its `ink` is the
 // material's, since granite dims the key's name where shadcn mutes it.
 //
+// `lock.ink` is the ink of the words the lock surface draws straight onto
+// the wallpaper (the clock, the date and the now-playing block), with no box
+// under them at all. Which of its two states applies is the wallpaper's
+// question, not the mode's (Lock/model.js's `ink`): `light` is white words
+// over a dark backdrop, `dark` dark words over a bright one, the same reading
+// of the names wingpanel's band paints take.
+//
 // `window` is the one role nothing in the shell draws. Hyprland does, off
 // the variables ThemeEngine publishes into formalshell-chrome.conf
 // (chrome.js, M60 P7), so it carries a `shadow` the compositor can render
@@ -76,6 +83,7 @@ var ROLES = {
     "keycap": [],
     "switcher": [],
     "switcher.cell": ["rest", "selected"],
+    "lock.ink": ["light", "dark"],
     "window": ["rest", "inactive"]
 };
 

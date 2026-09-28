@@ -3,6 +3,8 @@ import Quickshell.Wayland
 import qs.Core
 import qs.Core as Core
 import qs.Components
+import qs.Theme as Paint
+import "../../Lock/model.js" as Model
 
 // Per-output lock surface, instantiated automatically by WlSessionLock (see
 // Lock.qml's `surface: Component { LockSurface { ... } }`) once for every
@@ -66,10 +68,93 @@ WlSessionLockSurface {
     // guard directly, regardless of what isIdle happens to be doing.
     signal activity()
     signal submit(string password)
+    // What this output decided, for `lock status` (Lock.qml's `outputs`).
+    signal report(string name, var state)
 
     property date _now: new Date()
 
     readonly property bool _dither: Core.Theme.lockDither
+
+    // The scrim's opacity over the wallpaper, and so how dark whatever the
+    // words sit on is. The ink below is chosen against that composite.
+    readonly property real _scrimAlpha: 0.5
+    readonly property bool _hasWallpaper: Core.State.wallpaper !== ""
+
+    // The ink of the words on the wallpaper, by contrast with what is under
+    // them rather than by the palette's mode (Lock/model.js's `ink`): the
+    // clock block and the now-playing block each read their own rect of the
+    // wallpaper through the bar's sampler, never the screen. Without a
+    // wallpaper they sit on the flat background, and while a wallpaper has
+    // not been read yet the scrim is the best guess at what is under them,
+    // which is dark.
+    readonly property real _fallbackLuma: surfaceRoot._hasWallpaper ? 0
+        : Model.lumaOf(Theme.color.background.r, Theme.color.background.g, Theme.color.background.b)
+    readonly property string _clockInk: Model.ink(clockSampler.stats,
+        surfaceRoot._hasWallpaper ? surfaceRoot._scrimAlpha : 0, surfaceRoot._fallbackLuma)
+    readonly property string _mediaInk: Model.ink(mediaSampler.stats,
+        surfaceRoot._hasWallpaper ? surfaceRoot._scrimAlpha : 0, surfaceRoot._fallbackLuma)
+    readonly property var _clockBox: Theme.box("lock.ink", surfaceRoot._clockInk)
+    readonly property var _mediaBox: Theme.box("lock.ink", surfaceRoot._mediaInk)
+
+    // Where the transport cursor sits, -1 while it is off and the field's
+    // keys are all the field's (Lock/model.js's `transportKey`).
+    property int _transportCursor: -1
+
+    function _keyName(event) {
+        switch (event.key) {
+        case Qt.Key_Tab: return "tab";
+        case Qt.Key_Backtab: return "backtab";
+        case Qt.Key_Left: return "left";
+        case Qt.Key_Right: return "right";
+        case Qt.Key_Return:
+        case Qt.Key_Enter: return "enter";
+        case Qt.Key_Escape: return "escape";
+        case Qt.Key_Shift:
+        case Qt.Key_Control:
+        case Qt.Key_Alt:
+        case Qt.Key_AltGr:
+        case Qt.Key_Meta:
+        case Qt.Key_Super_L:
+        case Qt.Key_Super_R:
+        case Qt.Key_CapsLock: return "modifier";
+        default: return "other";
+        }
+    }
+
+    function _filterKey(event) {
+        var step = Model.transportKey(surfaceRoot._transportCursor, nowPlaying.transport.length,
+            surfaceRoot._keyName(event));
+        surfaceRoot._transportCursor = step.index;
+        if (step.press)
+            nowPlaying.press(step.index);
+        if (step.taken)
+            event.accepted = true;
+    }
+
+    readonly property string _outputName: surfaceRoot.screen ? surfaceRoot.screen.name : ""
+    readonly property var _reportState: ({
+        clockInk: surfaceRoot._clockInk,
+        clockLuma: Model.backdropLuma(clockSampler.stats,
+            surfaceRoot._hasWallpaper ? surfaceRoot._scrimAlpha : 0, surfaceRoot._fallbackLuma),
+        clockSampled: clockSampler.stats.sampled,
+        clockRect: {
+            x: clockSampler.region.x,
+            y: clockSampler.region.y,
+            width: clockSampler.region.width,
+            height: clockSampler.region.height
+        },
+        mediaInk: surfaceRoot._mediaInk,
+        mediaLuma: Model.backdropLuma(mediaSampler.stats,
+            surfaceRoot._hasWallpaper ? surfaceRoot._scrimAlpha : 0, surfaceRoot._fallbackLuma),
+        nowPlaying: nowPlaying.shown,
+        transportCursor: surfaceRoot._transportCursor
+    })
+    // Held until the surface knows its output: a report under "" would sit
+    // beside the real one for the rest of the lock.
+    on_ReportStateChanged: {
+        if (surfaceRoot._outputName !== "")
+            surfaceRoot.report(surfaceRoot._outputName, surfaceRoot._reportState);
+    }
 
     // The content column's entrance (M51 Task 7): opacity 0 to 1 plus an
     // upward rise, played once when this surface is created. A Behavior
@@ -221,8 +306,47 @@ WlSessionLockSurface {
         checking: surfaceRoot.authenticating
         fingerprintEnrolled: surfaceRoot.fingerprintEnrolled
         avatarPath: Core.Config.avatarPath
+        ink: surfaceRoot._clockBox.ink
+        dateInk: surfaceRoot._clockBox.ink
+        inkShadow: surfaceRoot._clockBox.inkShadow
         onAccepted: password => surfaceRoot.submit(password)
         onActivity: surfaceRoot.activity()
+        onKeyFilter: event => surfaceRoot._filterKey(event)
+    }
+
+    LockNowPlaying {
+        id: nowPlaying
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: authPrompt.bottom
+        anchors.topMargin: Theme.space.sectionGap * 2
+        width: implicitWidth
+        height: implicitHeight
+        visible: nowPlaying.shown && surfaceRoot._wakeShown
+        opacity: surfaceRoot._contentOpacity * surfaceRoot._wakeOpacity
+        transform: Translate { y: surfaceRoot._contentRise }
+        ink: surfaceRoot._mediaBox.ink
+        subInk: surfaceRoot._mediaBox.ink
+        inkShadow: surfaceRoot._mediaBox.inkShadow
+        cursorIndex: surfaceRoot._transportCursor
+        onPressed: authPrompt.forceInputFocus()
+        onShownChanged: if (!nowPlaying.shown) surfaceRoot._transportCursor = -1
+    }
+
+    // The two samplers behind the ink, each over its own block's resting
+    // rect (the entrance's rise is left out: it is gone within a clock).
+    Paint.BarPaint {
+        id: clockSampler
+        source: surfaceRoot._hasWallpaper ? "file://" + Core.State.wallpaper : ""
+        screenSize: Qt.size(surfaceRoot.width, surfaceRoot.height)
+        region: Qt.rect(authPrompt.x + authPrompt.inkRect.x, authPrompt.y + authPrompt.inkRect.y,
+            authPrompt.inkRect.width, authPrompt.inkRect.height)
+    }
+
+    Paint.BarPaint {
+        id: mediaSampler
+        source: surfaceRoot._hasWallpaper ? "file://" + Core.State.wallpaper : ""
+        screenSize: Qt.size(surfaceRoot.width, surfaceRoot.height)
+        region: Qt.rect(nowPlaying.x, nowPlaying.y, nowPlaying.width, nowPlaying.height)
     }
 
     Timer {

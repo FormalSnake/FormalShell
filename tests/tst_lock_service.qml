@@ -86,6 +86,7 @@ TestCase {
         compare(s.secure, null);
         compare(s.authError, null);
         compare(s.blanked, null);
+        compare(s.outputs, null);
     }
 
     function test_status_reports_the_surface_when_no_command_is_set() {
@@ -96,5 +97,12 @@ TestCase {
         compare(s.secure, true);
         compare(s.authError, "Wrong password");
         compare(s.blanked, false);
+        compare(s.outputs, {});
+    }
+
+    function test_status_carries_what_each_output_reported() {
+        var surface = { locked: true, secure: true, authError: "", blanked: false,
+            outputs: { "Virtual-1": { clockInk: "dark" } } };
+        compare(Lock.status([], surface).outputs["Virtual-1"].clockInk, "dark");
     }
 }

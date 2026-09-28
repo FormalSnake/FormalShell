@@ -572,6 +572,14 @@ var STYLE = {
             selected: { fill: "accent", fillAlpha: 64 / 255, radius: R_CONTROL }
         },
 
+        // Words straight on the lock wallpaper, in the band's own two inks:
+        // white under elementary's bare text shadow, and the 0.65 black over
+        // a bright backdrop with none, for the reason INK_SHADOW gives.
+        "lock.ink": {
+            light: { ink: ["white", 1], inkShadow: INK_SHADOW.bare },
+            dark: { ink: ["black", 0.65], inkShadow: [] }
+        },
+
         // The window itself, which the shell does not draw: Hyprland does,
         // off the variables ThemeEngine publishes into
         // formalshell-chrome.conf (chrome.js, M60 P7). elementary's focused

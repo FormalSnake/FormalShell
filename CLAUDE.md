@@ -198,6 +198,14 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `lock.sh` `--lock`: the lock round trip over real PAM, wrong password to
   unlocked, typed by a real virtual-keyboard client, with a staged `~/.face`
   found in the locked frame as the avatar over the clock.
+- `lock_media.sh` `--lock-media`: a real MPRIS player looping a fixture
+  track while the session locks over a flat white wallpaper, the now-playing
+  block under the field photographed with its cover, real Tab, Right and
+  Return through the password field's own key filter pausing the player
+  (`media status`), and the clock's ink flipping from dark to light when a
+  flat dark wallpaper replaces the white one under the same lock, read off
+  `lock status`'s per-output report and off the frame inside the clock's
+  own rect. The real password typed last still unlocks.
 - `lyrics.sh` `--lyrics`: three tracks (two cached, one a sibling `.lrc` of
   the shape a line-synced provider really returns), the lit set on a duet and
   background overlap, quality and estimated timing, the estimated wipe read

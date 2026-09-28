@@ -289,6 +289,14 @@ var STYLE = {
             selected: { fill: "accent", fillAlpha: 1, radius: "md" }
         },
 
+        // Words straight on the lock wallpaper: plain white or plain black,
+        // whichever the backdrop under them asks for, and nothing drawn
+        // behind either, since this look shadows nothing.
+        "lock.ink": {
+            light: { ink: ["white", 1] },
+            dark: { ink: ["black", 1] }
+        },
+
         // The one role the shell does not draw: Hyprland does, off
         // formalshell-chrome.conf (chrome.js). The frame is the wallpaper's
         // own colour at the compositor's default width, which is what

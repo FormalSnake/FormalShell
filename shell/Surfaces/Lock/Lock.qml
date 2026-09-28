@@ -47,6 +47,20 @@ Item {
 
     property string _pendingPassword: ""
 
+    // What each output's surface decided, keyed by output name, for `lock
+    // status`: the ink its clock and its now-playing block took and the
+    // backdrop luma behind each, and what the block shows. Written by the
+    // surfaces through report(), emptied by every fresh lock().
+    property var outputs: ({})
+
+    function report(name, state) {
+        var next = {};
+        for (var key in root.outputs)
+            next[key] = root.outputs[key];
+        next[name] = state;
+        root.outputs = next;
+    }
+
     // Idle blanking (spec §8, Task 4): once locked, `idleMonitor` mirrors
     // the compositor's own ext-idle-notify-v1 idle state, the real,
     // session-wide "no input anywhere" signal, not just activity inside
@@ -109,6 +123,7 @@ Item {
     // false; these two have no such combinator to hide behind.
     function lock() {
         root.authError = "";
+        root.outputs = {};
         root._resumeGuardActive = false;
         root._lastTickMs = Date.now();
         sessionLock.locked = true;
@@ -301,6 +316,7 @@ Item {
                 fingerprintEnrolled: root._fingerprintService !== ""
                 onSubmit: password => root.submitPassword(password)
                 onActivity: root.wake()
+                onReport: (name, state) => root.report(name, state)
             }
         }
     }

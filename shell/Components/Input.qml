@@ -29,6 +29,10 @@ Item {
     // keystroke the field would otherwise take. The lock screen's idle-wake
     // rides on it.
     signal activity()
+    // Every key reaching the field, before the field's own handling: a
+    // handler that sets `event.accepted` keeps it from the field. The lock
+    // screen's transport cursor rides on it without ever taking focus.
+    signal keyFilter(var event)
 
     function forceFocus() {
         input.forceActiveFocus();
@@ -148,7 +152,10 @@ Item {
             selectByMouse: true
             selectionColor: Theme.box("input.selection").fill
             selectedTextColor: Theme.color.primaryForeground
-            Keys.onPressed: event => root.activity()
+            Keys.onPressed: event => {
+                root.activity();
+                root.keyFilter(event);
+            }
             onAccepted: root.accepted()
         }
     }

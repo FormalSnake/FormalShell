@@ -236,4 +236,25 @@ TestCase {
         var band = Paint.bandRect("top", 1, 1920, 1080, 240, 135);
         compare(band.height, 1);
     }
+
+    // Any other rect of the output (the lock clock's), scaled the same way:
+    // the 1920x1080 output's centre 400x200 is 50x25 samples of 240x135.
+    function test_a_region_rect_scales_into_the_sample() {
+        var r = Paint.regionRect(760, 440, 400, 200, 1920, 1080, 240, 135);
+        compare(r.x, 95);
+        compare(r.y, 55);
+        compare(r.width, 50);
+        compare(r.height, 25);
+    }
+
+    // Past the output's edge it is clamped inside the sample, and a speck
+    // still reads one sample.
+    function test_a_region_rect_is_clamped_and_never_empty() {
+        var edge = Paint.regionRect(1900, 1070, 400, 400, 1920, 1080, 240, 135);
+        compare(edge.x + edge.width, 240);
+        compare(edge.y + edge.height, 135);
+        var speck = Paint.regionRect(10, 10, 0.1, 0.1, 1920, 1080, 240, 135);
+        compare(speck.width, 1);
+        compare(speck.height, 1);
+    }
 }

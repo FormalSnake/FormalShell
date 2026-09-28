@@ -36,6 +36,16 @@ Item {
     // Profile picture over the clock. The greeter leaves it empty: it has no
     // account resolved until a username is typed.
     property string avatarPath: ""
+    // The clock's and the date's ink, and the shadow under them. The
+    // greeter keeps the palette's; the lock screen hands in the `lock.ink`
+    // state its wallpaper asks for (LockSurface.qml).
+    property color ink: Theme.color.foreground
+    property color dateInk: Theme.color.mutedForeground
+    property var inkShadow: []
+    // Where the clock and the date sit inside this item, for a caller that
+    // samples what is behind them.
+    readonly property rect inkRect: Qt.rect(column.x + clockHolder.x, column.y + clockHolder.y,
+        clockHolder.width, clockHolder.height)
 
     property alias text: input.text
 
@@ -44,6 +54,8 @@ Item {
     // the field's own handling. The lock screen's idle-wake rides on this;
     // the greeter has nothing listening.
     signal activity()
+    // Input's own `keyFilter`, forwarded.
+    signal keyFilter(var event)
 
     function forceInputFocus() {
         input.forceFocus();
@@ -87,18 +99,43 @@ Item {
             size: Math.round(Theme.fontSize.displayLarge * 3)
         }
 
-        Text {
+        // The clock and the date as one block, so the ink's shadow has one
+        // source to draw behind (Components/InkGlow.qml; hidden rather than
+        // drawn twice while there is one, the way Cell.qml's content box is).
+        Item {
+            id: clockHolder
             anchors.horizontalCenter: parent.horizontalCenter
-            text: Qt.formatTime(root.now, "hh:mm")
-            color: Theme.color.foreground
-            font.family: Theme.fontFamilyMono
-            font.pixelSize: Math.round(Theme.fontSize.displayLarge * 3)
-            font.weight: Theme.weight.semibold
-        }
+            width: clockBlock.width
+            height: clockBlock.height
 
-        SectionLabel {
-            anchors.horizontalCenter: parent.horizontalCenter
-            text: Qt.formatDate(root.now, "dddd, MMMM d")
+            InkGlow {
+                anchors.fill: clockBlock
+                source: clockBlock
+                shadows: root.inkShadow
+            }
+
+            Column {
+                id: clockBlock
+                spacing: Theme.space.lg
+                opacity: root.inkShadow.length > 0 ? 0 : 1
+                layer.enabled: root.inkShadow.length > 0
+
+                Text {
+                    id: clockText
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: Qt.formatTime(root.now, "hh:mm")
+                    color: root.ink
+                    font.family: Theme.fontFamilyMono
+                    font.pixelSize: Math.round(Theme.fontSize.displayLarge * 3)
+                    font.weight: Theme.weight.semibold
+                }
+
+                SectionLabel {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: Qt.formatDate(root.now, "dddd, MMMM d")
+                    color: root.dateInk
+                }
+            }
         }
 
         SectionLabel {
@@ -122,6 +159,7 @@ Item {
                 root.accepted(value);
             }
             onActivity: root.activity()
+            onKeyFilter: event => root.keyFilter(event)
         }
 
         // The reader is a parallel PAM flow with no field of its own, so the

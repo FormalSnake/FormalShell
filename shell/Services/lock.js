@@ -46,12 +46,13 @@ function lock(command, spawn, raise, missing) {
 // than a stale value or an invented one.
 function status(command, surface) {
     if (isExternal(command))
-        return { external: true, locked: null, secure: null, authError: null, blanked: null };
+        return { external: true, locked: null, secure: null, authError: null, blanked: null, outputs: null };
     return {
         external: false,
         locked: surface.locked,
         secure: surface.secure,
         authError: surface.authError,
-        blanked: surface.blanked
+        blanked: surface.blanked,
+        outputs: surface.outputs || {}
     };
 }

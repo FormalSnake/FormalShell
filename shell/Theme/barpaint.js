@@ -152,3 +152,17 @@ function bandRect(edge, thickness, screenWidth, screenHeight, sampleWidth, sampl
         return { x: 0, y: 0, width: sampleWidth, height: across };
     }
 }
+
+// Any other rect of the output inside the same sample, for a reader that is
+// not a band (the lock clock and the now-playing block under it,
+// Surfaces/Lock/LockSurface.qml). Scaled the way bandRect scales, clamped
+// inside the sample, and never thinner than one sample on either axis.
+function regionRect(x, y, width, height, screenWidth, screenHeight, sampleWidth, sampleHeight) {
+    var sx = sampleWidth / Math.max(1, screenWidth);
+    var sy = sampleHeight / Math.max(1, screenHeight);
+    var left = Math.max(0, Math.min(sampleWidth - 1, Math.floor(x * sx)));
+    var top = Math.max(0, Math.min(sampleHeight - 1, Math.floor(y * sy)));
+    var right = Math.max(left + 1, Math.min(sampleWidth, Math.ceil((x + width) * sx)));
+    var bottom = Math.max(top + 1, Math.min(sampleHeight, Math.ceil((y + height) * sy)));
+    return { x: left, y: top, width: right - left, height: bottom - top };
+}

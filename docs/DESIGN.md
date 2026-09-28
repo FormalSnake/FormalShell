@@ -760,7 +760,13 @@ tabular percentage.
 `SectionLabel`, one `Input`. Wrong password: `Input` error state. The lock
 screen puts the profile picture (`avatar.path`, default `~/.face`) over the
 clock as a circular `Avatar` the clock's height; no readable image, no slot.
-The greeter draws none: it has no account until a username is typed.
+The greeter draws none: it has no account until a username is typed. The
+lock's words sit on the wallpaper and take the `lock.ink` role's `light` or
+`dark` state by contrast with the wallpaper under their own rect, scrim
+included, never by the palette's mode. Under the field, while something is
+playing or paused, the now-playing block: `Cover`, title and artist in that
+ink, a `Track`, and the transport as a `ButtonGroup` the field's own Tab
+reaches without the field ever losing focus.
 
 **Picker.** Thumbnail `Cell`s with `radiusMd`; cursor is the ring;
 `Dark | Light` is a `Segmented`.

@@ -28,6 +28,12 @@ Item {
     property string edge: "top"
     property real thickness: 0
     property size screenSize: Qt.size(0, 0)
+    // A rect of the output in its own pixels, read instead of the band when
+    // it has an area: the lock clock and the now-playing block are sampled
+    // with the same crop and the same three numbers as the band
+    // (Surfaces/Lock/LockSurface.qml), which then decides ink rather than a
+    // paint off them.
+    property rect region: Qt.rect(0, 0, 0, 0)
 
     // The three numbers and nothing else: which paint they ask for is the
     // band's own question, since the mode, the pin and the window over an
@@ -42,8 +48,11 @@ Item {
         ? Math.max(1, Math.round(root._sampleWidth * root.screenSize.height / root.screenSize.width))
         : 1
 
-    readonly property var _band: Paint.bandRect(root.edge, root.thickness,
-        root.screenSize.width, root.screenSize.height, root._sampleWidth, root._sampleHeight)
+    readonly property var _band: root.region.width > 0 && root.region.height > 0
+        ? Paint.regionRect(root.region.x, root.region.y, root.region.width, root.region.height,
+            root.screenSize.width, root.screenSize.height, root._sampleWidth, root._sampleHeight)
+        : Paint.bandRect(root.edge, root.thickness,
+            root.screenSize.width, root.screenSize.height, root._sampleWidth, root._sampleHeight)
 
     // A Canvas paints only while it is part of a window's scene, and
     // nothing about this one belongs on screen: it sits in a clip of no
