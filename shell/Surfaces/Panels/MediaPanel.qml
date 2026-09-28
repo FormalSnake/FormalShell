@@ -234,6 +234,8 @@ Panel {
     function _sourceIcon(kind) {
         if (kind === "radio")
             return "radio";
+        if (kind === "iphone")
+            return "smartphone";
         if (kind === "stream")
             return "audio-lines";
         return "music";

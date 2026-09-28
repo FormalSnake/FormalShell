@@ -101,6 +101,44 @@ TestCase {
         compare(IM.parseEvent("{\"type\":\"hci\",\"adapters\":[]}"), null);
     }
 
+    // --- AMS now-playing (M75 Task 4) -------------------------------------
+    //
+    // Lines in the exact shape omarchy-iphone-ams's cmd_listen/cmd_command
+    // emit (bin/omarchy-iphone-ams @ 586f37d): `nowplaying` always carries
+    // the player's whole known state, not a diff.
+
+    function test_parse_ams_status() {
+        compare(IM.parseAmsLine("{\"type\": \"status\", \"available\": true}").available, true);
+        compare(IM.parseAmsLine("{\"type\": \"status\", \"available\": false}").available, false);
+    }
+
+    function test_parse_ams_nowplaying() {
+        var e = IM.parseAmsLine("{\"type\": \"nowplaying\", \"title\": \"Talk\", \"artist\": \"Kraftwerk\", \"album\": \"The Man-Machine\", \"duration\": 220.5, \"player\": \"Music\", \"playback\": \"playing\", \"elapsed\": 41.2, \"volume\": 0.6}");
+        compare(e.type, "nowplaying");
+        compare(e.title, "Talk");
+        compare(e.artist, "Kraftwerk");
+        compare(e.album, "The Man-Machine");
+        compare(e.duration, 220.5);
+        compare(e.elapsed, 41.2);
+        compare(e.playback, "playing");
+        compare(e.volume, 0.6);
+    }
+
+    function test_parse_ams_nowplaying_defaults() {
+        var e = IM.parseAmsLine("{\"type\": \"nowplaying\", \"title\": \"\", \"artist\": \"\", \"album\": \"\", \"duration\": 0.0, \"player\": \"\", \"playback\": \"\", \"elapsed\": 0.0, \"volume\": -1.0}");
+        compare(e.title, "");
+        compare(e.duration, 0);
+        compare(e.playback, "");
+        compare(e.volume, -1);
+    }
+
+    function test_parse_ams_error_and_garbage() {
+        compare(IM.parseAmsLine("{\"type\": \"error\", \"message\": \"AMS not available (phone connected?)\"}").message, "AMS not available (phone connected?)");
+        compare(IM.parseAmsLine(""), null);
+        compare(IM.parseAmsLine("not json"), null);
+        compare(IM.parseAmsLine("{\"type\":\"hci\"}"), null);
+    }
+
     // --- recent list -----------------------------------------------------
 
     function test_upsert_replaces_a_modified_resend() {

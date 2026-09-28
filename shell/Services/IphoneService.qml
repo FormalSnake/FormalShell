@@ -83,6 +83,44 @@ Singleton {
     property double _now: Date.now()
     readonly property bool inFocus: IphoneModel.inFocus(root._arrivals, root._now, root._focusWindow)
 
+    // --- now-playing (Apple Media Service, M75 Task 4) --------------------
+    //
+    // A second GATT client, `omarchy-iphone-ams listen`, owned only while a
+    // phone is actually connected: it rides the same BLE link ANCS does but
+    // is its own process with its own subscribe handshake. `mediaAvailable`
+    // is AMS's own signal that the phone's entity-update characteristic
+    // exists at all, never guessed from whether a title has arrived yet.
+    property bool amsInstalled: false
+    property bool mediaAvailable: false
+    property string mediaTitle: ""
+    property string mediaArtist: ""
+    property string mediaAlbum: ""
+    property real mediaDuration: 0
+    // "playing"/"paused"/"rewinding"/"forwarding"/"" (nothing reported yet).
+    property string mediaPlayback: ""
+    // -1 unknown; AMS reports the player's own 0..1 volume, not a step size,
+    // so `MediaService.setVolume` can only ever pick a direction (Task 4).
+    property real mediaVolume: -1
+
+    // AMS pushes `elapsed` only on a playback-info change (a rate/track
+    // change), the same "position doesn't tick" contract MPRIS documents
+    // (MediaService.qml's header note), so this extrapolates forward from
+    // the last real reading rather than fabricating a continuous one.
+    property real _mediaElapsedBase: 0
+    property double _mediaElapsedAt: 0
+    property double _mediaTick: Date.now()
+    readonly property real mediaPosition: root.mediaPlayback === "playing"
+        ? Math.min(root.mediaDuration > 0 ? root.mediaDuration : Infinity,
+            root._mediaElapsedBase + (root._mediaTick - root._mediaElapsedAt) / 1000)
+        : root._mediaElapsedBase
+
+    Timer {
+        interval: 1000
+        repeat: true
+        running: root.mediaPlayback === "playing"
+        onTriggered: root._mediaTick = Date.now()
+    }
+
     signal codeCopied(string code)
 
     // --- public verbs --------------------------------------------------------
@@ -136,6 +174,18 @@ Singleton {
         return true;
     }
 
+    // One AMS transport command (play/pause/toggle/next/prev/volup/voldown).
+    // One in flight at a time: a slider drag or a held key can fire several
+    // of these a second, and AMS answers over the same BLE write either way,
+    // so queuing would only ever lag behind what the phone is doing now.
+    function mediaCommand(name) {
+        if (!root.amsInstalled || amsCommandProc.running)
+            return false;
+        amsCommandProc.command = [root._ams, "command", name];
+        amsCommandProc.running = true;
+        return true;
+    }
+
     // --- incoming --------------------------------------------------------------
 
     function _onLine(line) {
@@ -171,6 +221,42 @@ Singleton {
             break;
         case "advertising":
             root.advertising = true;
+            break;
+        case "error":
+            root.lastError = event.message;
+            break;
+        }
+    }
+
+    function _onAmsLine(line) {
+        var event = IphoneModel.parseAmsLine(line);
+        if (!event)
+            return;
+        switch (event.type) {
+        case "status":
+            root.mediaAvailable = event.available;
+            if (event.available) {
+                root._amsBackoffMs = root._baseBackoffMs;
+            } else {
+                root.mediaTitle = "";
+                root.mediaArtist = "";
+                root.mediaAlbum = "";
+                root.mediaDuration = 0;
+                root.mediaPlayback = "";
+                root.mediaVolume = -1;
+            }
+            break;
+        case "nowplaying":
+            root.mediaTitle = event.title;
+            root.mediaArtist = event.artist;
+            root.mediaAlbum = event.album;
+            root.mediaDuration = event.duration;
+            root.mediaPlayback = event.playback;
+            if (event.volume >= 0)
+                root.mediaVolume = event.volume;
+            root._mediaElapsedBase = event.elapsed;
+            root._mediaElapsedAt = Date.now();
+            root._mediaTick = root._mediaElapsedAt;
             break;
         case "error":
             root.lastError = event.message;
@@ -385,13 +471,78 @@ Singleton {
         if (root.enabled) {
             if (!bridgeProc.running && !retryTimer.running)
                 bridgeProc.running = true;
+            root._applyAms();
             return;
         }
         retryTimer.stop();
         bridgeProc.running = false;
         root._actionQueue = [];
+        root._applyAms();
     }
 
     onEnabledChanged: root._applyEnabled()
+    onConnectedChanged: root._applyAms()
     Component.onCompleted: root._applyEnabled()
+
+    // --- Apple Media Service (M75 Task 4) ---------------------------------
+
+    readonly property string _ams: "omarchy-iphone-ams"
+    property int _amsBackoffMs: root._baseBackoffMs
+
+    Process {
+        id: amsProc
+        command: ["sh", "-c",
+            'command -v "$0" >/dev/null 2>&1 || exit 127; exec "$0" listen',
+            root._ams]
+        stdout: SplitParser {
+            onRead: line => {
+                root.amsInstalled = true;
+                root._onAmsLine(line);
+            }
+        }
+        onExited: exitCode => {
+            root.amsInstalled = exitCode !== 127;
+            root.mediaAvailable = false;
+            if (root.enabled && root.connected)
+                amsRetryTimer.start();
+        }
+    }
+
+    Timer {
+        id: amsRetryTimer
+        interval: root._amsBackoffMs
+        onTriggered: {
+            root._amsBackoffMs = Math.min(root._maxBackoffMs, root._amsBackoffMs * 2);
+            if (root.enabled && root.connected)
+                amsProc.running = true;
+        }
+    }
+
+    Process {
+        id: amsCommandProc
+        stdout: SplitParser {
+            onRead: line => root._onAmsLine(line)
+        }
+    }
+
+    // Owned exactly while a phone is connected: AMS is a second GATT client
+    // against whichever iPhone BlueZ currently holds, so there is nothing
+    // for it to subscribe to before ANCS itself reports a connection.
+    function _applyAms() {
+        if (root.enabled && root.connected) {
+            root._amsBackoffMs = root._baseBackoffMs;
+            if (!amsProc.running && !amsRetryTimer.running)
+                amsProc.running = true;
+            return;
+        }
+        amsRetryTimer.stop();
+        amsProc.running = false;
+        root.mediaAvailable = false;
+        root.mediaTitle = "";
+        root.mediaArtist = "";
+        root.mediaAlbum = "";
+        root.mediaDuration = 0;
+        root.mediaPlayback = "";
+        root.mediaVolume = -1;
+    }
 }

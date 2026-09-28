@@ -16,15 +16,21 @@ import "../../Iphone/model.js" as IphoneModel
 // whatever it holds back), and Recent lists the mirrored notifications with
 // their phone-side actions and a local dismiss synced back to the phone.
 //
-// The Task 4 now-playing card lands in its own section below Recent; this
-// task only leaves the boundary, nothing drawn inside it yet.
+// Below Recent, a Now playing section (M75 Task 4): the phone's own AMS
+// now-playing, a compact title/artist/transport peek driven straight off
+// IphoneService (never through MediaService's active-source pick, so this
+// card always reaches the phone), honest about AMS having nothing to report
+// yet. MediaPanel picks the phone up as an ordinary `iphone` row in its own
+// source menu with no wiring here at all.
 //
 // Keyboard (spec "Keyboard model"): the cursor walks Recent keyed by
 // notification id (BluetoothPanel's idiom), so a row arriving or leaving
 // mid-session never slides the highlight onto a different notification.
 // Enter fires the row's positive action (the phone's own label, "Answer" or
 // "Reply", decides what it does), `x` dismisses it on both ends, and Tab
-// reaches the footer's Pair button while no phone is paired.
+// reaches the now-playing transport and the footer's Pair button, which
+// never both show at once (the footer only appears with no phone connected,
+// and now-playing only with one).
 Panel {
     id: root
 
@@ -38,6 +44,17 @@ Panel {
     readonly property bool _connected: IphoneService.connected
     readonly property bool _pairing: IphoneService.advertising || IphoneService.pairingCode !== ""
     readonly property bool _showFooter: root._noPhone
+
+    // The now-playing card (M75 Task 4): a row only once AMS has actually
+    // reported a track, same gate MediaService.qml's `_iphoneRows` uses, so
+    // this and the footer's Pair button never both need a section (a phone
+    // that is `_noPhone` has nothing connected to play anything).
+    readonly property bool _nowPlaying: root._connected && IphoneService.mediaAvailable && IphoneService.mediaTitle !== ""
+    readonly property var _nowPlayingOptions: [
+        { icon: "skip-back", value: "prev" },
+        { icon: IphoneService.mediaPlayback === "playing" ? "pause" : "play", value: "toggle" },
+        { icon: "skip-forward", value: "next" }
+    ]
 
     readonly property var _entries: IphoneService.recent
     readonly property var _rowModel: root._entries.map(function (entry, i) {
@@ -54,9 +71,15 @@ Panel {
         onTriggered: root._now = Date.now()
     }
 
-    cursorCount: root._entries.length
-    // 0 is Recent, 1 is the footer's Pair button.
-    sectionCount: root._showFooter ? 2 : 1
+    // 0 is Recent; the now-playing card and the footer's Pair button never
+    // coexist (see `_nowPlaying`'s comment), so whichever is showing takes
+    // section 1 and `_footerSection`/`_nowPlayingSection` are never both >= 0.
+    readonly property int _nowPlayingSection: root._nowPlaying ? 1 : -1
+    readonly property int _footerSection: root._showFooter ? 1 : -1
+
+    cursorCount: root.cursorSection === 0 ? root._entries.length
+        : root.cursorSection === root._nowPlayingSection ? root._nowPlayingOptions.length : 1
+    sectionCount: 1 + (root._nowPlaying ? 1 : 0) + (root._showFooter ? 1 : 0)
 
     function _idAt(index) {
         var e = root._entries[index];
@@ -78,10 +101,9 @@ Panel {
     }
 
     onCursorSectionChanged: {
-        if (root.cursorSection !== 0)
-            return;
         root.cursorIndex = 0;
-        root._cursorId = root._idAt(0);
+        if (root.cursorSection === 0)
+            root._cursorId = root._idAt(0);
     }
 
     on_EntriesChanged: {
@@ -90,9 +112,9 @@ Panel {
             root.cursorIndex = index;
     }
 
-    // The footer comes and goes with pairing state; a cursor stranded on it
-    // when the phone connects mid-session would sit on a button that no
-    // longer renders.
+    // The footer and the now-playing card each come and go on their own
+    // (pairing state, AMS reporting a track); a cursor stranded on either
+    // when it stops rendering falls back to Recent.
     on_ShowFooterChanged: {
         if (root._showFooter || root.cursorSection === 0)
             return;
@@ -101,8 +123,32 @@ Panel {
         root._cursorId = root._idAt(0);
     }
 
+    on_NowPlayingChanged: {
+        if (root._nowPlaying || root.cursorSection === 0)
+            return;
+        root.cursorSection = 0;
+        root.cursorIndex = 0;
+        root._cursorId = root._idAt(0);
+    }
+
+    function _pointAt(section, index) {
+        root.cursorActive = true;
+        root.cursorSection = section;
+        root.cursorIndex = index;
+    }
+
+    function _pressNowPlaying(index) {
+        var opt = root._nowPlayingOptions[index];
+        if (opt)
+            IphoneService.mediaCommand(opt.value);
+    }
+
     onCursorActivated: index => {
-        if (root.cursorSection === 1) {
+        if (root.cursorSection === root._nowPlayingSection) {
+            root._pressNowPlaying(index);
+            return;
+        }
+        if (root.cursorSection === root._footerSection) {
             IphoneService.pair();
             return;
         }
@@ -406,15 +452,68 @@ Panel {
         }
     }
 
-    // M75 Task 4 lands the phone's now-playing card here; the boundary only,
-    // nothing drawn inside it yet.
+    // The phone's now-playing (M75 Task 4): title, artist and the three
+    // transport buttons AMS always answers to, driven straight off
+    // IphoneService rather than through MediaService's active-source pick,
+    // so this card controls the phone whatever the media panel currently
+    // has selected. The full experience (progress, volume, the source menu
+    // picking the phone up as any other row) is MediaPanel's, for free,
+    // once `players` carries the `iphone` row.
     Column {
         width: parent.width
         visible: root._connected
         spacing: Theme.space.rowGap
 
         SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "Now playing" }
-        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "Not available yet" }
+
+        SectionLabel {
+            visible: !root._nowPlaying
+            leftPadding: Theme.space.controlPaddingX
+            text: "Not available yet"
+        }
+
+        Column {
+            visible: root._nowPlaying
+            width: parent.width
+            spacing: Theme.space.xxs
+
+            Text {
+                width: parent.width
+                leftPadding: Theme.space.controlPaddingX
+                rightPadding: Theme.space.controlPaddingX
+                text: IphoneService.mediaTitle
+                color: Theme.color.foreground
+                font.family: Theme.fontFamilySans
+                font.pixelSize: Theme.fontSize.body
+                font.weight: Theme.weight.medium
+                elide: Text.ElideRight
+            }
+
+            Text {
+                width: parent.width
+                visible: IphoneService.mediaArtist !== ""
+                leftPadding: Theme.space.controlPaddingX
+                rightPadding: Theme.space.controlPaddingX
+                text: IphoneService.mediaArtist
+                color: Theme.color.mutedForeground
+                font.family: Theme.fontFamilySans
+                font.pixelSize: Theme.fontSize.bodySmall
+                elide: Text.ElideRight
+            }
+
+            ButtonGroup {
+                id: nowPlayingGroup
+                anchors.left: parent.left
+                anchors.leftMargin: Theme.space.controlPaddingX
+                height: Theme.space.controlHeight
+                exclusive: false
+                options: root._nowPlayingOptions
+                cursorIndex: root.cursorIndex
+                cursor: root.cursorActive && root.cursorSection === root._nowPlayingSection
+                onPressed: index => root._pressNowPlaying(index)
+                onHovered: (index, isHovered) => { if (isHovered) root._pointAt(root._nowPlayingSection, index); }
+            }
+        }
     }
 
     // The footer acts on the panel rather than sitting in the list above it,
@@ -437,7 +536,7 @@ Panel {
             icon: "smartphone"
             text: root._pairing ? "Pairing" : "Pair"
             enabled: !root._pairing
-            cursor: root.cursorActive && root.cursorSection === 1
+            cursor: root.cursorActive && root.cursorSection === root._footerSection
             onClicked: IphoneService.pair()
         }
     }

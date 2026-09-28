@@ -24,12 +24,22 @@ import "../Media/model.js" as MediaModel
 // `xesam:userRating` is read-only metadata and MPRIS has no set-rating call
 // at all, so a like button would be a per-app D-Bus dialect, not a feature.
 //
-// Three kinds of source share one row list (`players`), and every property
+// Four kinds of source share one row list (`players`), and every property
 // below reads the active one whatever its kind: an MPRIS player; the radio
-// (RadioService, `id: "radio"`), listed while a station is tuned; and an app
-// playing audio with no MPRIS at all (`stream:<node id>`), listed only while
-// the media panel is open or one is picked, and only ever picked by hand,
-// since the most it offers is its own stream volume. `selectedId` "" is auto.
+// (RadioService, `id: "radio"`), listed while a station is tuned; the
+// phone's own now-playing (IphoneService, `id: "iphone"`, M75 Task 4), an
+// Apple Media Service GATT client Task 4's plan describes, listed only
+// while the phone is connected and has actually reported a track; and an
+// app playing audio with no MPRIS at all (`stream:<node id>`), listed only
+// while the media panel is open or one is picked, and only ever picked by
+// hand, since the most it offers is its own stream volume. `selectedId` ""
+// is auto.
+//
+// The phone offers no seek, no cover art and no arbitrary volume, only
+// play/pause/toggle/next/prev/volup/voldown: `canSeek` stays false and
+// `artUrl` stays "" for it, honest gaps rather than a fake scrub bar or a
+// blank square, and `setVolume` picks a direction and issues one step
+// rather than pretending AMS took an absolute value.
 //
 // The output a source plays on is read off Pipewire's link groups and moved
 // with `pactl move-sink-input` (quickshell has no move of its own); the radio
@@ -62,6 +72,13 @@ Singleton {
 
     readonly property var _radioRows: RadioService.running
         ? [{ id: "radio", kind: "radio", identity: "Radio", isPlaying: !RadioService.paused }]
+        : []
+
+    // A row only once AMS has actually reported a track, not merely once the
+    // phone is connected: a bonded phone with the lock screen up and nothing
+    // queued has no now-playing to speak of.
+    readonly property var _iphoneRows: (IphoneService.connected && IphoneService.mediaAvailable && IphoneService.mediaTitle !== "")
+        ? [{ id: "iphone", kind: "iphone", identity: "iPhone", isPlaying: IphoneService.mediaPlayback === "playing" }]
         : []
 
     readonly property bool _streamsLive: root.routingWanted || root.selectedId.indexOf("stream:") === 0
@@ -104,11 +121,12 @@ Singleton {
 
     // Plain rows, built here so every live property read happens inside this
     // binding rather than inside Media/model.js. The pick itself is pure.
-    readonly property var players: MediaModel.withLabels(root._mprisRows.concat(root._radioRows, root._streamRows))
+    readonly property var players: MediaModel.withLabels(root._mprisRows.concat(root._radioRows, root._iphoneRows, root._streamRows))
 
     readonly property string activeId: MediaModel.pickPlayerId(root.players, root.selectedId)
     readonly property string activeKind: root.activeId === "" ? ""
         : root.activeId === "radio" ? "radio"
+        : root.activeId === "iphone" ? "iphone"
         : root.activeId.indexOf("stream:") === 0 ? "stream" : "mpris"
     readonly property string activeLabel: {
         for (var i = 0; i < root.players.length; i++)
@@ -137,17 +155,23 @@ Singleton {
 
     readonly property bool _radio: root.activeKind === "radio"
     readonly property var _station: root._radio ? RadioService.station : null
+    readonly property bool _iphone: root.activeKind === "iphone"
 
-    readonly property bool available: root.activePlayer !== null || root._radio || root._activeStream !== null
-    // Only an MPRIS player has a track with a position and a length; the
-    // radio is live and an app stream says nothing about either.
-    readonly property bool hasTimeline: root.activePlayer !== null
+    readonly property bool available: root.activePlayer !== null || root._radio || root._iphone || root._activeStream !== null
+    // An MPRIS player and the phone both carry a real position and length;
+    // the radio is live and an app stream says nothing about either. The
+    // phone's own duration is 0 until AMS reports one (no track, or a live
+    // source with no fixed length), which reads the same as "no timeline".
+    readonly property bool hasTimeline: root.activePlayer !== null || (root._iphone && IphoneService.mediaDuration > 0)
     readonly property string title: root.activePlayer ? root.activePlayer.trackTitle
         : root._station ? (RadioService.trackTitle || String(root._station.name || ""))
+        : root._iphone ? IphoneService.mediaTitle
         : root._activeStream ? (root._activeStream.title || root._activeStream.label) : ""
     readonly property string artist: root.activePlayer ? root.activePlayer.trackArtist
-        : root._station && RadioService.trackTitle !== "" ? String(root._station.name || "") : ""
-    readonly property string album: root.activePlayer ? root.activePlayer.trackAlbum : ""
+        : root._station && RadioService.trackTitle !== "" ? String(root._station.name || "")
+        : root._iphone ? IphoneService.mediaArtist : ""
+    readonly property string album: root.activePlayer ? root.activePlayer.trackAlbum
+        : root._iphone ? IphoneService.mediaAlbum : ""
     readonly property string artUrl: root.activePlayer ? root.activePlayer.trackArtUrl : ""
     // `xesam:url` has no dedicated MprisPlayer property (only trackArtUrl
     // does); it comes straight out of the raw metadata map (LyricsService's
@@ -155,15 +179,21 @@ Singleton {
     readonly property string url: root.activePlayer && root.activePlayer.metadata ? (root.activePlayer.metadata["xesam:url"] || "") : ""
     readonly property string identity: root.activePlayer ? root.activePlayer.identity : root.activeLabel
     readonly property bool isPlaying: root.activePlayer ? root.activePlayer.isPlaying
-        : root._radio ? !RadioService.paused : false
-    readonly property bool canPlayPause: root.activePlayer ? root.activePlayer.canTogglePlaying : root._radio
+        : root._radio ? !RadioService.paused
+        : root._iphone ? IphoneService.mediaPlayback === "playing" : false
+    readonly property bool canPlayPause: root.activePlayer ? root.activePlayer.canTogglePlaying : root._radio || root._iphone
     readonly property bool canGoNext: root.activePlayer ? root.activePlayer.canGoNext
-        : root._radio && RadioService.queue.length > 1
+        : root._radio ? RadioService.queue.length > 1 : root._iphone
     readonly property bool canGoPrevious: root.activePlayer ? root.activePlayer.canGoPrevious
-        : root._radio && RadioService.queue.length > 1
+        : root._radio ? RadioService.queue.length > 1 : root._iphone
+    // AMS has no seek/scrub call, only relative transport, so this stays
+    // false for the phone: the position row below is a readout, not a track
+    // you can drag.
     readonly property bool canSeek: root.activePlayer ? (root.activePlayer.canSeek && root.activePlayer.positionSupported) : false
-    readonly property real position: root.activePlayer ? root.activePlayer.position : 0
-    readonly property real length: root.activePlayer ? root.activePlayer.length : 0
+    readonly property real position: root.activePlayer ? root.activePlayer.position
+        : root._iphone ? IphoneService.mediaPosition : 0
+    readonly property real length: root.activePlayer ? root.activePlayer.length
+        : root._iphone ? IphoneService.mediaDuration : 0
 
     readonly property bool shuffleSupported: root.activePlayer ? root.activePlayer.shuffleSupported : false
     readonly property bool shuffle: root.activePlayer ? root.activePlayer.shuffle : false
@@ -189,8 +219,10 @@ Singleton {
     // per-app slider moves.
     readonly property bool volumeSupported: root.activePlayer ? root.activePlayer.volumeSupported
         : root._radio || (root._activeStream !== null && root._activeStream.node.audio !== null)
+        || (root._iphone && IphoneService.mediaVolume >= 0)
     readonly property real volume: root.activePlayer ? MediaModel.clampVolume(root.activePlayer.volume)
         : root._radio ? RadioService.volume / 100
+        : root._iphone ? MediaModel.clampVolume(IphoneService.mediaVolume)
         : root._activeStream && root._activeStream.node.audio ? MediaModel.clampVolume(root._activeStream.node.audio.volume) : 0
 
     readonly property bool canRaise: root.activePlayer ? root.activePlayer.canRaise : false
@@ -280,6 +312,8 @@ Singleton {
     function playPause() {
         if (root._radio)
             RadioService.toggle();
+        else if (root._iphone)
+            IphoneService.mediaCommand("toggle");
         else if (root.activePlayer && root.activePlayer.canTogglePlaying)
             root.activePlayer.togglePlaying();
     }
@@ -287,6 +321,8 @@ Singleton {
     function next() {
         if (root._radio)
             RadioService.next();
+        else if (root._iphone)
+            IphoneService.mediaCommand("next");
         else if (root.activePlayer && root.activePlayer.canGoNext)
             root.activePlayer.next();
     }
@@ -294,6 +330,8 @@ Singleton {
     function previous() {
         if (root._radio)
             RadioService.previous();
+        else if (root._iphone)
+            IphoneService.mediaCommand("prev");
         else if (root.activePlayer && root.activePlayer.canGoPrevious)
             root.activePlayer.previous();
     }
@@ -331,12 +369,19 @@ Singleton {
     function setVolume(v) {
         if (!root.volumeSupported)
             return;
-        if (root._radio)
+        if (root._radio) {
             RadioService.setVolume(MediaModel.clampVolume(v) * 100);
-        else if (root._activeStream)
+        } else if (root._iphone) {
+            // AMS takes a step, not a target: one volup/voldown in whichever
+            // direction the request moves from the last known volume.
+            var target = MediaModel.clampVolume(v);
+            if (target !== root.volume)
+                IphoneService.mediaCommand(target > root.volume ? "volup" : "voldown");
+        } else if (root._activeStream) {
             root._activeStream.node.audio.volume = MediaModel.clampVolume(v);
-        else
+        } else {
             root.activePlayer.volume = MediaModel.clampVolume(v);
+        }
     }
 
     function raise() {

@@ -431,6 +431,50 @@ function toNotification(entry) {
     };
 }
 
+// One `omarchy-iphone-ams listen`/`command` stdout line to one event, or
+// null for a blank line or bad JSON (omarchy-iphone @ 586f37d, bin/omarchy-
+// iphone-ams). AMS rides the same BLE link as ANCS but is a second GATT
+// client with its own process; `status.available` is whether the phone's
+// entity-update characteristic was found at all (false right after a
+// listen that then exits non-zero), and every `nowplaying` line carries the
+// player's *whole* known state, not a diff, so a title-only change still
+// repeats the last `elapsed`/`playback` the caller already had.
+function parseAmsLine(line) {
+    var text = _str(line).trim();
+    if (text === "")
+        return null;
+    var raw;
+    try {
+        raw = JSON.parse(text);
+    } catch (e) {
+        return null;
+    }
+    if (!raw || typeof raw !== "object")
+        return null;
+
+    switch (raw.type) {
+    case "status":
+        return { type: "status", available: raw.available === true };
+    case "nowplaying":
+        var duration = Number(raw.duration);
+        var elapsed = Number(raw.elapsed);
+        var volume = Number(raw.volume);
+        return {
+            type: "nowplaying",
+            title: _str(raw.title),
+            artist: _str(raw.artist),
+            album: _str(raw.album),
+            duration: isFinite(duration) && duration > 0 ? duration : 0,
+            elapsed: isFinite(elapsed) && elapsed >= 0 ? elapsed : 0,
+            playback: _str(raw.playback),
+            volume: isFinite(volume) && volume >= 0 ? volume : -1
+        };
+    case "error":
+        return { type: "error", message: _str(raw.message) || "Unknown error" };
+    }
+    return null;
+}
+
 // A BlueZ device object path ends in dev_AA_BB_CC_DD_EE_FF; that is the
 // device's address, which is how the phone is found among Quickshell's
 // Bluetooth devices when no object path is exposed to match on directly.
