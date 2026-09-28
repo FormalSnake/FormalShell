@@ -8,6 +8,7 @@ import Quickshell.Bluetooth
 import qs.Core as Core
 import qs.Notifications
 import "../Iphone/model.js" as IphoneModel
+import "../Core/proc.js" as Proc
 
 // Portions from omarchy-iphone (MIT, Copyright (c) 2026 kbbahaPro)
 
@@ -431,9 +432,9 @@ Singleton {
     // installed: false rather than a bridge that started and died.
     Process {
         id: bridgeProc
-        command: ["sh", "-c",
+        command: Proc.dieWithParent(["sh", "-c",
             'command -v "$0" >/dev/null 2>&1 || exit 127; exec "$0" listen --limit "$1"',
-            root._bridge, String(root._historyLimit)]
+            root._bridge, String(root._historyLimit)])
         stdout: SplitParser {
             onRead: line => {
                 root.installed = true;
@@ -491,9 +492,9 @@ Singleton {
 
     Process {
         id: amsProc
-        command: ["sh", "-c",
+        command: Proc.dieWithParent(["sh", "-c",
             'command -v "$0" >/dev/null 2>&1 || exit 127; exec "$0" listen',
-            root._ams]
+            root._ams])
         stdout: SplitParser {
             onRead: line => {
                 root.amsInstalled = true;

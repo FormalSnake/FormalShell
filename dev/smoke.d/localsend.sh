@@ -63,9 +63,13 @@ sleep 3
 "$qs_bin" ipc -p "$shell_path" call localsend status > "$localsend_status_before_path" 2>&1
 "$qs_bin" ipc -p "$shell_path" call notifications status > "$localsend_notify_before_path" 2>&1
 
-# The receiver's own advertisement and TLS cert generation take a moment
-# past the process actually starting.
-sleep 3
+# "receiving" means the child is running, not that its HTTPS server answers
+# yet (cert generation comes first); a send before that is dropped with
+# "server closed connection before returning the first response byte".
+for _ in \$(seq 1 40); do
+  curl -skf -o /dev/null https://127.0.0.1:53317/api/localsend/v2/info && break
+  sleep 0.5
+done
 "$localsend_cli_bin" send --ip 127.0.0.1 -f "$localsend_payload_path" > "$localsend_send_out_path" 2>&1
 
 for _ in \$(seq 1 30); do

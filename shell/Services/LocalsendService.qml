@@ -5,6 +5,7 @@ import Quickshell.Io
 import qs.Core
 import qs.Notifications
 import "../Localsend/model.js" as LocalsendModel
+import "../Core/proc.js" as Proc
 
 // LocalSend over 0w0mewo/localsend-cli (M75 Task 5, plan at
 // docs/superpowers/plans/2026-09-28-m75-iphone.md), picked over the official
@@ -209,7 +210,7 @@ Singleton {
     // it, and no PIN key exists in settings.json for this feature.
     Process {
         id: recvProc
-        command: ["localsend-cli", "recv", "-n", root.alias, "-d", root.dir]
+        command: Proc.dieWithParent(["localsend-cli", "recv", "-n", root.alias, "-d", root.dir])
         stderr: SplitParser {
             onRead: line => {
                 var event = LocalsendModel.parseRecvLine(line);
