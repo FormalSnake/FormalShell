@@ -313,6 +313,20 @@ need_wl_paste() {
   fi
 }
 
+need_localsend_cli() {
+  if [ -z "${localsend_cli_bin:-}" ]; then
+    if command -v localsend-cli >/dev/null 2>&1; then
+      localsend_cli_bin=$(command -v localsend-cli)
+    else
+      # This repo's own package (nix/localsend-cli.nix), not upstream
+      # nixpkgs -- --localsend's own second CLI instance, standing in for a
+      # real second device, is built the same way `nix build .#formalshell`
+      # already builds the wrapped shell above.
+      localsend_cli_bin=$(nix build --no-link --print-out-paths '.#localsend-cli')/bin/localsend-cli
+    fi
+  fi
+}
+
 need_bin hyprland hyprctl grim qs
 if $fixture_window_mode; then
   need_bin foot convert

@@ -72,6 +72,15 @@ How a run works:
 Every leg is one file, `dev/smoke.d/<name>.sh`, whose header carries the
 detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 
+- `airplay.sh` `--airplay`: AirplayService against a PATH-shimmed `uxplay`
+  (the real one decodes into a GL texture this rig's software KMS card has
+  no path for), which prints uxplay's own connect log line and writes the
+  `-md`/`-ca`/`-dacp` files at its own startup, standing in for a client
+  already connected. `airplay status` and the media panel's `airplay`
+  source (MediaService's `_airplayRows`) read the metadata and cover art
+  back; a drive-script trigger then tells the shim to clear the files and
+  print the disconnect line, and both go back to idle in the frame and
+  over IPC.
 - `app_grid.sh` `--app-grid`: `menu.appGrid` drawing the launcher's app
   results as icons over their names, read off the probe entry's own colour
   covering a 64px cell rather than a row's glyph, with real arrow keys
@@ -192,6 +201,19 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   fires again only after a leave plus the 400ms cooldown.
 - `instance.sh` `--instance`: a second daemon taking the lock, exactly one
   survivor, and the survivor being the new pid.
+- `iphone.sh` `--iphone`: IphoneService and the notification filter against
+  PATH-shimmed `omarchy-iphone-bridge`/`omarchy-iphone-ams`, both a
+  `tail -F` over a JSONL fixture the drive script paces in real time.
+  Connected state and device name; a normal arrival's toast carrying the
+  iPhone source mark, its positive action reaching the bridge shim's own
+  call record; a silent arrival under `focus: respect` landing in the
+  centre's pending tier with no toast, and under `hide` (retargeted
+  mid-run by rewriting settings.json in place) not reaching the centre at
+  all while the phone's own recent list still keeps it; the
+  `com.apple.MobileSMS`/`Messages` dedupe rule collapsing a phone message
+  and the same one over a real `notify-send -a Messages` to one card in
+  both arrival orders, the local one surviving; and the panel populated,
+  Recent and Now playing off the ams shim's own line.
 - `join.sh` `--join`: the join itself mid-flight under `debug motionScale`,
   four opens sampled frame by frame: a panel against the far end of the
   line, the chevron's second bar, a panel clicked out of a cell inside that
@@ -206,6 +228,15 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `lock.sh` `--lock`: the lock round trip over real PAM, wrong password to
   unlocked, typed by a real virtual-keyboard client, with a staged `~/.face`
   found in the locked frame as the avatar over the clock.
+- `localsend.sh` `--localsend`: a real loopback transfer, a second
+  independent `localsend-cli send` process against the shell's own real
+  receiver child. The file lands byte-identical (sha256) in the fixture
+  directory and a RECEIVED toast follows. The reverse direction (the
+  shell's own `send` IPC route against a second real `recv`) can't run
+  here: 0w0mewo/localsend-cli hardcodes the receive port to 53317 with no
+  flag to move it, so a second `recv` on the same host only collides with
+  the first; `--share`'s own `localsend send`/`peers` IPC round trip is
+  what this rig can still honestly prove of that half.
 - `lock_media.sh` `--lock-media`: a real MPRIS player looping a fixture
   track while the session locks over a flat white wallpaper, the now-playing
   block under the field photographed with its cover, real Tab, Right and

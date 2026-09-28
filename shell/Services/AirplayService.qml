@@ -154,8 +154,17 @@ Singleton {
         root.lastError = "";
     }
 
+    // Reads the three inputs directly rather than through `_shouldRun`:
+    // this runs synchronously off `on_DirReadyChanged` and the other two
+    // onXChanged handlers below, one of which is always the change that
+    // triggered the call, and `_shouldRun`'s own binding does not reliably
+    // observe that same change yet at this point in the engine's update
+    // pass (confirmed live: `dirReady: true` alongside a stale `_shouldRun:
+    // false`, which left `uxplayProc` never spawning at all). The two
+    // Process callbacks below keep reading `_shouldRun`, since neither runs
+    // inside the tick that changes it.
     function _apply() {
-        if (root._shouldRun) {
+        if (root.enabled && root.installed && root._dirReady) {
             if (!uxplayProc.running && !retryTimer.running) {
                 root._backoffMs = root._baseBackoffMs;
                 uxplayProc.running = true;
