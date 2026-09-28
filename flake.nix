@@ -79,7 +79,14 @@
           ttfx = pkgs.callPackage ./nix/ttfx-package.nix { };
           clipssh = pkgs.callPackage ./nix/clipssh-package.nix { };
           lucide-font = pkgs.callPackage ./nix/lucide-font.nix { };
-          formalshell = pkgs.callPackage ./nix/package.nix { quickshell = qsFor system; inherit formalshell-eds tensaku ttfx clipssh lucide-font; };
+          ancs4linux = pkgs.callPackage ./nix/ancs4linux.nix { };
+          iphone-bridge = pkgs.callPackage ./nix/iphone-bridge.nix { };
+          localsend-cli = pkgs.callPackage ./nix/localsend-cli.nix { };
+          formalshell = pkgs.callPackage ./nix/package.nix {
+            quickshell = qsFor system;
+            inherit formalshell-eds tensaku ttfx clipssh lucide-font iphone-bridge localsend-cli;
+            inherit (pkgs) uxplay;
+          };
           formalshell-greeter = pkgs.callPackage ./nix/greeter-package.nix { quickshell = qsFor system; };
           default = formalshell;
         }));

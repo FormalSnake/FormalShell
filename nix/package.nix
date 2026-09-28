@@ -1,6 +1,7 @@
 { lib, stdenvNoCC, makeWrapper, quickshell, brightnessctl, wl-clipboard, curl, grim, slurp, wtype, qt6, formalshell-eds
 , matugen, qrencode, cava, ddcutil, tensaku, ttfx, clipssh, lucide-font, nerd-fonts
-, wf-recorder, tesseract, ffmpeg-headless, pulseaudio, pipewire, git, mpv, util-linux, coreutils, systemd, procps, openssh, xdg-utils }:
+, wf-recorder, tesseract, ffmpeg-headless, pulseaudio, pipewire, git, mpv, util-linux, coreutils, systemd, procps, openssh, xdg-utils
+, iphone-bridge, uxplay, localsend-cli }:
 stdenvNoCC.mkDerivation {
   pname = "formalshell";
   version = "0.1.0-dev";
@@ -72,6 +73,13 @@ stdenvNoCC.mkDerivation {
     # host's own pw-dump, built against the daemon it talks to, wins.
     # xdg-utils (xdg-open) opens a finished recording and a GitHub link;
     # neither caller guards, so it cannot be left to the host.
+    # iphone-bridge is the two omarchy-iphone scripts (bridge, ams)
+    # IphoneService spawns directly by name; prefixed rather than suffixed
+    # because there is no host install of them to defer to, unlike uxplay and
+    # localsend-cli below. uxplay and localsend-cli back AirplayService and
+    # LocalsendService and are both suffixed: a host install of either can
+    # still shadow the bundled one, and every caller already guards with
+    # `command -v` before spawning them, same contract as wtype/tensaku.
     # qtimageformats: qtbase alone decodes gif/ico/jpeg/png, so a webp (or
     # avif) wallpaper fails Background.qml's Image with "Unsupported image
     # format" while matugen, which decodes the file itself, keeps recolouring.
@@ -97,8 +105,8 @@ stdenvNoCC.mkDerivation {
     # session variable may put the hwaccel back.
     makeWrapper ${lib.getExe' quickshell "qs"} $out/bin/formalshell \
       --add-flags "-p $out/share/formalshell" \
-      --prefix PATH : ${lib.makeBinPath [ brightnessctl wl-clipboard curl grim slurp formalshell-eds matugen qrencode cava ddcutil ttfx wf-recorder tesseract ffmpeg-headless pulseaudio git mpv util-linux procps xdg-utils ]} \
-      --suffix PATH : ${lib.makeBinPath [ wtype tensaku openssh clipssh pipewire ]} \
+      --prefix PATH : ${lib.makeBinPath [ brightnessctl wl-clipboard curl grim slurp formalshell-eds matugen qrencode cava ddcutil ttfx wf-recorder tesseract ffmpeg-headless pulseaudio git mpv util-linux procps xdg-utils iphone-bridge ]} \
+      --suffix PATH : ${lib.makeBinPath [ wtype tensaku openssh clipssh pipewire uxplay localsend-cli ]} \
       --prefix XDG_DATA_DIRS : ${lucide-font}/share \
       --prefix XDG_DATA_DIRS : ${nerd-fonts.symbols-only}/share \
       --prefix NIXPKGS_QT6_QML_IMPORT_PATH : ${qt6.qtpositioning}/lib/qt-6/qml \
