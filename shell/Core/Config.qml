@@ -333,6 +333,30 @@ import QtQuick
 // so a NixOS module generating its own theme pair (e.g. a matugen-derived
 // one) can point GTK apps at it instead of adw-gtk3. Either left "" falls
 // back to its own default (shell/Theme/gtk.js's gtkThemeName()).
+// iphone.enable (bool, default true): IphoneService's
+// omarchy-iphone-bridge child, and with it every iPhone feature; off stops
+// it. iphone.notifications.enable (bool, default true): the phone's
+// notifications mirrored into the toast stack and the centre; off still
+// keeps IphoneService's recent list. iphone.notifications.focus (string,
+// default "respect", one of "respect" | "hide" | "ignore"): what a
+// notification the phone's Focus held back (ANCS's silent flag) does here.
+// "respect" files it in the centre's history with no toast and no sound,
+// "hide" drops it, "ignore" treats it like any other.
+// iphone.notifications.syncDnd (bool, default false): the shell's DND
+// follows the phone's Focus as far as it can be read, which is a heuristic:
+// a silent arrival inside the last iphone.notifications.focusWindow seconds
+// (number, default 900) with no audible one since. It only ever turns off a
+// DND it turned on itself. iphone.notifications.dedupe (array, default
+// [{ "phone": "com.apple.MobileSMS", "local": ["Messages",
+// "es.canarycoders.messages"], "window": 30 }]): pairs of a phone bundle id
+// and the local clients (app name or desktop entry) that raise the same
+// messages. A phone and a local notification are one message when their
+// sender and body agree, normalised, within `window` seconds; the local one
+// wins, dropping the phone's arrival or removing the phone card it
+// replaces. [] turns it off. iphone.notifications.block (array of bundle
+// ids, default []): apps never mirrored at all. iphone.copyCodes (bool,
+// default false): a one-time code in a phone notification goes to the
+// clipboard. Resolved by shell/Iphone/model.js.
 Singleton {
     id: root
 

@@ -34,7 +34,10 @@ TestCase {
         "folder", "file", "save", "copy", "share-2", "send", "mail",
         "message-square", "phone", "headphones", "gamepad-2", "printer",
         "usb", "plug", "plug-zap", "fingerprint", "circle-dot",
-        "app-window", "loader-circle", "circle-check"
+        "app-window", "loader-circle", "circle-check",
+        "smartphone", "message-circle", "phone-incoming", "phone-missed",
+        "voicemail", "hash", "heart-pulse", "map", "newspaper", "wallet",
+        "list-todo"
     ]
 
     // "circle-help" is its own fallback, and "plug-zap" is nerd.js's one

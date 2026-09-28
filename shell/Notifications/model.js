@@ -41,6 +41,11 @@ function makeEntry(notif, now, expiresAt) {
         actions: notif.actions || [],
         image: notif.image || "",
         local: notif.local === true,
+        // "iphone" for an entry mirrored off the phone (Iphone/model.js
+        // toNotification), with the bridge's own record under `phone`;
+        // "" and null for everything the server or the shell raised.
+        source: notif.source || "",
+        phone: notif.phone || null,
         arrivedAt: now,
         seenAt: null,
         expiresAt: expiresAt
@@ -63,9 +68,11 @@ function recomputeNextExpiry(popups) {
 // exists for is a chat app firing one summary with a different body per
 // message, and keying on body too would degenerate to no grouping at all
 // there. The NUL separator can't appear in either field, so no appName/summary
-// pair can collide with a different one.
+// pair can collide with a different one. The source leads the key: a phone
+// mirror of an app shares its name with the desktop client of the same app,
+// and folding the two into one card would hide which device a message is on.
 function groupKey(entry) {
-    return String(entry.appName || "").trim().toLowerCase() + "\u0000" + String(entry.summary || "");
+    return String(entry.source || "") + "\u0000" + String(entry.appName || "").trim().toLowerCase() + "\u0000" + String(entry.summary || "");
 }
 
 // Collapses repeats into one row each: a copy of the group's newest member
@@ -116,10 +123,13 @@ function groupEntries(entries) {
     });
 }
 
+// `opts.quiet` files the entry straight into pending, the way DND does, for
+// an arrival the sender asked to be delivered without a toast (an iPhone
+// Focus, Iphone/model.js focusVerdict).
 function add(state, notif, now, opts) {
     opts = opts || {};
 
-    if (state.dnd && !bypassesDnd(notif)) {
+    if (opts.quiet === true || (state.dnd && !bypassesDnd(notif))) {
         return Object.assign({}, state, {
             pending: state.pending.concat([makeEntry(notif, now, null)])
         });

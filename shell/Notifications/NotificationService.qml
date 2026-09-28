@@ -9,6 +9,7 @@ import qs.Compositor
 // this same collision. Core.State disambiguates it.
 import qs.Core as Core
 import "model.js" as Model
+import "../Iphone/model.js" as IphoneModel
 
 // Owns the freedesktop NotificationServer and drives model.js's pure
 // three-tier reducer (M5 Task 3). Live Notification objects are kept OUT of
@@ -145,6 +146,28 @@ Singleton {
         soundProc.running = true;
     }
 
+    // iphone.notifications.dedupe (M75): the phone mirror and a desktop
+    // client of the same app raising one message twice. Read here rather
+    // than in IphoneService because the server path below has to check it
+    // on every arrival too.
+    readonly property var _dedupeRules: IphoneModel.dedupeRules(Core.Config.get("iphone.notifications.dedupe", IphoneModel.DEFAULT_DEDUPE))
+
+    // The owner closed a card mirrored off the iPhone (a toast's X, a row in
+    // the centre), so IphoneService clears it on the phone too. Not fired
+    // for a card the phone itself withdrew (dropPhone) or one a local
+    // duplicate replaced.
+    signal phoneDismissed(var phone)
+
+    function _entriesAll() {
+        return root._state.popups.concat(root._state.pending, root._state.past);
+    }
+
+    function _announcePhoneDismiss(id) {
+        var entry = root._findEntry(id);
+        if (entry && entry.source === "iphone" && entry.phone)
+            root.phoneDismissed(entry.phone);
+    }
+
     function _findEntry(id) {
         return root.popups.find(e => e.id === id)
             ?? root.pending.find(e => e.id === id)
@@ -247,6 +270,15 @@ Singleton {
             // is shown makes no sound.
             if (root._state.popups.some(p => p.id === id))
                 root._playSound(notification.urgency, (notification.hints ?? {})["category"]);
+
+            // The local client wins: a phone card already up for this same
+            // message goes, and the phone keeps its own copy.
+            var entry = root._findEntry(id);
+            if (entry && root._dedupeRules.length > 0) {
+                var stale = IphoneModel.superseded(root._dedupeRules, entry, root._entriesAll(), Date.now());
+                if (stale.length > 0)
+                    root._state = Model.dismissMany(root._state, stale);
+            }
         }
     }
 
@@ -303,6 +335,8 @@ Singleton {
 
     function dismissPopup(id) {
         delete root._hoveredPopups[id];
+        if (root._state.popups.some(p => p.id === id))
+            root._announcePhoneDismiss(id);
         root._state = Model.dismissPopup(root._state, id, Date.now());
         var notif = root._live[id];
         if (notif) {
@@ -369,6 +403,7 @@ Singleton {
     }
 
     function dismissOne(id) {
+        root._announcePhoneDismiss(id);
         root._state = Model.dismissOne(root._state, id);
     }
 
@@ -378,7 +413,7 @@ Singleton {
     function dismissGroup(memberIds) {
         var ids = memberIds ?? [];
         for (var i = 0; i < ids.length; i++)
-            root._state = Model.dismissOne(root._state, ids[i]);
+            root.dismissOne(ids[i]);
     }
 
     function dismissAll() {
@@ -423,33 +458,84 @@ Singleton {
     function notify(summary, body, urgency, actions, image) {
         urgency = urgency === undefined ? 1 : urgency;
         root._localSerial += 1;
-        var id = "local-" + root._localSerial;
-        var list = actions ?? [];
-
-        if (list.length > 0) {
-            var callbacks = {};
-            list.forEach(function (a) { callbacks[a.key] = a.invoke; });
-            root._localActions[id] = callbacks;
-        }
-
-        root._state = Model.add(root._state, {
-            id: id,
+        // A shell-authored notification carries no category hint, so it
+        // lands on the plain information sound unless it is critical.
+        root._inject({
+            id: "local-" + root._localSerial,
             appName: "formalshell",
             appIcon: "",
             summary: summary,
             body: body,
             urgency: urgency,
-            actions: list.map(a => ({ key: a.key, label: a.label })),
             image: image ?? "",
             senderIsNotifySend: false,
             local: true
-        }, Date.now(), {});
+        }, actions, "", false);
+    }
 
-        // A shell-authored notification is a toast like any other, and it
-        // carries no category hint, so it lands on the plain information
-        // sound unless it is critical.
+    // The one way into the reducer for anything that has no server object:
+    // `fields` is add()'s notif minus `actions`, `actions` the same
+    // [{ key, label, invoke }] notify() takes.
+    function _inject(fields, actions, category, quiet) {
+        var id = fields.id;
+        var list = actions ?? [];
+        if (list.length > 0) {
+            var callbacks = {};
+            list.forEach(function (a) { callbacks[a.key] = a.invoke; });
+            root._localActions[id] = callbacks;
+        }
+        root._state = Model.add(root._state, Object.assign({}, fields, {
+            actions: list.map(a => ({ key: a.key, label: a.label }))
+        }), Date.now(), { quiet: quiet === true });
         if (root._state.popups.some(p => p.id === id))
-            root._playSound(urgency, "");
+            root._playSound(fields.urgency, category);
+    }
+
+    // A notification mirrored off the iPhone (IphoneService, M75).
+    // `mirrored` is Iphone/model.js toNotification()'s output, `actions` its
+    // actions with an `invoke` each, `quiet` the Focus verdict's "history,
+    // no toast". Answers the entry id, or "" when a local client already
+    // raised the same message and the phone's copy was dropped.
+    //
+    // ANCS resends an id when the phone modifies a notification; that
+    // updates the card in place rather than raising a second one.
+    function notifyPhone(mirrored, actions, quiet) {
+        var phone = mirrored.phone;
+        var id = "iphone-" + phone.session + "-" + phone.id;
+        if (root._findEntry(id)) {
+            root._state = Model.update(root._state, id, {
+                summary: mirrored.summary,
+                body: mirrored.body,
+                phone: phone
+            }, Date.now());
+            return id;
+        }
+        if (root._dedupeRules.length > 0
+                && IphoneModel.dedupe(root._dedupeRules, phone, root._entriesAll(), Date.now()) !== null)
+            return "";
+        root._inject({
+            id: id,
+            appName: mirrored.appName,
+            appIcon: "",
+            summary: mirrored.summary,
+            body: mirrored.body,
+            urgency: mirrored.urgency,
+            image: "",
+            senderIsNotifySend: false,
+            source: "iphone",
+            phone: phone
+        }, actions, mirrored.category, quiet);
+        return id;
+    }
+
+    // The phone withdrew a notification (cleared there, acted on, a call
+    // that ended): its card goes, without telling the phone back.
+    function dropPhone(phoneId) {
+        var ids = root._entriesAll()
+            .filter(e => e.source === "iphone" && e.phone && e.phone.id === phoneId)
+            .map(e => e.id);
+        if (ids.length > 0)
+            root._state = Model.dismissMany(root._state, ids);
     }
 
     // Callbacks outlive the reducer entry otherwise: a long session firing

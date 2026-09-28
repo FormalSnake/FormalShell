@@ -178,7 +178,20 @@ var ICONS = {
 
     // M74: the Spaces cell's herdr agent badges.
     "loader-circle": "\u{F0772}",    // md-loading
-    "circle-check": "\u{F05E0}"      // md-check_circle
+    "circle-check": "\u{F05E0}",     // md-check_circle
+
+    // M75: the iPhone mirror's per-app marks (Iphone/model.js appIcon).
+    "smartphone": "\u{F011C}",       // md-cellphone
+    "message-circle": "\u{F0361}",   // md-message
+    "phone-incoming": "\u{F03F7}",   // md-phone_incoming
+    "phone-missed": "\u{F03FA}",     // md-phone_missed
+    "voicemail": "\u{F057D}",        // md-voicemail
+    "hash": "\u{F0423}",             // md-pound
+    "heart-pulse": "\u{F05F6}",      // md-heart_pulse
+    "map": "\u{F034D}",              // md-map
+    "newspaper": "\u{F0395}",        // md-newspaper
+    "wallet": "\u{F0584}",           // md-wallet
+    "list-todo": "\u{F0756}"         // md-format_list_checks
 };
 
 var FAMILY = "";

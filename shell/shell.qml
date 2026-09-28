@@ -43,7 +43,7 @@ ShellRoot {
     // InstanceLock.qml's own header comment for the takeover protocol.
     InstanceLock {}
 
-    // Construction site for two singletons nothing else builds at startup.
+    // Construction site for singletons nothing else builds at startup.
     // Quickshell builds a singleton on its first read, and every other read
     // of these two sits behind the launcher's `isOpen` gate
     // (Surfaces/Menu/Menu.qml's `_liveClipboardItems` and its
@@ -59,7 +59,11 @@ ShellRoot {
     // This reads the singletons and none of their properties, so the
     // launcher tree stays unsubscribed from their churn, which is what the
     // gate is there for.
-    readonly property var _startupServices: [ClipboardService, ThumbnailService]
+    //
+    // IphoneService has no startup read at all, only the bar cell and the
+    // panel, and it owns the bridge child every mirrored notification comes
+    // through, so it is built here as well.
+    readonly property var _startupServices: [ClipboardService, ThumbnailService, IphoneService]
 
     // The startup reveal gate (M52, DESIGN.md §1 Motion): the three boot
     // surfaces below stay unmapped until the shell knows what it is drawing.

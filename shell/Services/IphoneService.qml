@@ -1,0 +1,397 @@
+pragma Singleton
+import QtQuick
+import Quickshell
+import Quickshell.Io
+import Quickshell.Bluetooth
+// `qs.Core as Core`: QtQuick exports its own `State`, see
+// NotificationService.qml's note on the same collision.
+import qs.Core as Core
+import qs.Notifications
+import "../Iphone/model.js" as IphoneModel
+
+// Portions from omarchy-iphone (MIT, Copyright (c) 2026 kbbahaPro)
+
+// The iPhone over ANCS (M75 Task 2, plan at
+// docs/superpowers/plans/2026-09-28-m75-iphone.md). ancs4linux's observer
+// daemon runs as root on the system bus and holds the BLE link;
+// `omarchy-iphone-bridge listen` turns its signals into JSONL on stdout,
+// and this owns one long-lived child of it, restarted with backoff.
+//
+// No bridge on PATH is `installed: false`; a bridge whose daemon does not
+// own its bus name is `available: false`. Neither fakes a phone.
+//
+// Mirrored notifications go through NotificationService.notifyPhone(),
+// which owns the dedupe against local clients; the Focus verdict, the block
+// list and the one-time-code copy are decided here first.
+Singleton {
+    id: root
+
+    // Waits for settings.json, so a session with the key off never starts
+    // the bridge in the moment before the file lands.
+    readonly property bool enabled: Core.Config.loaded && Core.Config.get("iphone.enable", true) === true
+    readonly property bool _mirror: Core.Config.get("iphone.notifications.enable", true) === true
+    readonly property string _focusMode: String(Core.Config.get("iphone.notifications.focus", "respect"))
+    readonly property bool _syncDndEnabled: Core.Config.get("iphone.notifications.syncDnd", false) === true
+    readonly property real _focusWindow: {
+        var n = Number(Core.Config.get("iphone.notifications.focusWindow", IphoneModel.DEFAULT_FOCUS_WINDOW));
+        return isFinite(n) && n > 0 ? n : IphoneModel.DEFAULT_FOCUS_WINDOW;
+    }
+    readonly property var _block: Core.Config.get("iphone.notifications.block", [])
+    readonly property bool _copyCodes: Core.Config.get("iphone.copyCodes", false) === true
+
+    readonly property int _historyLimit: 200
+    readonly property string _bridge: "omarchy-iphone-bridge"
+
+    // --- state -------------------------------------------------------------
+
+    property bool installed: false
+    property bool bridgeRunning: false
+    property bool observer: false
+    readonly property bool available: root.enabled && root.bridgeRunning && root.observer
+    property bool connected: false
+    property string deviceName: ""
+    // ancs4linux's device handle, the phone's BlueZ object path. Only
+    // notifications carry it, so it is "" until the first one arrives.
+    property string deviceHandle: ""
+    // BlueZ's Battery1 percentage as the bridge polls it, -1 unknown.
+    property int _bridgeBattery: -1
+    // The connection the newest notification belongs to; ids from an
+    // earlier one can no longer be acted on.
+    property int session: 0
+
+    readonly property var device: IphoneModel.matchDevice(
+        Bluetooth.defaultAdapter ? Bluetooth.defaultAdapter.devices.values : [], root.deviceHandle, root.deviceName)
+    // 0..1, like every other Quickshell fraction. The matched Bluetooth
+    // device first; the bridge's own poll of the same BlueZ interface when
+    // no device matched yet.
+    readonly property bool batteryAvailable: root.connected
+        && ((root.device !== null && root.device.batteryAvailable) || root._bridgeBattery >= 0)
+    readonly property real battery: !root.batteryAvailable ? 0
+        : (root.device !== null && root.device.batteryAvailable) ? root.device.battery
+        : root._bridgeBattery / 100
+
+    // Newest first, the bridge's own record per notification (Iphone/model.js
+    // parseEvent), including ones the Focus verdict kept out of the
+    // notification centre. Blocked apps never land here.
+    property var recent: []
+    property int unread: 0
+    property string pairingCode: ""
+    property bool advertising: false
+    property string lastError: ""
+
+    property var _arrivals: []
+    property double _now: Date.now()
+    readonly property bool inFocus: IphoneModel.inFocus(root._arrivals, root._now, root._focusWindow)
+
+    signal codeCopied(string code)
+
+    // --- public verbs --------------------------------------------------------
+
+    function _find(id) {
+        for (var i = 0; i < root.recent.length; i++)
+            if (root.recent[i].id === id)
+                return root.recent[i];
+        return null;
+    }
+
+    // Act on a notification on the phone: `positive` is its positive action
+    // (Answer, Reply), false its negative one (Clear, Decline). Answers
+    // whether the action was queued.
+    function invoke(id, positive) {
+        return root._invokeRecord(root._find(Number(id)), positive === true);
+    }
+
+    // Clear on the phone and here. The phone's own dismiss that follows
+    // finds nothing left to remove.
+    function dismiss(id) {
+        var entry = root._find(Number(id));
+        if (!entry)
+            return false;
+        root.recent = IphoneModel.removeById(root.recent, entry.id);
+        NotificationService.dropPhone(entry.id);
+        return entry.negativeAction === "" ? true : root._invokeRecord(entry, false);
+    }
+
+    function clear() {
+        root.recent.forEach(function (entry) {
+            if (entry.negativeAction !== "")
+                root._invokeRecord(entry, false);
+            NotificationService.dropPhone(entry.id);
+        });
+        root.recent = [];
+        root.unread = 0;
+        root._runOnce(["clear"]);
+    }
+
+    function markRead() {
+        root.unread = 0;
+    }
+
+    function pair() {
+        if (!root.installed)
+            return false;
+        root.lastError = "";
+        pairProc.command = [root._bridge, "pair", "--name", "FormalShell"];
+        pairProc.running = true;
+        return true;
+    }
+
+    // --- incoming --------------------------------------------------------------
+
+    function _onLine(line) {
+        var event = IphoneModel.parseEvent(line);
+        if (!event)
+            return;
+        switch (event.type) {
+        case "history":
+            var items = event.items.filter(e => !IphoneModel.isBlocked(e, root._block));
+            items.sort((a, b) => b.ts - a.ts);
+            root.recent = items.slice(0, root._historyLimit);
+            break;
+        case "status":
+            root._backoffMs = root._baseBackoffMs;
+            root.observer = event.observer;
+            root.connected = event.connected;
+            root.deviceName = event.deviceName;
+            root._bridgeBattery = event.battery;
+            if (event.connected)
+                root.advertising = false;
+            if (event.observer)
+                root.lastError = "";
+            break;
+        case "notification":
+            root._receive(event);
+            break;
+        case "dismiss":
+            root.recent = IphoneModel.removeById(root.recent, event.id);
+            NotificationService.dropPhone(event.id);
+            break;
+        case "pairingCode":
+            root.pairingCode = event.code;
+            break;
+        case "advertising":
+            root.advertising = true;
+            break;
+        case "error":
+            root.lastError = event.message;
+            break;
+        }
+    }
+
+    function _receive(entry) {
+        if (IphoneModel.isBlocked(entry, root._block))
+            return;
+        if (entry.deviceHandle !== "")
+            root.deviceHandle = entry.deviceHandle;
+        if (entry.session !== 0)
+            root.session = entry.session;
+        var known = root._find(entry.id) !== null;
+        root.recent = IphoneModel.upsert(root.recent, entry, root._historyLimit);
+        if (!known)
+            root.unread += 1;
+
+        if (!entry.preexisting && !known) {
+            root._now = Date.now();
+            var horizon = root._now - root._focusWindow * 1000;
+            root._arrivals = root._arrivals.filter(a => a.at >= horizon)
+                .concat([{ at: root._now, silent: entry.silent }]);
+            if (root._copyCodes)
+                root._copyCode(IphoneModel.extractCode(entry.title + " " + entry.body));
+        }
+
+        var verdict = IphoneModel.route(entry, {
+            enable: root._mirror,
+            block: root._block,
+            focus: root._focusMode
+        });
+        if (verdict === "drop")
+            return;
+        var mirrored = IphoneModel.toNotification(entry);
+        var actions = mirrored.actions.map(a => ({
+            key: a.key,
+            label: a.label,
+            invoke: () => root.invoke(entry.id, a.key === "positive")
+        }));
+        NotificationService.notifyPhone(mirrored, actions, verdict === "quiet");
+    }
+
+    property string _lastCode: ""
+
+    function _copyCode(code) {
+        if (code === "" || code === root._lastCode)
+            return;
+        root._lastCode = code;
+        copyProc.command = ["wl-copy", "--", code];
+        copyProc.running = true;
+        root.codeCopied(code);
+    }
+
+    Process {
+        id: copyProc
+    }
+
+    Connections {
+        target: NotificationService
+        function onPhoneDismissed(phone) {
+            root.recent = IphoneModel.removeById(root.recent, phone.id);
+            if (phone.negativeAction !== "")
+                root._invokeRecord(phone, false);
+        }
+    }
+
+    // --- Focus and DND -----------------------------------------------------------
+
+    // Re-reads the window's edge: a silent arrival ageing out of it ends the
+    // Focus reading with no event to say so.
+    Timer {
+        interval: 15000
+        repeat: true
+        running: root._arrivals.length > 0
+        onTriggered: {
+            root._now = Date.now();
+            var horizon = root._now - root._focusWindow * 1000;
+            var kept = root._arrivals.filter(a => a.at >= horizon);
+            if (kept.length !== root._arrivals.length)
+                root._arrivals = kept;
+        }
+    }
+
+    property var _dndStep: ({ owned: false, focus: false })
+
+    function _syncDnd() {
+        var next = IphoneModel.syncDndStep(root._dndStep, root.inFocus, Core.State.dnd, root._syncDndEnabled);
+        // Stored before the write: setDnd() lands back here through
+        // onDndChanged, which has to see this step already taken.
+        root._dndStep = { owned: next.owned, focus: next.focus };
+        if (next.set !== null)
+            Core.State.setDnd(next.set);
+    }
+
+    onInFocusChanged: root._syncDnd()
+    on_SyncDndEnabledChanged: root._syncDnd()
+
+    Connections {
+        target: Core.State
+        function onDndChanged() { root._syncDnd(); }
+    }
+
+    // --- outgoing actions ----------------------------------------------------------
+
+    // One action Process at a time: re-running a Process that is still
+    // running is a no-op, so a burst (clear()) would send the first action
+    // and drop the rest.
+    property var _actionQueue: []
+
+    function _invokeRecord(entry, positive) {
+        if (!entry || !root.installed)
+            return false;
+        if (!IphoneModel.isActionable(entry, root.session)) {
+            root.lastError = "The phone reconnected since this arrived, so it can no longer be acted on";
+            return false;
+        }
+        root._actionQueue = root._actionQueue.concat([[root._bridge, "invoke",
+            "--handle", String(entry.deviceHandle),
+            "--id", String(entry.id),
+            "--kind", positive ? "positive" : "negative"]]);
+        root._pumpActions();
+        return true;
+    }
+
+    function _pumpActions() {
+        if (actionProc.running || root._actionQueue.length === 0)
+            return;
+        actionProc.command = root._actionQueue[0];
+        root._actionQueue = root._actionQueue.slice(1);
+        actionProc.running = true;
+    }
+
+    function _runOnce(args) {
+        if (!root.installed)
+            return;
+        onceProc.command = [root._bridge].concat(args);
+        onceProc.running = true;
+    }
+
+    Process {
+        id: actionProc
+        stdout: SplitParser {
+            onRead: line => root._onLine(line)
+        }
+        onExited: exitCode => {
+            if (exitCode !== 0 && root.lastError === "")
+                root.lastError = "The phone did not take that action";
+            root._pumpActions();
+        }
+    }
+
+    Process {
+        id: onceProc
+    }
+
+    Process {
+        id: pairProc
+        stdout: SplitParser {
+            onRead: line => root._onLine(line)
+        }
+    }
+
+    // --- the bridge ------------------------------------------------------------------
+
+    readonly property int _baseBackoffMs: 2000
+    readonly property int _maxBackoffMs: 60000
+    property int _backoffMs: root._baseBackoffMs
+
+    // 127 from the probe is "no bridge on PATH", the one exit that means
+    // installed: false rather than a bridge that started and died.
+    Process {
+        id: bridgeProc
+        command: ["sh", "-c",
+            'command -v "$0" >/dev/null 2>&1 || exit 127; exec "$0" listen --limit "$1"',
+            root._bridge, String(root._historyLimit)]
+        stdout: SplitParser {
+            onRead: line => {
+                root.installed = true;
+                root._onLine(line);
+            }
+        }
+        stderr: SplitParser {
+            onRead: line => {
+                var text = String(line || "").trim();
+                if (text !== "")
+                    root.lastError = text;
+            }
+        }
+        onRunningChanged: root.bridgeRunning = bridgeProc.running
+        onExited: exitCode => {
+            root.installed = exitCode !== 127;
+            root.observer = false;
+            root.connected = false;
+            if (root.enabled)
+                retryTimer.start();
+        }
+    }
+
+    Timer {
+        id: retryTimer
+        interval: root._backoffMs
+        onTriggered: {
+            root._backoffMs = Math.min(root._maxBackoffMs, root._backoffMs * 2);
+            if (root.enabled)
+                bridgeProc.running = true;
+        }
+    }
+
+    function _applyEnabled() {
+        if (root.enabled) {
+            if (!bridgeProc.running && !retryTimer.running)
+                bridgeProc.running = true;
+            return;
+        }
+        retryTimer.stop();
+        bridgeProc.running = false;
+        root._actionQueue = [];
+    }
+
+    onEnabledChanged: root._applyEnabled()
+    Component.onCompleted: root._applyEnabled()
+}
