@@ -178,6 +178,20 @@ Icon=formalshell-spaces-$name
 EOF
     $convert_bin -size 48x48 "xc:$colour" "$iso_home/.local/share/icons/hicolor/48x48/apps/formalshell-spaces-$name.png"
   done
+  # The base run writes the same index only when every leg keeps its
+  # fixture window, which a rider like --frame does not, and QIconLoader
+  # enumerates nothing under hicolor without one.
+  cat > "$iso_home/.local/share/icons/hicolor/index.theme" <<'EOF'
+[Icon Theme]
+Name=Hicolor
+Comment=Fallback icon theme
+Directories=48x48/apps
+
+[48x48/apps]
+Size=48
+Context=Applications
+Type=Threshold
+EOF
 }
 
 leg_spaces_timing() {
@@ -306,8 +320,11 @@ leg_spaces_assert() {
   done
   "$jq_bin" -e '[.slots[] | select(.icons | length > 0) | .appsShown] | all' "$spaces_status_one_path" > /dev/null \
     || fail "an occupied chip hides its icons: $("$jq_bin" -c '[.slots[] | {idx, appsShown}]' "$spaces_status_one_path")"
-  "$jq_bin" -e '.slots[0].icons | map(select(.appId == "formalshell-smoke-iconic")) | length == 1' "$spaces_status_one_path" > /dev/null \
-    || fail "the base fixture window is not under workspace 1's slot"
+  # Only there when every leg in the run keeps the base fixture window.
+  if $fixture_window_mode; then
+    "$jq_bin" -e '.slots[0].icons | map(select(.appId == "formalshell-smoke-iconic")) | length == 1' "$spaces_status_one_path" > /dev/null \
+      || fail "the base fixture window is not under workspace 1's slot"
+  fi
 
   # Badges in status, then the same answer in the service itself.
   [ "$(echo "$blocked" | "$jq_bin" -r .agent)" = blocked ] || fail "the remote client's window carries no blocked badge: $blocked"
