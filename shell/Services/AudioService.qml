@@ -81,7 +81,36 @@ Singleton {
     // auto-showed for an external volume change (e.g. wpctl, hardware keys).
     Connections {
         target: root._sinkAudio
-        function onVolumesChanged() { root.changed(); }
-        function onMutedChanged() { root.changed(); }
+        function onVolumesChanged() { root._report(); }
+        function onMutedChanged() { root._report(); }
     }
+
+    // A default-sink swap is not a volume change: AirPods leaving or joining
+    // hands `_sink` to another node at its own level, and a node that was
+    // just bound reports 0 before its real volume; neither is the user
+    // turning a knob. Only a move on the same ready sink, away from what it
+    // last reported, counts; everything else re-baselines.
+    property var _reportedSink: null
+    property real _reportedVolume: -1
+    property bool _reportedMuted: false
+
+    function _report() {
+        var sink = root._sink;
+        if (!sink || !sink.ready || !root._sinkAudio)
+            return;
+        var audio = root._sinkAudio;
+        var moved = sink === root._reportedSink
+            && (audio.volume !== root._reportedVolume || audio.muted !== root._reportedMuted);
+        root._reportedSink = sink;
+        root._reportedVolume = audio.volume;
+        root._reportedMuted = audio.muted;
+        if (moved)
+            root.changed();
+    }
+
+    Connections {
+        target: root._sink
+        function onReadyChanged() { root._report(); }
+    }
+    on_SinkChanged: root._report()
 }
