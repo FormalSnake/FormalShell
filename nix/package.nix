@@ -73,16 +73,11 @@ stdenvNoCC.mkDerivation {
     # host's own pw-dump, built against the daemon it talks to, wins.
     # xdg-utils (xdg-open) opens a finished recording and a GitHub link;
     # neither caller guards, so it cannot be left to the host.
-    # iphone-bridge is the two omarchy-iphone scripts (bridge, ams)
-    # IphoneService spawns directly by name, guarded by the same `command -v`
-    # probe as uxplay and localsend-cli below (IphoneService.qml's bridgeProc
-    # and amsProc), so it carries the same suffix contract they do: a host
-    # install, or the smoke rig's own PATH-shimmed fixture (dev/smoke.d/
-    # iphone.sh), can shadow the bundled one. A `--prefix` here made the
-    # bundled binary unshadowable and the rig's shim dead on arrival (M75
-    # Task 7, 2026-09-28: `iphone status` never left `connected: false`
-    # because the real bridge, not the fixture, was always what `command -v`
-    # found first).
+    # uxplay, localsend-cli and iphone-bridge (the omarchy-iphone bridge and
+    # ams scripts) back AirplayService, LocalsendService and IphoneService.
+    # All three are suffixed and every caller guards with `command -v`, so a
+    # host install or the rig's PATH shims (--iphone, --airplay) shadow the
+    # bundled ones; prefixed, the --iphone shim never ran.
     # qtimageformats: qtbase alone decodes gif/ico/jpeg/png, so a webp (or
     # avif) wallpaper fails Background.qml's Image with "Unsupported image
     # format" while matugen, which decodes the file itself, keeps recolouring.

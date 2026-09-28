@@ -273,7 +273,7 @@ Singleton {
             root.session = entry.session;
         var known = root._find(entry.id) !== null;
         root.recent = IphoneModel.upsert(root.recent, entry, root._historyLimit);
-        if (!known)
+        if (!known && IphoneModel.focusVerdict(entry, root._focusMode) !== "drop")
             root.unread += 1;
 
         if (!entry.preexisting && !known) {
