@@ -125,6 +125,37 @@ Card {
                         size: root._iconSize
                         color: root.owner.critical ? Theme.color.destructive : Theme.color.mutedForeground
                     }
+
+                    // The source mark for a card mirrored off the iPhone
+                    // (M75 Task 3): riding the icon slot the way Workspaces.qml's
+                    // herdr badge rides a window's own icon.
+                    Item {
+                        id: sourceMark
+                        visible: root.owner.entry.source === "iphone"
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        anchors.rightMargin: -Theme.space.xxs
+                        anchors.bottomMargin: -Theme.space.xxs
+                        width: Theme.fontSize.caption
+                        height: Theme.fontSize.caption
+
+                        // primitive-exempt: the mark's own backing disc, which
+                        // keeps the glyph readable over the app icon under it.
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: Theme.pillRadius(sourceMark.width)
+                            color: Theme.color.background
+                        }
+
+                        Icon {
+                            anchors.centerIn: parent
+                            width: sourceMark.width
+                            height: sourceMark.height
+                            size: sourceMark.width
+                            name: "smartphone"
+                            color: Theme.color.mutedForeground
+                        }
+                    }
                 }
 
                 SectionLabel {

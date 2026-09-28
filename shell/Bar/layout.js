@@ -38,15 +38,17 @@
 
 // "github", "usage", "tailscale", "visualizer", "microphone",
 // "keyboardLayout", "systemUpdate", "chevron", "airpods", "dualsense",
-// "display" and "monitor" are deliberately absent from DEFAULT_LAYOUT below:
-// all twelve are opt-in builtins (M12 Task 8, M14 Task 7, M16 Task 8, the
-// ASCII visualizer's own owner-ask task, the cheap-wins trio, M24's collapse
-// boundary, M29 Tasks 3+4's AirPods/DualSense cells, M36's display cell
-// (the display panel long predates having a cell at all), and M38 Task 6's
-// system monitor: a monitor cell in the bar is optional per install, since
-// the launcher's "monitor" route (Menu/appviews.js) is the always-available
-// path to the same data), so a no-config bar carries none of them.
-var BUILTIN_WIDGETS = ["launcher", "workspaces", "activeWindow", "clock", "nowPlaying", "battery", "audio", "network", "bluetooth", "weather", "tray", "github", "usage", "tailscale", "visualizer", "bell", "indicators", "microphone", "keyboardLayout", "systemUpdate", "chevron", "airpods", "dualsense", "display", "monitor"];
+// "display", "monitor" and "iphone" are deliberately absent from
+// DEFAULT_LAYOUT below: all thirteen are opt-in builtins (M12 Task 8, M14
+// Task 7, M16 Task 8, the ASCII visualizer's own owner-ask task, the
+// cheap-wins trio, M24's collapse boundary, M29 Tasks 3+4's AirPods/
+// DualSense cells, M36's display cell (the display panel long predates
+// having a cell at all), M38 Task 6's system monitor (a monitor cell in the
+// bar is optional per install, since the launcher's "monitor" route
+// (Menu/appviews.js) is the always-available path to the same data), and
+// M75 Task 3's iPhone cell (no bridge on PATH means no cell)), so a
+// no-config bar carries none of them.
+var BUILTIN_WIDGETS = ["launcher", "workspaces", "activeWindow", "clock", "nowPlaying", "battery", "audio", "network", "bluetooth", "weather", "tray", "github", "usage", "tailscale", "visualizer", "bell", "indicators", "microphone", "keyboardLayout", "systemUpdate", "chevron", "airpods", "dualsense", "display", "monitor", "iphone"];
 
 var MODULE_TYPES = ["command", "qml"];
 

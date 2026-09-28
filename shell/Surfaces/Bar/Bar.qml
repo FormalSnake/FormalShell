@@ -65,6 +65,7 @@ PanelWindow {
     property var networkPanel: null
     property var bluetoothPanel: null
     property var airpodsPanel: null
+    property var iphonePanel: null
     property var dualsensePanel: null
     property var powerPanel: null
     property var weatherPanel: null
@@ -566,6 +567,12 @@ PanelWindow {
         }
     }
     Component {
+        id: iphoneComponent
+        IphoneWidget {
+            panel: bar.iphonePanel
+        }
+    }
+    Component {
         id: dualsenseComponent
         DualsenseWidget {
             panel: bar.dualsensePanel
@@ -702,6 +709,7 @@ PanelWindow {
         network: networkComponent,
         bluetooth: bluetoothComponent,
         airpods: airpodsComponent,
+        iphone: iphoneComponent,
         dualsense: dualsenseComponent,
         weather: weatherComponent,
         tray: trayComponent,

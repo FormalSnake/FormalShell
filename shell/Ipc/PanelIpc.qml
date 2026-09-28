@@ -15,9 +15,9 @@ import "../Bar/panels.js" as Panels
 // a keyboard open hangs under its own widget rather than at the end of the
 // strip. `registry` maps
 // panel name -> its Panel instance, wired from shell.qml as each panel is
-// added: appmenu, audio, calendar, network, bluetooth, airpods, dualsense,
-// power, weather, media, github, usage, tailscale, systemupdate, display,
-// monitor, trayoverflow, radio.
+// added: appmenu, audio, calendar, network, bluetooth, airpods, iphone,
+// dualsense, power, weather, media, github, usage, tailscale, systemupdate,
+// display, monitor, trayoverflow, radio.
 IpcHandler {
     id: root
     target: "panel"

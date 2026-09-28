@@ -25,6 +25,7 @@ var WIDGET_PANELS = {
     display: "display",
     dualsense: "dualsense",
     github: "github",
+    iphone: "iphone",
     microphone: "audio",
     monitor: "monitor",
     network: "network",

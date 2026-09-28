@@ -18,7 +18,7 @@ TestCase {
 
     property var panelNames: [
         "appmenu", "audio", "calendar", "network", "bluetooth", "airpods",
-        "dualsense", "power", "weather", "media", "github", "usage",
+        "iphone", "dualsense", "power", "weather", "media", "github", "usage",
         "tailscale", "systemupdate", "display", "monitor"
     ]
 

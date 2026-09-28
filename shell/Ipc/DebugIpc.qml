@@ -76,6 +76,17 @@ IpcHandler {
                 stateByWindow: HerdrService.stateByWindow,
                 stateByKey: HerdrService.stateByKey
             },
+            iphone: {
+                installed: IphoneService.installed,
+                available: IphoneService.available,
+                connected: IphoneService.connected,
+                deviceName: IphoneService.deviceName,
+                batteryAvailable: IphoneService.batteryAvailable,
+                battery: IphoneService.battery,
+                unread: IphoneService.unread,
+                inFocus: IphoneService.inFocus,
+                recentCount: IphoneService.recent.length
+            },
             bar: root._bars(),
             join: root._join(),
             // The chrome numbers a leg would otherwise have to restate: the
