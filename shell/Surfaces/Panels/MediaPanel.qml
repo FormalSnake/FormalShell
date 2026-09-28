@@ -136,7 +136,7 @@ Panel {
     // identity row has left, since it sits beside the title rather than
     // under it.
     readonly property bool _spectrumVisible: MediaService.available && root._spectrumEnabled
-        && VisualizerService.state === "available"
+        && (VisualizerService.state === "available" || VisualizerService.tempoDriven)
     readonly property int _spectrumColumns: 12
     readonly property real _spectrumWidth: root._spectrumColumns * Theme.space.trackThickness
         + (root._spectrumColumns - 1) * Theme.space.xxs
@@ -157,10 +157,7 @@ Panel {
     // progress track at a much coarser grain and is left alone.
     FrameAnimation {
         running: root.isOpen && MediaService.isPlaying && LyricsService.state === "synced"
-        onTriggered: {
-            if (MediaService.activePlayer)
-                MediaService.activePlayer.positionChanged();
-        }
+        onTriggered: MediaService.refreshPosition()
     }
 
     // The album-art slot, three control heights square so it scales with

@@ -127,7 +127,14 @@ Singleton {
         interval: 1000
         repeat: true
         running: root.mediaPlayback === "playing"
-        onTriggered: root._mediaTick = Date.now()
+        onTriggered: root.refreshPosition()
+    }
+
+    // MediaService.refreshPosition's half for the phone: the lyrics wipe and
+    // the tempo visualizer call it every frame, the Timer above covers the
+    // progress row.
+    function refreshPosition() {
+        root._mediaTick = Date.now();
     }
 
     signal codeCopied(string code)

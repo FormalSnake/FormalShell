@@ -408,6 +408,15 @@ Singleton {
         }
     }
 
+    // Re-reads the position now rather than on the Timer below's next
+    // second, for a caller drawing against it every frame.
+    function refreshPosition() {
+        if (root.activePlayer)
+            root.activePlayer.positionChanged();
+        else if (root._iphone)
+            IphoneService.refreshPosition();
+    }
+
     function raise() {
         if (root.canRaise)
             root.activePlayer.raise();

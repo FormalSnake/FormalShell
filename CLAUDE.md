@@ -602,7 +602,11 @@ behavior on hosts where a real owner exists.
   or an invented device. Enabling a real service in `nix/testvm.nix` so a
   panel has a genuine backend to talk to is the sanctioned way to make a
   screenshot show more — inventing fake `/sys` entries or synthetic devices
-  is not.
+  is not. The one exception (owner, 2026-09-28): with the iPhone as the
+  active media source, whose audio never reaches this machine, the
+  visualizer draws a frame off the track's Deezer bpm
+  (`Visualizer/model.js` `beatFrame`, 120 when Deezer has none) instead of
+  cava.
 - Pure QML/JS. No compiled companion binary. No Node/npm/bun anywhere.
   Third-party CLIs the shell shells out to (matugen, grim, cava, ttfx, …)
   are runtime dependencies wired onto the wrapper's PATH in

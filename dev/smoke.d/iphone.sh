@@ -80,6 +80,9 @@ iphone_normal_toast_png="$shot_dir/iphone-normal-toast.png"
 iphone_dedupe_phone_first_png="$shot_dir/iphone-dedupe-phone-first.png"
 iphone_dedupe_local_first_png="$shot_dir/iphone-dedupe-local-first.png"
 iphone_panel_png="$shot_dir/iphone-panel.png"
+iphone_media_png="$shot_dir/iphone-media.png"
+iphone_visualizer_a_path="$shot_dir/iphone-visualizer-a.json"
+iphone_visualizer_b_path="$shot_dir/iphone-visualizer-b.json"
 
 leg_iphone_fixture() {
   settings_fragment ', "iphone": {"notifications": {"focus": "respect"}}'
@@ -226,6 +229,15 @@ sleep 2
 "$qs_bin" ipc -p "$shell_path" call panel open iphone > "$iphone_panel_open_path" 2>&1
 sleep 2
 "$grim_bin" "$iphone_panel_png" > /dev/null 2>&1
+
+# The media panel on the phone as its source: no audio reaches cava, so the
+# spectrum is the tempo frame, which moves between two reads.
+"$qs_bin" ipc -p "$shell_path" call panel open media > /dev/null 2>&1
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call visualizer status > "$iphone_visualizer_a_path" 2>&1
+sleep 0.3
+"$qs_bin" ipc -p "$shell_path" call visualizer status > "$iphone_visualizer_b_path" 2>&1
+"$grim_bin" "$iphone_media_png" > /dev/null 2>&1
 EOF
   echo "exec-once = bash $script"
 }
@@ -279,7 +291,15 @@ leg_iphone_assert() {
     fail "panel open iphone did not answer ok, got: $(cat "$iphone_panel_open_path" 2>/dev/null)"
   fi
 
-  for f in "$iphone_bar_png" "$iphone_normal_toast_png" "$iphone_dedupe_phone_first_png" "$iphone_dedupe_local_first_png" "$iphone_panel_png"; do
+  if [ "$("$jq_bin" -r '.running' "$iphone_visualizer_a_path" 2>/dev/null)" != "true" ]; then
+    fail "visualizer not running on the phone's track: $(cat "$iphone_visualizer_a_path")"
+  fi
+  if [ "$("$jq_bin" -c '.levels' "$iphone_visualizer_a_path")" = "$("$jq_bin" -c '.levels' "$iphone_visualizer_b_path")" ]; then
+    fail "the tempo frame did not move between two reads"
+  fi
+  if pgrep -x cava > /dev/null; then fail "cava running with the phone as the source"; fi
+
+  for f in "$iphone_bar_png" "$iphone_normal_toast_png" "$iphone_dedupe_phone_first_png" "$iphone_dedupe_local_first_png" "$iphone_panel_png" "$iphone_media_png"; do
     if [ ! -f "$f" ]; then fail "no iphone screenshot produced at $f"; fi
   done
   echo "SMOKE_IPHONE_BAR $iphone_bar_png"
@@ -287,4 +307,5 @@ leg_iphone_assert() {
   echo "SMOKE_IPHONE_DEDUPE_PHONE_FIRST $iphone_dedupe_phone_first_png"
   echo "SMOKE_IPHONE_DEDUPE_LOCAL_FIRST $iphone_dedupe_local_first_png"
   echo "SMOKE_IPHONE_PANEL $iphone_panel_png"
+  echo "SMOKE_IPHONE_MEDIA $iphone_media_png"
 }

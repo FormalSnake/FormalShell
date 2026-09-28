@@ -351,4 +351,44 @@ TestCase {
         verify(h < 1);
         compare(Model.normalize(0, 0.1), 0);
     }
+
+    function test_deezer_search_url_encodes_the_query() {
+        compare(Model.deezerSearchUrl("Daft Punk", "Get Lucky & Co"),
+            "https://api.deezer.com/search?limit=1&q=Get%20Lucky%20%26%20Co%20Daft%20Punk");
+    }
+
+    function test_parse_deezer_search_takes_the_first_id() {
+        compare(Model.parseDeezerSearch('{"data":[{"id":67238735},{"id":1}]}'), "67238735");
+        compare(Model.parseDeezerSearch('{"data":[]}'), "");
+        compare(Model.parseDeezerSearch("not json"), "");
+    }
+
+    function test_parse_deezer_bpm_reads_zero_as_unknown() {
+        compare(Model.parseDeezerBpm('{"bpm":116.1}'), 116.1);
+        compare(Model.parseDeezerBpm('{"bpm":0}'), 0);
+        compare(Model.parseDeezerBpm('{"error":{}}'), 0);
+    }
+
+    function test_beat_frame_peaks_on_the_beat_in_the_low_bands() {
+        var onBeat = Model.beatFrame(2, 120, 24, 0);
+        var between = Model.beatFrame(2.2, 120, 24, 0);
+        compare(onBeat.length, 24);
+        verify(onBeat[0] > between[0] + 0.3);
+        for (var i = 0; i < onBeat.length; i++)
+            verify(onBeat[i] >= 0 && onBeat[i] <= 1);
+    }
+
+    function test_beat_frame_hits_the_high_bands_on_the_off_beat() {
+        var offBeat = Model.beatFrame(2.25, 120, 24, 0);
+        var before = Model.beatFrame(2.2, 120, 24, 0);
+        verify(offBeat[23] > before[23]);
+    }
+
+    function test_beat_frame_falls_back_without_a_bpm() {
+        compare(Model.beatFrame(3.3, 0, 24, 0), Model.beatFrame(3.3, Model.FALLBACK_BPM, 24, 0));
+    }
+
+    function test_beat_frame_channels_differ() {
+        verify(JSON.stringify(Model.beatFrame(1.3, 120, 24, -1)) !== JSON.stringify(Model.beatFrame(1.3, 120, 24, 1)));
+    }
 }

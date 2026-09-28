@@ -58,7 +58,8 @@ Cell {
 
     // Read by Bar.qml's regionDelegate instead of `visible` directly, see
     // that file's own header comment.
-    readonly property bool shown: root._state === "missing" || (root._state === "available" && MediaService.available)
+    readonly property bool shown: VisualizerService.tempoDriven
+        || root._state === "missing" || (root._state === "available" && MediaService.available)
 
     visible: root.shown
 

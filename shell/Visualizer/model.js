@@ -305,3 +305,65 @@ function levelColorBand(level) {
         return "content";
     return "dim";
 }
+
+// A source whose audio never reaches this machine's PipeWire graph (the
+// iPhone over AMS) has nothing for cava to hear. VisualizerService draws a
+// frame off the track's tempo for it instead, the one sanctioned exception
+// to the no-faked-data rule (owner, 2026-09-28). Deezer's free API carries a
+// `bpm` per track, 0 when it has none; FALLBACK_BPM covers that and a miss.
+var FALLBACK_BPM = 120;
+
+function deezerSearchUrl(artist, title) {
+    return "https://api.deezer.com/search?limit=1&q=" + encodeURIComponent(String(title || "") + " " + String(artist || ""));
+}
+
+function deezerTrackUrl(id) {
+    return "https://api.deezer.com/track/" + encodeURIComponent(String(id));
+}
+
+// The first hit's id, or "" for no hit or a body that isn't the search shape.
+function parseDeezerSearch(body) {
+    try {
+        var hit = JSON.parse(body).data[0];
+        return hit && hit.id !== undefined ? String(hit.id) : "";
+    } catch (e) {
+        return "";
+    }
+}
+
+// The track's bpm, or 0 when Deezer has none or the body is not a track.
+function parseDeezerBpm(body) {
+    try {
+        var bpm = Number(JSON.parse(body).bpm);
+        return isFinite(bpm) && bpm >= 40 && bpm <= 250 ? bpm : 0;
+    } catch (e) {
+        return 0;
+    }
+}
+
+// One `count`-long 0..1 frame at `seconds` into the track: a kick on every
+// beat weighted to the low bands, a hat on every off-beat weighted to the
+// high ones, the downbeat of each four-beat bar hit harder, and a slow
+// per-band drift so no two frames between beats are the same. `channel`
+// (0 mix, -1 left, 1 right) shifts the drift so the stereo style's halves
+// differ. Deterministic in its inputs, so a paused track holds its frame.
+function beatFrame(seconds, bpm, count, channel) {
+    var tempo = bpm > 0 ? bpm : FALLBACK_BPM;
+    var beats = Math.max(0, seconds) * tempo / 60;
+    var phase = beats - Math.floor(beats);
+    var offPhase = (beats + 0.5) - Math.floor(beats + 0.5);
+    var accent = Math.floor(beats) % 4 === 0 ? 1 : 0.75;
+    var kick = Math.exp(-phase * 7) * accent;
+    var hat = Math.exp(-offPhase * 12);
+    var shift = (channel || 0) * 0.9;
+    var frame = new Array(count);
+    for (var i = 0; i < count; i++) {
+        var x = count > 1 ? i / (count - 1) : 0;
+        var low = Math.pow(1 - x, 1.5);
+        var high = Math.pow(x, 1.2);
+        var drift = 0.5 + 0.5 * Math.sin(seconds * (1.1 + i * 0.29) + i * 1.7 + shift);
+        var v = 0.12 + 0.2 * drift * (1 - 0.5 * x) + 0.6 * low * kick + 0.35 * high * hat + 0.15 * kick * (1 - low);
+        frame[i] = Math.min(1, Math.max(0, v));
+    }
+    return frame;
+}

@@ -92,10 +92,78 @@ Singleton {
         return "";
     }
 
-    readonly property bool running: cavaProc.running
+    readonly property bool running: cavaProc.running || root._tempoRunning
 
-    readonly property bool _shouldRun: root.state === "available" && MediaService.isPlaying
-        && Theme.motionEnabled && (root._visibleBars > 0 || root.panelWants)
+    readonly property bool _wanted: MediaService.isPlaying && Theme.motionEnabled
+        && (root._visibleBars > 0 || root.panelWants)
+    readonly property bool _shouldRun: root.state === "available" && root._wanted && !root.tempoDriven
+
+    // The iPhone's audio plays on the phone, so cava hears nothing of it.
+    // Its frame is drawn off the track's tempo instead (Model.beatFrame, the
+    // owner's exception to the no-faked-data rule, 2026-09-28), with the
+    // bpm looked up on Deezer once per track and cached for the session.
+    readonly property bool tempoDriven: MediaService.activeKind === "iphone"
+    readonly property bool _tempoRunning: root.tempoDriven && root._wanted
+    property real bpm: 0
+    property var _bpmCache: ({})
+    property int _bpmSerial: 0
+    readonly property string _bpmKey: root.tempoDriven && MediaService.title !== ""
+        ? MediaService.artist + "\n" + MediaService.title : ""
+
+    on_BpmKeyChanged: {
+        root._bpmSerial++;
+        if (root._bpmKey === "") {
+            root.bpm = 0;
+            return;
+        }
+        if (root._bpmKey in root._bpmCache) {
+            root.bpm = root._bpmCache[root._bpmKey];
+            return;
+        }
+        root.bpm = 0;
+        var serial = root._bpmSerial;
+        var key = root._bpmKey;
+        root._curl(Model.deezerSearchUrl(MediaService.artist, MediaService.title), body => {
+            var id = Model.parseDeezerSearch(body);
+            if (id === "")
+                return root._settleBpm(serial, key, 0);
+            root._curl(Model.deezerTrackUrl(id), trackBody => root._settleBpm(serial, key, Model.parseDeezerBpm(trackBody)));
+        });
+    }
+
+    function _settleBpm(serial, key, bpm) {
+        var cache = root._bpmCache;
+        cache[key] = bpm;
+        root._bpmCache = cache;
+        if (serial === root._bpmSerial)
+            root.bpm = bpm;
+    }
+
+    // One lookup step at a time; a failed curl reads as an empty body.
+    function _curl(url, onDone) {
+        var proc = bpmProc.createObject(root, { command: ["curl", "-sS", "--fail", "--max-time", "5", url] });
+        proc.done.connect(body => {
+            onDone(body);
+            proc.destroy();
+        });
+        proc.running = true;
+    }
+
+    Component {
+        id: bpmProc
+        Process {
+            signal done(string body)
+            stdout: StdioCollector {
+                id: collector
+            }
+            onExited: exitCode => done(exitCode === 0 ? collector.text : "")
+        }
+    }
+
+    on_TempoRunningChanged: {
+        if (!root._tempoRunning)
+            root._resetLevels();
+    }
 
     // Drawn levels, one 0..1 fill fraction per bar, reset to the all-zero
     // baseline array the instant the process isn't running, so a
@@ -243,17 +311,20 @@ Singleton {
             }
         }
         onRunningChanged: {
-            if (!cavaProc.running) {
-                root._target = Model.baselineLevels();
-                root._targetLeft = Model.baselineLevels();
-                root._targetRight = Model.baselineLevels();
-                root.levels = Model.baselineLevels();
-                root.levelsLeft = Model.baselineLevels();
-                root.levelsRight = Model.baselineLevels();
-                root._agcRef = 0;
-                root._agcAt = 0;
-            }
+            if (!cavaProc.running)
+                root._resetLevels();
         }
+    }
+
+    function _resetLevels() {
+        root._target = Model.baselineLevels();
+        root._targetLeft = Model.baselineLevels();
+        root._targetRight = Model.baselineLevels();
+        root.levels = Model.baselineLevels();
+        root.levelsLeft = Model.baselineLevels();
+        root.levelsRight = Model.baselineLevels();
+        root._agcRef = 0;
+        root._agcAt = 0;
     }
 
     // Carries `levels` toward `_target` every screen frame rather than
@@ -263,8 +334,15 @@ Singleton {
     // already snapped both to the baseline.
     FrameAnimation {
         id: _smoothClock
-        running: cavaProc.running
+        running: root.running
         onTriggered: {
+            if (root._tempoRunning) {
+                MediaService.refreshPosition();
+                var t = MediaService.position;
+                root._target = Model.beatFrame(t, root.bpm, Model.BAR_COUNT, 0);
+                root._targetLeft = Model.beatFrame(t, root.bpm, Model.BAR_COUNT, -1);
+                root._targetRight = Model.beatFrame(t, root.bpm, Model.BAR_COUNT, 1);
+            }
             root.levels = Model.smoothLevels(root.levels, root._target, frameTime);
             root.levelsLeft = Model.smoothLevels(root.levelsLeft, root._targetLeft, frameTime);
             root.levelsRight = Model.smoothLevels(root.levelsRight, root._targetRight, frameTime);
