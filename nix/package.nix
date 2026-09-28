@@ -64,6 +64,8 @@ stdenvNoCC.mkDerivation {
     # procps (ps) and openssh (ssh) back HerdrService's window-to-client walk
     # and its remote poll; herdr itself stays the user's own install, never
     # bundled here, and every caller already guards with `command -v herdr`.
+    # openssh is suffixed for wtype's reason: the user's own ssh wins, and
+    # the rig's --spaces leg shadows it with a shim answering one canned host.
     # qtimageformats: qtbase alone decodes gif/ico/jpeg/png, so a webp (or
     # avif) wallpaper fails Background.qml's Image with "Unsupported image
     # format" while matugen, which decodes the file itself, keeps recolouring.
@@ -89,8 +91,8 @@ stdenvNoCC.mkDerivation {
     # session variable may put the hwaccel back.
     makeWrapper ${lib.getExe' quickshell "qs"} $out/bin/formalshell \
       --add-flags "-p $out/share/formalshell" \
-      --prefix PATH : ${lib.makeBinPath [ brightnessctl wl-clipboard curl grim slurp formalshell-eds matugen qrencode cava ddcutil ttfx wf-recorder tesseract ffmpeg-headless pulseaudio git mpv util-linux procps openssh ]} \
-      --suffix PATH : ${lib.makeBinPath [ wtype tensaku ]} \
+      --prefix PATH : ${lib.makeBinPath [ brightnessctl wl-clipboard curl grim slurp formalshell-eds matugen qrencode cava ddcutil ttfx wf-recorder tesseract ffmpeg-headless pulseaudio git mpv util-linux procps ]} \
+      --suffix PATH : ${lib.makeBinPath [ wtype tensaku openssh ]} \
       --prefix XDG_DATA_DIRS : ${lucide-font}/share \
       --prefix XDG_DATA_DIRS : ${nerd-fonts.symbols-only}/share \
       --prefix NIXPKGS_QT6_QML_IMPORT_PATH : ${qt6.qtpositioning}/lib/qt-6/qml \

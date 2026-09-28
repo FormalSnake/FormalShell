@@ -222,10 +222,13 @@ Cell {
 
     // `workspaces status`: the slots as this cell resolved them, with each
     // icon's agent state and each slot's settled length, which is how the
-    // rig tells the wide slot from the rest without reading pixels.
+    // rig tells the wide slot from the rest without reading pixels. `rect`
+    // is the slot in its bar window's own coordinates, where the rig parks a
+    // real pointer.
     function status() {
         return root.slots.map(function (ws, i) {
             var item = slotRepeater.itemAt(i);
+            var origin = item ? item.mapToItem(null, 0, 0) : Qt.point(0, 0);
             return {
                 id: ws.id,
                 idx: ws.idx,
@@ -236,6 +239,12 @@ Cell {
                 placeholder: ws.placeholder,
                 appsShown: item ? item.showsApps : false,
                 extent: root._extents[i] || 0,
+                rect: {
+                    x: Math.round(origin.x),
+                    y: Math.round(origin.y),
+                    width: item ? Math.round(item.width) : 0,
+                    height: item ? Math.round(item.height) : 0
+                },
                 overflow: ws.overflow,
                 icons: ws.windows.map(function (w) {
                     return {

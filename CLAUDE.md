@@ -341,6 +341,15 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   the bar opens in its own line read off the shell's numbers as the card's
   rect plus a `radiusXl` fillet at either end, and the pixel where the line
   stops and the arc starts.
+- `spaces.sh` `--spaces`: the Spaces cell over windows on two workspaces,
+  each listed with its icon under its own slot in `workspaces status` and
+  the slot on screen wider than a bare one; a real wheel notch over the
+  cell moving focus there and back; `workspaces peek 2` and a real pointer
+  parked on that slot both opening its preview with two boxes, and the
+  pointer leaving closing it; and herdr badges read off shimmed clients
+  (`herdr --remote fakehost` answered by an `ssh` shim, a local `herdr`
+  answering `working`), agreeing in `debug dump`, `workspaces status` and
+  the frame, where the blocked `!` is red and gone once herdr says idle.
 - `spectrum.sh` `--spectrum`: the media panel's own spectrum band, a cava
   child owned by `panelWants` alone with no `visualizer` cell anywhere in
   bar.layout, pgrep proving it appears on open and dies on close.
