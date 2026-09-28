@@ -578,6 +578,12 @@ behavior on hosts where a real owner exists.
   `nix/package.nix`, not companion binaries: nothing here is built from
   source we maintain, and every one of them has an honest fallback or
   unavailable state when it isn't installed.
+- **Everything ships in the flake** (owner, 2026-09-28): FormalShell is
+  meant to install on any Hyprland system with first-party Nix support.
+  Every CLI the shell uses is packaged here (nixpkgs or `nix/*.nix`) and on
+  the wrapper's PATH, and every system piece it needs (a daemon, a D-Bus
+  policy, a firewall port, avahi) is a `services.formalshell.*` option in
+  `nix/nixos-module.nix`. Never tell a user to install something by hand.
 - **ttfx is a spec addendum, not a conflict.** Spec §10 says the
   screensaver renders "TTE-style rain/decrypt/matrix drawn in QML with the
   shell's mono font and palette — no spawned terminal windows". The
