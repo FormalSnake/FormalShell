@@ -121,39 +121,33 @@ in
 
       users.groups.ancs4linux = { };
 
-      # D-Bus policy and unit shape copied from ancs4linux's own autorun/ dir
-      # (pzmarzly/ancs4linux @ b658546, autorun/ancs4linux-{observer,advertising}.xml):
-      # root owns each bus name outright, the ancs4linux group gets send/receive.
-      environment.etc."dbus-1/system.d/ancs4linux-observer.conf".text = ''
-        <!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-BUS Bus Configuration 1.0//EN"
-         "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
-        <busconfig>
-          <policy user="root">
-            <allow own="ancs4linux.Observer"/>
-            <allow send_destination="ancs4linux.Observer"/>
-            <allow receive_sender="ancs4linux.Observer"/>
-          </policy>
-          <policy group="ancs4linux">
-            <allow send_destination="ancs4linux.Observer"/>
-            <allow receive_sender="ancs4linux.Observer"/>
-          </policy>
-        </busconfig>
-      '';
-      environment.etc."dbus-1/system.d/ancs4linux-advertising.conf".text = ''
-        <!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-BUS Bus Configuration 1.0//EN"
-         "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
-        <busconfig>
-          <policy user="root">
-            <allow own="ancs4linux.Advertising"/>
-            <allow send_destination="ancs4linux.Advertising"/>
-            <allow receive_sender="ancs4linux.Advertising"/>
-          </policy>
-          <policy group="ancs4linux">
-            <allow send_destination="ancs4linux.Advertising"/>
-            <allow receive_sender="ancs4linux.Advertising"/>
-          </policy>
-        </busconfig>
-      '';
+      # D-Bus policy copied from ancs4linux's own autorun/ dir (pzmarzly/ancs4linux
+      # @ b658546, autorun/ancs4linux-{observer,advertising}.xml): root owns each
+      # bus name outright, the ancs4linux group gets send/receive. It goes in
+      # through services.dbus.packages because NixOS links /etc/dbus-1 whole
+      # from the store, so environment.etc cannot add a file under it.
+      services.dbus.packages = [
+        (pkgs.writeTextDir "share/dbus-1/system.d/ancs4linux.conf" ''
+          <!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-BUS Bus Configuration 1.0//EN"
+           "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+          <busconfig>
+            <policy user="root">
+              <allow own="ancs4linux.Observer"/>
+              <allow send_destination="ancs4linux.Observer"/>
+              <allow receive_sender="ancs4linux.Observer"/>
+              <allow own="ancs4linux.Advertising"/>
+              <allow send_destination="ancs4linux.Advertising"/>
+              <allow receive_sender="ancs4linux.Advertising"/>
+            </policy>
+            <policy group="ancs4linux">
+              <allow send_destination="ancs4linux.Observer"/>
+              <allow receive_sender="ancs4linux.Observer"/>
+              <allow send_destination="ancs4linux.Advertising"/>
+              <allow receive_sender="ancs4linux.Advertising"/>
+            </policy>
+          </busconfig>
+        '')
+      ];
 
       # Type=dbus units, same as upstream: systemd waits for the BusName to
       # appear on the system bus before treating the unit as started, which is
