@@ -225,7 +225,7 @@ Panel {
 
     PanelHero {
         id: deviceHero
-        visible: root._connected
+        visible: root._connected && !root._pairing
         width: parent.width
         title: IphoneService.deviceName !== "" ? IphoneService.deviceName : "iPhone"
         meta: "Connected"
@@ -243,10 +243,11 @@ Panel {
 
     PanelHero {
         id: pairHero
-        visible: root._noPhone
+        visible: root._noPhone || root._pairing
         width: parent.width
-        title: "No phone paired"
-        meta: root._pairing ? "Advertising for pairing" : "Not paired"
+        title: root._connected && IphoneService.deviceName !== "" ? "Pairing with " + IphoneService.deviceName : "No phone paired"
+        meta: IphoneService.pairingCode !== "" ? "Check this matches the code on your iPhone"
+            : root._pairing ? "Advertising for pairing" : "Not paired"
         readout: IphoneService.pairingCode
         readoutSize: "displayLarge"
 

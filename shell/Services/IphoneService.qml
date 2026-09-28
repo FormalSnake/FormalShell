@@ -80,6 +80,14 @@ Singleton {
     property bool advertising: false
     property string lastError: ""
 
+    // ancs4linux renames the whole adapter to the pairing name and keeps it
+    // discoverable until DisableAdvertising, so the session is ended here:
+    // once the phone is paired, or when BlueZ's default DiscoverableTimeout
+    // (180s) has already hidden the classic side anyway.
+    property string _hostname: ""
+    property string _advertisingHci: ""
+    readonly property bool _pairDone: root.advertising && root.device !== null && root.device.paired
+
     property var _arrivals: []
     property double _now: Date.now()
     readonly property bool inFocus: IphoneModel.inFocus(root._arrivals, root._now, root._focusWindow)
@@ -166,13 +174,44 @@ Singleton {
         root.unread = 0;
     }
 
+    // A second EnableAdvertising on an advertising adapter tears the advert
+    // down before raising it again, which drops it off the phone's list.
     function pair() {
         if (!root.installed)
             return false;
+        if (root.advertising || pairProc.running)
+            return true;
         root.lastError = "";
-        pairProc.command = [root._bridge, "pair", "--name", "FormalShell"];
+        root.pairingCode = "";
+        pairProc.command = [root._bridge, "pair", "--name", root._hostname !== "" ? root._hostname : "FormalShell"];
         pairProc.running = true;
         return true;
+    }
+
+    // ancs4linux's agent confirms the code on its own, so a paired device is
+    // the only signal the phone side accepted. Trusted, or BlueZ asks the
+    // agent to authorize every profile on reconnect and ancs4linux's rejects.
+    function _finishPairing() {
+        if (!root.device.trusted)
+            root.device.trusted = true;
+        root._endPairing();
+    }
+
+    function _endPairing() {
+        pairTimer.stop();
+        if (root._advertisingHci !== "") {
+            unadvertiseProc.command = ["busctl", "call", "--system", "ancs4linux.Advertising", "/",
+                "ancs4linux.Advertising", "DisableAdvertising", "s", root._advertisingHci];
+            unadvertiseProc.running = true;
+        }
+        root._advertisingHci = "";
+        root.advertising = false;
+        root.pairingCode = "";
+    }
+
+    on_PairDoneChanged: {
+        if (root._pairDone)
+            root._finishPairing();
     }
 
     // One AMS transport command (play/pause/toggle/next/prev/volup/voldown).
@@ -205,8 +244,6 @@ Singleton {
             root.connected = event.connected;
             root.deviceName = event.deviceName;
             root._bridgeBattery = event.battery;
-            if (event.connected)
-                root.advertising = false;
             if (event.observer)
                 root.lastError = "";
             break;
@@ -221,7 +258,9 @@ Singleton {
             root.pairingCode = event.code;
             break;
         case "advertising":
+            root._advertisingHci = event.hci;
             root.advertising = true;
+            pairTimer.restart();
             break;
         case "error":
             root.lastError = event.message;
@@ -422,6 +461,24 @@ Singleton {
         }
     }
 
+    Process {
+        id: unadvertiseProc
+    }
+
+    Timer {
+        id: pairTimer
+        interval: 180000
+        onTriggered: root._endPairing()
+    }
+
+    Process {
+        id: hostnameProc
+        command: ["hostname"]
+        stdout: StdioCollector {
+            onStreamFinished: root._hostname = text.trim()
+        }
+    }
+
     // --- the bridge ------------------------------------------------------------------
 
     readonly property int _baseBackoffMs: 2000
@@ -483,7 +540,10 @@ Singleton {
 
     onEnabledChanged: root._applyEnabled()
     onConnectedChanged: root._applyAms()
-    Component.onCompleted: root._applyEnabled()
+    Component.onCompleted: {
+        hostnameProc.running = true;
+        root._applyEnabled();
+    }
 
     // --- Apple Media Service (M75 Task 4) ---------------------------------
 
