@@ -1,6 +1,6 @@
 { lib, stdenvNoCC, makeWrapper, quickshell, brightnessctl, wl-clipboard, curl, grim, slurp, wtype, qt6, formalshell-eds
 , matugen, qrencode, cava, ddcutil, tensaku, ttfx, lucide-font, nerd-fonts
-, wf-recorder, tesseract, ffmpeg-headless, pulseaudio, git, mpv, util-linux, coreutils, systemd }:
+, wf-recorder, tesseract, ffmpeg-headless, pulseaudio, git, mpv, util-linux, coreutils, systemd, procps, openssh }:
 stdenvNoCC.mkDerivation {
   pname = "formalshell";
   version = "0.1.0-dev";
@@ -61,6 +61,9 @@ stdenvNoCC.mkDerivation {
     # long-lived child it owned running, and PR_SET_PDEATHSIG is what closes
     # that. Unlike the optional CLIs above this one has no fallback state,
     # which is why it is wired here rather than guarded with `command -v`.
+    # procps (ps) and openssh (ssh) back HerdrService's window-to-client walk
+    # and its remote poll; herdr itself stays the user's own install, never
+    # bundled here, and every caller already guards with `command -v herdr`.
     # qtimageformats: qtbase alone decodes gif/ico/jpeg/png, so a webp (or
     # avif) wallpaper fails Background.qml's Image with "Unsupported image
     # format" while matugen, which decodes the file itself, keeps recolouring.
@@ -86,7 +89,7 @@ stdenvNoCC.mkDerivation {
     # session variable may put the hwaccel back.
     makeWrapper ${lib.getExe' quickshell "qs"} $out/bin/formalshell \
       --add-flags "-p $out/share/formalshell" \
-      --prefix PATH : ${lib.makeBinPath [ brightnessctl wl-clipboard curl grim slurp formalshell-eds matugen qrencode cava ddcutil ttfx wf-recorder tesseract ffmpeg-headless pulseaudio git mpv util-linux ]} \
+      --prefix PATH : ${lib.makeBinPath [ brightnessctl wl-clipboard curl grim slurp formalshell-eds matugen qrencode cava ddcutil ttfx wf-recorder tesseract ffmpeg-headless pulseaudio git mpv util-linux procps openssh ]} \
       --suffix PATH : ${lib.makeBinPath [ wtype tensaku ]} \
       --prefix XDG_DATA_DIRS : ${lucide-font}/share \
       --prefix XDG_DATA_DIRS : ${nerd-fonts.symbols-only}/share \

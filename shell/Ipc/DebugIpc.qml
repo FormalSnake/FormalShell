@@ -66,6 +66,10 @@ IpcHandler {
                 available: BrightnessService.available,
                 percent: BrightnessService.percent
             },
+            herdr: {
+                stateByWindow: HerdrService.stateByWindow,
+                stateByKey: HerdrService.stateByKey
+            },
             bar: root._bars(),
             join: root._join(),
             // The chrome numbers a leg would otherwise have to restate: the
