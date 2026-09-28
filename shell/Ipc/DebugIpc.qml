@@ -66,6 +66,13 @@ IpcHandler {
                 available: BrightnessService.available,
                 percent: BrightnessService.percent
             },
+            location: {
+                available: LocationService.available,
+                source: LocationService.source,
+                latitude: LocationService.latitude,
+                longitude: LocationService.longitude,
+                placeName: LocationService.placeName
+            },
             lyrics: {
                 latency: LyricsService.latency,
                 offsetAuto: LyricsService.offsetAuto,

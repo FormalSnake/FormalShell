@@ -103,6 +103,13 @@ in
       services.geoclue2 = lib.mkIf cfg.geoclue.enable {
         enable = lib.mkDefault true;
         enableDemoAgent = lib.mkDefault true;
+        # LocationService's PositionSource asks under this desktop id. A
+        # system client skips the agent, whose prompt has no one to answer
+        # it once the shell owns the notification server.
+        appConfig.formalshell = {
+          isAllowed = true;
+          isSystem = true;
+        };
       };
 
       networking.networkmanager.enable = lib.mkIf cfg.networkmanager.enable (lib.mkDefault true);

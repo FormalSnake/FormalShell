@@ -1,7 +1,7 @@
 { lib, stdenvNoCC, makeWrapper, quickshell, brightnessctl, wl-clipboard, curl, grim, slurp, wtype, qt6, formalshell-eds
 , matugen, qrencode, cava, ddcutil, tensaku, ttfx, clipssh, lucide-font, nerd-fonts
 , wf-recorder, tesseract, ffmpeg-headless, pulseaudio, pipewire, git, mpv, util-linux, coreutils, systemd, procps, openssh, xdg-utils
-, iphone-bridge, uxplay, localsend-cli }:
+, iphone-bridge, uxplay, localsend-cli, networkmanager }:
 stdenvNoCC.mkDerivation {
   pname = "formalshell";
   version = "0.1.0-dev";
@@ -104,7 +104,7 @@ stdenvNoCC.mkDerivation {
     makeWrapper ${lib.getExe' quickshell "qs"} $out/bin/formalshell \
       --add-flags "-p $out/share/formalshell" \
       --prefix PATH : ${lib.makeBinPath [ brightnessctl wl-clipboard curl grim slurp formalshell-eds matugen qrencode cava ddcutil ttfx wf-recorder tesseract ffmpeg-headless pulseaudio git mpv util-linux procps xdg-utils ]} \
-      --suffix PATH : ${lib.makeBinPath [ wtype tensaku openssh clipssh pipewire uxplay localsend-cli iphone-bridge ]} \
+      --suffix PATH : ${lib.makeBinPath [ wtype tensaku openssh clipssh pipewire uxplay localsend-cli iphone-bridge systemd networkmanager ]} \
       --prefix XDG_DATA_DIRS : ${lucide-font}/share \
       --prefix XDG_DATA_DIRS : ${nerd-fonts.symbols-only}/share \
       --prefix NIXPKGS_QT6_QML_IMPORT_PATH : ${qt6.qtpositioning}/lib/qt-6/qml \

@@ -32,7 +32,7 @@ Panel {
     id: root
 
     panelIcon: root.hasCurrent ? Openmeteo.iconForCode(root.currentCode, root._isDay) : "cloud"
-    panelTitle: "Weather"
+    panelTitle: LocationService.placeName !== "" ? LocationService.placeName : "Weather"
     panelWidth: Theme.space.popupWidthDefault
 
     // Flipped true by WeatherWidget's Component.onCompleted, mirroring
