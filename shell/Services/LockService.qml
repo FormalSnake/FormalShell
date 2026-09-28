@@ -1,5 +1,6 @@
 pragma Singleton
 import Quickshell
+import Quickshell.Io
 import QtQuick
 import qs.Core
 import qs.Compositor
@@ -25,6 +26,31 @@ Singleton {
     readonly property var command: Lock.argv(Config.get("lock.command", []))
     readonly property bool external: root.command.length > 0
 
+    // null until the lookup below answers, so a lock fired in the first
+    // moments after start still takes the configured locker.
+    property var _missing: null
+
+    onCommandChanged: root._lookUp()
+    Component.onCompleted: root._lookUp()
+
+    function _lookUp() {
+        root._missing = null;
+        if (!root.external)
+            return;
+        lookup.running = false;
+        lookup.command = ["sh", "-c", 'command -v "$1" >/dev/null 2>&1', "sh", root.command[0]];
+        lookup.running = true;
+    }
+
+    Process {
+        id: lookup
+        onExited: exitCode => {
+            root._missing = exitCode !== 0;
+            if (root._missing)
+                console.warn("LockService: lock.command", root.command[0], "is not on PATH, the built-in lock is used instead");
+        }
+    }
+
     // A function, not a property: WlSessionLock::setLocked() only emits
     // lockStateChanged() on its unlock path (verified against
     // session_lock.cpp, see Lock.qml's own lock() comment), so a binding on
@@ -42,7 +68,8 @@ Singleton {
     function lock() {
         return Lock.lock(root.command,
             function (argv) { CompositorService.spawn(argv); },
-            function () { return root._raise(); });
+            function () { return root._raise(); },
+            root._missing);
     }
 
     function _raise() {

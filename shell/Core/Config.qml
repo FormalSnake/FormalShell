@@ -65,7 +65,8 @@ import QtQuick
 // it never starts, M7 Task 4), lock.command (array of strings, default [],
 // an external locker LockService spawns instead of raising the built-in
 // surface: ["hyprlock"], ["loginctl", "lock-session"]; empty keeps the
-// built-in one, M45) and lock.dither (bool, default theme.dither, the retro
+// built-in one, and a first word not on PATH falls back to it, M45) and
+// lock.dither (bool, default theme.dither, the retro
 // dither pass over the lock backdrop; off means the plain wallpaper
 // draws, M45). caffeinate.onStartup (bool, default false, starts the
 // session with IdleService.caffeinated on; read once at load, like the

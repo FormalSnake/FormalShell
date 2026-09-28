@@ -29,9 +29,13 @@ function isExternal(value) {
 
 // Routes one lock request. `spawn(argv)` and `raise()` are the two sides;
 // exactly one of them is called. Returns the caller's reply string.
-function lock(command, spawn, raise) {
+//
+// `missing` is true once a lookup found no such binary. The compositor's exec
+// never reports back, so spawning it would leave the session unlocked with
+// nothing said; the built-in surface locks instead.
+function lock(command, spawn, raise, missing) {
     var resolved = argv(command);
-    if (resolved.length === 0)
+    if (resolved.length === 0 || missing === true)
         return raise();
     spawn(resolved);
     return "ok";

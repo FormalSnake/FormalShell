@@ -46,6 +46,18 @@ TestCase {
         compare(spawned.length, 0);
     }
 
+    function test_a_missing_locker_raises_the_surface_instead() {
+        compare(Lock.lock(["hyprlock"], _spawn, _raise, true), "ok");
+        compare(raised, 1);
+        compare(spawned.length, 0);
+    }
+
+    function test_an_unanswered_lookup_still_spawns_the_locker() {
+        compare(Lock.lock(["hyprlock"], _spawn, _raise, null), "ok");
+        compare(spawned.length, 1);
+        compare(raised, 0);
+    }
+
     function test_the_surface_reply_is_passed_straight_back() {
         compare(Lock.lock([], _spawn, function () { return "error: lock not ready"; }),
                 "error: lock not ready");

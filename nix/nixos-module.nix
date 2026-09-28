@@ -17,7 +17,11 @@
 #     profile picker.
 #   - pipewire: the backend Quickshell.Services.Pipewire talks to —
 #     AudioService.qml (bar cell, audio panel, volume OSD).
-# All five are genuine FormalShell prerequisites, not test-rig artifacts —
+#   - polkit: PolkitService.qml registers the shell as the session's
+#     authentication agent, which needs polkitd to register with. The
+#     setuid pkexec wrapper is its own opt-in on current nixpkgs; without it
+#     pkexec refuses to run ("pkexec must be setuid root").
+# All six are genuine FormalShell prerequisites, not test-rig artifacts —
 # nix/testvm.nix's *other* hand-added bits (the null-audio-sink virtual
 # node, wtype/grim/mpv, getty autologin, …) stay in the VM config because
 # they only exist to give the smoke rig something to screenshot, not
@@ -55,6 +59,7 @@ in
     upower.enable = lib.mkEnableOption "UPower, backing the battery bar cell and power panel" // { default = true; };
     powerProfiles.enable = lib.mkEnableOption "power-profiles-daemon, backing the power panel's profile picker" // { default = true; };
     pipewire.enable = lib.mkEnableOption "pipewire, backing the audio bar cell, audio panel, and volume OSD" // { default = true; };
+    polkit.enable = lib.mkEnableOption "polkit and the pkexec wrapper, backing the shell's authentication agent" // { default = true; };
   };
 
   config = lib.mkIf cfg.enable {
@@ -70,5 +75,9 @@ in
     services.upower.enable = lib.mkIf cfg.upower.enable (lib.mkDefault true);
     services.power-profiles-daemon.enable = lib.mkIf cfg.powerProfiles.enable (lib.mkDefault true);
     services.pipewire.enable = lib.mkIf cfg.pipewire.enable (lib.mkDefault true);
+    security.polkit = lib.mkIf cfg.polkit.enable {
+      enable = lib.mkDefault true;
+      enablePkexecWrapper = lib.mkDefault true;
+    };
   };
 }
