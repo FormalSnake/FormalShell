@@ -357,6 +357,16 @@ import QtQuick
 // ids, default []): apps never mirrored at all. iphone.copyCodes (bool,
 // default false): a one-time code in a phone notification goes to the
 // clipboard. Resolved by shell/Iphone/model.js.
+// localsend.receive (bool, default false): LocalsendService's own
+// `localsend-cli recv` child, listening unattended on 53317 (nixos-module's
+// localsend.enable opens the port). Off by default: it saves every incoming
+// file with no confirmation prompt, the CLI's own behaviour, not something
+// to turn on without meaning to. localsend.alias (string, default "" ->
+// this machine's hostname): the device name it advertises and the one a
+// peer picks it by. localsend.dir (string, default "" -> $HOME/Downloads):
+// where received files land; the receive directory is also what the
+// arrival toast's Show in Folder action opens. Neither key is read while
+// receive is off. Resolved by shell/Services/LocalsendService.qml.
 Singleton {
     id: root
 

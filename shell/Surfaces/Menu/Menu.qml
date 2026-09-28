@@ -445,18 +445,25 @@ PanelWindow {
         // M38 Task 8: the "gpu.mode" fragment, present only when
         // supergfxctl is -- see gpuModeEntry's own header.
         var gpuMode = Providers.gpuModeEntry(Quickshell.shellDir, GpuService.gfxMode);
-        // Live-while-open, unlike wallpaper/buttons above: its action
-        // depends on the current newest clipboard entry, so
-        // liveSources.clipboardItems rides this same binding for
-        // _defaultObj (and _tree below) to recompute whenever it changes,
-        // but only while that dependency is actually subscribed (see
-        // LiveMenuSources' own comment). Merged as a plain overwrite of the
-        // "share.clipboard" key default-menu.jsonc already declares, so the
-        // row keeps that declared position instead of jumping to the end.
-        var shareClipboard = Providers.shareClipboardEntry(liveSources.clipboardItems);
+        // Live-while-open, unlike wallpaper/buttons above: liveSources.
+        // clipboardItems rides this same binding for _defaultObj (and
+        // _tree below) to recompute whenever it changes, but only while
+        // that dependency is actually subscribed (see LiveMenuSources' own
+        // comment); LocalsendService.installed/peers do the same for a
+        // rescan or the CLI's own presence flipping mid-session. The whole
+        // "share.*" subtree is dynamic (sharePeerEntries' own header), so
+        // this entirely replaces whatever's under "share" in default-menu
+        // rather than overwriting one placeholder key.
+        var share = Providers.sharePeerEntries(LocalsendService.installed, LocalsendService.peers,
+            liveSources.clipboardItems, {
+                enabled: Core.Config.get("localsend.receive", false) === true,
+                receiving: LocalsendService.receiving,
+                alias: LocalsendService.alias,
+                dir: LocalsendService.dir
+            });
         var merged = {};
         Object.keys(parsed).forEach(function (k) { merged[k] = parsed[k]; });
-        Object.keys(shareClipboard).forEach(function (k) { merged[k] = shareClipboard[k]; });
+        Object.keys(share).forEach(function (k) { merged[k] = share[k]; });
         Object.keys(capture).forEach(function (k) { merged[k] = capture[k]; });
         Object.keys(gpuMode).forEach(function (k) { merged[k] = gpuMode[k]; });
         Object.keys(buttons).forEach(function (k) { merged[k] = buttons[k]; });
@@ -1221,6 +1228,10 @@ PanelWindow {
         // they are never cached, resolving from conditions.stateSnapshot on
         // every evaluation.
         ClipsshService.reloadAliases();
+        // Cached: a scan inside the freshness window is trusted rather than
+        // re-run, so reopening the launcher moments after summon doesn't
+        // pay another 4s wait (LocalsendService.scan's own header).
+        LocalsendService.scan(false);
         keybindsProvider.refresh();
         // A ":"-led route is a search prefill, not a node id: `menu summon
         // ':nix hello'` opens root with the trigger query already typed
@@ -1808,6 +1819,17 @@ PanelWindow {
         // the shell could not watch (see ClipsshService's header).
         if (name.indexOf("clipssh.send:") === 0) {
             ClipsshService.send(name.slice("clipssh.send:".length));
+            return;
+        }
+        // "localsend.send:<peer index>:<clipboard entry id>"
+        // (sharePeerEntries's own rows): the peer index is into the same
+        // LocalsendService.peers array the tree was built from, the entry
+        // id into ClipboardService.items, both resolved inside the
+        // service (LocalsendService.sendClipboardEntryAt's own header).
+        if (name.indexOf("localsend.send:") === 0) {
+            var lsRest = name.slice("localsend.send:".length);
+            var lsSep = lsRest.indexOf(":");
+            LocalsendService.sendClipboardEntryAt(Number(lsRest.slice(0, lsSep)), lsRest.slice(lsSep + 1));
             return;
         }
         // The clipboard route's own rows. In-process because this menu runs

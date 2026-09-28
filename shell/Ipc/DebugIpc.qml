@@ -87,6 +87,13 @@ IpcHandler {
                 inFocus: IphoneService.inFocus,
                 recentCount: IphoneService.recent.length
             },
+            localsend: {
+                installed: LocalsendService.installed,
+                receiving: LocalsendService.receiving,
+                peerCount: LocalsendService.peers.length,
+                scanning: LocalsendService.scanning,
+                busy: LocalsendService.busy
+            },
             bar: root._bars(),
             join: root._join(),
             // The chrome numbers a leg would otherwise have to restate: the

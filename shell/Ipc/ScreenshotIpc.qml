@@ -236,6 +236,22 @@ Scope {
         return "ok";
     }
 
+    // M75 Task 5: a SAVED toast's own "Send to Phone" action, present only
+    // while a peer is actually known (LocalsendService.resolveSendTarget's
+    // own header: the paired iPhone's device name among the last scan when
+    // connected, else the last scan's first peer). Empty array rather than
+    // a disabled action, since notify()'s actions are exactly what renders.
+    function _sendToPhoneActions(path) {
+        var target = LocalsendService.resolveSendTarget();
+        if (target === "")
+            return [];
+        return [{
+            key: "sendToPhone",
+            label: "Send to Phone",
+            invoke: () => LocalsendService.send(target, [path])
+        }];
+    }
+
     function _cancel(reason) {
         if (!root._busy)
             return "error: no capture in flight";
@@ -415,7 +431,7 @@ Scope {
                 // `save` is the deliberately quiet mode: straight to disk, no
                 // editor offered, matching upstream's own `save` processing.
                 if (root._processing === "save") {
-                    NotificationService.notify("SCREENSHOT SAVED", saved, 1, [], saved);
+                    NotificationService.notify("SCREENSHOT SAVED", saved, 1, root._sendToPhoneActions(saved), saved);
                     return;
                 }
                 // Key "default" rather than "edit": Toasts.qml and Center.qml
@@ -426,7 +442,7 @@ Scope {
                     key: "default",
                     label: "EDIT",
                     invoke: () => root.edit(saved)
-                }], saved);
+                }].concat(root._sendToPhoneActions(saved)), saved);
                 return;
             }
             root._lastError = captureStderr.text.trim() || ("capture exited " + exitCode);

@@ -269,8 +269,11 @@ function _shq(value) {
     return "'" + String(value).replace(/'/g, "'\\''") + "'";
 }
 
-// The SHARE route's launch command. omarchy's own bin/omarchy-menu-share
-// invokes `localsend --headless send <path>`, but that binary name and
+// The SHARE route's fallback launch command (M75 Task 5: localsend-cli on
+// PATH takes over the route entirely, sharePeerEntries below; this only
+// still runs when no localsend-cli is there and the GUI is the one thing
+// left). omarchy's own bin/omarchy-menu-share invokes `localsend --headless
+// send <path>`, but that binary name and
 // those flags don't exist on the package this shell actually ships
 // (nixpkgs' pkgs.localsend installs a binary named `localsend_app`, and
 // upstream's own arg parser, LoadSelectionFromArgsAction in
@@ -298,37 +301,102 @@ function shareEntryCommand(entry) {
     return "tmp=$(mktemp --suffix=.txt) && printf '%s' " + _shq(entry.text) + " > \"$tmp\" && exec localsend_app \"$tmp\"";
 }
 
-// Root "share.clipboard" leaf (Task 1), injected the same way
-// captureEntries() is: its action depends on the CURRENT newest clipboard
-// entry (items[0]), which static jsonc can't express. default-menu.jsonc
-// still declares a "share.clipboard" placeholder so this fragment's key
-// overwrites an already-present entry rather than appending a new one,
-// JS object property order only tracks first insertion, so overwriting
-// keeps the row's position (right after "share", ahead of "share.history"/
-// "share.receive") instead of the row jumping to the end of the level.
+// The SHARE route's whole dynamic subtree (M75 Task 5), the same
+// entirely-dynamic shape gpuModeEntry uses for "gpu.mode.*": nothing under
+// "share" is declared in default-menu.jsonc, because every bit of it
+// depends on live state a static jsonc node can't express (whether
+// localsend-cli is even on PATH, its last scan, the clipboard). Object key
+// order is first-insertion order, so "share.receive" is built first to keep
+// it ahead of "share.send"'s peer rows regardless of how many there are.
+//
+// `installed` (LocalsendService.installed) decides which of two shapes this
+// builds. CLI present: "Send" lists the last scan's peers, each a folder
+// carrying a "Clipboard" row (the newest TEXT entry, M17's shareEntryCommand
+// replaced by an in-process dispatch, LocalsendService has to watch the
+// CLI's own exit and stderr the way ClipsshService already does) and one
+// row per clipboard-history image; "Receive" is a status line, never an
+// action, localsend.receive is a settings.json key the service only reads.
+// CLI absent, GUI (`localsend_app`) the only thing left: the M17 shape,
+// unchanged -- one newest-entry Send action, Receive launches the GUI, the
+// full history picker still lives at "share.history" via the "shareHistory"
+// provider Menu.qml already registers.
+function sharePeerEntries(installed, peers, clipboardItems, receive) {
+    if (!installed)
+        return _shareFallbackEntries(clipboardItems);
+
+    var out = { "share.receive": _shareReceiveStatus(receive) };
+    var list = peers || [];
+    out["share.send"] = { label: "Send" };
+    if (list.length === 0) {
+        out["share.send.empty"] = { label: "No devices found", icon: "", kind: "note", dim: true };
+        return out;
+    }
+    var textEntry = (clipboardItems || []).find(function (e) { return e.kind !== "image"; });
+    var imageEntries = (clipboardItems || []).filter(function (e) { return e.kind === "image"; });
+    list.forEach(function (peer, i) {
+        var peerId = "share.send." + i;
+        out[peerId] = { label: peer.name };
+        if (!textEntry && imageEntries.length === 0) {
+            out[peerId + ".empty"] = { label: "Nothing to share", icon: "", kind: "note", dim: true };
+            return;
+        }
+        if (textEntry) {
+            out[peerId + ".clipboard"] = {
+                label: "Clipboard",
+                icon: "",
+                action: "@ipc:localsend.send:" + i + ":" + textEntry.id
+            };
+        }
+        imageEntries.forEach(function (entry, j) {
+            out[peerId + ".image." + j] = {
+                label: "Image",
+                icon: "",
+                desc: _capturedAtLabel(entry.capturedAt),
+                thumbSource: entry.path,
+                action: "@ipc:localsend.send:" + i + ":" + entry.id
+            };
+        });
+    });
+    return out;
+}
+
+// `receive` is { enabled, receiving, alias, dir }, LocalsendService's own
+// state: a plain status line, never an activatable row -- there is nothing
+// for Enter to flip, `localsend.receive` is read-only from here. `dim` is
+// always false on purpose: Menu.qml's own live-row filter drops a "note"
+// row outright once it sits alongside an actual actionable row (the
+// dim-note shape means "this level has nothing in it", not "here's a
+// muted status line"), so state is read off `desc` instead of dimming it.
+function _shareReceiveStatus(receive) {
+    var r = receive || { enabled: false, receiving: false, alias: "", dir: "" };
+    return {
+        label: "Receive",
+        icon: "",
+        kind: "note",
+        dim: false,
+        desc: !r.enabled
+            ? "Off (set localsend.receive: true)"
+            : (r.receiving ? "Listening as " + r.alias + ", saving to " + r.dir : "Starting…")
+    };
+}
+
+// M17's shape, byte-identical bar the id rename ("share.clipboard" ->
+// "share.send", so the fallback and the CLI path share one Send/Receive
+// vocabulary at the root even though only one of the two ever renders).
 // Empty history is the one shape model.js's inferKind can't produce on its
 // own (no action/target/provider to key off), which is what the explicit
 // `kind`/`dim` override exists for: an honest NOTHING TO SHARE row, the
 // same non-activatable shape as nix's own unavailable-state rows.
-function shareClipboardEntry(items) {
-    var newest = (items || [])[0];
-    if (!newest) {
-        return {
-            "share.clipboard": {
-                label: "Nothing to share",
-                icon: "",
-                kind: "note",
-                dim: true
-            }
-        };
-    }
-    return {
-        "share.clipboard": {
-            label: "Clipboard",
-            icon: "\u{F014D}", // nf-md-clipboard_text, same glyph the root clipboard node uses
-            action: shareEntryCommand(newest)
-        }
+function _shareFallbackEntries(clipboardItems) {
+    var newest = (clipboardItems || [])[0];
+    var out = {
+        "share.receive": { label: "Receive", action: "localsend_app" },
+        "share.history": { label: "Pick From History", provider: "shareHistory" }
     };
+    out["share.send"] = newest
+        ? { label: "Send", icon: "\u{F014D}", action: shareEntryCommand(newest) } // nf-md-clipboard_text
+        : { label: "Nothing to share", icon: "", kind: "note", dim: true };
+    return out;
 }
 
 // First non-blank line only, capped at maxLen chars, clipboard captures can

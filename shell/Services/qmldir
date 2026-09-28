@@ -16,6 +16,7 @@ singleton IdleService IdleService.qml
 singleton IphoneService IphoneService.qml
 InstanceLock InstanceLock.qml
 singleton KeyboardLayoutService KeyboardLayoutService.qml
+singleton LocalsendService LocalsendService.qml
 singleton LockService LockService.qml
 singleton LocationService LocationService.qml
 singleton LyricsService LyricsService.qml

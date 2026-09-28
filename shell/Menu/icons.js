@@ -38,7 +38,7 @@ var ROUTE_ICONS = {
     "reminder.clear": "x",
 
     "share": "share-2",
-    "share.clipboard": "clipboard",
+    "share.send": "send",
     "share.history": "history",
     "share.receive": "download",
 

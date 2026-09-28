@@ -73,6 +73,16 @@ in
       omarchy-iphone metadata patch), the D-Bus policy letting the
       "ancs4linux" group talk to them, that group itself, and Bluetooth
     '';
+
+    # M75 Task 5/6: LocalsendService's receiver binds 0.0.0.0:53317 (both
+    # TCP for the HTTP(S) transfer and UDP for the peer-discovery multicast
+    # announcement, internal/localsend/scan.go's 224.0.0.167:53317 group),
+    # on every interface so it/tailscale0 both work -- not folded into the
+    # top-level `enable` toggle since the port only needs opening when
+    # localsend.receive is actually turned on.
+    localsend.enable = lib.mkEnableOption ''
+      the firewall opening for LocalsendService's receiver: TCP+UDP 53317
+    '';
   };
 
   config = lib.mkMerge [
@@ -161,6 +171,11 @@ in
           ExecStart = "${ancs4linux}/bin/ancs4linux-advertising";
         };
       };
+    })
+
+    (lib.mkIf cfg.localsend.enable {
+      networking.firewall.allowedTCPPorts = [ 53317 ];
+      networking.firewall.allowedUDPPorts = [ 53317 ];
     })
   ];
 }

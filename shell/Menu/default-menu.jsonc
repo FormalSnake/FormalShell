@@ -129,19 +129,21 @@
     "reminder.show": { "label": "Show Reminders", "action": "@ipc:reminder.show" },
     "reminder.clear": { "label": "Clear Reminders", "action": "@ipc:reminder.clear" },
 
-    // SHARE (M17 Task 1): present only when `localsend_app` resolves on
-    // PATH (nixpkgs' pkgs.localsend package, verified against its actual
-    // installed bin/, not the bare `localsend` name omarchy assumes), the
-    // standard `command -v` presence guard (see TailscalePanel.qml's own
-    // "NO TAILSCALE" check for the same idiom). "share.clipboard" is a
-    // placeholder: providers.js's shareClipboardEntry() overwrites it at
-    // tree-build time with the live newest-clipboard-entry action (or the
-    // honest NOTHING TO SHARE row), keeping its declared position ahead of
-    // "share.history"/"share.receive" below.
-    "share": { "label": "Share", "when": "command -v localsend_app >/dev/null 2>&1" },
-    "share.clipboard": { "label": "Clipboard" },
-    "share.history": { "label": "Pick From History", "provider": "shareHistory" },
-    "share.receive": { "label": "Receive", "action": "localsend_app" },
+    // SHARE (M17 Task 1, restructured M75 Task 5 for localsend-cli):
+    // present when either localsend-cli (the primary path, peers under
+    // Send, LocalsendService) or the GUI's `localsend_app` (the fallback,
+    // nixpkgs' pkgs.localsend, verified against its actual installed bin/,
+    // not the bare `localsend` name omarchy assumes) resolves on PATH --
+    // the standard `command -v` presence guard (see TailscalePanel.qml's
+    // own "NO TAILSCALE" check for the same idiom). Every child is
+    // dynamic, none declared here: providers.js's sharePeerEntries()
+    // builds the whole subtree at tree-build time, picking the CLI or the
+    // GUI shape off LocalsendService.installed (Menu.qml), the same
+    // fully-dynamic pattern gpuModeEntry uses for "gpu.mode.*".
+    "share": {
+        "label": "Share",
+        "when": "command -v localsend-cli >/dev/null 2>&1 || command -v localsend_app >/dev/null 2>&1"
+    },
 
     // CLIPSSH: present only when `clipssh` resolves on PATH (the same
     // presence-gate idiom as "share" above), each row is a saved alias
