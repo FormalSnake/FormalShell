@@ -4,6 +4,7 @@ import Quickshell
 import Quickshell.Io
 import qs.Core as Core
 import "../Core/proc.js" as Proc
+import "../Theme/sun.js" as Sun
 
 // Opt-in night light (M16 Task 6, laptop feature parity with omarchy, that
 // shell drives Hyprland's own hyprsunset IPC directly; this compositor has
@@ -36,12 +37,66 @@ import "../Core/proc.js" as Proc
 // before any Wayland setup (setup_signals() runs first in wlrun()), so the
 // fork/exec-to-handler race this would otherwise need to guard against is
 // not a real concern here.
+//
+// `nightlight.schedule` ("sun", the default, or "off") turns it on at
+// sunset and off at sunrise, off the same sun.js pair and LocationService
+// `theme.mode: "auto"` reads (20:00 to 06:00 with no location). Only a
+// crossing acts, so an enable() or disable() in between holds until the
+// next sunrise or sunset.
 Singleton {
     id: root
 
     readonly property bool active: proc.running
     property string lastError: ""
     readonly property int temp: Core.Config.get("nightlight.temp", 4000)
+
+    readonly property bool scheduled: Core.Config.loaded && Core.Config.get("nightlight.schedule", "sun") === "sun"
+    property var scheduleTimes: null
+    // What the schedule says right now, null while it is off.
+    property var scheduleDark: null
+
+    // Guarded like ThemeEngine's scheduleLocation: touching LocationService
+    // with no location in settings.json D-Bus-activates geoclue2.
+    readonly property var _location: {
+        if (!root.scheduled || !LocationService.available)
+            return null;
+        var latitude = LocationService.latitude;
+        var longitude = LocationService.longitude;
+        return isFinite(latitude) && isFinite(longitude) ? { latitude: latitude, longitude: longitude } : null;
+    }
+
+    function _tick() {
+        if (!root.scheduled) {
+            root.scheduleTimes = null;
+            root.scheduleDark = null;
+            return;
+        }
+        var now = new Date();
+        var location = root._location;
+        root.scheduleTimes = location ? Sun.sunTimes(now, location.latitude, location.longitude) : null;
+        var dark = Sun.isDark(now, root.scheduleTimes);
+        if (dark === root.scheduleDark)
+            return;
+        root.scheduleDark = dark;
+        if (dark)
+            root.enable();
+        else
+            root.disable();
+    }
+
+    on_LocationChanged: root._tick()
+
+    Timer {
+        interval: 60000
+        repeat: true
+        triggeredOnStart: true
+        running: root.scheduled
+        onTriggered: root._tick()
+        onRunningChanged: {
+            if (!running)
+                root._tick();
+        }
+    }
 
     property bool _sawExit: false
     property bool _intentionalStop: false
@@ -50,7 +105,20 @@ Singleton {
     property string _phase: ""
     property string _lastStderrLine: ""
 
+    property int _retries: 0
+
+    Timer {
+        id: retryTimer
+        interval: 3000
+        onTriggered: root._start()
+    }
+
     function enable() {
+        root._retries = 0;
+        root._start();
+    }
+
+    function _start() {
         if (proc.running)
             return;
         root.lastError = "";
@@ -60,6 +128,7 @@ Singleton {
     }
 
     function disable() {
+        retryTimer.stop();
         if (!proc.running)
             return;
         root._intentionalStop = true;
@@ -139,10 +208,18 @@ Singleton {
             }
         }
 
+        // wlsunset exits 0 on a Wayland protocol error, so any exit nobody
+        // asked for is an error. One at session start ("Gamma ramps size
+        // mismatch" while the output is still settling) is retried.
         onExited: exitCode => {
             root._sawExit = true;
-            if (exitCode !== 0 && !root._intentionalStop)
-                root.lastError = root._lastStderrLine || ("wlsunset exited " + exitCode);
+            if (root._intentionalStop)
+                return;
+            root.lastError = root._lastStderrLine || ("wlsunset exited " + exitCode);
+            if (root._retries < 5) {
+                root._retries++;
+                retryTimer.restart();
+            }
         }
     }
 }

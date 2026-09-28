@@ -29,6 +29,9 @@ IpcHandler {
         return JSON.stringify({
             active: NightLightService.active,
             temp: NightLightService.temp,
+            schedule: NightLightService.scheduled ? "sun" : "off",
+            scheduleDark: NightLightService.scheduleDark,
+            source: NightLightService.scheduleTimes ? "location" : "fallback",
             lastError: NightLightService.lastError
         });
     }

@@ -183,7 +183,10 @@ import QtQuick
 // NightLightService starts wlsunset automatically at shell boot) and
 // nightlight.temp (number, default 4000, the fixed low colour
 // temperature it pins via wlsunset's own SIGUSR1 runtime control, M16
-// Task 6).
+// Task 6). nightlight.schedule (string, default "sun", or "off"): on at
+// sunset and off at sunrise, the same sun times and 20:00 to 06:00
+// fallback theme.mode "auto" uses; a manual toggle holds until the next
+// crossing.
 // tailscale.intervalMs (number, default 60000, TailscalePanel's
 // `tailscale status --json` poll cadence in ms; the widget itself is
 // opt-in via bar.layout, M16 Task 8).

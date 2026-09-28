@@ -1,7 +1,12 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
 # --nightlight enables the wlsunset-backed night light over IPC, photographs
-# the warmed session, then disables it and proves the flip back.
+# the warmed session, then disables it and proves the flip back. First, the
+# schedule: the base fixture pins `nightlight.schedule` off so no other
+# leg's frame is warmed by the hour it runs at, and this leg turns it back
+# on over a location where it is solar midnight now (the equator, at the
+# longitude the run's own UTC hour puts there), which has to switch the
+# night light on with no IPC call at all.
 #
 # Honest bifurcation is the contract: active:true means the session
 # implements wlr-gamma-control-unstable-v1 and wlsunset held; active:false
@@ -14,6 +19,13 @@ leg_nightlight_order=210
 nightlight_active_path="$shot_dir/nightlight-active.png"
 nightlight_status1_path="$shot_dir/nightlight-status-1.json"
 nightlight_status2_path="$shot_dir/nightlight-status-2.json"
+nightlight_status0_path="$shot_dir/nightlight-status-0.json"
+
+leg_nightlight_fixture() {
+  local longitude
+  longitude=$(( ( -15 * 10#$(date -u +%H) + 540 ) % 360 - 180 ))
+  settings_fragment ', "nightlight": {"schedule": "sun"}, "location": {"latitude": 0, "longitude": '"$longitude"'}'
+}
 
 # This leg's own clock. A gamma shift repaints every pixel on the output, so
 # under --wallpaper it starts after that leg's last frame rather than warming
@@ -25,7 +37,7 @@ nightlight_t0() {
 leg_nightlight_timing() {
   local t0
   t0=$(nightlight_t0)
-  leg_timing $((t0 + 13)) $((t0 + 42))
+  leg_timing $((t0 + 25)) $((t0 + 54))
 }
 
 leg_nightlight_drive() {
@@ -34,6 +46,12 @@ leg_nightlight_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep $t0
+SECONDS=0
+while [ "\$SECONDS" -lt 12 ]; do
+  "$qs_bin" ipc -p "$shell_path" call nightlight status > "$nightlight_status0_path" 2>&1
+  grep -qF '"active":true' "$nightlight_status0_path" && break
+  sleep 1
+done
 "$qs_bin" ipc -p "$shell_path" call nightlight enable > /dev/null 2>&1
 SECONDS=0
 while [ "\$SECONDS" -lt 8 ]; do
@@ -54,6 +72,18 @@ EOF
 }
 
 leg_nightlight_assert() {
+  cat "$nightlight_status0_path"; echo
+  if ! grep -qF '"schedule":"sun"' "$nightlight_status0_path" \
+      || ! grep -qF '"scheduleDark":true' "$nightlight_status0_path" \
+      || ! grep -qF '"source":"location"' "$nightlight_status0_path"; then
+    fail "the schedule did not read solar midnight off the fixture location: $(cat "$nightlight_status0_path")"
+  fi
+  if ! grep -qF '"active":true' "$nightlight_status0_path" && grep -qF '"lastError":""' "$nightlight_status0_path"; then
+    fail "the schedule said dark but nothing started wlsunset: $(cat "$nightlight_status0_path")"
+  fi
+  if grep -qF '"active":true' "$nightlight_status1_path" && ! grep -qF '"active":true' "$nightlight_status0_path"; then
+    fail "wlsunset holds on a manual enable but the schedule's never came up: $(cat "$nightlight_status0_path")"
+  fi
   [ -f "$nightlight_active_path" ] || fail "no nightlight-active screenshot produced"
   echo "SMOKE_NIGHTLIGHT_ACTIVE $nightlight_active_path"
   if [ ! -s "$nightlight_status1_path" ]; then

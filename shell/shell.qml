@@ -65,8 +65,10 @@ ShellRoot {
     // through, so it is built here as well. LocalsendService is the same
     // shape: nothing reads it until the launcher's share route or a capture
     // toast does, but it owns the receiver child that has to be listening
-    // from boot whenever localsend.receive is on.
-    readonly property var _startupServices: [ClipboardService, ThumbnailService, IphoneService, LocalsendService]
+    // from boot whenever localsend.receive is on. NightLightService owns
+    // `nightlight.startOn` and the sunset schedule, neither of which ran
+    // until something first read the toggle.
+    readonly property var _startupServices: [ClipboardService, ThumbnailService, IphoneService, LocalsendService, NightLightService]
 
     // The startup reveal gate (M52, DESIGN.md §1 Motion): the three boot
     // surfaces below stay unmapped until the shell knows what it is drawing.

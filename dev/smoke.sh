@@ -438,7 +438,7 @@ for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
 done
 
 cat > "$iso_home/.config/formalshell/settings.json" <<EOF
-{"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}, "location": {"latitude": 52.52, "longitude": 13.41}$settings_extra}
+{"calendar": {"icsDir": "$iso_home/.local/share/formalshell/calendar"}, "location": {"latitude": 52.52, "longitude": 13.41}, "nightlight": {"schedule": "off"}$settings_extra}
 EOF
 
 # The calendar leg's own events, dated at run time so the fixture never goes
