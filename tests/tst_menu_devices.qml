@@ -127,4 +127,63 @@ TestCase {
         compare(rows.length, 1);
         compare(rows[0].label, "Real");
     }
+
+    function _bt(devices, extra) {
+        return Providers.bluetoothRows(Object.assign({ available: true, enabled: true, devices: devices }, extra || {}));
+    }
+
+    function _dev(address, name, extra) {
+        return Object.assign({ address: address, name: name, connected: false, paired: true, bonded: false,
+            trusted: false, activity: "", battery: "" }, extra || {});
+    }
+
+    function test_bluetooth_no_adapter_is_one_note() {
+        var rows = Providers.bluetoothRows({ available: false, enabled: false, devices: [] });
+        compare(rows.length, 1);
+        compare(rows[0].id, "bluetooth.unavailable");
+        compare(rows[0].kind, "note");
+    }
+
+    function test_bluetooth_off_offers_to_turn_on() {
+        var rows = Providers.bluetoothRows({ available: true, enabled: false, devices: [] });
+        compare(rows[0].id, "bluetooth.off");
+        compare(rows[0].action, "@ipc:bluetooth.power:on");
+    }
+
+    function test_bluetooth_no_paired_devices_is_one_note() {
+        var rows = _bt([_dev("AA:01", "Seen", { paired: false })]);
+        compare(rows.length, 1);
+        compare(rows[0].id, "bluetooth.empty");
+        compare(rows[0].kind, "note");
+    }
+
+    function test_bluetooth_order_connected_then_paired() {
+        var rows = _bt([_dev("AA:01", "Alpha"), _dev("AA:02", "Zed", { connected: true }), _dev("AA:03", "Beta")]);
+        compare(rows.map(function (r) { return r.label; }), ["Zed", "Alpha", "Beta"]);
+    }
+
+    function test_bluetooth_unnamed_devices_are_dropped() {
+        var rows = _bt([_dev("AA:01", ""), _dev("AA:02", "AA:BB:CC:DD:EE:FF"), _dev("AA:03", "Real")]);
+        compare(rows.length, 1);
+        compare(rows[0].label, "Real");
+    }
+
+    function test_bluetooth_desc_prefers_activity_then_battery() {
+        var rows = _bt([
+            _dev("AA:01", "A", { connected: true, activity: "Connecting…", battery: "80%" }),
+            _dev("AA:02", "B", { connected: true, battery: "50%" }),
+            _dev("AA:03", "C", { connected: true })
+        ]);
+        compare(_descOf(rows, "A"), "Connecting…");
+        compare(_descOf(rows, "B"), "50%");
+        compare(_descOf(rows, "C"), "");
+    }
+
+    function test_bluetooth_row_ids_action_and_tick() {
+        var rows = _bt([_dev("aa:bb", "Buds")]);
+        compare(rows[0].id, "bluetooth.dev.aa%3Abb");
+        compare(rows[0].action, "@ipc:bluetooth.toggle:aa:bb");
+        compare(rows[0].checked, "@state:bluetooth.connected=AA:BB");
+        compare(rows[0].keepOpen, true);
+    }
 }

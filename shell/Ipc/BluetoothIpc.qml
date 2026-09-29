@@ -1,5 +1,6 @@
 import Quickshell.Bluetooth
 import Quickshell.Io
+import "../Bluetooth/model.js" as BluetoothModel
 
 // `qs ipc call bluetooth toggle|power <on|off>|status|trust <address>|untrust
 // <address>`, spec addendum (M16 Task 10, the `panel`/`nightlight`
@@ -55,13 +56,7 @@ IpcHandler {
         var adapter = Bluetooth.defaultAdapter;
         if (!adapter)
             return null;
-        var devices = adapter.devices.values;
-        var wanted = String(address || "").toUpperCase();
-        for (var i = 0; i < devices.length; i++) {
-            if (String(devices[i].address || "").toUpperCase() === wanted)
-                return devices[i];
-        }
-        return null;
+        return BluetoothModel.findByAddress(adapter.devices.values, address);
     }
 
     function _writeTrust(address, want) {

@@ -114,4 +114,27 @@ TestCase {
         compare(BluetoothModel.batteryText(dev("A", { connected: false, batteryAvailable: true, battery: 0.9 })), "");
         compare(BluetoothModel.batteryText(null), "");
     }
+
+    function _seq(items) {
+        var o = { length: items.length };
+        for (var i = 0; i < items.length; i++) o[i] = items[i];
+        return o;
+    }
+
+    function test_findByAddress_is_case_insensitive_over_a_sequence() {
+        var devices = _seq([{ address: "AA:BB:CC:DD:EE:01", name: "one" }, { address: "AA:BB:CC:DD:EE:02", name: "two" }]);
+        compare(BluetoothModel.findByAddress(devices, "aa:bb:cc:dd:ee:02").name, "two");
+        compare(BluetoothModel.findByAddress(devices, "AA:BB:CC:DD:EE:09"), null);
+        compare(BluetoothModel.findByAddress(null, "AA"), null);
+    }
+
+    function test_connectedAddresses_uppercases_and_sorts() {
+        var devices = _seq([
+            { address: "cc:00", connected: true },
+            { address: "AA:00", connected: false },
+            { address: "bb:00", connected: true }
+        ]);
+        compare(BluetoothModel.connectedAddresses(devices), ["BB:00", "CC:00"]);
+        compare(BluetoothModel.connectedAddresses(undefined), []);
+    }
 }

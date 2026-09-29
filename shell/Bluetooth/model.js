@@ -97,3 +97,29 @@ function batteryText(device) {
     if (!device || !device.connected || !device.batteryAvailable) return "";
     return Math.round(device.battery * 100) + "%";
 }
+
+function _toList(devices) {
+    var list = [];
+    if (devices && devices.length !== undefined)
+        for (var i = 0; i < devices.length; i++) list.push(devices[i]);
+    return list;
+}
+
+// BlueZ hands addresses out uppercase; callers may paste one back in any case.
+function findByAddress(devices, address) {
+    var wanted = String(address || "").toUpperCase();
+    var list = _toList(devices);
+    for (var i = 0; i < list.length; i++) {
+        if (String(list[i].address || "").toUpperCase() === wanted)
+            return list[i];
+    }
+    return null;
+}
+
+function connectedAddresses(devices) {
+    return _toList(devices).filter(function (d) {
+        return d && d.connected === true;
+    }).map(function (d) {
+        return String(d.address || "").toUpperCase();
+    }).sort();
+}

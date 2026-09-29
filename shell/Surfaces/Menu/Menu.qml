@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import Quickshell.Bluetooth
 import Quickshell.Wayland
 import Quickshell.Services.SystemTray
 import qs.Core as Core
@@ -16,6 +17,7 @@ import "../../Menu/providers.js" as Providers
 import "../../Menu/calc.js" as Calc
 import "../../Menu/frecency.js" as Frecency
 import "../../Menu/toggles.js" as Toggles
+import "../../Bluetooth/model.js" as BluetoothModel
 import "../../Menu/actions.js" as Actions
 import "../../Menu/appviews.js" as AppViews
 import "../../Menu/appgrid.js" as AppGrid
@@ -515,7 +517,8 @@ PanelWindow {
         // (_activateRowAlternate below), not a route mirroring the
         // whole app list a second time.
         gpu: function () { return Providers.gpuProvider(GpuService.cards); },
-        wifi: function () { return Providers.wifiRows(liveSources.wifi); }
+        wifi: function () { return Providers.wifiRows(liveSources.wifi); },
+        bluetooth: function () { return Providers.bluetoothRows(liveSources.bluetooth); }
     })
 
     // The scanner runs while the wifi level is the one on screen.
@@ -1905,6 +1908,23 @@ PanelWindow {
                     var wifiPrompt = WifiService.requestSecret(wifiSsid);
                     // Deferred for the same reason reminder.set is below.
                     Qt.callLater(function () { root.openInput(wifiPrompt.prompt, wifiPrompt.token, true); });
+                }
+            }
+            return;
+        }
+        // "bluetooth.<verb>[:<address>]" (providers.js's bluetoothRows).
+        if (name.indexOf("bluetooth.") === 0) {
+            var btSep = name.indexOf(":");
+            var btVerb = btSep > 0 ? name.slice("bluetooth.".length, btSep) : name.slice("bluetooth.".length);
+            var btValue = btSep > 0 ? name.slice(btSep + 1) : "";
+            var btAdapter = Bluetooth.defaultAdapter;
+            if (btVerb === "power" && btValue === "on" && btAdapter) {
+                btAdapter.enabled = true;
+            } else if (btVerb === "toggle" && btAdapter) {
+                var btDev = BluetoothModel.findByAddress(btAdapter.devices.values, btValue);
+                if (btDev) {
+                    if (btDev.connected) btDev.disconnect();
+                    else btDev.connect();
                 }
             }
             return;

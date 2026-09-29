@@ -2,6 +2,7 @@
 .import "frecency.js" as Frecency
 .import "../Clipboard/emoji.js" as Emoji
 .import "../Network/model.js" as NetworkModel
+.import "../Bluetooth/model.js" as BluetoothModel
 
 // Provider functions populate a "provider" kind node's children at
 // tree-build time (Model.buildTree() infers "provider" from an entry's
@@ -1311,6 +1312,49 @@ function wifiRows(state) {
             row.alternateLabel = "Forget";
         }
         return row;
+    });
+}
+
+// Bluetooth route (M76 Task 3). `state` is LiveMenuSources.bluetooth. Paired
+// devices only: pairing is watching a scan fill in, which stays the panel's
+// job. Rows are reachable from a root query.
+function bluetoothRows(state) {
+    var st = state || {};
+    if (st.available !== true)
+        return [_noteRow("bluetooth.unavailable", "No Bluetooth adapter")];
+    if (st.enabled !== true) {
+        return [{
+            id: "bluetooth.off",
+            parentId: null,
+            label: "Turn Bluetooth on",
+            icon: "",
+            title: "",
+            aliases: [],
+            kind: "action",
+            action: "@ipc:bluetooth.power:on",
+            keepOpen: true,
+            childIds: []
+        }];
+    }
+    var b = BluetoothModel.buckets(st.devices || [], false);
+    var devices = b.connected.concat(b.known);
+    if (devices.length === 0)
+        return [_noteRow("bluetooth.empty", "No paired devices")];
+    return devices.map(function (d) {
+        return {
+            id: "bluetooth.dev." + idPart(d.address),
+            parentId: null,
+            label: d.name || d.deviceName,
+            icon: "",
+            title: "",
+            desc: d.activity || d.battery || "",
+            aliases: [],
+            kind: "action",
+            action: "@ipc:bluetooth.toggle:" + d.address,
+            checked: "@state:bluetooth.connected=" + String(d.address).toUpperCase(),
+            keepOpen: true,
+            childIds: []
+        };
     });
 }
 

@@ -78,6 +78,10 @@
     // panel row under Panels, which opens the card. Nearby unknown networks
     // are searchable only from inside the level.
     "wifi": { "label": "Wi-Fi", "provider": "wifi", "aliases": ["wifi", "wlan", "network", "ssid", "internet"], "prompt": "Search networks" },
+    // "bluetooth" registers a provider fn (providers.js's bluetoothRows): the
+    // paired devices, connected ones ticked, Enter connecting or
+    // disconnecting. No pairing here, that stays the "Bluetooth" panel's job.
+    "bluetooth": { "label": "Bluetooth Devices", "provider": "bluetooth", "aliases": ["bt", "headphones", "earbuds", "speaker"], "prompt": "Search devices" },
 
     // "panels" registers a provider fn too: one row per name in
     // shell.qml's PanelIpc registry, each spawning "panel open <name>"

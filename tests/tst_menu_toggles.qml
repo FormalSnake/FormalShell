@@ -2,6 +2,7 @@ import QtQuick
 import QtTest
 import "../shell/Menu/model.js" as Model
 import "../shell/Menu/toggles.js" as Toggles
+import "../shell/Bluetooth/model.js" as BluetoothModel
 
 // Covers shell/Menu/toggles.js plus two drift guards that read shipped files
 // rather than fixtures: the "@state:" allow-list only means anything if
@@ -154,6 +155,11 @@ TestCase {
         compare(Toggles.resolveState("@state:bluetooth.connected=", snap), false);
         compare(Toggles.isKnownListPath("bluetooth.connected"), true);
         compare(Toggles.isKnownListPath("lights.effect"), false);
+    }
+
+    function test_list_condition_matches_a_lowercase_address_via_connectedAddresses() {
+        var snap = Toggles.snapshot({ "bluetooth.connected": BluetoothModel.connectedAddresses([{ address: "aa:bb", connected: true }]) });
+        compare(Toggles.resolveState("@state:bluetooth.connected=AA:BB", snap), true);
     }
 
     function test_list_snapshot_normalizes() {

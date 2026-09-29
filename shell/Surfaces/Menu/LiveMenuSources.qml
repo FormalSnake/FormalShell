@@ -1,6 +1,8 @@
 import QtQuick
 import qs.Compositor
+import Quickshell.Bluetooth
 import qs.Services
+import "../../Bluetooth/model.js" as BluetoothModel
 import "../../Network/model.js" as NetworkModel
 
 // The clipboard and window lists behind the menu's clipboard/apps
@@ -16,9 +18,51 @@ Item {
     // Bound to Menu.qml's isOpen.
     property bool active: false
 
+    // The bluetooth route's rows are built from this, only while active and
+    // only republished when the fields the rows read change.
+    readonly property var bluetooth: root.active ? root._btLive : root._btIdle
+    readonly property var _btIdle: ({ available: false, enabled: false, devices: [] })
+    property var _btLive: root._btIdle
+    property string _btKey: ""
+
     // Addresses of the connected Bluetooth devices, the source of the
     // `bluetooth.connected` tick list.
-    readonly property var bluetoothConnected: []
+    readonly property var bluetoothConnected: root.bluetooth.connected || []
+
+    readonly property var _btNow: root.active ? root._btState() : null
+
+    function _btState() {
+        var adapter = Bluetooth.defaultAdapter;
+        if (!adapter)
+            return { available: false, enabled: false, devices: [], connected: [] };
+        var values = adapter.devices.values;
+        var devices = [];
+        for (var i = 0; i < values.length; i++) {
+            var d = values[i];
+            devices.push({
+                address: d.address,
+                name: d.name,
+                deviceName: d.deviceName,
+                connected: d.connected,
+                paired: d.paired,
+                bonded: d.bonded,
+                trusted: d.trusted,
+                activity: BluetoothModel.activityText(d),
+                battery: BluetoothModel.batteryText(d)
+            });
+        }
+        return { available: true, enabled: adapter.enabled, devices: devices, connected: BluetoothModel.connectedAddresses(values) };
+    }
+
+    on_BtNowChanged: {
+        if (!root._btNow)
+            return;
+        var key = JSON.stringify(root._btNow);
+        if (key === root._btKey)
+            return;
+        root._btKey = key;
+        root._btLive = root._btNow;
+    }
 
     // The wifi route's rows are built from this, only while active and only
     // republished when something other than signal strength changed. Signal
