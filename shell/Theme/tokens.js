@@ -85,10 +85,11 @@ var SPACING_BASE = {
 // split with its preview, an app view): the card never sizes to its rows, so
 // typing scrolls results inside a card that stays put, and only a level
 // change can morph it. `LAUNCHER` below caps each at a share of the output.
-// `switcherIcon` and `switcherInset` are Gala's two window-switcher numbers
-// (`lib/Widgets/WindowSwitcherIcon.vala`, M60 T6): the app icon a cell
-// carries, and the room the card keeps off every edge of the output, which
-// is also what caps how many cells fit across before the row wraps.
+// `switcherThumb` is the fixed height of a switcher cell's window thumbnail,
+// whose width follows the window's aspect. `switcherInset` is Gala's number
+// (`lib/Widgets/WindowSwitcherIcon.vala`, M60 T6): the room the card keeps off
+// every edge of the output, which is also what caps how many cells fit across
+// before the row wraps.
 // `keycapHeight` is shadcn's `<Kbd>` (`h-5`): one key's cap, and its
 // narrowest width too, so a one-letter cap is square.
 var SEMANTIC_SPACING_BASE = {
@@ -101,7 +102,7 @@ var SEMANTIC_SPACING_BASE = {
     popupWidthMenuSplit: 840, popupWidthMenuApp: 900,
     popupWidthBubble: 332,
     popupHeightMenu: 520, popupHeightMenuSplit: 560, popupHeightMenuApp: 720,
-    switcherIcon: 64, switcherInset: 64,
+    switcherThumb: 128, switcherInset: 64,
     keycapHeight: 20
 };
 

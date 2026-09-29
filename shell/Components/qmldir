@@ -48,3 +48,4 @@ Tooltip Tooltip.qml
 TooltipGroup TooltipGroup.qml
 Track Track.qml
 WheelScroll WheelScroll.qml
+WindowThumb WindowThumb.qml

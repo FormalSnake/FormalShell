@@ -9,9 +9,11 @@ import "../../Components/cursor.js" as Cursor
 import "switcher.js" as Model
 
 // The Alt+Tab switcher, after Gala's (`src/Widgets/WindowSwitcher/
-// WindowSwitcher.vala`, `WindowSwitcherIcon.vala`; M60 T6): the windows as
-// app tiles on one card in the middle of the output, the selected one under
-// the cursor with its title and app name below the row. Keyboard only, and
+// WindowSwitcher.vala`, `WindowSwitcherIcon.vala`; M60 T6) for its behaviour
+// and Windows' for its cells (owner, 2026-09-29): the windows as live
+// thumbnails on one card in the middle of the output, each with its app icon
+// and title under it and the selected one under the cursor. The thumbnails
+// are Components/WindowThumb.qml, captured only while the card is up. Keyboard only, and
 // summoned over IPC alone
 // (`switcher next|prev|commit|cancel|state`), so the compositor's own bind
 // drives it: Alt+Tab advances, the release of the modifier commits, and
@@ -200,64 +202,56 @@ PanelWindow {
     readonly property real _outputWidth: root._screen ? root._screen.width : 0
     readonly property real _outputHeight: root._screen ? root._screen.height : 0
 
-    // One tile: Gala's 64px icon inside `WRAPPER_PADDING` on all four sides
-    // (`WindowSwitcherIcon.vala`'s `reload_icon`), which is the same 12 the
-    // card keeps around its own contents, so both are `panelPadding` here.
-    // The tiles touch: Gala lays them out in a `Clutter.FlowLayout` and sets
-    // no spacing on it, and the 24px the two paddings leave between two
-    // icons is the gap the row reads as. The --switcher leg reads these
-    // tiles at fixed pixels, so the extent is a contract with it.
-    readonly property real _cellExtent: Theme.space.switcherIcon
-        + Theme.space.panelPadding * 2
-    readonly property real _cellGap: 0
-
-    // How many cells fit across before the row wraps: the output minus the
-    // room the card keeps off both edges and its own padding.
-    readonly property int _maxColumns: Math.max(1, Math.floor(
-        (root._outputWidth - (Theme.space.switcherInset + Theme.space.panelPadding) * 2
-            + root._cellGap) / (root._cellExtent + root._cellGap)))
-    readonly property int _columns: Model.columns(root.count, root._maxColumns)
-    readonly property int _rows: Model.rows(root.count, root._columns)
-
-    readonly property real _gridWidth: root._columns > 0
-        ? root._columns * root._cellExtent + (root._columns - 1) * root._cellGap
-        : root._cellExtent
-    readonly property real _gridHeight: root._rows > 0
-        ? root._rows * root._cellExtent + (root._rows - 1) * root._cellGap
-        : root._cellExtent
-
-    // The caption band under the tiles: the title on one line of `heading`
-    // and the app's name on one of `caption`, measured at the live fonts
-    // whatever is in them, so a two-word title and a path leave the card the
-    // same height.
-    readonly property real _captionHeight: titleMetric.implicitHeight + Theme.space.rowGap
-        + appMetric.implicitHeight
-
-    // As many rows as the output holds under the same inset; past that the
-    // tiles scroll inside the card with the cursor's row kept in view.
-    readonly property int _maxRows: Math.max(1, Math.floor(
-        (root._outputHeight - Theme.space.switcherInset * 2 - Theme.space.panelPadding * 3
-            - root._captionHeight + root._cellGap) / (root._cellExtent + root._cellGap)))
-    readonly property real _viewHeight: Math.min(root._gridHeight,
-        root._maxRows * root._cellExtent + (root._maxRows - 1) * root._cellGap)
-
-    // As wide as its widest row, which is Gala's own `get_preferred_width`,
-    // over a floor that keeps one window's title legible. A card that
-    // resized as the cursor walked would move the tiles under it (the
-    // plan-wide no-jitter contract), so nothing here reads the title's
-    // length: the caption elides into whatever the tiles leave it. The tiles
-    // are centred in the card and the card on the output, so the floor never
-    // moves a tile.
-    readonly property real _contentWidth: Math.max(root.count > 0 ? root._gridWidth : 0,
-        Theme.space.popupWidthNarrow - Theme.space.panelPadding * 2)
-    readonly property real _cardWidth: root._contentWidth + Theme.space.panelPadding * 2
-    readonly property real _cardHeight: root._viewHeight + Theme.space.panelPadding
+    // One cell: a thumbnail of `switcherThumb` height at its window's own
+    // aspect, its caption under it, `panelPadding` on all four sides (the same
+    // 12 the card keeps around its own contents). The cells touch, so the
+    // padding is the gap the row reads as. The --switcher leg reads the cells
+    // off `switcher state`, so nothing in it hardcodes a pixel.
+    readonly property real _thumbHeight: Theme.space.switcherThumb
+    readonly property real _captionIcon: Theme.space.iconGap * 2
+    readonly property real _captionHeight: Math.max(root._captionIcon, captionMetric.implicitHeight)
+    readonly property real _cellHeight: root._thumbHeight + Theme.space.iconGap
         + root._captionHeight + Theme.space.panelPadding * 2
 
-    // Per tile: the desktop entry, the picture it names, and which of its
-    // app's windows it is. One pass rather than a binding per tile, since
-    // the ordinals need every tile's app at once. AppIconService is the
-    // resolver the launcher's rows take too.
+    // How wide a row may run: the output minus the room the card keeps off
+    // both edges and its own padding.
+    readonly property real _maxRowWidth: Math.max(0,
+        root._outputWidth - (Theme.space.switcherInset + Theme.space.panelPadding) * 2)
+
+    readonly property var _thumbWidths: root.entries.map(function (win) {
+        return Model.thumbWidth(win.rect, root._thumbHeight, root._thumbHeight / 2,
+            Math.max(root._thumbHeight / 2, Math.min(root._thumbHeight * 3,
+                root._maxRowWidth - Theme.space.panelPadding * 2)));
+    })
+    readonly property var _layout: Model.layout(root._thumbWidths.map(function (width) {
+        return width + Theme.space.panelPadding * 2;
+    }), 0, root._maxRowWidth)
+    readonly property var _cells: Model.cells(root._layout, root._cellHeight)
+
+    readonly property real _gridWidth: root.count > 0 ? root._layout.width : 0
+    readonly property real _gridHeight: root._layout.rows.length > 0
+        ? root._layout.rows.length * root._cellHeight : root._cellHeight
+
+    // As many rows as the output holds under the same inset; past that the
+    // cells scroll inside the card with the cursor's row kept in view.
+    readonly property int _maxRows: Math.max(1, Math.floor(
+        (root._outputHeight - Theme.space.switcherInset * 2 - Theme.space.panelPadding * 2)
+            / root._cellHeight))
+    readonly property real _viewHeight: Math.min(root._gridHeight, root._maxRows * root._cellHeight)
+
+    // As wide as its widest row, over a floor that keeps "No windows"
+    // legible. Nothing here reads a title's length: a card that resized as
+    // the cursor walked would move the cells under it (the plan-wide
+    // no-jitter contract), so captions elide into their cell.
+    readonly property real _contentWidth: Math.max(root._gridWidth,
+        Theme.space.popupWidthNarrow - Theme.space.panelPadding * 2)
+    readonly property real _cardWidth: root._contentWidth + Theme.space.panelPadding * 2
+    readonly property real _cardHeight: root._viewHeight + Theme.space.panelPadding * 2
+
+    // Per entry: the picture its desktop entry names, and which of its app's
+    // windows it is. One pass rather than a binding per cell, since the
+    // ordinals need every entry's app at once. AppIconService is the resolver
+    // the launcher's rows take too.
     readonly property var _apps: {
         var out = [];
         for (var i = 0; i < root.entries.length; i++) {
@@ -265,7 +259,6 @@ PanelWindow {
             var entry = AppIconService.entryFor(win);
             out.push({
                 key: entry ? "entry:" + entry.id : (win.appId || win.initialClass || ""),
-                name: entry ? entry.name : (win.appId || win.initialClass || ""),
                 icon: entry ? AppIconService.source(entry.icon) : ""
             });
         }
@@ -275,8 +268,51 @@ PanelWindow {
         return app.key;
     }))
 
-    readonly property string _selectedApp: (root.selected && root.index < root._apps.length)
-        ? root._apps[root.index].name : ""
+    // How many thumbnails hold a captured frame, and how many hold a capture
+    // source at all, for `switcher state`. Read whether or not the card is
+    // open: a closed switcher has to answer zero for both.
+    function capturedCount() {
+        var n = 0;
+        for (var i = 0; i < thumbRepeater.count; i++) {
+            var cell = thumbRepeater.itemAt(i);
+            if (cell && cell.captured)
+                n++;
+        }
+        return n;
+    }
+
+    function capturingCount() {
+        var n = 0;
+        for (var i = 0; i < thumbRepeater.count; i++) {
+            var cell = thumbRepeater.itemAt(i);
+            if (cell && cell.sourced)
+                n++;
+        }
+        return n;
+    }
+
+    // Each cell's box, its thumbnail's and its caption icon's, in output
+    // pixels as drawn now.
+    function cellRects() {
+        var origin = tileView.mapToItem(null, 0, 0);
+        var pad = Theme.space.panelPadding;
+        return root._cells.map(function (cell, i) {
+            var x = origin.x + cell.x;
+            var y = origin.y + cell.y - tileView.contentY;
+            var thumbWidth = cell.width - pad * 2;
+            return {
+                cell: { x: Math.round(x), y: Math.round(y), width: cell.width, height: cell.height },
+                thumb: { x: Math.round(x + pad), y: Math.round(y + pad), width: thumbWidth, height: root._thumbHeight },
+                icon: {
+                    x: Math.round(x + pad),
+                    y: Math.round(y + pad + root._thumbHeight + Theme.space.iconGap
+                        + (root._captionHeight - root._captionIcon) / 2),
+                    width: root._captionIcon,
+                    height: root._captionIcon
+                }
+            };
+        });
+    }
 
     screen: root._screen
     // Held visible through the exit (DESIGN.md §1 "Motion"): the keyboard is
@@ -314,22 +350,14 @@ PanelWindow {
         onTriggered: if (root.isOpen) root._focusPrimed = true
     }
 
-    // Off-screen calibration for `_captionHeight`: one line of each at the
-    // live font, as tall as the lines the caption draws.
-    Item {
+    // Off-screen calibration for `_captionHeight`: one line at the caption's
+    // live font.
+    Text {
+        id: captionMetric
         visible: false
-
-        Text {
-            id: titleMetric
-            text: "Ag"
-            font: titleText.font
-        }
-
-        Text {
-            id: appMetric
-            text: "Ag"
-            font: appText.font
-        }
+        text: "Ag"
+        font.family: Theme.fontFamilySans
+        font.pixelSize: Theme.fontSize.caption
     }
 
     // The pointer's only part in this: a click anywhere cancels. The window
@@ -388,196 +416,169 @@ PanelWindow {
             Math.round((root._outputHeight - root._cardHeight) / 2),
             root._cardWidth, root._cardHeight)
 
-        Column {
+        // The cells, wrapped: as many across as the output holds, each row
+        // centred on the widest. Held to `_viewHeight` and scrolled from the
+        // keyboard alone once the rows outgrow the output.
+        Flickable {
+            id: tileView
+            visible: root.count > 0
             anchors.centerIn: parent
-            spacing: Theme.space.panelPadding
+            width: root._gridWidth
+            height: root._viewHeight
+            contentWidth: root._gridWidth
+            contentHeight: root._gridHeight
+            interactive: false
+            clip: root._gridHeight > root._viewHeight
 
-            // The tiles, wrapped: `_columns` across, the last row short and
-            // centred under the ones above it. Held to `_viewHeight` and
-            // scrolled from the keyboard alone once the rows outgrow the
-            // output.
-            Flickable {
-                id: tileView
-                visible: root.count > 0
-                anchors.horizontalCenter: parent.horizontalCenter
-                width: root._gridWidth
-                height: root._viewHeight
-                contentWidth: root._gridWidth
-                contentHeight: root._gridHeight
-                interactive: false
-                clip: root._gridHeight > root._viewHeight
-
-                Connections {
-                    target: root
-                    function onIndexChanged() {
-                        if (root._columns <= 0)
-                            return;
-                        var row = Math.floor(root.index / root._columns);
-                        tileView.contentY = Cursor.follow(row * (root._cellExtent + root._cellGap),
-                            root._cellExtent, tileView.contentY, tileView.height,
-                            tileView.contentHeight, 0);
-                    }
+            Connections {
+                target: root
+                function onIndexChanged() {
+                    var cell = root._cells[root.index];
+                    if (!cell)
+                        return;
+                    tileView.contentY = Cursor.follow(cell.y, root._cellHeight,
+                        tileView.contentY, tileView.height, tileView.contentHeight, 0);
                 }
+            }
 
-                Column {
-                    width: root._gridWidth
-                    spacing: root._cellGap
+            Repeater {
+                id: thumbRepeater
+                model: root.count
 
-                    Repeater {
-                        model: root._rows
+                delegate: Item {
+                    id: slot
+                    required property int index
 
-                        delegate: Row {
-                            id: cellRow
-                            required property int index
+                    readonly property var _win: root.entries[slot.index]
+                    readonly property var _app: root._apps[slot.index] || ({})
+                    readonly property var _ordinal: root._ordinals[slot.index] || ({ n: 0, of: 1 })
+                    readonly property var _place: root._cells[slot.index] || ({ x: 0, y: 0, width: 0, height: 0 })
+                    readonly property bool _selected: slot.index === root.index
+                    readonly property bool captured: picture.captured
+                    readonly property bool sourced: picture.sourced
 
-                            readonly property int _first: cellRow.index * root._columns
-                            readonly property int _count: Math.min(root._columns,
-                                root.count - cellRow._first)
+                    x: slot._place.x
+                    y: slot._place.y
+                    width: slot._place.width
+                    height: slot._place.height
 
-                            anchors.horizontalCenter: parent ? parent.horizontalCenter : undefined
-                            spacing: root._cellGap
+                    // A ghost `Cell`, as the launcher's tiles are
+                    // (Menu/views/LauncherTile.qml), over the table's own
+                    // `switcher.cell` fill, with the ring on the chosen one.
+                    // Inert, since a click anywhere cancels.
+                    Cell {
+                        anchors.fill: parent
+                        role: "switcher.cell"
+                        ghost: true
+                        selected: slot._selected
+                        cursor: slot._selected
+                    }
 
-                            Repeater {
-                                model: cellRow._count
+                    Item {
+                        id: body
+                        x: Theme.space.panelPadding
+                        y: Theme.space.panelPadding
+                        width: slot.width - Theme.space.panelPadding * 2
+                        height: slot.height - Theme.space.panelPadding * 2
 
-                                delegate: Item {
-                                    id: slot
-                                    required property int index
+                        WindowThumb {
+                            id: picture
+                            width: body.width
+                            height: root._thumbHeight
+                            win: slot._win
+                            iconSource: slot._app.icon || ""
+                            capturing: root.visible
+                            live: root.isOpen
+                            lit: slot._selected
+                            showTitle: false
+                        }
 
-                                    readonly property int _entry: cellRow._first + slot.index
-                                    readonly property var _app: root._apps[slot._entry] || ({})
-                                    readonly property var _ordinal: root._ordinals[slot._entry]
-                                        || ({ n: 0, of: 1 })
-                                    readonly property bool _selected: slot._entry === root.index
+                        // Which of its app's windows this is, on every cell
+                        // of an app with more than one here, so two
+                        // identical captions still say they are two windows.
+                        Cell {
+                            visible: slot._ordinal.of > 1
+                            anchors.right: picture.right
+                            anchors.bottom: picture.bottom
+                            anchors.rightMargin: Theme.space.xs
+                            anchors.bottomMargin: Theme.space.xs
+                            chip: true
+                            active: true
+                            radius: Theme.radiusSm
 
-                                    width: root._cellExtent
-                                    height: root._cellExtent
+                            CellLabel {
+                                text: String(slot._ordinal.n)
+                            }
+                        }
 
-                                    // A ghost `Cell`, as the launcher's tiles are
-                                    // (Menu/views/LauncherTile.qml), over the
-                                    // table's own `switcher.cell` fill, with the
-                                    // ring on the chosen one.
-                                    // Inert, since a click anywhere cancels.
-                                    Cell {
-                                        id: tile
-                                        anchors.fill: parent
-                                        role: "switcher.cell"
-                                        ghost: true
-                                        selected: slot._selected
-                                        cursor: slot._selected
+                        Row {
+                            y: root._thumbHeight + Theme.space.iconGap
+                            width: body.width
+                            height: root._captionHeight
+                            spacing: Theme.space.iconGap
 
-                                        // The picture the entry names, decoded
-                                        // before the card shows: a switcher
-                                        // flashed open for one Alt+Tab would
-                                        // otherwise commit before an
-                                        // asynchronous decode ever painted.
-                                        Picture {
-                                            id: tileIcon
-                                            anchors.centerIn: parent
-                                            visible: (slot._app.icon || "") !== "" && tileIcon.status !== Image.Error
-                                            source: slot._app.icon || ""
-                                            asynchronous: false
-                                            width: Theme.space.switcherIcon
-                                            height: Theme.space.switcherIcon
-                                            sourceSize.width: Theme.space.switcherIcon
-                                                * (root._screen ? root._screen.devicePixelRatio : 1)
-                                            sourceSize.height: Theme.space.switcherIcon
-                                                * (root._screen ? root._screen.devicePixelRatio : 1)
-                                            fillMode: Image.PreserveAspectFit
-                                        }
+                            // Decoded before the card shows: a switcher
+                            // flashed open for one Alt+Tab would otherwise
+                            // commit before an asynchronous decode ever
+                            // painted.
+                            Picture {
+                                id: captionIcon
+                                anchors.verticalCenter: parent.verticalCenter
+                                visible: (slot._app.icon || "") !== "" && captionIcon.status !== Image.Error
+                                source: slot._app.icon || ""
+                                asynchronous: false
+                                width: root._captionIcon
+                                height: root._captionIcon
+                                sourceSize.width: root._captionIcon
+                                    * (root._screen ? root._screen.devicePixelRatio : 1)
+                                sourceSize.height: root._captionIcon
+                                    * (root._screen ? root._screen.devicePixelRatio : 1)
+                                fillMode: Image.PreserveAspectFit
+                            }
 
-                                        // Nothing in the chain answered, or the
-                                        // file it named would not decode: the
-                                        // generic window mark, dim, which says
-                                        // "a window, no icon of its own".
-                                        Icon {
-                                            anchors.centerIn: parent
-                                            visible: !tileIcon.visible
-                                            name: "app-window"
-                                            size: Theme.space.switcherIcon * 0.75
-                                            color: tile.dimForeground
-                                        }
-                                    }
+                            // Nothing in the chain answered, or the file it
+                            // named would not decode: the generic window
+                            // mark, which says "a window, no icon of its
+                            // own".
+                            Icon {
+                                anchors.verticalCenter: parent.verticalCenter
+                                visible: !captionIcon.visible
+                                name: "app-window"
+                                size: root._captionIcon
+                                color: Theme.color.mutedForeground
+                            }
 
-                                    // Which of its app's windows this is, on
-                                    // every tile of an app with more than one
-                                    // here, so two identical icons still say
-                                    // they are two windows.
-                                    Cell {
-                                        visible: slot._ordinal.of > 1
-                                        anchors.right: parent.right
-                                        anchors.bottom: parent.bottom
-                                        anchors.rightMargin: Theme.space.xs
-                                        anchors.bottomMargin: Theme.space.xs
-                                        chip: true
-                                        active: true
-                                        radius: Theme.radiusSm
-
-                                        CellLabel {
-                                            text: String(slot._ordinal.n)
-                                        }
-                                    }
-                                }
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: body.width - root._captionIcon - Theme.space.iconGap
+                                elide: Text.ElideRight
+                                maximumLineCount: 1
+                                textFormat: Text.PlainText
+                                text: slot._win ? slot._win.title : ""
+                                color: slot._selected ? Theme.color.foreground : Theme.color.mutedForeground
+                                font.family: Theme.fontFamilySans
+                                font.pixelSize: Theme.fontSize.caption
+                                font.weight: slot._selected ? Theme.weight.medium : Theme.weight.normal
                             }
                         }
                     }
                 }
             }
+        }
 
-            // Nothing to switch between: one dim cell saying so, rather than
-            // an empty card or an invented window.
-            Box {
-                visible: root.count === 0
-                role: "switcher.cell"
-                state: "rest"
-                width: root._contentWidth
-                height: root._cellExtent
+        // Nothing to switch between: one dim cell saying so, rather than an
+        // empty card or an invented window.
+        Box {
+            visible: root.count === 0
+            anchors.centerIn: parent
+            role: "switcher.cell"
+            state: "rest"
+            width: root._contentWidth
+            height: root._cellHeight
 
-                SectionLabel {
-                    anchors.centerIn: parent
-                    text: "No windows"
-                }
-            }
-
-            // The selected window's title and its app's name under the
-            // tiles, centred, each on one line and elided into the card's own
-            // width. `heading` for the title because Gala pins its caption at
-            // 12 against elementary's `Inter 9` (`Text.vala`'s
-            // `set_system_font_name`), and 12/9 is this ladder's heading
-            // step. The app line is empty rather than repeated when the title
-            // already says it.
-            Column {
-                width: root._contentWidth
-                spacing: Theme.space.rowGap
-
-                Text {
-                    id: titleText
-                    width: parent.width
-                    horizontalAlignment: Text.AlignHCenter
-                    elide: Text.ElideRight
-                    maximumLineCount: 1
-                    textFormat: Text.PlainText
-                    text: root.selectedTitle
-                    color: Theme.color.foreground
-                    font.family: Theme.fontFamilySans
-                    font.pixelSize: Theme.fontSize.heading
-                    font.weight: Theme.weight.medium
-                }
-
-                Text {
-                    id: appText
-                    width: parent.width
-                    height: appMetric.implicitHeight
-                    horizontalAlignment: Text.AlignHCenter
-                    elide: Text.ElideRight
-                    maximumLineCount: 1
-                    textFormat: Text.PlainText
-                    text: root._selectedApp.toLowerCase() === root.selectedTitle.toLowerCase()
-                        ? "" : root._selectedApp
-                    color: Theme.color.mutedForeground
-                    font.family: Theme.fontFamilySans
-                    font.pixelSize: Theme.fontSize.caption
-                }
+            SectionLabel {
+                anchors.centerIn: parent
+                text: "No windows"
             }
         }
     }

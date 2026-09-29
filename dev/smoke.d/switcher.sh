@@ -1,15 +1,15 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
 # --switcher: Gala's Alt+Tab as a keyboard-only surface (M60 T6, the
-# 2026-09-17 spec's Part 2). Three windows in one session, the cursor walked
-# over IPC the way the compositor's bind walks it, and both halves of the
-# claim at every step: what `switcher state` says the cursor is on, and the
-# card as drawn.
+# 2026-09-17 spec's Part 2), with live window thumbnails (owner, 2026-09-29).
+# Three windows in one session, the cursor walked over IPC the way the
+# compositor's bind walks it, and both halves of the claim at every step:
+# what `switcher state` says the cursor is on, and the card as drawn.
 #
 # The three windows are the base run's own fixture window plus two more of
-# the same app id, so all three cells resolve the same 48px icon out of the
-# isolated home's icon theme (#CE5D97, which nothing else in a frame is) and
-# a cell carrying an icon is telling apart from an empty one by colour alone.
+# the same app id, so all three captions resolve the same icon out of the
+# isolated home's icon theme (#CE5D97, which nothing else in a frame is) and a
+# caption carrying an icon is telling apart from an empty one by colour alone.
 #
 # A fourth window sits on workspace 2 and must not be offered (M64): Gala
 # lists the active workspace's windows alone, and offering the rest is what
@@ -18,12 +18,18 @@
 # a run where that fourth window never spawned cannot pass by having nothing
 # to exclude.
 #
-# What the frames are read for, without hardcoding a single colour the
-# palette owns: the icon's pink at all three cell centres (three icon cells,
-# not one card with a gap in it), and the 12px margin the icon leaves inside
-# its cell sampled on each of them. The selected cell takes a quarter-strength
-# `accent` tint, so its margin differs from the other two while theirs match
-# each other, and after one `switcher prev` that difference has moved one cell
+# The thumbnails are ScreencopyViews and live only while the card is open:
+# `switcher state` reports how many hold a frame (`captured`) and how many
+# hold a capture source (`capturing`), which has to be all three while open
+# and zero once the commit has closed the card and its fade has run out.
+#
+# Cell positions come from `switcher state` (`cells`, in output pixels as the
+# card draws them) rather than from constants, since a thumbnail's width
+# follows its window. The frames are read for the caption icon's pink at the
+# centre of each cell's icon rect, and for the strip of cell fill left of each
+# thumbnail. The selected cell takes the table's `switcher.cell` selected
+# fill, so its strip differs from the other two while theirs match each
+# other, and after one `switcher prev` that difference has moved one cell
 # left. A patch read per cell rather than a colour compared against a
 # constant: the fill is the wallpaper's own accent under matugen, and a leg
 # naming a hex would be asserting the palette rather than the cursor.
@@ -46,20 +52,6 @@ switcher_layers_open="$shot_dir/switcher-layers-open.json"
 switcher_layers_closed="$shot_dir/switcher-layers-closed.json"
 switcher_active_json="$shot_dir/switcher-active.json"
 switcher_clients_json="$shot_dir/switcher-clients.json"
-
-# The card's own geometry on this rig, off the tokens rather than off a
-# screenshot: a 64px icon inside `panelPadding` on all four sides is an 88px
-# cell, the cells touch (Gala sets no spacing on its flow layout), three of
-# them make a 264px row, and the card is exactly as wide as that row plus its
-# own padding, with no floor under it. That puts the card at 288 wide,
-# centred on 1920, with cells at x 828, 916 and 1004.
-#
-# The y is the output's own centre minus half a card whose height carries one
-# line of `heading`, so it moves by a pixel or two with the font. Every patch
-# below is 20 rows tall about the middle of an 88px cell, which leaves 20
-# rows of slack against the 64px icon inside it.
-switcher_icon_patches="20x20+862+512 20x20+950+512 20x20+1038+512"
-switcher_margin_patches="4x20+831+512 4x20+919+512 4x20+1007+512"
 
 leg_switcher_fixture() {
   # The fourth window on workspace 2 is only held out of the card under
@@ -144,6 +136,18 @@ _switcher_near() {
   return 0
 }
 
+# A crop geometry for the middle of cell $2's caption icon, and for the strip
+# of cell fill four pixels in from its left edge, read off the state in $1.
+_switcher_icon_patch() {
+  "$jq_bin" -r --argjson i "$2" \
+    '.cells[$i].icon | "6x6+\(.x + .width / 2 - 3 | floor)+\(.y + .height / 2 - 3 | floor)"' "$1"
+}
+
+_switcher_margin_patch() {
+  "$jq_bin" -r --argjson i "$2" \
+    '.cells[$i].cell | "4x20+\(.x + 4)+\(.y + .height / 2 - 10 | floor)"' "$1"
+}
+
 # Hyprland's own address for a window, and the shell's id for it, differ by
 # the prefix alone (HyprlandBackend: ids are the hex address verbatim, the
 # dispatcher's selector adds the 0x).
@@ -205,26 +209,39 @@ leg_switcher_assert() {
   echo "layers while open: formalshell:switcher=$mapped"
   [ "${mapped:-0}" -ge 1 ] || fail "no formalshell:switcher layer surface while the card is open"
 
-  # Three cells carrying the fixture's own icon, which is the only pink in
+  # Thumbnails: every cell holds a live frame and a capture source while the
+  # card is open.
+  local captured capturing
+  captured=$("$jq_bin" -r '.captured' "$switcher_second_json")
+  capturing=$("$jq_bin" -r '.capturing' "$switcher_second_json")
+  echo "thumbnails while open: captured=$captured capturing=$capturing"
+  [ "$capturing" = "$count" ] \
+    || fail "$capturing of $count thumbnails hold a capture source while the card is open"
+  [ "$captured" = "$count" ] \
+    || fail "$captured of $count thumbnails hold a captured frame while the card is open"
+  "$jq_bin" -e '.cells | length == 3' "$switcher_second_json" > /dev/null \
+    || fail "switcher state reports $("$jq_bin" -r '.cells | length' "$switcher_second_json") cells, not three"
+
+  # Three captions carrying the fixture's own icon, which is the only pink in
   # the session.
-  local patch icon_colours=""
-  for patch in $switcher_icon_patches; do
-    icon_colours="$icon_colours $(_switcher_patch "$switcher_second_png" "$patch")"
+  local i icon_colours=""
+  for i in 0 1 2; do
+    icon_colours="$icon_colours $(_switcher_patch "$switcher_second_png" "$(_switcher_icon_patch "$switcher_second_json" "$i")")"
   done
-  echo "icon cells: $icon_colours"
+  echo "caption icons: $icon_colours"
   local expected_icon="206.93.151"
   local colour
   for colour in $icon_colours; do
     _switcher_near "$colour" "$expected_icon" \
-      || fail "a cell centre reads $colour, not the fixture icon's $expected_icon: three icon cells are not what was drawn"
+      || fail "a caption icon reads $colour, not the fixture icon's $expected_icon: three icon captions are not what was drawn"
   done
 
-  # The margin the icon leaves inside each cell: the selected one fills with
-  # `accent`, the other two show the card under it.
+  # The strip of cell fill left of each thumbnail: the selected one fills
+  # with the table's selected fill, the other two show the card under it.
   local second_margins=() first_margins=()
-  for patch in $switcher_margin_patches; do
-    second_margins+=("$(_switcher_patch "$switcher_second_png" "$patch")")
-    first_margins+=("$(_switcher_patch "$switcher_first_png" "$patch")")
+  for i in 0 1 2; do
+    second_margins+=("$(_switcher_patch "$switcher_second_png" "$(_switcher_margin_patch "$switcher_second_json" "$i")")")
+    first_margins+=("$(_switcher_patch "$switcher_first_png" "$(_switcher_margin_patch "$switcher_first_json" "$i")")")
   done
   echo "cell margins on the third: ${second_margins[*]}"
   echo "cell margins on the second: ${first_margins[*]}"
@@ -232,7 +249,7 @@ leg_switcher_assert() {
   [ "${second_margins[0]}" = "${second_margins[1]}" ] \
     || fail "the first two cells differ (${second_margins[0]} vs ${second_margins[1]}) with the cursor on the third"
   [ "${second_margins[2]}" != "${second_margins[1]}" ] \
-    || fail "the third cell draws what the unselected ones do (${second_margins[2]}), so no accent fill reached the frame"
+    || fail "the third cell draws what the unselected ones do (${second_margins[2]}), so no selection fill reached the frame"
 
   # One `prev`, and the fill has moved one cell left.
   local first_index
@@ -254,12 +271,14 @@ leg_switcher_assert() {
   active_address=$("$jq_bin" -r '.address' "$switcher_active_json")
   echo "commit: open=$closed_open layers=$closed_layers active=$active_address want=$committed_id"
   [ "$closed_open" = "false" ] || fail "the switcher is still open after a commit: $(cat "$switcher_closed_json")"
+  "$jq_bin" -e '.captured == 0 and .capturing == 0' "$switcher_closed_json" > /dev/null \
+    || fail "thumbnails are still captured after the commit: $("$jq_bin" -c '{captured, capturing}' "$switcher_closed_json")"
   [ "${closed_layers:-0}" -eq 0 ] || fail "the switcher's layer surface stayed mapped after a commit ($closed_layers)"
   [ -n "$active_address" ] || fail "hyprctl reports no active window after the commit"
   [ "$(_switcher_bare_address "$active_address")" = "$(_switcher_bare_address "$committed_id")" ] \
     || fail "focus landed on $active_address, not on the committed $committed_id"
 
-  echo "SMOKE_SWITCHER ok index=$index->$first_index count=$count committed=$committed_id"
+  echo "SMOKE_SWITCHER ok index=$index->$first_index count=$count captured=$captured committed=$committed_id"
   echo "SMOKE_SWITCHER_SECOND $switcher_second_png"
   echo "SMOKE_SWITCHER_FIRST $switcher_first_png"
 }

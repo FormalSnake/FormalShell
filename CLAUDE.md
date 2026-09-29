@@ -463,9 +463,11 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   on workspace 2 that must not be offered (the leg pins
   `switcher.currentWorkspace`, off by default), `switcher next` twice and `prev`
   once over IPC against `switcher state`, the frame read for the fixture icon
-  at three cell centres and for the accent fill travelling from the third
-  cell to the second, then a commit landing focus on the window the card
-  named (`hyprctl activewindow`).
+  in three captions and for the selection fill travelling from the third
+  cell to the second (cell positions off `switcher state`'s `cells`), all
+  three thumbnails holding a captured frame while open and none holding any
+  capture source after the commit, then a commit landing focus on the window
+  the card named (`hyprctl activewindow`).
 - `switcher_keys.sh` `--switcher-keys`: the same card driven by the
   compositor's own binds and real keys instead of IPC, one `wtype` process
   holding Alt across two taps of Tab and letting go, with the same fourth
@@ -710,11 +712,13 @@ behavior on hosts where a real owner exists.
   draws instead of a `Card`. Never
   reintroduce a `ScreencopyView`-based capture anywhere (see
   `LockSurface.qml`'s header comment: it crashes the whole shell outright,
-  a fail-open on a security-critical surface). The one exception (owner,
-  2026-09-28): the Spaces preview's per-window thumbnails
-  (`Surfaces/Panels/WorkspacePreview.qml`), a `ScreencopyView` on each
-  window's toplevel handle, live only while that card is open. The lock
-  surface and everything else stay banned.
+  a fail-open on a security-critical surface). Two exceptions (owner,
+  2026-09-28 and 2026-09-29): the Spaces preview's per-window thumbnails
+  (`Surfaces/Panels/WorkspacePreview.qml`) and the Alt+Tab switcher's
+  (`Surfaces/Switcher/Switcher.qml`), both the one shared
+  `Components/WindowThumb.qml`, a `ScreencopyView` on each window's toplevel
+  handle, live only while that card is open and holding no capture source
+  once it has closed. The lock surface and everything else stay banned.
 - License MIT. Every file substantially ported from DankMaterialShell keeps
   a `// Portions from DankMaterialShell (MIT, Copyright 2025 Avenge Media LLC)`
   header line.

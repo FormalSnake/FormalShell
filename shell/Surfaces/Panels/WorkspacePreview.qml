@@ -1,7 +1,5 @@
 import QtQuick
 import Quickshell
-import Quickshell.Wayland
-import Quickshell.Widgets
 import qs.Core
 import qs.Components
 import qs.Compositor
@@ -20,11 +18,9 @@ import "../../Components/cursor.js" as Cursor
 // output and every window and opens on the output's own region.
 // Click a window (or Enter on the cursor) to focus it.
 //
-// The thumbnails are ScreencopyViews on each window's toplevel handle,
-// through hyprland-toplevel-export-v1, live while the card is open and torn
-// down with the window when it closes. This is the one ScreencopyView in the
-// shell (owner, 2026-09-28): LockSurface.qml's header is why none may ever
-// sit on or near the lock. A window with no handle, or one the compositor
+// The thumbnails are Components/WindowThumb.qml, a ScreencopyView on each
+// window's toplevel handle, live while the card is open and torn down with
+// the window when it closes. A window with no handle, or one the compositor
 // has not sent a frame for, is drawn as a schematic box instead, its icon
 // and title on the cell fill.
 //
@@ -323,11 +319,10 @@ Panel {
                     readonly property var place: root._layout[thumb.index] || ({ id: "", x: 0, y: 0, width: 0, height: 0 })
                     readonly property var win: CompositorService.windowById(thumb.place.id)
                     readonly property string iconSource: thumb.win ? AppIconService.forWindow(thumb.win) : ""
-                    readonly property bool captured: capture.hasContent
+                    readonly property bool captured: picture.captured
                     readonly property bool lit: thumbPointer.containsMouse || thumb.cursor
                     // What Panel's cursor halo finds a row by.
                     readonly property bool cursor: root.cursorActive && root.cursorIndex === thumb.index
-                    readonly property real radius: Theme.coverRadius(Math.min(thumb.width, thumb.height))
 
                     // `xxs` in from its neighbours: two tiled windows share an
                     // edge on screen, and two borders on one line read as one.
@@ -337,107 +332,17 @@ Panel {
                     height: Math.max(0, thumb.place.height - Theme.space.xxs * 2)
                     z: thumb.place.floating ? 1 : 0
 
-                    // The schematic, under the capture and in its place until
-                    // the first frame lands: the window's own box, `selected` on
-                    // the one holding focus, its icon and title in it.
-                    Cell {
-                        id: box
+                    WindowThumb {
+                        id: picture
                         anchors.fill: parent
-                        visible: !thumb.captured
+                        win: thumb.win
+                        iconSource: thumb.iconSource
+                        capturing: root.isOpen || root.visible
+                        live: root.isOpen
+                        lit: thumb.lit
                         selected: !!thumb.win && thumb.win.isFocused
                         cursor: thumb.cursor
-
-                        readonly property real _iconSize: Math.min(Theme.space.huge * 2, box.width / 2, box.height / 2)
-
-                        Column {
-                            anchors.centerIn: parent
-                            spacing: Theme.space.xs
-
-                            Item {
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                width: box._iconSize
-                                height: box._iconSize
-
-                                Picture {
-                                    id: boxIcon
-                                    anchors.fill: parent
-                                    visible: thumb.iconSource !== "" && boxIcon.status !== Image.Error
-                                    source: thumb.iconSource
-                                    sourceSize.width: box._iconSize * 2
-                                    sourceSize.height: box._iconSize * 2
-                                    fillMode: Image.PreserveAspectFit
-                                }
-
-                                Icon {
-                                    anchors.centerIn: parent
-                                    visible: !boxIcon.visible
-                                    name: "app-window"
-                                    size: box._iconSize * 0.75
-                                    color: box.dimForeground
-                                }
-                            }
-
-                            // Dropped rather than squeezed on a box too short to
-                            // carry it; the icon still says which window it is.
-                            Text {
-                                visible: box.height >= box._iconSize + Theme.space.xs + implicitHeight + Theme.space.md * 2
-                                width: Math.max(0, box.width - Theme.space.md * 2)
-                                horizontalAlignment: Text.AlignHCenter
-                                text: thumb.win ? thumb.win.title : ""
-                                elide: Text.ElideRight
-                                color: box.foreground
-                                font.family: Theme.fontFamilySans
-                                font.pixelSize: Theme.fontSize.caption
-                            }
-                        }
-                    }
-
-                    // The window itself, rounded the way any picture is
-                    // (Theme.coverRadius), its border lit in `ring` under the
-                    // pointer or the cursor.
-                    ClippingRectangle {
-                        anchors.fill: parent
-                        color: "transparent"
-                        radius: thumb.radius
-                        border.width: Theme.borderWidth
-                        border.color: thumb.lit ? Theme.color.ring : Theme.color.border
-                        contentInsideBorder: true
-                        opacity: thumb.captured ? 1 : 0
-
-                        Behavior on opacity {
-                            Anim { kind: "effects" }
-                        }
-
-                        ScreencopyView {
-                            id: capture
-                            anchors.fill: parent
-                            captureSource: (root.isOpen || root.visible) ? CompositorService.toplevelHandle(thumb.place.id) : null
-                            live: root.isOpen
-                        }
-                    }
-
-                    // The app's icon in the corner, so a small thumbnail is
-                    // still a window you can name.
-                    Box {
-                        visible: thumb.captured && thumb.iconSource !== ""
-                            && thumb.width > Theme.space.controlHeight * 2 && thumb.height > Theme.space.controlHeight * 1.5
-                        role: "cell"
-                        state: "rest"
-                        anchors.left: parent.left
-                        anchors.bottom: parent.bottom
-                        anchors.margins: Theme.space.sm
-                        width: Theme.space.controlHeight - Theme.space.sm
-                        height: width
-
-                        Picture {
-                            anchors.centerIn: parent
-                            width: parent.width - Theme.space.sm * 2
-                            height: width
-                            source: thumb.iconSource
-                            sourceSize.width: width * 2
-                            sourceSize.height: height * 2
-                            fillMode: Image.PreserveAspectFit
-                        }
+                        badge: true
                     }
 
                     MouseArea {

@@ -74,7 +74,9 @@ IpcHandler {
     // Debug/verification hook (the smoke rig reads the cursor and the count
     // off it): the same status() idiom the lock/screenshot/tray targets
     // carry. The window id is the compositor's own opaque string, passed
-    // through as it arrived.
+    // through as it arrived. `captured` and `capturing` count the thumbnails
+    // holding a frame and holding a capture source, open or not, and `cells`
+    // is where each cell, thumbnail and caption icon is drawn.
     function state(): string {
         var error = root._guard();
         if (error !== "")
@@ -84,7 +86,10 @@ IpcHandler {
             index: switcher.index,
             count: switcher.count,
             id: switcher.selectedId,
-            title: switcher.selectedTitle
+            title: switcher.selectedTitle,
+            captured: switcher.capturedCount(),
+            capturing: switcher.capturingCount(),
+            cells: switcher.isOpen ? switcher.cellRects() : []
         });
     }
 }

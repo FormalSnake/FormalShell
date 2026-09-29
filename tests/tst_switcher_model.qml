@@ -117,27 +117,88 @@ TestCase {
         compare(Switcher.advance(4, 0, -1), 0);
     }
 
-    // One row while the cells fit, then balanced rows: eleven across a card
-    // holding seven reads as 6 and 5 rather than as a full row and a stub.
-    function test_a_row_too_long_for_the_output_wraps_balanced() {
-        compare(Switcher.columns(3, 7), 3);
-        compare(Switcher.columns(7, 7), 7);
-        compare(Switcher.columns(8, 7), 4);
-        compare(Switcher.columns(11, 7), 6);
-        compare(Switcher.rows(11, 6), 2);
-        compare(Switcher.rows(3, 3), 1);
+    // A thumbnail keeps its window's aspect at the cell's fixed height, held
+    // between a floor and a ceiling so no cell collapses or sprawls.
+    function test_a_thumbnail_keeps_its_window_aspect() {
+        compare(Switcher.thumbWidth({ width: 1600, height: 900 }, 100, 60, 300), 178);
+        compare(Switcher.thumbWidth({ width: 900, height: 900 }, 100, 60, 300), 100);
+        compare(Switcher.thumbWidth({ width: 300, height: 900 }, 100, 60, 300), 60);
+        compare(Switcher.thumbWidth({ width: 3840, height: 400 }, 100, 60, 300), 300);
     }
 
-    // A card that can hold nothing across still holds one cell: a switcher
-    // on a tiny output is cramped, never empty.
-    function test_a_column_count_below_one_still_draws_a_cell() {
-        compare(Switcher.columns(3, 0), 1);
-        compare(Switcher.rows(3, 1), 3);
+    // A window whose rect the compositor has not reported reads as 16:9.
+    function test_a_window_with_no_rect_reads_as_sixteen_by_nine() {
+        compare(Switcher.thumbWidth(undefined, 90, 40, 400), 160);
+        compare(Switcher.thumbWidth({ width: 0, height: 0 }, 90, 40, 400), 160);
+    }
+
+    function test_cells_that_fit_stay_on_one_row() {
+        var out = Switcher.layout([100, 150, 100], 0, 400);
+        compare(out.rows.length, 1);
+        compare(out.rows[0].count, 3);
+        compare(out.width, 350);
+    }
+
+    // Eleven equal cells over a row holding seven read as 6 and 5.
+    function test_a_row_too_long_for_the_output_wraps_balanced() {
+        var widths = [];
+        for (var i = 0; i < 11; i++)
+            widths.push(100);
+        var out = Switcher.layout(widths, 0, 700);
+        compare(out.rows.length, 2);
+        compare(out.rows[0].first, 0);
+        compare(out.rows[0].count, 6);
+        compare(out.rows[1].first, 6);
+        compare(out.rows[1].count, 5);
+        compare(out.width, 600);
+    }
+
+    // Different widths pack by their sum, and the gap counts between cells.
+    function test_mixed_widths_wrap_by_their_sum() {
+        var out = Switcher.layout([300, 300, 300], 10, 620);
+        compare(out.rows.length, 2);
+        compare(out.rows[0].count, 2);
+        compare(out.rows[0].width, 610);
+        compare(out.rows[1].count, 1);
+        compare(out.width, 610);
+    }
+
+    // A cell wider than the output still gets a row, cramped and never empty.
+    function test_a_cell_wider_than_the_output_still_draws() {
+        var out = Switcher.layout([500, 100], 0, 300);
+        compare(out.rows.length, 2);
+        compare(out.rows[0].count, 1);
+        compare(out.width, 500);
     }
 
     function test_no_windows_is_no_grid_at_all() {
-        compare(Switcher.columns(0, 7), 0);
-        compare(Switcher.rows(0, 0), 0);
+        compare(Switcher.layout([], 0, 700).rows.length, 0);
+        compare(Switcher.layout(undefined, 0, 700).width, 0);
+    }
+
+    // Rows stack at the cell height and each is centred on the widest; the
+    // balanced wrap here is 200 over 200 and 100.
+    function test_cells_sit_in_centred_rows() {
+        var grid = Switcher.layout([200, 200, 100], 0, 400);
+        compare(grid.width, 300);
+        var out = Switcher.cells(grid, 50);
+        compare(out.length, 3);
+        compare(out[0].x, 50);
+        compare(out[0].y, 0);
+        compare(out[1].x, 0);
+        compare(out[1].y, 50);
+        compare(out[2].x, 200);
+        compare(out[2].width, 100);
+        compare(out[2].row, 1);
+    }
+
+    function test_the_row_holding_an_entry_is_found() {
+        var out = Switcher.layout([100, 100, 100, 100], 0, 200);
+        compare(Switcher.rowOf(out.rows, 0), 0);
+        compare(Switcher.rowOf(out.rows, 1), 0);
+        compare(Switcher.rowOf(out.rows, 2), 1);
+        compare(Switcher.rowOf(out.rows, 3), 1);
+        compare(Switcher.rowOf(out.rows, 4), -1);
     }
 
     // Several windows of one app count off in row order; an app with one
