@@ -133,42 +133,6 @@ TestCase {
         compare(Power.formatRate(-8.05), "8.1W");
     }
 
-    // raplDeltaUj
-
-    function test_rapl_delta_normal_increase() {
-        compare(Power.raplDeltaUj(1000000, 1500000, 65000000), 500000);
-    }
-
-    function test_rapl_delta_wraps_at_max_range() {
-        // counter was near the top, wrapped back to a small value.
-        compare(Power.raplDeltaUj(64900000, 100000, 65000000), 200000);
-    }
-
-    // raplWatts
-
-    function test_rapl_watts_normal_sample() {
-        // 1,000,000 uJ over 1000ms = 1 W.
-        compare(Power.raplWatts(0, 1000000, 65000000, 1000), 1);
-    }
-
-    function test_rapl_watts_matches_e1504g_probe() {
-        // e1504g probe (plan header): ~8.5W package draw over a 2s interval.
-        compare(Power.raplWatts(0, 17000000, 65000000, 2000), 8.5);
-    }
-
-    function test_rapl_watts_zero_interval_is_null() {
-        compare(Power.raplWatts(0, 1000000, 65000000, 0), null);
-    }
-
-    function test_rapl_watts_negative_interval_is_null() {
-        compare(Power.raplWatts(0, 1000000, 65000000, -50), null);
-    }
-
-    function test_rapl_watts_wraparound_end_to_end() {
-        // 200,000 uJ over 500ms = 0.4 W, computed through the wrap.
-        compare(Power.raplWatts(64900000, 100000, 65000000, 500), 0.4);
-    }
-
     // parseChargeLimit
 
     // e1504g's own reading: an ASUS laptop parked at 80 by the firmware.
@@ -198,32 +162,17 @@ TestCase {
         compare(Power.parseChargeLimit("nope\n"), null);
     }
 
-    // parseRaplUj
-
-    function test_parseRaplUj_normal_two_lines() {
-        var r = Power.parseRaplUj("12345678\n65000000\n");
-        compare(r.energyUj, 12345678);
-        compare(r.maxRangeUj, 65000000);
+    // parseRaplMw
+    function test_parseRaplMw_milliwatts_to_watts() {
+        compare(Power.parseRaplMw("8500\n"), 8.5);
+        compare(Power.parseRaplMw("0"), 0);
     }
 
-    function test_parseRaplUj_permission_denied_leaves_one_line() {
-        // `cat energy_uj max_energy_range_uj` when energy_uj is root-only:
-        // stderr carries the "Permission denied" line, stdout only gets
-        // max_energy_range_uj's own content — one line, honest null.
-        compare(Power.parseRaplUj("65000000\n"), null);
-    }
-
-    function test_parseRaplUj_empty_is_null() {
-        compare(Power.parseRaplUj(""), null);
-        compare(Power.parseRaplUj(null), null);
-    }
-
-    function test_parseRaplUj_zero_max_range_is_null() {
-        compare(Power.parseRaplUj("12345\n0\n"), null);
-    }
-
-    function test_parseRaplUj_non_numeric_is_null() {
-        compare(Power.parseRaplUj("cat: Permission denied\ncat: Permission denied\n"), null);
+    function test_parseRaplMw_missing_or_garbage_is_null() {
+        compare(Power.parseRaplMw(""), null);
+        compare(Power.parseRaplMw(null), null);
+        compare(Power.parseRaplMw("-5"), null);
+        compare(Power.parseRaplMw("cat: /run/formalshell/rapl: No such file"), null);
     }
 
     // chargeThresholdActive

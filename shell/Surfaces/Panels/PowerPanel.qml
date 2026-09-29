@@ -179,36 +179,24 @@ Panel {
             SystemMonitorService.subscribe();
         } else {
             SystemMonitorService.unsubscribe();
-            // Drop the RAPL baseline on close (M20 Task 5c): no background
-            // polling for a closed panel, and reopening starts a fresh pair
-            // of samples rather than computing a wattage across whatever gap
-            // the panel was closed for.
-            root._raplPrev = null;
             root.cpuPackageW = null;
         }
     }
 
     // CPU package power (M20 Task 5c, owner ask: "the W usage right next
-    // to the W it's charging with"). Two `energy_uj` reads a fixed
-    // interval apart, watts = delta / interval, the same idiom as
-    // NetworkPanel's speed-test sampler (`cat` straight to argv, no
-    // shell, a pure-JS reducer in Power/model.js does the math). RAPL's
-    // `energy_uj` is root-only by default (PLATYPUS mitigation); a udev
-    // rule outside this repo can make it user-readable. Either way,
-    // `cat`'s stdout on a permission-denied or absent path comes up short
-    // a line, `Power.parseRaplUj` returns null, and `cpuPackageW` stays
-    // null rather than 0 or a guess.
-    property var _raplPrev: null // {uj, maxUj, t} | null
+    // to the W it's charging with"), read off the nix module's power poller,
+    // which already averages RAPL over its own interval: `energy_uj` is
+    // root-only (PLATYPUS mitigation). No poller, no figure: `cpuPackageW`
+    // stays null rather than 0 or a guess.
     property var cpuPackageW: null
 
-    readonly property string _raplEnergyPath: "/sys/class/powercap/intel-rapl:0/energy_uj"
-    readonly property string _raplMaxRangePath: "/sys/class/powercap/intel-rapl:0/max_energy_range_uj"
-    readonly property int _raplSampleIntervalMs: 2000
+    readonly property string _raplPath: "/run/formalshell/rapl"
+    readonly property int _raplSampleIntervalMs: 3000
 
     function _sampleRapl() {
         if (raplProc.running)
             return;
-        raplProc.command = ["cat", root._raplEnergyPath, root._raplMaxRangePath];
+        raplProc.command = ["cat", root._raplPath];
         raplProc.running = true;
     }
 
@@ -217,18 +205,7 @@ Panel {
         stdout: StdioCollector {
             id: raplCollector
         }
-        onExited: exitCode => {
-            var parsed = Power.parseRaplUj(raplCollector.text);
-            if (!parsed) {
-                root._raplPrev = null;
-                root.cpuPackageW = null;
-                return;
-            }
-            var t = Date.now();
-            if (root._raplPrev)
-                root.cpuPackageW = Power.raplWatts(root._raplPrev.uj, parsed.energyUj, parsed.maxRangeUj, t - root._raplPrev.t);
-            root._raplPrev = { uj: parsed.energyUj, maxUj: parsed.maxRangeUj, t: t };
-        }
+        onExited: exitCode => root.cpuPackageW = exitCode === 0 ? Power.parseRaplMw(raplCollector.text) : null
     }
 
     Timer {

@@ -73,45 +73,15 @@ function formatRate(watts) {
 }
 
 // RAPL package power (M20 Task 5c, owner ask: "the W usage right next to
-// the W it's charging with"). `energy_uj` accumulates until it reaches
-// `max_energy_range_uj`, then the powercap driver resets it to 0 rather
-// than overflowing, so a sample pair spanning exactly one wrap needs the
-// full range added back onto the naive difference, the same one-wrap
-// assumption the kernel's own powercap consumers make (RAPL packages wrap
-// on the order of minutes on real hardware, far longer than a poll
-// interval measured in seconds).
-function raplDeltaUj(prevUj, currUj, maxRangeUj) {
-    if (currUj >= prevUj)
-        return currUj - prevUj;
-    return (maxRangeUj - prevUj) + currUj;
-}
-
-// null on a non-positive interval or a still-negative delta (a reset
-// outside the wraparound case, e.g. suspend/resume clearing the
-// counter), never a negative or invented wattage.
-function raplWatts(prevUj, currUj, maxRangeUj, deltaMs) {
-    if (!(deltaMs > 0))
+// the W it's charging with"). The counter itself is root-only (PLATYPUS), so
+// the nix module's power poller publishes the package draw as integer
+// milliwatts averaged over its own interval. Honest null on an absent file
+// or anything but one non-negative integer, never 0 or a guess.
+function parseRaplMw(text) {
+    var t = String(text || "").trim();
+    if (!/^\d+$/.test(t))
         return null;
-    var deltaUj = raplDeltaUj(prevUj, currUj, maxRangeUj);
-    if (!(deltaUj >= 0))
-        return null;
-    return (deltaUj / 1e6) / (deltaMs / 1000);
-}
-
-// Two-line `cat energy_uj max_energy_range_uj` stdout -> {energyUj,
-// maxRangeUj}. Honest null on anything short of two parseable numbers:
-// a root-only energy_uj (PLATYPUS mitigation, user-readable only via a
-// udev rule outside this repo) or an absent powercap path both leave
-// `cat`'s stdout short a line, same shape as SpeedTest.parseStatBytes.
-function parseRaplUj(text) {
-    var lines = (text || "").split("\n").map(function (l) { return l.trim(); }).filter(function (l) { return l !== ""; });
-    if (lines.length < 2)
-        return null;
-    var energyUj = parseInt(lines[0], 10);
-    var maxRangeUj = parseInt(lines[1], 10);
-    if (!isFinite(energyUj) || !isFinite(maxRangeUj) || energyUj < 0 || maxRangeUj <= 0)
-        return null;
-    return { energyUj: energyUj, maxRangeUj: maxRangeUj };
+    return parseInt(t, 10) / 1000;
 }
 
 // The wattage stat, split so the words land in the label and the figures
