@@ -136,6 +136,25 @@ TestCase {
         ]);
     }
 
+    // The runner registers no `icon` provider, so a synchronous request for
+    // one fails inside the assignment itself, while one handed to the pixmap
+    // reader thread still reads Loading on the next line.
+    function test_a_themed_source_never_reaches_the_reader_thread() {
+        var steps = [
+            ["", "image://icon/firefox"],
+            [testCase.whiteSource, "image://icon/kitty"],
+            ["image://icon/kitty", "image://icon/org.gnome.Nautilus"]
+        ];
+        for (var i = 0; i < steps.length; i++) {
+            var picture = make({ source: steps[i][0] });
+            var img = imageOf(picture);
+            if (steps[i][0] === testCase.whiteSource)
+                tryVerify(function () { return img.status === Image.Ready; }, 2000);
+            picture.source = steps[i][1];
+            compare(img.status, Image.Error, steps[i][0] + " -> " + steps[i][1]);
+        }
+    }
+
     // NotificationCard hides its whole art frame on the status the frame
     // reads off this alias, so it has to answer for the Image underneath at
     // every step rather than only once loaded.
