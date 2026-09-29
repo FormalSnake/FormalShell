@@ -1221,6 +1221,12 @@ var LIGHT_COLORS = [
     { id: "ffffff", label: "White" }
 ];
 
+// Row ids are dotted tree paths, so a key that can carry a dot (an SSID, a
+// PipeWire node name) is escaped before it goes into one.
+function idPart(s) {
+    return encodeURIComponent(String(s)).replace(/\./g, "%2E");
+}
+
 function lightsEntries(available, effects) {
     if (available !== true)
         return {};

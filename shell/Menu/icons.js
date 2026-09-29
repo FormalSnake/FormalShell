@@ -61,6 +61,16 @@ var ROUTE_ICONS = {
     "lights.speed": "gauge",
     "lights.brightness": "sun",
 
+    // Device routes (providers.js).
+    "wifi": "wifi",
+    "wifi.off": "wifi-off",
+    "bluetooth": "bluetooth",
+    "bluetooth.off": "bluetooth",
+    "audio": "volume-2",
+    "radio": "radio",
+    "radio.search": "search",
+    "radio.stop": "square",
+
     // Injected at tree-build time (providers.js's captureEntries).
     "capture": "camera",
     "capture.text": "scan-text",
@@ -111,6 +121,17 @@ var ROUTE_ICONS = {
     "panels.radio": "radio"
 };
 
+// Rows minted per device by the device routes, matched by id prefix after an
+// exact miss. Order matters only if one prefix contains another.
+var ROUTE_ICON_PREFIXES = [
+    ["wifi.net.", "wifi"],
+    ["bluetooth.dev.", "bluetooth"],
+    ["audio.output.", "volume-2"],
+    ["audio.input.", "mic"],
+    ["radio.fav.", "radio"],
+    ["radio.result.", "radio"]
+];
+
 // Routes whose mark is a real logo rather than an icon, keyed by the
 // os-release id Theme/icons/distro.js's own table uses. A logo never
 // follows `theme.icons` (that file's header has why): under `lucide` the
@@ -126,7 +147,13 @@ var ROUTE_LOGOS = {
 function iconFor(node) {
     if (!node || !node.id)
         return "";
-    return ROUTE_ICONS[node.id] || "";
+    if (ROUTE_ICONS[node.id])
+        return ROUTE_ICONS[node.id];
+    for (var i = 0; i < ROUTE_ICON_PREFIXES.length; i++) {
+        if (node.id.indexOf(ROUTE_ICON_PREFIXES[i][0]) === 0)
+            return ROUTE_ICON_PREFIXES[i][1];
+    }
+    return "";
 }
 
 // "" means "this row's mark is not a logo", which is every row but one.

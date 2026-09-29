@@ -84,6 +84,9 @@ Item {
     // isOpen the way LiveMenuSources is: a few scalars cost nothing, and the
     // NightLightService read is a second construction site for that lazy
     // singleton, which Indicators.qml wants.
+    // Bound by Menu.qml to liveSources.bluetoothConnected.
+    property var bluetoothConnected: []
+
     readonly property var stateSnapshot: Toggles.snapshot({
         "nightlight.active": NightLightService.active,
         "overnight.active": OvernightService.active,
@@ -96,6 +99,11 @@ Item {
         "lights.source": LightsService.source,
         "lights.colour": LightsService.source === "custom" ? LightsService.customColour : "",
         "lights.speed": LightsService.speed,
-        "lights.brightness": String(LightsService.brightness)
+        "lights.brightness": String(LightsService.brightness),
+        "wifi.ssid": "",
+        "audio.sink": "",
+        "audio.source": "",
+        "radio.station": RadioService.station ? RadioService.station.uuid : "",
+        "bluetooth.connected": root.bluetoothConnected
     })
 }

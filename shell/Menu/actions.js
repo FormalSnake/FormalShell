@@ -26,7 +26,7 @@ var KEY_TAB = ["Tab"];
 var KEY_SHIFT_ENTER = ["Shift", "Enter"];
 
 // `ctx`: { mode, node, atRoot, pickerSelect, variantSwitch, confirming,
-// discreteGpu, clipsshImage }.
+// discreteGpu, clipsshImage, alternateLabel }.
 function primaryAction(ctx) {
     var c = ctx || {};
     if (c.mode === "input")
@@ -79,6 +79,9 @@ function primaryAction(ctx) {
 // image, sent over ssh instead of copied. Ungated on aliases existing, since
 // with none saved the key drills into the route whose empty state spells out
 // the add command, which is a better answer than a hint that isn't there.
+//
+// `alternateLabel` is a row's own Shift+Enter verb (its `alternate` action),
+// "" for a row with none.
 function hints(ctx) {
     var c = ctx || {};
     if (c.mode === "input")
@@ -90,6 +93,8 @@ function hints(ctx) {
         out.push({ keys: KEY_SHIFT_ENTER, label: "Open on GPU" });
     if (c.clipsshImage && !c.confirming)
         out.push({ keys: KEY_SHIFT_ENTER, label: "Send over SSH" });
+    if (c.alternateLabel && !c.confirming)
+        out.push({ keys: KEY_SHIFT_ENTER, label: c.alternateLabel });
     if (c.mode === "select")
         return out.concat([{ keys: KEY_ESC, label: "Cancel" }]);
     return out.concat([{ keys: KEY_ESC, label: c.atRoot ? "Close" : "Back" }]);

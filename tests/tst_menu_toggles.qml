@@ -81,7 +81,7 @@ TestCase {
 
     function test_snapshot_normalizes_to_the_allow_list() {
         var snap = Toggles.snapshot({ "nightlight.active": true, "bogus": true });
-        compare(Object.keys(snap).length, Toggles.PATHS.length + Toggles.ENUM_PATHS.length);
+        compare(Object.keys(snap).length, Toggles.PATHS.length + Toggles.ENUM_PATHS.length + Toggles.LIST_PATHS.length);
         for (var i = 0; i < Toggles.PATHS.length; i++)
             verify(snap.hasOwnProperty(Toggles.PATHS[i]));
         verify(!snap.hasOwnProperty("bogus"));
@@ -128,7 +128,7 @@ TestCase {
     function test_menu_qml_snapshot_names_every_allow_listed_path() {
         var text = _read("../shell/Surfaces/Menu/ConditionEvaluator.qml");
         verify(text.length > 0);
-        var paths = Toggles.PATHS.concat(Toggles.ENUM_PATHS);
+        var paths = Toggles.PATHS.concat(Toggles.ENUM_PATHS, Toggles.LIST_PATHS);
         for (var i = 0; i < paths.length; i++)
             verify(text.indexOf("\"" + paths[i] + "\"") >= 0);
     }
@@ -145,6 +145,35 @@ TestCase {
         compare(Toggles.resolveState("@state:lights.on=true", Toggles.snapshot({ "lights.on": true })), false);
         // A non-string enum value normalizes to "".
         compare(Toggles.snapshot({ "lights.brightness": 3 })["lights.brightness"], "");
+    }
+
+    function test_list_condition_tests_membership() {
+        var snap = Toggles.snapshot({ "bluetooth.connected": ["AA:BB", "CC:DD"] });
+        compare(Toggles.resolveState("@state:bluetooth.connected=AA:BB", snap), true);
+        compare(Toggles.resolveState("@state:bluetooth.connected=EE:FF", snap), false);
+        compare(Toggles.resolveState("@state:bluetooth.connected=", snap), false);
+        compare(Toggles.isKnownListPath("bluetooth.connected"), true);
+        compare(Toggles.isKnownListPath("lights.effect"), false);
+    }
+
+    function test_list_snapshot_normalizes() {
+        compare(Toggles.snapshot({ "bluetooth.connected": "AA:BB" })["bluetooth.connected"], []);
+        compare(Toggles.snapshot({})["bluetooth.connected"], []);
+        compare(Toggles.snapshot({ "bluetooth.connected": ["a", 3, null, "b"] })["bluetooth.connected"], ["a", "b"]);
+    }
+
+    function test_device_enum_paths_match_their_value() {
+        var snap = Toggles.snapshot({ "wifi.ssid": "Home", "audio.sink": "alsa.out", "audio.source": "alsa.in", "radio.station": "u-1" });
+        compare(Toggles.resolveState("@state:wifi.ssid=Home", snap), true);
+        compare(Toggles.resolveState("@state:wifi.ssid=Other", snap), false);
+        compare(Toggles.resolveState("@state:audio.sink=alsa.out", snap), true);
+        compare(Toggles.resolveState("@state:audio.source=alsa.in", snap), true);
+        compare(Toggles.resolveState("@state:radio.station=u-1", snap), true);
+    }
+
+    function test_unknown_path_with_value_is_false() {
+        compare(Toggles.resolveState("@state:nope.path=x", { "nope.path": "x" }), false);
+        compare(Toggles.unknownKeys({ "wifi.ssid": "", "audio.sink": "", "audio.source": "", "radio.station": "", "bluetooth.connected": [] }).length, 0);
     }
 
     // Contract test against the real shipped tree, not a fixture: this is

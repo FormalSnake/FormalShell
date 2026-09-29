@@ -15,6 +15,10 @@ Item {
     // Bound to Menu.qml's isOpen.
     property bool active: false
 
+    // Addresses of the connected Bluetooth devices, the source of the
+    // `bluetooth.connected` tick list.
+    readonly property var bluetoothConnected: []
+
     readonly property var clipboardItems: root.active ? ClipboardService.items : []
 
     // Prerender the ledger's image captures the moment the live list

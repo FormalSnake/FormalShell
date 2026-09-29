@@ -123,6 +123,10 @@ function _ancestry(id) {
 // walks both returns the same app twice. The route row itself still scores,
 // so "tray" reaches the route from anywhere; what it no longer does is
 // double every app in a search for one.
+//
+// `localOnly` is the per-node counterpart: the node is scored only while its
+// parent level is open, so nearby SSIDs or radio search results never turn
+// up in a root query, while their siblings (saved networks, favourites) do.
 function rank(nodes, query, condResults, withinId) {
     condResults = condResults || {};
     var declIndex = 0;
@@ -139,7 +143,8 @@ function rank(nodes, query, condResults, withinId) {
         if (node.when !== undefined && condResults[node.id] !== true) return;
 
         var idx = declIndex++;
-        var s = score(node, qNorm, qSlug, depth);
+        var s = (node.localOnly === true && open[node.parentId] !== true)
+            ? 0 : score(node, qNorm, qSlug, depth);
         if (s > 0) results.push({ node: node, score: s, depth: depth, declIndex: idx });
 
         if (node.routeOnly === true && open[id] !== true) return;

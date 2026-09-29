@@ -7,7 +7,10 @@ import Quickshell.Io
 // chosen value (or a cancel) is instead written to
 // $XDG_STATE_HOME/formalshell/menu-selection.txt as `{token, value}` /
 // `{token, cancelled: true}` JSON, correlated by the caller-supplied token,
-// callers poll/read that file. Menu.qml owns the actual write.
+// callers poll/read that file. Menu.qml owns the actual write. A password
+// step the launcher opens for itself is the exception: its file record is
+// `{token, cancelled: true, secret: true}` and the value only ever travels
+// on the in-process selectionResolved signal. `input` here stays non-secret.
 IpcHandler {
     target: "menu"
 
@@ -121,6 +124,8 @@ IpcHandler {
             columns: menu.cursorColumns,
             cursor: menu.cursorIndex,
             cursorId: menu.cursorId,
+            empty: menu.emptyId,
+            mode: menu.mode,
             viewCursor: menu.viewCursor(),
             rows: menu.rowCount,
             cells: menu.cellIds(),

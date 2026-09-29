@@ -34,7 +34,18 @@ var ENUM_PATHS = [
     "lights.source",         // LightsService.source
     "lights.colour",         // LightsService.customColour, "" unless source is custom
     "lights.speed",          // LightsService.speed
-    "lights.brightness"      // LightsService.brightness, as a string
+    "lights.brightness",     // LightsService.brightness, as a string
+    "wifi.ssid",             // WifiService.connectedSsid
+    "audio.sink",            // AudioService.sinkName
+    "audio.source",          // AudioService.sourceName
+    "radio.station"          // RadioService.station.uuid, "" when nothing plays
+];
+
+// Paths whose value is a list of strings, matched as "@state:<path>=<value>"
+// by membership: one row per element, checked while its value is in the list.
+// Same closed-list rule and the same drift guard as PATHS.
+var LIST_PATHS = [
+    "bluetooth.connected"    // Menu.qml's bluetoothConnected: addresses of connected devices
 ];
 
 // Mirrors Menu.qml's own "@ipc:" prefix test, minus the assumption that the
@@ -55,6 +66,10 @@ function isKnownEnumPath(path) {
     return ENUM_PATHS.indexOf(path) >= 0;
 }
 
+function isKnownListPath(path) {
+    return LIST_PATHS.indexOf(path) >= 0;
+}
+
 // A NEW object every call, carrying exactly PATHS as keys. QML's var-property
 // change detection compares references, so a snapshot mutated in place would
 // repaint nothing; and normalizing here is what keeps the allow-list and the
@@ -67,6 +82,12 @@ function snapshot(live) {
         out[PATHS[i]] = source[PATHS[i]] === true;
     for (var j = 0; j < ENUM_PATHS.length; j++)
         out[ENUM_PATHS[j]] = typeof source[ENUM_PATHS[j]] === "string" ? source[ENUM_PATHS[j]] : "";
+    for (var k = 0; k < LIST_PATHS.length; k++) {
+        var list = source[LIST_PATHS[k]];
+        out[LIST_PATHS[k]] = Array.isArray(list)
+            ? list.filter(function (v) { return typeof v === "string"; })
+            : [];
+    }
     return out;
 }
 
@@ -75,7 +96,7 @@ function snapshot(live) {
 function unknownKeys(live) {
     var out = [];
     Object.keys(live || {}).forEach(function (k) {
-        if (!isKnownPath(k) && !isKnownEnumPath(k)) out.push(k);
+        if (!isKnownPath(k) && !isKnownEnumPath(k) && !isKnownListPath(k)) out.push(k);
     });
     return out;
 }
@@ -92,7 +113,13 @@ function resolveState(cond, snap) {
     if (eq >= 0) {
         var value = path.slice(eq + 1);
         path = path.slice(0, eq);
-        return isKnownEnumPath(path) && value !== "" && (snap || {})[path] === value;
+        if (value === "") return false;
+        if (isKnownEnumPath(path)) return (snap || {})[path] === value;
+        if (isKnownListPath(path)) {
+            var list = (snap || {})[path];
+            return Array.isArray(list) && list.indexOf(value) >= 0;
+        }
+        return false;
     }
     if (!isKnownPath(path)) return false;
     return (snap || {})[path] === true;

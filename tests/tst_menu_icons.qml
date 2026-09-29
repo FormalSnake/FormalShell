@@ -42,6 +42,25 @@ TestCase {
         }
     }
 
+    function test_every_route_prefix_name_resolves_in_both_sets() {
+        var sets = ["lucide", "nerd"];
+        verify(MenuIcons.ROUTE_ICON_PREFIXES.length > 0);
+        for (var s = 0; s < sets.length; s++) {
+            var fallback = Icons.glyph(sets[s], "circle-help");
+            for (var i = 0; i < MenuIcons.ROUTE_ICON_PREFIXES.length; i++) {
+                var pair = MenuIcons.ROUTE_ICON_PREFIXES[i];
+                verify(Icons.glyph(sets[s], pair[1]) !== fallback,
+                    pair[0] + " -> " + pair[1] + " fell back in " + sets[s]);
+            }
+        }
+    }
+
+    function test_a_device_row_resolves_by_prefix() {
+        compare(MenuIcons.iconFor({ id: "wifi.net.x" }), "wifi");
+        compare(MenuIcons.iconFor({ id: "audio.input.a%2Eb" }), "mic");
+        compare(MenuIcons.iconFor({ id: "wifi" }), "wifi");
+    }
+
     // The point of the map: every route the shell ships names its icon here,
     // or its logo in the map beside it. A route added without either still
     // renders, just bare, so only this test catches the omission.

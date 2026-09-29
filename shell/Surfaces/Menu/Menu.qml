@@ -86,6 +86,9 @@ PanelWindow {
     // window/search field; _displayRows, the footer and key handling branch
     // on this. _abandonPendingSelect() is what resets it back to "menu".
     property string _mode: "menu"
+    // A password step: the field is masked and the answer leaves only through
+    // selectionResolved, never through the selection file (_writeSelection).
+    property bool _inputSecret: false
     property string _selectPrompt: ""
     property var _selectOptions: []
     property string _selectToken: ""
@@ -707,6 +710,10 @@ PanelWindow {
     // one cell rather than by a whole row of them.
     readonly property int cursorIndex: root._cursorIndex
     readonly property string cursorId: root._cursorId
+    // The empty-state note's id ("" when the level has rows or no note), and
+    // the mode (menu, select or input), both for `menu status`.
+    readonly property string emptyId: root._emptyNote ? root._emptyNote.id : ""
+    readonly property string mode: root._mode
 
     // One heading per row (M48 D6), index-aligned with _displayRows: the
     // delegate draws its `SectionLabel` wherever this array changes value,
@@ -971,7 +978,7 @@ PanelWindow {
 
     // What the empty body says: the provider's own note in its own words,
     // or that the query found nothing, naming the query.
-    readonly property string _emptyTitle: root._emptyNote
+    readonly property string _emptyTitle: root._mode === "input" ? "" : root._emptyNote
         ? root._emptyNote.label
         : (searchInput.text.length > 0 ? "No results for \u201C" + searchInput.text + "\u201D" : "No results")
     readonly property string _emptyDetail: root._emptyNote ? (root._emptyNote.desc || "") : ""
@@ -1036,7 +1043,8 @@ PanelWindow {
         discreteGpu: GpuService.defaultDiscrete() !== null,
         // The clipboard route's image rows, whose Shift+Enter sends the file
         // over ssh instead of copying it (_activateRowAlternate).
-        clipsshImage: !!(root._cursorNode && root._cursorNode.clipsshPath)
+        clipsshImage: !!(root._cursorNode && root._cursorNode.clipsshPath),
+        alternateLabel: root._cursorNode ? (root._cursorNode.alternateLabel || "") : ""
     })
 
     // The level the card is on, for the back chip and the footer: its name
@@ -1182,8 +1190,13 @@ PanelWindow {
     // poll/read the file themselves, see MenuIpc.qml's header comment for
     // the full contract.
     function _writeSelection(payload) {
-        selectionChannel.writeFile(selectionChannel.menuSelectionPath, JSON.stringify(payload));
+        var filed = root._inputSecret ? { token: payload.token, cancelled: true, secret: true } : payload;
+        selectionChannel.writeFile(selectionChannel.menuSelectionPath, JSON.stringify(filed));
         root.selectionResolved(payload.token, payload.value !== undefined ? payload.value : null, !!payload.cancelled);
+        if (root._inputSecret) {
+            searchInput.text = "";
+            root._inputSecret = false;
+        }
     }
 
     // Leaving select/input mode without the caller ever getting an answer
@@ -1284,10 +1297,11 @@ PanelWindow {
         root._arrive();
     }
 
-    function openInput(prompt, token) {
+    function openInput(prompt, token, secret) {
         root._rowsSettle = true;
         root._beginSelectionRequest();
         root._mode = "input";
+        root._inputSecret = secret === true;
         root._selectPrompt = prompt;
         root._selectOptions = [];
         root._selectToken = token;
@@ -1782,6 +1796,12 @@ PanelWindow {
         if (root._isAppView) return;
         var rows = root._displayRows;
         var node = (index >= 0 && index < rows.length) ? rows[index] : null;
+        if (node && node.alternate) {
+            root._runAction(node.alternate);
+            if (node.keepOpen !== true)
+                root.close();
+            return;
+        }
         if (node && node.clipsshPath) {
             var alias = ClipsshService.resolveAlias();
             if (alias !== "") {
@@ -1933,6 +1953,7 @@ PanelWindow {
     // ConditionEvaluator.
     ConditionEvaluator {
         id: conditions
+        bluetoothConnected: liveSources.bluetoothConnected
     }
 
     Component.onCompleted: {
@@ -2086,6 +2107,7 @@ PanelWindow {
                 clip: true
                 focus: true
                 selectByMouse: true
+                echoMode: root._mode === "input" && root._inputSecret ? TextInput.Password : TextInput.Normal
                 cursorVisible: true
 
                 Text {

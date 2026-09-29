@@ -118,6 +118,28 @@ TestCase {
         compare(ids, ["apps.equibop", "tray.equibop"]);
     }
 
+    function _localOnlyTree() {
+        // localOnly is set on the built node: only provider rows carry it,
+        // and buildTree copies a fixed key list.
+        var tree = M.buildTree({
+            "net": { label: "Net" },
+            "net.home": { label: "Cafe Home" },
+            "net.scan": { label: "Cafe Scan" }
+        }, {});
+        tree.nodes["net.scan"].localOnly = true;
+        return tree;
+    }
+
+    function test_local_only_child_is_absent_from_a_root_query() {
+        var ids = S.rank(_localOnlyTree().nodes, "Cafe", {}, null).map(function (n) { return n.id; });
+        compare(ids, ["net.home"]);
+    }
+
+    function test_local_only_child_is_found_inside_its_parent() {
+        var ids = S.rank(_localOnlyTree().nodes, "Cafe", {}, "net").map(function (n) { return n.id; });
+        compare(ids.sort(), ["net.home", "net.scan"]);
+    }
+
     // The route row itself is not what routeOnly hides, so the route stays
     // reachable by name from the root the way every other route is.
     function test_route_only_route_row_still_matches_from_the_root() {
