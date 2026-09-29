@@ -19,6 +19,8 @@ DrawerJoin DrawerJoin.qml
 DrawerPopover DrawerPopover.qml
 DitherFill DitherFill.qml
 DitherImage DitherImage.qml
+FlowLink FlowLink.qml
+FlowNode FlowNode.qml
 Icon Icon.qml
 InkGlow InkGlow.qml
 IconButton IconButton.qml
@@ -36,6 +38,7 @@ Presence Presence.qml
 Rail Rail.qml
 RemoveTransition RemoveTransition.qml
 PointerMoveGate PointerMoveGate.qml
+PowerFlow PowerFlow.qml
 Scrim Scrim.qml
 SectionLabel SectionLabel.qml
 Separator Separator.qml

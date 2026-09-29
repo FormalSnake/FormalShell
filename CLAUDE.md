@@ -212,7 +212,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   while the fixture window is fullscreen and back to their starting counts
   after, with `hyprctl clients` confirming a window really was fullscreen.
 - `gallery.sh` `--gallery`: the dev gallery sheet, every shared component
-  drawn against the live theme.
+  drawn against the live theme. `PowerFlow` is drawn from `Power/flow.js`'s
+  fixed g815 snapshot (labelled a sample), the only populated view of it on
+  a rig with no battery; `--panel power` proves the honest "No power
+  sources" state.
 - `gpu.sh` `--gpu`: both cards of a hybrid laptop this rig is not, and the
   four PRIME offload variables reaching a launched child.
 - `grid_relaunch.sh` `--grid-relaunch`: the root grid after launches that

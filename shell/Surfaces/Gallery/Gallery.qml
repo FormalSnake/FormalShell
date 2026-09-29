@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import qs.Core
 import qs.Components
+import "../../Power/flow.js" as PowerFlowModel
 
 // The dev gallery (reference: omarchy's own shell/plugins/dev-gallery/
 // GalleryPanel.qml, read per CLAUDE.md's read-reference rule, the ledger
@@ -304,6 +305,28 @@ Panel {
                                     font.pixelSize: Theme.fontSize[typeCell.modelData]
                                 }
                             }
+                        }
+                    }
+
+                    // Never live data: Power/flow.js's fixed g815 snapshot
+                    // (AC, charge limit 80, both USB-C ports supplying), the
+                    // only way to see the populated drawing on a rig with no
+                    // battery. The Power panel itself reads real sysfs and
+                    // shows its honest empty state here.
+                    Column {
+                        width: typeColumn.width
+                        topPadding: Theme.space.sectionGap
+                        spacing: Theme.space.rowGap
+
+                        SectionLabel {
+                            leftPadding: Theme.space.controlPaddingX
+                            text: "PowerFlow / sample snapshot, not live"
+                        }
+
+                        PowerFlow {
+                            width: parent.width
+                            flow: PowerFlowModel.sampleFlow()
+                            animate: root.isOpen
                         }
                     }
                 }
@@ -631,8 +654,7 @@ Panel {
                     SectionLabel {
                         leftPadding: Theme.space.controlPaddingX
                         text: "Tooltip opens under the row above, over this panel"
-                    }
-                }
+                    }                }
             }
         }
     }

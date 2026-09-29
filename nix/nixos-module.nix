@@ -35,6 +35,36 @@
 let
   cfg = config.services.formalshell;
   ancs4linux = pkgs.callPackage ./ancs4linux.nix { };
+
+  # 0x12 is GET_CONNECTOR_STATUS, the connector number goes in bits 16 and
+  # up; it is the only command written. shell/Power/flow.js decodes the
+  # `response` lines.
+  ucsiPoll = pkgs.writeShellScript "formalshell-ucsi-poll" ''
+    out=/run/formalshell/ucsi
+    while :; do
+      : > "$out.tmp"
+      ports=0
+      for p in /sys/class/typec/port[0-9]*; do
+        case "$p" in *-partner) ;; *) ports=$((ports + 1)) ;; esac
+      done
+      for dir in /sys/kernel/debug/usb/ucsi/*; do
+        [ -w "$dir/command" ] || continue
+        c=1
+        while [ "$c" -le "$ports" ]; do
+          # debugfs parses the value with base 0, so without the 0x prefix
+          # it reads as decimal and sends a different command.
+          printf '0x%x\n' $((0x12 | (c << 16))) > "$dir/command" 2>/dev/null || break
+          if r=$(cat "$dir/response" 2>/dev/null); then
+            echo "$c $r" >> "$out.tmp"
+          fi
+          c=$((c + 1))
+        done
+      done
+      chmod 644 "$out.tmp"
+      mv -f "$out.tmp" "$out"
+      sleep 3
+    done
+  '';
 in
 {
   options.services.formalshell = {
@@ -61,6 +91,25 @@ in
     powerProfiles.enable = lib.mkEnableOption "power-profiles-daemon, backing the power panel's profile picker" // { default = true; };
     pipewire.enable = lib.mkEnableOption "pipewire, backing the audio bar cell, audio panel, and volume OSD" // { default = true; };
     polkit.enable = lib.mkEnableOption "polkit and the pkexec wrapper, backing the shell's authentication agent" // { default = true; };
+
+    # The Power panel's flow diagram reads two things the kernel keeps from a
+    # user session. Both are read-only on the machine and default on.
+    power.raplReadable.enable = lib.mkEnableOption ''
+      world-readable RAPL energy counters (a udev rule chmod-ing
+      /sys/class/powercap/*/energy_uj to a+r), which the Power panel samples
+      for the CPU package draw. Linux makes them root-only because of the
+      PLATYPUS power side channel; turn this off to keep that mitigation and
+      the panel shows the CPU draw as unavailable
+    '' // { default = true; };
+
+    power.ucsiPoller.enable = lib.mkEnableOption ''
+      a root service that asks each USB-C connector for its status (the UCSI
+      GET_CONNECTOR_STATUS command through debugfs, nothing else) every few
+      seconds and writes the answers to /run/formalshell/ucsi. The kernel
+      exposes no per-port power figure elsewhere, so without it the Power
+      panel's USB-C rows say "Powering a device" with no contract wattage.
+      Does nothing on a machine without /sys/kernel/debug/usb/ucsi
+    '' // { default = true; };
 
     # M75: the iPhone ANCS/AMS bridge. Off by default and not folded into the
     # `enable` toggle above: ancs4linux.Observer and ancs4linux.Advertising
@@ -127,6 +176,27 @@ in
       security.polkit = lib.mkIf cfg.polkit.enable {
         enable = lib.mkDefault true;
         enablePkexecWrapper = lib.mkDefault true;
+      };
+    })
+
+    (lib.mkIf (cfg.enable && cfg.power.raplReadable.enable) {
+      services.udev.extraRules = ''
+        SUBSYSTEM=="powercap", ACTION=="add|change", RUN+="${pkgs.coreutils}/bin/chmod a+r /sys%p/energy_uj"
+      '';
+    })
+
+    (lib.mkIf (cfg.enable && cfg.power.ucsiPoller.enable) {
+      systemd.services.formalshell-ucsi-poll = {
+        description = "FormalShell USB-C connector status for the Power panel";
+        wantedBy = [ "multi-user.target" ];
+        unitConfig.ConditionPathExists = "/sys/kernel/debug/usb/ucsi";
+        path = [ pkgs.coreutils ];
+        serviceConfig = {
+          ExecStart = ucsiPoll;
+          RuntimeDirectory = "formalshell";
+          RuntimeDirectoryMode = "0755";
+          Restart = "on-failure";
+        };
       };
     })
 

@@ -4,7 +4,9 @@ import Quickshell.Services.UPower
 import qs.Core
 import qs.Components
 import qs.Notifications
+import qs.Services
 import "../../Power/model.js" as Power
+import "../../Power/flow.js" as Flow
 
 // Power panel (DESIGN.md §3 "Panel", spec "Panels"): a hero for the battery
 // (state icon, "Battery", the state word, the percent as the display-sized
@@ -174,7 +176,9 @@ Panel {
             profileGroup.cursorIndex = root._activeProfileIndex;
             root.cursorSection = 0;
             root._readChargeLimit();
+            SystemMonitorService.subscribe();
         } else {
+            SystemMonitorService.unsubscribe();
             // Drop the RAPL baseline on close (M20 Task 5c): no background
             // polling for a closed panel, and reopening starts a fresh pair
             // of samples rather than computing a wattage across whatever gap
@@ -234,6 +238,55 @@ Panel {
         running: root.isOpen
         triggeredOnStart: true
         onTriggered: root._sampleRapl()
+    }
+
+    // Power flow (adapter, laptop, battery, USB-C ports): one sysfs pass per
+    // sample while the panel is open, decoded by Power/flow.js. The CPU
+    // figure is the RAPL sampler above, the GPU figure the monitor
+    // collector's nvidia/hwmon reading (GpuService rides its tick), so
+    // neither is read a second time here.
+    property var _flowSnapshot: ({ supplies: [], ports: [], ucsi: {} })
+
+    readonly property real _gpuTotalW: {
+        var total = 0;
+        var seen = false;
+        var cards = GpuService.cards;
+        for (var i = 0; i < cards.length; i++) {
+            var m = cards[i].metrics;
+            if (m && m.powerW !== null && m.powerW !== undefined) {
+                total += m.powerW;
+                seen = true;
+            }
+        }
+        return seen ? total : -1;
+    }
+
+    readonly property var _flow: Flow.buildFlow(root._flowSnapshot, {
+        cpuW: root.cpuPackageW,
+        gpuW: root._gpuTotalW >= 0 ? root._gpuTotalW : null,
+        iphonePercent: IphoneService.batteryAvailable ? IphoneService.battery * 100 : null
+    })
+
+    Process {
+        id: flowProc
+        command: Flow.collectCommand()
+        stdout: StdioCollector {
+            id: flowCollector
+        }
+        onExited: exitCode => {
+            root._flowSnapshot = Flow.parseSnapshot(flowCollector.text);
+        }
+    }
+
+    Timer {
+        interval: root._raplSampleIntervalMs
+        repeat: true
+        running: root.isOpen
+        triggeredOnStart: true
+        onTriggered: {
+            if (!flowProc.running)
+                flowProc.running = true;
+        }
     }
 
     // The percentage the firmware stops charging at, when the battery
@@ -457,6 +510,26 @@ Panel {
         visible: !root._hasBattery
         leftPadding: Theme.space.controlPaddingX
         text: "AC power"
+    }
+
+    Column {
+        width: parent.width
+        spacing: Theme.space.rowGap
+
+        SectionLabel { leftPadding: Theme.space.controlPaddingX; text: "Power flow" }
+
+        PowerFlow {
+            visible: root._flow.available
+            width: parent.width
+            flow: root._flow
+            animate: root.isOpen
+        }
+
+        SectionLabel {
+            visible: !root._flow.available
+            leftPadding: Theme.space.controlPaddingX
+            text: "No power sources"
+        }
     }
 
     Column {
