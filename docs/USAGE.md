@@ -1534,10 +1534,14 @@ binds {
 
 ## Window switcher
 
-One card in the middle of the output: a row of 64px app icons, one per
-mapped window across every workspace, the most recently focused first, the
-selected one on an accent fill with its title and app name under the row.
-Several windows of one app carry a small number each. An app with no
+One card in the middle of the output: a thumbnail of every mapped window
+across every workspace, each with its app icon and title under it, the most
+recently focused first and the selected one on an accent fill. The card
+opens with its icons and the thumbnails fill in once it is up: one frame
+per window, and a live one for the selected window alone. Hyprland only
+copies a window whose box overlaps its monitor, so a column scrolled off
+the output under the scrolling layout keeps its app icon instead of a
+thumbnail. Several windows of one app carry a small number each. An app with no
 matching desktop entry, no class and no recognisable process draws the
 generic application icon rather than an empty tile. A window on a
 special workspace (the quake console) is not offered, since it is an overlay
@@ -1554,7 +1558,7 @@ fs switcher next     # open on the window before this one, or walk on
 fs switcher prev     # the other way, wrapping at either end
 fs switcher commit   # focus the selected window and close
 fs switcher cancel   # close, focus untouched
-fs switcher state    # {"open":…,"index":…,"count":…,"id":…,"title":…}
+fs switcher state    # {"open":…,"shown":…,"index":…,"count":…,"id":…,"title":…,"captured":…}
 ```
 
 The card takes the keyboard while it is open and never a modifier: Tab,
@@ -1562,7 +1566,10 @@ Right and Down walk the row, Shift+Tab, Left and Up walk it back, Enter
 commits, Escape cancels, and nothing else types anywhere. Holding a modifier
 is the compositor's job, so the shipped Hyprland example binds Alt+Tab to
 `switcher next`, Alt+Shift+Tab to `switcher prev` and the release of Alt to
-`switcher commit` (`docs/examples/hyprland/formalshell.lua`). A release bind
+`switcher commit` (`docs/examples/hyprland/formalshell.lua`), with the two
+Tab binds `repeating` so a held Tab keeps walking. The card maps 150ms
+after the first press, so a quick Alt+Tab switches to the previous window
+with no card at all, the way Cmd+Tab does on macOS. A release bind
 takes the modifier as a keysym (`Alt_L`), so it fires on every Alt release,
 open or not; a commit with nothing open is a no-op that says so. Where a
 release bind cannot be made to fire, Enter commits from the card itself.

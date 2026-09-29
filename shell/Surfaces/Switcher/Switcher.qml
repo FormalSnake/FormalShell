@@ -16,8 +16,10 @@ import "switcher.js" as Model
 // are Components/WindowThumb.qml, captured only while the card is up. Keyboard only, and
 // summoned over IPC alone
 // (`switcher next|prev|commit|cancel|state`), so the compositor's own bind
-// drives it: Alt+Tab advances, the release of the modifier commits, and
-// nothing here ever grabs a modifier of its own. That release bind has to
+// drives it: Alt+Tab advances (the binds repeat, so a held Tab walks on),
+// the release of the modifier commits, and nothing here ever grabs a
+// modifier of its own. The card maps only once `_showTimer` runs out, so a
+// quick Alt+Tab switches with no card at all, as Cmd+Tab does on macOS. That release bind has to
 // carry Hyprland's `t` flag (`bindrt`, M64): a bind whose key is held while
 // another bind fires is shadowed for as long as that key stays down, and a
 // transparent bind is the only kind `shadowKeybinds` leaves alone
@@ -32,7 +34,20 @@ import "switcher.js" as Model
 PanelWindow {
     id: root
 
+    // A switch is under way: from the first `next`/`prev` to the commit or
+    // the cancel. The card itself only maps once `_shown` flips, which a
+    // quick Alt+Tab never waits for (macOS's Cmd+Tab: a tap switches with no
+    // card at all).
     property bool isOpen: false
+    property bool _shown: false
+    readonly property bool shown: root._shown
+    // How many times the card has mapped since startup, for `switcher
+    // state`: a fast tap leaves it where it was.
+    property int shows: 0
+    // Set one frame after the card maps: the thumbnails' captures attach to a
+    // card already on screen with its icons, never ahead of it.
+    property bool _capturing: false
+
     // Which entry the cursor sits on. Held across a close so nothing reads a
     // stale index mid-exit; every open sets it before flipping `isOpen`.
     property int index: 0
@@ -63,6 +78,7 @@ PanelWindow {
     // has shown and far short of the gap between two distinct gestures, so
     // it never couples an unrelated bare Alt tap to a later Alt+Tab.
     property bool _commitPending: false
+    property real _committedAt: 0
 
     readonly property var entries: Model.entries(CompositorService.windows,
         root._openHistory, root._openWorkspaceId)
@@ -107,6 +123,12 @@ PanelWindow {
     // taking the compositor somewhere else.
     function step(direction) {
         if (!root.isOpen) {
+            // The same race the other way round: with Tab held the bind
+            // repeats, and a repeat spawned just before Alt came up can land
+            // after the commit. Opening on it would leave a card up with no
+            // modifier held; no new gesture starts this soon after a release.
+            if (Date.now() - root._committedAt < _commitRaceTimer.interval)
+                return;
             root._openHistory = root._history;
             // Every workspace unless `switcher.currentWorkspace` asks for
             // Gala's list: a desk that keeps one app per workspace has one
@@ -117,8 +139,7 @@ PanelWindow {
             root.index = Model.advance(0, root.count, direction);
             root._focusPrimed = false;
             root.isOpen = true;
-            root._beginFocusPrime();
-            Qt.callLater(function () { backdrop.forceActiveFocus(); });
+            _showTimer.restart();
             // The release that opened this got here first (see
             // `_commitPending`'s header): commit against the row this open
             // just built instead of leaving the card up with nothing
@@ -139,6 +160,22 @@ PanelWindow {
         onTriggered: root._commitPending = false
     }
 
+    // The delay before the card maps, macOS's: long enough that a tap
+    // commits before it runs out, short enough that a held Alt reads as
+    // instant.
+    Timer {
+        id: _showTimer
+        interval: 150
+        onTriggered: if (root.isOpen) root._show()
+    }
+
+    function _show() {
+        root._shown = true;
+        root.shows++;
+        root._beginFocusPrime();
+        Qt.callLater(function () { backdrop.forceActiveFocus(); });
+    }
+
     // The selected window through the backend's own focus verb, on the
     // opaque id the compositor handed over (CLAUDE.md: never parsed, never
     // compared numerically).
@@ -157,7 +194,9 @@ PanelWindow {
     function _commitNow() {
         var id = root.selectedId;
         var primed = root._focusPrimed;
+        var shown = root._shown;
         root.close();
+        root._committedAt = Date.now();
         if (id === "")
             return false;
         // A commit inside the prime window lands while this layer still holds
@@ -165,7 +204,9 @@ PanelWindow {
         // window it came from once the layer lets go, undoing the switch. One
         // dispatch after that release rather than one either side of it: two
         // make the compositor start its animation, reverse it and start again.
-        if (primed) {
+        // A card that never mapped never took the keyboard, so there is
+        // nothing to wait out.
+        if (primed || !shown) {
             CompositorService.focusWindow(id);
         } else {
             root._refocusId = id;
@@ -187,7 +228,9 @@ PanelWindow {
     }
 
     function close() {
+        _showTimer.stop();
         root.isOpen = false;
+        root._shown = false;
     }
 
     readonly property var _screen: {
@@ -281,6 +324,20 @@ PanelWindow {
         return n;
     }
 
+    // Per entry, in row order, its window and whether its thumbnail holds a
+    // frame.
+    function capturedCells() {
+        var out = [];
+        for (var i = 0; i < thumbRepeater.count; i++) {
+            var cell = thumbRepeater.itemAt(i);
+            out.push({
+                id: root.entries[i] ? root.entries[i].id : "",
+                captured: !!(cell && cell.captured)
+            });
+        }
+        return out;
+    }
+
     function capturingCount() {
         var n = 0;
         for (var i = 0; i < thumbRepeater.count; i++) {
@@ -331,23 +388,49 @@ PanelWindow {
     // click), so every open primes with Exclusive and settles back once that
     // focus has landed; Panel.qml carries the full rationale, including why
     // the prime has to stay short under Hyprland.
-    WlrLayershell.keyboardFocus: root.isOpen
+    WlrLayershell.keyboardFocus: root._shown
         ? (root._focusPrimed ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive)
         : WlrKeyboardFocus.None
 
     anchors { top: true; left: true; right: true; bottom: true }
 
-    onBackingWindowVisibleChanged: root._beginFocusPrime()
+    onBackingWindowVisibleChanged: {
+        root._beginFocusPrime();
+        if (root.backingWindowVisible && root._shown)
+            _captureTimer.restart();
+        else if (!root.backingWindowVisible)
+            root._capturing = false;
+    }
 
     function _beginFocusPrime() {
-        if (root.isOpen && root.backingWindowVisible)
+        if (root._shown && root.backingWindowVisible)
             focusPrimeTimer.restart();
     }
 
     Timer {
         id: focusPrimeTimer
         interval: 75
-        onTriggered: if (root.isOpen) root._focusPrimed = true
+        onTriggered: if (root._shown) root._focusPrimed = true
+    }
+
+    // Two frames at 60Hz: the card's first frame is on screen before the
+    // first capture is requested.
+    Timer {
+        id: _captureTimer
+        interval: 32
+        onTriggered: if (root._shown) root._capturing = true
+    }
+
+    Timer {
+        id: _refreshTimer
+        interval: 200
+        repeat: true
+        running: root._shown && root._capturing
+        onTriggered: {
+            var cell = thumbRepeater.itemAt(root.index);
+            if (cell)
+                cell.refresh();
+        }
     }
 
     // Off-screen calibration for `_captionHeight`: one line at the caption's
@@ -368,7 +451,7 @@ PanelWindow {
     MouseArea {
         id: backdrop
         anchors.fill: parent
-        enabled: root.isOpen
+        enabled: root._shown
         focus: true
         Keys.priority: Keys.BeforeItem
         Keys.onPressed: event => keyCatcher.handle(event)
@@ -378,7 +461,7 @@ PanelWindow {
     KeyCatcher {
         id: keyCatcher
         focus: false
-        blocked: !root.isOpen
+        blocked: !root._shown
 
         // Tab and the arrows walk the row the same way `switcher next` does:
         // right and down forward, left and up back, wrapping at either end.
@@ -404,7 +487,7 @@ PanelWindow {
         id: drawer
         anchors.fill: parent
         owner: root
-        open: root.isOpen
+        open: root._shown
         mapped: root.backingWindowVisible
         edge: "center"
         screen: root._screen
@@ -457,6 +540,10 @@ PanelWindow {
                     readonly property bool captured: picture.captured
                     readonly property bool sourced: picture.sourced
 
+                    function refresh() {
+                        picture.refresh();
+                    }
+
                     x: slot._place.x
                     y: slot._place.y
                     width: slot._place.width
@@ -487,8 +574,13 @@ PanelWindow {
                             height: root._thumbHeight
                             win: slot._win
                             iconSource: slot._app.icon || ""
-                            capturing: root.visible
-                            live: root.isOpen
+                            // One frame per window, and the selected one
+                            // refreshed by `_refreshTimer`. `live` would
+                            // have the compositor copy the window on every
+                            // frame and this whole card repaint after each
+                            // copy, which is what made Alt+Tab lag.
+                            capturing: root._capturing && root.visible
+                            live: false
                             lit: slot._selected
                             showTitle: false
                         }

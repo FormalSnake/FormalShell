@@ -489,8 +489,9 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   once over IPC against `switcher state`, the frame read for the fixture icon
   in three captions and for the selection fill travelling from the third
   cell to the second (cell positions off `switcher state`'s `cells`), all
-  three thumbnails holding a captured frame while open and none holding any
-  capture source after the commit, then a commit landing focus on the window
+  three thumbnails holding a captured frame while open (one frame each,
+  the selected one refreshed five times a second, never `live`) and none
+  holding any capture source after the commit, then a commit landing focus on the window
   the card named (`hyprctl activewindow`).
 - `switcher_keys.sh` `--switcher-keys`: the same card driven by the
   compositor's own binds and real keys instead of IPC, one `wtype` process
@@ -504,7 +505,15 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   Alt tap first, which has to leave the plain probe's marker. Three fast
   taps close it out, each one wtype process with no sleep between the Tab
   and the Alt release, asserting the active window alternates every time
-  rather than a commit racing ahead of the next that opened the card.
+  rather than a commit racing ahead of the next that opened the card, and
+  none of them mapping the card (`switcher state`'s `shows` and a polled
+  layer list): it shows only 150ms into a hold. Then nine windows and one
+  hold: Tab held on a slowed repeat stepping the cursor several entries
+  (the Tab binds carry `repeating`), Shift+Tab with Alt still down stepping
+  back one and the release landing there, and all nine thumbnails captured.
+  Last the scrolling layout, where Hyprland copies no window whose box
+  misses its monitor: the cells with no frame are exactly the windows off
+  the monitor, drawn with their icon.
 - `switcher_off.sh` `--switcher-off`: the same target with
   `switcher.enabled: false` in the settings fixture: all five verbs answering
   the error string and no switcher surface mapped at all.

@@ -296,8 +296,11 @@ fs_bind("SUPER + CTRL + L", "lock lock")
 -- Alt_R is bound beside it for a right-hand Alt; on a layout where that key
 -- is AltGr it carries a different modifier and simply never matches. Escape
 -- and Enter still cancel and commit from the card's own keyboard.
-fs_bind("ALT + Tab", "switcher next")
-fs_bind("ALT + SHIFT + Tab", "switcher prev")
+--
+-- `repeating` on the two Tab binds: Hyprland repeats a bind only when asked,
+-- so without it a held Tab steps once and stops.
+fs_bind("ALT + Tab", "switcher next", { repeating = true })
+fs_bind("ALT + SHIFT + Tab", "switcher prev", { repeating = true })
 fs_bind("ALT + Alt_L", "switcher commit", { release = true, transparent = true })
 fs_bind("ALT + Alt_R", "switcher commit", { release = true, transparent = true })
 

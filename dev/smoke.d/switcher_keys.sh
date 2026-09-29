@@ -61,7 +61,19 @@ leg_switcher_keys_fixture_window=keep
 # independent processes, and nothing orders their arrival at the ipc
 # socket, so a fast enough tap can have the release win that race. The
 # active window has to alternate between the two windows on every one of
-# the three, never repeat or sit still.
+# the three, never repeat or sit still. None of them may map the card: it
+# waits 150ms before it shows (macOS's Cmd+Tab), read off `switcher state`'s
+# `shows` and off hyprctl's layer list polled for the whole run of taps.
+#
+# Then six more windows, nine on the workspace, and one hold: Tab held for a
+# second (the binds carry `repeating`, and this session slows the repeat to
+# five a second so the steps can be counted), then Shift+Tab with Alt still
+# down stepping back one, and the release landing there. All nine
+# thumbnails hold a frame. Last, the same nine under the scrolling layout:
+# Hyprland copies a window only while its box overlaps its monitor
+# (`CScreenshareManager::onOutputCommit`), so the cells with no frame have
+# to be exactly the windows hyprctl places off the monitor, drawn with their
+# icon.
 
 switcher_keys_probe_dir="$shot_dir/switcher-keys-probes"
 switcher_keys_binds_path="$shot_dir/switcher-keys-binds.txt"
@@ -81,6 +93,19 @@ switcher_keys_fast_1_json="$shot_dir/switcher-keys-fast-1.json"
 switcher_keys_fast_2_json="$shot_dir/switcher-keys-fast-2.json"
 switcher_keys_fast_3_json="$shot_dir/switcher-keys-fast-3.json"
 switcher_keys_fast_state_json="$shot_dir/switcher-keys-fast-state.json"
+switcher_keys_fast_pre_state_json="$shot_dir/switcher-keys-fast-pre-state.json"
+switcher_keys_fast_layers="$shot_dir/switcher-keys-fast-layers.txt"
+switcher_keys_fast_done="$shot_dir/switcher-keys-fast-done"
+switcher_keys_many_clients_json="$shot_dir/switcher-keys-many-clients.json"
+switcher_keys_repeat_json="$shot_dir/switcher-keys-repeat.json"
+switcher_keys_back_json="$shot_dir/switcher-keys-back.json"
+switcher_keys_back_active_json="$shot_dir/switcher-keys-back-active.json"
+switcher_keys_many_png="$shot_dir/switcher-keys-many.png"
+switcher_keys_scroll_eval="$shot_dir/switcher-keys-scroll-eval.txt"
+switcher_keys_scroll_json="$shot_dir/switcher-keys-scroll.json"
+switcher_keys_scroll_clients_json="$shot_dir/switcher-keys-scroll-clients.json"
+switcher_keys_scroll_monitors_json="$shot_dir/switcher-keys-scroll-monitors.json"
+switcher_keys_scroll_png="$shot_dir/switcher-keys-scroll.png"
 
 leg_switcher_keys_fixture() {
   # The fourth window on workspace 2 is only held out of the card under
@@ -99,7 +124,7 @@ leg_switcher_keys_validate() {
 }
 
 leg_switcher_keys_timing() {
-  leg_timing 50 128
+  leg_timing 90 170
 }
 
 leg_switcher_keys_drive() {
@@ -123,12 +148,14 @@ EOS
   # same answer either way. Nothing else about the bind table changes: the
   # modifier mask, the shadowing and the release path are what this leg
   # reads, and none of them go near keysym resolution.
-  echo "hl.config({ input = { resolve_binds_by_sym = true } })"
+  # A slow repeat, so a held Tab's steps can be counted: 300ms before the
+  # first repeat and five a second after it.
+  echo "hl.config({ input = { resolve_binds_by_sym = true, repeat_delay = 300, repeat_rate = 5 } })"
   # Real binds in this session's real hyprland.lua, the shipped example's
   # three plus the probes, so what is exercised is hyprland's own bind table
   # rather than anything this rig invented.
-  echo "hl.bind(\"ALT + Tab\", hl.dsp.exec_cmd([==[$qs_bin ipc -p $shell_path call switcher next]==]))"
-  echo "hl.bind(\"ALT + SHIFT + Tab\", hl.dsp.exec_cmd([==[$qs_bin ipc -p $shell_path call switcher prev]==]))"
+  echo "hl.bind(\"ALT + Tab\", hl.dsp.exec_cmd([==[$qs_bin ipc -p $shell_path call switcher next]==]), { repeating = true })"
+  echo "hl.bind(\"ALT + SHIFT + Tab\", hl.dsp.exec_cmd([==[$qs_bin ipc -p $shell_path call switcher prev]==]), { repeating = true })"
   echo "hl.bind(\"ALT + Alt_L\", hl.dsp.exec_cmd([==[$qs_bin ipc -p $shell_path call switcher commit]==]), { release = true, transparent = true })"
   echo "hl.bind(\"ALT + Alt_L\", hl.dsp.exec_cmd([==[bash $probe plain]==]), { release = true })"
   echo "hl.bind(\"Alt_L\", hl.dsp.exec_cmd([==[bash $probe nomods]==]), { release = true, transparent = true })"
@@ -183,7 +210,13 @@ ls -1 "$switcher_keys_probe_dir" > "$switcher_keys_after_path" 2>&1
 
 # Three fast taps, no sleep inside any of them: one wtype process per tap
 # presses the Alt key, taps Tab once and releases Alt straight back out.
+"$qs_bin" ipc -p "$shell_path" call switcher state > "$switcher_keys_fast_pre_state_json" 2>&1
 "$hyprctl_bin" -j activewindow > "$switcher_keys_fast_before_json" 2>&1
+# Every layer map while the taps run, polled as fast as hyprctl answers.
+( while [ ! -e "$switcher_keys_fast_done" ]; do
+    "$hyprctl_bin" layers 2>/dev/null | grep -c 'formalshell:switcher' >> "$switcher_keys_fast_layers"
+  done ) &
+poller=\$!
 "$wtype_bin" -M alt -P Alt_L -k Tab -p Alt_L -m alt >> "$switcher_keys_wtype_log" 2>&1
 sleep 1
 "$hyprctl_bin" -j activewindow > "$switcher_keys_fast_1_json" 2>&1
@@ -193,7 +226,47 @@ sleep 1
 "$wtype_bin" -M alt -P Alt_L -k Tab -p Alt_L -m alt >> "$switcher_keys_wtype_log" 2>&1
 sleep 1
 "$hyprctl_bin" -j activewindow > "$switcher_keys_fast_3_json" 2>&1
+touch "$switcher_keys_fast_done"
+wait \$poller
 "$qs_bin" ipc -p "$shell_path" call switcher state > "$switcher_keys_fast_state_json" 2>&1
+
+# Six more windows on this workspace, nine in all, every one of them on
+# screen under the rig's dwindle layout.
+for n in 4 5 6 7 8 9; do
+  "$hyprctl_bin" dispatch "hl.dsp.exec_cmd([==[$foot_bin --app-id=formalshell-smoke-many --title='formalshell smoke \$n' sh -c 'sleep 300']==])"
+  sleep 1.5
+done
+sleep 3
+"$hyprctl_bin" -j clients > "$switcher_keys_many_clients_json" 2>&1
+# Tab held for a second with Alt down: one press, the 300ms delay, then a
+# step every 200ms. Then Shift+Tab once with Alt still down, then the
+# release.
+"$wtype_bin" -M alt -P Alt_L -P Tab -s 1000 -p Tab -s 1500 -M shift -k Tab -m shift -s 1500 -p Alt_L -m alt \
+  > /dev/null 2>&1 &
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call switcher state > "$switcher_keys_repeat_json" 2>&1
+"$grim_bin" "$switcher_keys_many_png" > /dev/null 2>&1
+sleep 1.4
+"$qs_bin" ipc -p "$shell_path" call switcher state > "$switcher_keys_back_json" 2>&1
+wait
+sleep 2
+"$hyprctl_bin" -j activewindow > "$switcher_keys_back_active_json" 2>&1
+
+# The same nine under the scrolling layout, half the output per column, so
+# most of them sit off the monitor. Hyprland copies a window only while its
+# box overlaps its monitor (ScreenshareManager::onOutputCommit), so those
+# cells keep their icon.
+"$hyprctl_bin" eval 'hl.config({ general = { layout = "scrolling" }, scrolling = { column_width = 0.5 } })' \
+  > "$switcher_keys_scroll_eval" 2>&1
+sleep 3
+"$wtype_bin" -M alt -P Alt_L -k Tab -s 3000 -p Alt_L -m alt > /dev/null 2>&1 &
+sleep 2
+"$qs_bin" ipc -p "$shell_path" call switcher state > "$switcher_keys_scroll_json" 2>&1
+"$hyprctl_bin" -j clients > "$switcher_keys_scroll_clients_json" 2>&1
+"$hyprctl_bin" -j monitors > "$switcher_keys_scroll_monitors_json" 2>&1
+"$grim_bin" "$switcher_keys_scroll_png" > /dev/null 2>&1
+wait
+sleep 1
 EOS
   hypr_exec_once "bash $script"
 }
@@ -312,7 +385,68 @@ leg_switcher_keys_assert() {
   [ "$fast_open" = "false" ] \
     || fail "the card is still open after three fast taps: $(cat "$switcher_keys_fast_state_json")"
 
+  # No card mapped for any of the three: the switch happened before the
+  # card's delay ran out, read off the shell's own map count and off
+  # hyprctl's layer list polled throughout.
+  local shows_before shows_after max_layers
+  shows_before=$("$jq_bin" -r '.shows' "$switcher_keys_fast_pre_state_json")
+  shows_after=$("$jq_bin" -r '.shows' "$switcher_keys_fast_state_json")
+  max_layers=$(sort -n "$switcher_keys_fast_layers" 2>/dev/null | tail -1)
+  echo "fast taps: card maps $shows_before -> $shows_after, most switcher layers seen $max_layers over $(wc -l < "$switcher_keys_fast_layers") polls"
+  [ -n "$shows_before" ] && [ "$shows_before" = "$shows_after" ] \
+    || fail "a fast tap mapped the card ($shows_before -> $shows_after): a tap has to switch with no card"
+  [ "${max_layers:-1}" = "0" ] \
+    || fail "hyprctl saw a formalshell:switcher layer during the fast taps"
+
+  # Tab held with Alt down: one press, then the bind's own repeats walking
+  # on, so the cursor is past where two separate presses would leave it.
+  local many repeat_index repeat_count repeat_shown back_index back_id back_active
+  many=$("$jq_bin" -r '[.[] | select(.workspace.id == 1)] | length' "$switcher_keys_many_clients_json")
+  repeat_index=$("$jq_bin" -r '.index' "$switcher_keys_repeat_json")
+  repeat_count=$("$jq_bin" -r '.count' "$switcher_keys_repeat_json")
+  repeat_shown=$("$jq_bin" -r '.shown' "$switcher_keys_repeat_json")
+  echo "tab held 1s: index=$repeat_index count=$repeat_count shown=$repeat_shown (windows on workspace 1: $many)"
+  [ "$repeat_count" = "$many" ] && [ "$many" -ge 9 ] \
+    || fail "the card offers $repeat_count windows with $many on the workspace"
+  [ "$repeat_shown" = "true" ] || fail "the card is not up while Alt is held: $(cat "$switcher_keys_repeat_json")"
+  [ "$repeat_index" -ge 3 ] \
+    || fail "a held Tab left the cursor on entry $repeat_index: the bind did not repeat"
+
+  # Every one of the nine on screen carries a captured frame.
+  "$jq_bin" -e '.captured == .count and (.capturedCells | map(.captured) | all)' "$switcher_keys_repeat_json" > /dev/null \
+    || fail "not every thumbnail holds a frame: $("$jq_bin" -c '{count, captured, capturedCells}' "$switcher_keys_repeat_json")"
+
+  # Shift+Tab with Alt still down steps back one, and the release lands there.
+  back_index=$("$jq_bin" -r '.index' "$switcher_keys_back_json")
+  back_id=$("$jq_bin" -r '.id' "$switcher_keys_back_json")
+  back_active=$("$jq_bin" -r '.address' "$switcher_keys_back_active_json")
+  echo "shift+tab: index $repeat_index -> $back_index, released onto $back_active (want $back_id)"
+  [ "$back_index" = "$(( repeat_index - 1 ))" ] \
+    || fail "Shift+Tab moved the cursor from $repeat_index to $back_index, not one back"
+  [ "$(_switcher_keys_bare_address "$back_active")" = "$(_switcher_keys_bare_address "$back_id")" ] \
+    || fail "the release after Shift+Tab focused $back_active, not $back_id"
+
+  # The scrolling layout: the cells Hyprland will not copy are exactly the
+  # windows whose box misses the monitor, and they are the only ones.
+  echo "scrolling eval: $(cat "$switcher_keys_scroll_eval")"
+  local offscreen uncaptured
+  offscreen=$("$jq_bin" -r --slurpfile m "$switcher_keys_scroll_monitors_json" '
+    ($m[0][0]) as $mon
+    | [.[] | select(.workspace.id == 1)
+       | select(.at[0] + .size[0] <= $mon.x or .at[0] >= $mon.x + $mon.width
+             or .at[1] + .size[1] <= $mon.y or .at[1] >= $mon.y + $mon.height)
+       | .address | ltrimstr("0x")] | sort | join(" ")' "$switcher_keys_scroll_clients_json")
+  uncaptured=$("$jq_bin" -r '[.capturedCells[] | select(.captured | not) | .id | ltrimstr("0x")] | sort | join(" ")' \
+    "$switcher_keys_scroll_json")
+  echo "scrolling: off-monitor windows [$offscreen], $("$jq_bin" -c '{count, captured, capturedCells}' "$switcher_keys_scroll_json")"
+  [ -n "$offscreen" ] || fail "no window sits off the monitor under the scrolling layout, so the limit was never exercised"
+  echo "scrolling: thumbnails without a frame [$uncaptured]"
+  [ "$uncaptured" = "$offscreen" ] \
+    || fail "under the scrolling layout the cells with no frame [$uncaptured] are not the windows off the monitor [$offscreen]"
+
   echo "SMOKE_SWITCHER_KEYS ok index=$index count=$count committed=$selected_id"
   echo "SMOKE_SWITCHER_KEYS_HELD $switcher_keys_held_png"
   echo "SMOKE_SWITCHER_KEYS_CLOSED $switcher_keys_closed_png"
+  echo "SMOKE_SWITCHER_KEYS_MANY $switcher_keys_many_png"
+  echo "SMOKE_SWITCHER_KEYS_SCROLL $switcher_keys_scroll_png"
 }

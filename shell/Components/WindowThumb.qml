@@ -42,6 +42,13 @@ Item {
     readonly property bool sourced: capture.captureSource !== null
     readonly property real radius: Theme.coverRadius(Math.min(root.width, root.height))
 
+    // One more frame, for an owner that paces its own refresh instead of
+    // running `live`.
+    function refresh() {
+        if (root.captured)
+            capture.captureFrame();
+    }
+
     Cell {
         id: box
         anchors.fill: parent
