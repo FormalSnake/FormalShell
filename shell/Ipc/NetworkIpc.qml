@@ -1,5 +1,6 @@
 import Quickshell.Io
 import Quickshell.Networking
+import qs.Services
 
 import "../Network/model.js" as NetworkModel
 
@@ -10,52 +11,25 @@ import "../Network/model.js" as NetworkModel
 // toggle network` alone can't (a bind that should also join a saved
 // network). Unknown ssid -> error string, never a silent no-op.
 //
-// connect/connectEap/forget drive NetworkPanel.qml's OWN row-activation
-// methods (same pattern CalendarIpc drives CalendarPanel's selectIsoDate)
-// rather than calling Quickshell.Networking directly: the panel's failure
-// handling (wifiRow's Connections.onConnectionFailed -> _failAction) is
-// gated on root._actionKind having been armed by _runAction first, an IPC
-// call that skipped straight to network.connectWithPsk() left that gate
-// permanently closed, so a genuine wrong-password rejection produced a
-// correctly-settled disconnected state but never lit up the row's WRONG
-// PASSWORD text (reproduced: wifi-wrong.png showed a bare unconnected row
-// even though wpa_supplicant's own journal showed a real 4-way-handshake
-// failure). Routing through the panel's real methods means an IPC-driven
-// connect renders exactly what an interactive click would.
+// connect/connectEap/forget go through WifiService, the same actions the
+// panel and the launcher run. The failure handling (Connections.
+// onConnectionFailed -> failAction) is gated on the service's actionKind
+// having been armed by runAction first: a call that skipped straight to
+// network.connectWithPsk() left that gate closed, so a genuine wrong-password
+// rejection settled to a bare disconnected row with no failure text.
 IpcHandler {
     target: "network"
 
     // Set from shell.qml: the NetworkPanel's PanelSlot, built on first use.
+    // Only the speed test verbs need it; the speed test lives on the panel.
     property var panel: null
-
-    function _wifiNetworks() {
-        var out = [];
-        var devices = Networking.devices.values;
-        for (var i = 0; i < devices.length; i++) {
-            if (devices[i].type !== DeviceType.Wifi)
-                continue;
-            var networks = devices[i].networks.values;
-            for (var j = 0; j < networks.length; j++)
-                out.push(networks[j]);
-        }
-        return out;
-    }
-
-    function _findNetwork(ssid) {
-        var networks = _wifiNetworks();
-        for (var i = 0; i < networks.length; i++) {
-            if ((networks[i].name || "") === ssid)
-                return networks[i];
-        }
-        return null;
-    }
 
     // Compact status for the smoke rig's poll loop: wifi radio power plus
     // one row per known/visible network. stateChanging rides alongside
     // connected so a caller can poll until NM has actually settled
     // (succeeded or given up) instead of guessing a sleep.
     function status(): string {
-        var networks = _wifiNetworks().map(function (n) {
+        var networks = WifiService.wifiNetworks().map(function (n) {
             return {
                 name: n.name || "",
                 known: n.known,
@@ -68,73 +42,50 @@ IpcHandler {
         return JSON.stringify({ wifiEnabled: Networking.wifiEnabled, networks: networks });
     }
 
-    // A network action already in flight (root._actionKind !== "") is not a
-    // condition connect/connectEap/forget below can ever proceed past:
-    // _activateWifiRow/_submitPassword/_forgetNetwork on the panel all
-    // early-return silently once busy, but _openPasswordPrompt (called
-    // directly by connect/connectEap below, ahead of _submitPassword) does
-    // not share that guard: it opens the inline prompt unconditionally.
-    // Reached over IPC while another action is still settling, that leaves
-    // a passphrase prompt open with nothing to ever close it (interactive
-    // clicks never hit this: _activateWifiRow guards opening the prompt on
-    // the same busy check, so only an IPC call that skips straight to
-    // _openPasswordPrompt could strand it). Guarding here, before any panel
-    // state is touched, is what keeps this an honest error instead of that
-    // silent no-op.
-    function _busyError(p) {
-        return "error: network action already in progress (" + p._actionKind + " " + p._actionSsid + ")";
+    // A network action already in flight is not a condition the verbs below
+    // can proceed past: the service refuses to start a second one, and an
+    // honest error beats a silent no-op.
+    function _busyError() {
+        return "error: network action already in progress (" + WifiService.actionKind + " " + WifiService.actionSsid + ")";
     }
 
     function connect(ssid: string, psk: string): string {
-        var p = panel ? panel.load() : null;
-        if (!p)
-            return "error: network panel not ready";
-        if (p._actionKind !== "")
-            return _busyError(p);
-        var network = _findNetwork(ssid);
+        if (WifiService.actionKind !== "")
+            return _busyError();
+        var network = WifiService.findNetwork(ssid);
         if (!network)
             return "error: unknown ssid '" + ssid + "'";
         if (psk === "") {
-            p._activateWifiRow(network);
-            return "ok";
+            if (WifiService.activate(network) === "needsSecret")
+                return "error: '" + ssid + "' needs a password";
+        } else {
+            WifiService.connectPsk(network, psk);
         }
-        p._openPasswordPrompt(ssid);
-        p._passwordText = psk;
-        p._submitPassword(network);
         return "ok";
     }
 
     function connectEap(ssid: string, identity: string, password: string): string {
-        var p = panel ? panel.load() : null;
-        if (!p)
-            return "error: network panel not ready";
-        if (p._actionKind !== "")
-            return _busyError(p);
-        var network = _findNetwork(ssid);
+        if (WifiService.actionKind !== "")
+            return _busyError();
+        var network = WifiService.findNetwork(ssid);
         if (!network)
             return "error: unknown ssid '" + ssid + "'";
-        p._openPasswordPrompt(ssid);
-        p._identityText = identity;
-        p._passwordText = password;
-        p._submitPassword(network);
+        WifiService.connectEnterprise(network, identity, password);
         return "ok";
     }
 
     function forget(ssid: string): string {
-        var p = panel ? panel.load() : null;
-        if (!p)
-            return "error: network panel not ready";
-        if (p._actionKind !== "")
-            return _busyError(p);
-        var network = _findNetwork(ssid);
+        if (WifiService.actionKind !== "")
+            return _busyError();
+        var network = WifiService.findNetwork(ssid);
         if (!network)
             return "error: unknown ssid '" + ssid + "'";
-        p._forgetNetwork(network);
+        WifiService.forget(network);
         return "ok";
     }
 
     function wifi(enabled: bool): string {
-        Networking.wifiEnabled = enabled;
+        WifiService.setEnabled(enabled);
         return "ok";
     }
 

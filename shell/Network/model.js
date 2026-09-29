@@ -73,12 +73,17 @@ function sectionOf(row) {
     return row.known ? "KNOWN" : "AVAILABLE";
 }
 
-// Uppercase status line for a connectionFailed(reason) signal.
+// Status line for a connectionFailed(reason) signal.
 function failureText(reason) {
-    if (reason === ConnectionFailReason.NoSecrets) return "PASSPHRASE REQUIRED";
-    if (reason === ConnectionFailReason.WifiAuthTimeout) return "WRONG PASSWORD";
-    if (reason === ConnectionFailReason.WifiNetworkLost) return "NETWORK LOST";
-    return "CONNECTION FAILED";
+    if (reason === ConnectionFailReason.NoSecrets) return "Passphrase required";
+    if (reason === ConnectionFailReason.WifiAuthTimeout) return "Wrong password";
+    if (reason === ConnectionFailReason.WifiNetworkLost) return "Network lost";
+    return "Connection failed";
+}
+
+// A failure whose fix is typing the secret again rather than retrying.
+function isSecretFailure(reason) {
+    return reason === ConnectionFailReason.NoSecrets || reason === ConnectionFailReason.WifiAuthTimeout;
 }
 
 // strength is a 0..1 fraction (src/network/wifi.hpp:22), not 0..100, see

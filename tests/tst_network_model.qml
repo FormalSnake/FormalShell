@@ -36,11 +36,11 @@ TestCase {
     }
 
     function test_failureText_mappings() {
-        compare(NetworkModel.failureText(NetworkModel.ConnectionFailReason.NoSecrets), "PASSPHRASE REQUIRED");
-        compare(NetworkModel.failureText(NetworkModel.ConnectionFailReason.WifiAuthTimeout), "WRONG PASSWORD");
-        compare(NetworkModel.failureText(NetworkModel.ConnectionFailReason.WifiNetworkLost), "NETWORK LOST");
-        compare(NetworkModel.failureText(NetworkModel.ConnectionFailReason.WifiClientFailed), "CONNECTION FAILED");
-        compare(NetworkModel.failureText(NetworkModel.ConnectionFailReason.Unknown), "CONNECTION FAILED");
+        compare(NetworkModel.failureText(NetworkModel.ConnectionFailReason.NoSecrets), "Passphrase required");
+        compare(NetworkModel.failureText(NetworkModel.ConnectionFailReason.WifiAuthTimeout), "Wrong password");
+        compare(NetworkModel.failureText(NetworkModel.ConnectionFailReason.WifiNetworkLost), "Network lost");
+        compare(NetworkModel.failureText(NetworkModel.ConnectionFailReason.WifiClientFailed), "Connection failed");
+        compare(NetworkModel.failureText(NetworkModel.ConnectionFailReason.Unknown), "Connection failed");
     }
 
     function test_isSecured_open_and_owe_are_unsecured() {

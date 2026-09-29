@@ -323,6 +323,11 @@ ShellRoot {
         function onSelectionResolved(token, value, cancelled) {
             ReminderService.resolveInput(token, value, cancelled);
             LightsService.resolveInput(token, value, cancelled);
+            var wifiNext = WifiService.resolveInput(token, value, cancelled);
+            if (wifiNext === "identity")
+                Qt.callLater(function () { menuInstance.openInput("Password for " + WifiService.pendingSsid, WifiService.passwordToken, true); });
+            else if (wifiNext === "submitted")
+                Qt.callLater(function () { menuInstance.open("wifi"); });
         }
     }
 

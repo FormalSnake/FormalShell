@@ -3,6 +3,7 @@ import Quickshell.Io
 import Quickshell.Networking
 import qs.Core
 import qs.Components
+import qs.Services
 import "../../Network/model.js" as NetworkModel
 import "../../Network/speedtest.js" as SpeedTest
 import "../../Network/wifiqr.js" as WifiQr
@@ -24,11 +25,11 @@ import "../../Network/wifiqr.js" as WifiQr
 // 802.1x identity), and that field blocks Panel's KeyCatcher while it holds
 // focus.
 //
-// The wifi device's `scannerEnabled` tracks the panel's own `isOpen` (live
-// list while looking, idle radio once closed), omarchy's exact idiom. Bound
-// directly to Quickshell.Networking, same as AudioPanel binds Pipewire
-// directly rather than going through a Services wrapper. Honest empty
-// states: "NO DEVICES" when Networking.devices is empty, and a section with
+// The wifi device's `scannerEnabled` follows the panel's own `isOpen` (live
+// list while looking, idle radio once closed) through WifiService.holdScan,
+// which also owns the connect/disconnect/forget state machine this panel
+// renders. The rows and hero still bind Quickshell.Networking directly.
+// Honest empty states: "NO DEVICES" when Networking.devices is empty, and a section with
 // zero rows omits its rows rather than inventing a placeholder.
 //
 // SPEED TEST (M16 Task 9, "flat ledger rows, no gauges": omarchy's own
@@ -84,26 +85,6 @@ import "../../Network/wifiqr.js" as WifiQr
 // the reveal section's own header comment below.
 Panel {
     id: root
-
-    // EAP profile creation shells out to nmcli (Constraints: the password
-    // never touches argv: it arrives over the Process's own stdin, read by
-    // `IFS= read -r pw` and fed straight into nmcli's scriptable `connection
-    // edit` editor). Command shape mirrored from omarchy's
-    // enterpriseConnectScript (~/Developer/omarchy/shell/plugins/panels/
-    // network/Model.js:322-333) with one addition: the leading `command -v`
-    // guard omarchy doesn't need (it assumes nmcli is always present) but
-    // this shell's "NO NMCLI" honest-unavailable-state contract does: the
-    // script's own `false`-swallowing failure path (`|| { delete; false; }`)
-    // would otherwise mask a missing binary as a generic connect failure.
-    readonly property string _enterpriseScript:
-        "command -v nmcli >/dev/null 2>&1 || exit 127;" +
-        "u=$(uuidgen); IFS= read -r pw;" +
-        " nmcli connection add type wifi con-name \"$1\" ssid \"$1\" connection.uuid \"$u\"" +
-        " wifi-sec.key-mgmt wpa-eap 802-1x.eap peap 802-1x.phase2-auth mschapv2" +
-        " 802-1x.identity \"$2\" 802-1x.auth-timeout 8 >/dev/null" +
-        " && printf 'set 802-1x.password %s\\nsave\\nquit\\n' \"$pw\" | nmcli connection edit uuid \"$u\" >/dev/null" +
-        " && nmcli connection up uuid \"$u\"" +
-        " || { nmcli connection delete uuid \"$u\" >/dev/null 2>&1; false; }"
 
     readonly property var _entries: {
         var out = [];
@@ -173,19 +154,10 @@ Panel {
     }
     readonly property string _wifiHeroIcon: root._connectedWifiSsid !== "" ? "wifi" : "wifi-off"
 
-    function _applyScanner() {
-        for (var i = 0; i < root._wifiDevices.length; i++)
-            root._wifiDevices[i].scannerEnabled = root.isOpen;
-    }
-
-    on_WifiDevicesChanged: root._applyScanner()
-    Component.onCompleted: {
-        root._applyScanner();
-        root._publishWifiSorted();
-    }
+    Component.onCompleted: root._publishWifiSorted()
 
     onIsOpenChanged: {
-        root._applyScanner();
+        WifiService.holdScan("panel", root.isOpen);
         if (root.isOpen) {
             // The cursor starts on the first row every open, so the
             // reveal-only first keypress has a real position to show. Empty
@@ -410,7 +382,7 @@ Panel {
     // ---- Wi-Fi QR share --------------------------------------------------
     //
     // Constraints: the passphrase is the entire point of the payload, so it
-    // is handled exactly like enterpriseProc's own secret below, it reaches
+    // is handled exactly like WifiService's enterprise secret, it reaches
     // qrencode over that Process's stdin, never argv (which /proc publishes
     // world-readable to every local user), and `qrEncodeProc.payload` is
     // cleared the instant it has been written. It is never logged and never
@@ -699,7 +671,7 @@ Panel {
     // wifi device nmcli reports. nmcli localizes device states, hence
     // LC_ALL=C and the prefix match, "connected (externally)" is still
     // connected. Exit 3 is "no active wifi connection"; the leading
-    // `command -v` guard (the same one _enterpriseScript needs, for the same
+    // `command -v` guard (the same one WifiService's enterprise script needs, for the same
     // reason: this script's own `|| exit 3` would otherwise report a missing
     // binary as an honest-looking "not connected") exits 2. Each consumer
     // maps those codes to its own honest state.
@@ -757,13 +729,6 @@ Panel {
         }
     }
 
-    // One action in flight at a time (omarchy's runNetworkAction/actionKind
-    // pattern): "connect" | "disconnect" | "forget" | "" while idle.
-    property string _actionSsid: ""
-    property string _actionKind: ""
-    property string _failureSsid: ""
-    property string _failureText: ""
-
     // One inline passphrase/identity prompt open at a time.
     property string _passwordSsid: ""
     property string _passwordText: ""
@@ -782,47 +747,6 @@ Panel {
         return -1;
     }
 
-    function _runAction(kind, network) {
-        if (root._actionKind !== "" || !network)
-            return false;
-        root._actionSsid = network.name || "";
-        root._actionKind = kind;
-        root._failureSsid = "";
-        root._failureText = "";
-        actionTimeout.restart();
-        return true;
-    }
-
-    function _clearAction() {
-        actionTimeout.stop();
-        if (root._actionKind === "connect")
-            root._passwordSsid = "";
-        root._actionSsid = "";
-        root._actionKind = "";
-        root._failureSsid = "";
-        root._failureText = "";
-    }
-
-    function _checkActionCompletion(network) {
-        if (!network || root._actionKind === "" || root._actionSsid !== (network.name || ""))
-            return;
-        if (root._actionKind === "connect" && network.connected) root._clearAction();
-        else if (root._actionKind === "disconnect" && !network.connected && !network.stateChanging) root._clearAction();
-        else if (root._actionKind === "forget" && !network.known && !network.stateChanging) root._clearAction();
-    }
-
-    function _failAction(network, reason) {
-        if (!network || root._actionKind === "" || root._actionSsid !== (network.name || ""))
-            return;
-        actionTimeout.stop();
-        root._failureSsid = root._actionSsid;
-        root._failureText = NetworkModel.failureText(reason);
-        root._actionSsid = "";
-        root._actionKind = "";
-        if (reason === NetworkModel.ConnectionFailReason.NoSecrets)
-            root._openPasswordPrompt(network.name || "");
-    }
-
     function _openPasswordPrompt(ssid) {
         if (root._passwordSsid !== ssid) {
             root._passwordText = "";
@@ -837,103 +761,39 @@ Panel {
         root._identityText = "";
     }
 
-    // Row activation (click or Enter-on-cursor): connected → disconnect;
-    // secured and not yet known → open the inline prompt; otherwise a plain
-    // connect (open network, or a known network reusing its saved secrets).
-    function _activateWifiRow(network) {
-        if (!network || root._actionKind !== "")
-            return;
-        if (network.connected) {
-            if (root._runAction("disconnect", network))
-                network.disconnect();
-            return;
+    Connections {
+        target: WifiService
+        function onConnectSettled() {
+            root._passwordSsid = "";
         }
+        function onSecretRequired(ssid) {
+            if (root.isOpen)
+                root._openPasswordPrompt(ssid);
+        }
+    }
+
+    // Row activation (click or Enter-on-cursor); the service decides between
+    // disconnect, a plain connect and asking for a secret.
+    function _activateWifiRow(network) {
+        if (!network || WifiService.actionKind !== "")
+            return;
         var ssid = network.name || "";
         if (root._passwordSsid === ssid)
             return;
-        if (NetworkModel.isSecured(network.security) && !network.known) {
+        if (WifiService.activate(network) === "needsSecret")
             root._openPasswordPrompt(ssid);
-            return;
-        }
-        if (root._runAction("connect", network))
-            network.connect();
-    }
-
-    function _forgetNetwork(network) {
-        if (!network)
-            return;
-        if (root._runAction("forget", network))
-            network.forget();
     }
 
     function _submitPassword(network) {
-        if (!network || root._actionKind !== "" || root._passwordText.length === 0)
+        if (!network || WifiService.actionKind !== "" || root._passwordText.length === 0)
             return;
         if (NetworkModel.isEnterprise(network.security)) {
             if (root._identityText.length === 0)
                 return;
-            root._connectEnterprise(network, root._identityText, root._passwordText);
+            WifiService.connectEnterprise(network, root._identityText, root._passwordText);
             return;
         }
-        var psk = root._passwordText;
-        if (root._runAction("connect", network))
-            network.connectWithPsk(psk);
-    }
-
-    function _connectEnterprise(network, identity, password) {
-        if (!root._runAction("connect", network))
-            return;
-        enterpriseProc.targetSsid = network.name || "";
-        enterpriseProc.secret = password;
-        enterpriseProc.command = ["bash", "-c", root._enterpriseScript, "nmcli-eap", network.name || "", identity];
-        enterpriseProc.running = true;
-    }
-
-    // Safety net (omarchy's actionTimeout, Panel.qml:1025-1041 there): if
-    // the completion signals above never fire, this clears a stuck busy row
-    // to an honest "TIMED OUT" instead of "Connecting…" forever.
-    Timer {
-        id: actionTimeout
-        interval: 15000
-        repeat: false
-        onTriggered: {
-            if (root._actionKind === "")
-                return;
-            root._failureSsid = root._actionSsid;
-            root._failureText = "TIMED OUT";
-            root._actionSsid = "";
-            root._actionKind = "";
-        }
-    }
-
-    // 802.1x profile creation/activation (see _enterpriseScript above). The
-    // secret is written to stdin the instant the process starts and dropped
-    // from JS memory immediately after: never argv, never logged, never
-    // lingering.
-    Process {
-        id: enterpriseProc
-        property string secret: ""
-        property string targetSsid: ""
-        stdinEnabled: true
-
-        onStarted: {
-            enterpriseProc.write(enterpriseProc.secret + "\n");
-            enterpriseProc.secret = "";
-        }
-
-        onExited: function (exitCode) {
-            if (root._actionKind !== "connect" || root._actionSsid !== enterpriseProc.targetSsid)
-                return;
-            actionTimeout.stop();
-            if (exitCode === 0) {
-                root._clearAction();
-                return;
-            }
-            root._actionSsid = "";
-            root._actionKind = "";
-            root._failureSsid = enterpriseProc.targetSsid;
-            root._failureText = exitCode === 127 ? "NO NMCLI" : NetworkModel.failureText(NetworkModel.ConnectionFailReason.Unknown);
-        }
+        WifiService.connectPsk(network, root._passwordText);
     }
 
     // ---- Layout ----------------------------------------------------------
@@ -1015,25 +875,15 @@ Panel {
     titleActions: [
         Switch {
             checked: Networking.wifiEnabled
-            onToggled: checked => Networking.wifiEnabled = checked
+            onToggled: checked => WifiService.setEnabled(checked)
         },
         IconButton {
             name: "refresh-cw"
             tooltipText: "Rescan"
             enabled: root._hasWifiDevice
-            onClicked: root._refreshScan()
+            onClicked: WifiService.rescan()
         }
     ]
-
-    // Quickshell.Networking exposes no rescan call at all (checked against
-    // quickshell-network.qmltypes: WifiDevice carries `scannerEnabled` and
-    // nothing else), so dropping the scanner and re-arming it is the only
-    // rescan handle the binding gives.
-    function _refreshScan() {
-        for (var i = 0; i < root._wifiDevices.length; i++)
-            root._wifiDevices[i].scannerEnabled = false;
-        Qt.callLater(root._applyScanner);
-    }
 
     Component {
         id: wiredRow
@@ -1111,16 +961,16 @@ Panel {
             readonly property bool _promptOpen: root._passwordSsid !== "" && root._passwordSsid === wifiCell._ssid
             readonly property bool _canForget: wifiCell._network.known && !wifiCell._network.connected
             readonly property string _statusText: {
-                if (root._actionKind !== "" && root._actionSsid === wifiCell._ssid) {
-                    if (root._actionKind === "connect") return "Connecting";
-                    if (root._actionKind === "disconnect") return "Disconnecting";
+                if (WifiService.actionKind !== "" && WifiService.actionSsid === wifiCell._ssid) {
+                    if (WifiService.actionKind === "connect") return "Connecting";
+                    if (WifiService.actionKind === "disconnect") return "Disconnecting";
                     return "Forgetting";
                 }
-                if (root._failureSsid !== "" && root._failureSsid === wifiCell._ssid)
-                    return root._failureText;
+                if (WifiService.failureSsid !== "" && WifiService.failureSsid === wifiCell._ssid)
+                    return WifiService.failureText;
                 return "";
             }
-            readonly property bool _isFailed: root._failureSsid !== "" && root._failureSsid === wifiCell._ssid && (root._actionKind === "" || root._actionSsid !== wifiCell._ssid)
+            readonly property bool _isFailed: WifiService.failureSsid !== "" && WifiService.failureSsid === wifiCell._ssid && (WifiService.actionKind === "" || WifiService.actionSsid !== wifiCell._ssid)
 
             // A pointer reaching a row reveals the cursor on it, the same
             // gate the first navigation key flips.
@@ -1133,23 +983,6 @@ Panel {
             }
 
             onClicked: root._activateWifiRow(wifiCell._network)
-
-            Connections {
-                target: wifiCell._network
-
-                function onConnectionFailed(reason) {
-                    root._failAction(wifiCell._network, reason);
-                }
-                function onConnectedChanged() {
-                    root._checkActionCompletion(wifiCell._network);
-                }
-                function onKnownChanged() {
-                    root._checkActionCompletion(wifiCell._network);
-                }
-                function onStateChangingChanged() {
-                    root._checkActionCompletion(wifiCell._network);
-                }
-            }
 
             Column {
                 width: parent.width
@@ -1217,10 +1050,10 @@ Panel {
                                 id: forgetHit
                                 anchors.fill: parent
                                 anchors.margins: -Theme.space.sm
-                                enabled: forgetIcon.opacity > 0 && root._actionKind === ""
+                                enabled: forgetIcon.opacity > 0 && WifiService.actionKind === ""
                                 hoverEnabled: enabled
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: root._forgetNetwork(wifiCell._network)
+                                onClicked: WifiService.forget(wifiCell._network)
                             }
                         }
 
@@ -1276,7 +1109,7 @@ Panel {
                         echoMode: TextInput.Password
                         text: wifiCell._promptOpen ? root._passwordText : ""
                         error: wifiCell._isFailed
-                        errorText: wifiCell._isFailed ? root._failureText : ""
+                        errorText: wifiCell._isFailed ? WifiService.failureText : ""
 
                         onTextChanged: if (wifiCell._promptOpen && text !== root._passwordText) root._passwordText = text;
                         onAccepted: root._submitPassword(wifiCell._network)

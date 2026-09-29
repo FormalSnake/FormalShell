@@ -72,6 +72,12 @@
     // compositor binds (Compositor/keybinds.js); ":k <query>" reaches the
     // same rows from anywhere. Rows are inert notes, never activatable.
     "keybinds": { "label": "Keybinds", "provider": "keybinds", "aliases": ["keys", "hotkeys", "shortcuts"], "prompt": "Search keybinds" },
+    // "wifi" registers a provider fn (providers.js's wifiRows): the scanned
+    // networks with saved ones first, Enter connecting (a password step for a
+    // secured new one) and Shift+Enter forgetting. Separate from the "Network"
+    // panel row under Panels, which opens the card. Nearby unknown networks
+    // are searchable only from inside the level.
+    "wifi": { "label": "Wi-Fi", "provider": "wifi", "aliases": ["wifi", "wlan", "network", "ssid", "internet"], "prompt": "Search networks" },
 
     // "panels" registers a provider fn too: one row per name in
     // shell.qml's PanelIpc registry, each spawning "panel open <name>"

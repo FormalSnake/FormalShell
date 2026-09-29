@@ -167,4 +167,12 @@ TestCase {
         var tree = _realTree();
         compare(tree.nodes["system.lock"].action, "@ipc:lock.lock");
     }
+
+    function test_wifi_is_a_root_provider_node() {
+        var node = _realTree().nodes["wifi"];
+        verify(node);
+        compare(node.kind, "provider");
+        compare(node.provider, "wifi");
+        compare(node.parentId, null);
+    }
 }

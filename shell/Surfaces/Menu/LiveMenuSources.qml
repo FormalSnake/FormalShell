@@ -1,6 +1,7 @@
 import QtQuick
 import qs.Compositor
 import qs.Services
+import "../../Network/model.js" as NetworkModel
 
 // The clipboard and window lists behind the menu's clipboard/apps
 // providers, mirrored ONLY while the menu is actually open (M17 review
@@ -18,6 +19,47 @@ Item {
     // Addresses of the connected Bluetooth devices, the source of the
     // `bluetooth.connected` tick list.
     readonly property var bluetoothConnected: []
+
+    // The wifi route's rows are built from this, only while active and only
+    // republished when something other than signal strength changed. Signal
+    // only feeds the sort, so a strength tick alone never rebuilds the tree.
+    readonly property var wifi: root.active ? root._wifiLive : root._wifiIdle
+    readonly property var _wifiIdle: ({ hasDevice: false, enabled: false, networks: [], actionSsid: "", actionKind: "", failureSsid: "", failureText: "" })
+    property var _wifiLive: root._wifiIdle
+    property string _wifiKey: ""
+
+    readonly property var _wifiNow: root.active ? root._wifiState() : null
+
+    function _wifiState() {
+        return {
+            hasDevice: WifiService.hasDevice,
+            enabled: WifiService.enabled,
+            networks: WifiService.networks.map(function (n) {
+                return {
+                    name: n.name || "",
+                    known: n.known,
+                    connected: n.connected,
+                    secured: NetworkModel.isSecured(n.security),
+                    enterprise: NetworkModel.isEnterprise(n.security),
+                    signal: n.signalStrength
+                };
+            }),
+            actionSsid: WifiService.actionSsid,
+            actionKind: WifiService.actionKind,
+            failureSsid: WifiService.failureSsid,
+            failureText: WifiService.failureText
+        };
+    }
+
+    on_WifiNowChanged: {
+        if (!root._wifiNow)
+            return;
+        var key = JSON.stringify(root._wifiNow, function (k, v) { return k === "signal" ? undefined : v; });
+        if (key === root._wifiKey)
+            return;
+        root._wifiKey = key;
+        root._wifiLive = root._wifiNow;
+    }
 
     readonly property var clipboardItems: root.active ? ClipboardService.items : []
 

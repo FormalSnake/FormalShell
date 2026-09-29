@@ -1,6 +1,7 @@
 .pragma library
 .import "frecency.js" as Frecency
 .import "../Clipboard/emoji.js" as Emoji
+.import "../Network/model.js" as NetworkModel
 
 // Provider functions populate a "provider" kind node's children at
 // tree-build time (Model.buildTree() infers "provider" from an entry's
@@ -1225,6 +1226,92 @@ var LIGHT_COLORS = [
 // PipeWire node name) is escaped before it goes into one.
 function idPart(s) {
     return encodeURIComponent(String(s)).replace(/\./g, "%2E");
+}
+
+function _noteRow(id, label) {
+    return {
+        id: id,
+        parentId: null,
+        label: label,
+        icon: "",
+        title: "",
+        aliases: [],
+        kind: "note",
+        dim: true,
+        childIds: []
+    };
+}
+
+// Wi-Fi route (M76 Task 2). `state` is LiveMenuSources.wifi: the device and
+// radio flags, the scanned networks as plain data, and WifiService's action
+// in flight and last failure. Pure, so the ordering, the ticks and the
+// per-row status text are testable without a radio.
+//
+// Saved networks are reachable from a root query; nearby ones are
+// `localOnly`, so a stranger's SSID never turns up in a search typed
+// outside the level. Enter on a secured unknown network asks for a password
+// (Menu.qml's wifi.activate), Shift+Enter on a saved one forgets it.
+function wifiRows(state) {
+    var st = state || {};
+    if (st.hasDevice !== true)
+        return [_noteRow("wifi.unavailable", "No Wi-Fi device")];
+    if (st.enabled !== true) {
+        return [{
+            id: "wifi.off",
+            parentId: null,
+            label: "Turn Wi-Fi on",
+            icon: "",
+            title: "",
+            aliases: [],
+            kind: "action",
+            action: "@ipc:wifi.enable",
+            keepOpen: true,
+            childIds: []
+        }];
+    }
+    var seen = {};
+    var visible = (st.networks || []).filter(function (n) {
+        var name = n.name || "";
+        if (name === "" || seen[name] === true)
+            return false;
+        seen[name] = true;
+        return true;
+    }).map(function (n) {
+        return Object.assign({ signalStrength: n.signal || 0 }, n);
+    });
+    if (visible.length === 0)
+        return [_noteRow("wifi.empty", "No networks found")];
+    var busyText = { connect: "Connecting", disconnect: "Disconnecting", forget: "Forgetting" };
+    return NetworkModel.sortWifiRows(visible).map(function (n) {
+        var desc = "";
+        if (st.actionKind && st.actionSsid === n.name)
+            desc = busyText[st.actionKind] || "";
+        else if (st.failureSsid === n.name && st.failureText)
+            desc = st.failureText;
+        else if (!n.known)
+            desc = n.enterprise ? "Enterprise" : (n.secured ? "Secured" : "");
+        var row = {
+            id: "wifi.net." + idPart(n.name),
+            parentId: null,
+            label: n.name,
+            icon: "",
+            title: "",
+            desc: desc,
+            aliases: [],
+            kind: "action",
+            action: "@ipc:wifi.activate:" + n.name,
+            checked: "@state:wifi.ssid=" + n.name,
+            keepOpen: true,
+            localOnly: !n.known,
+            section: n.known ? "Saved" : "Nearby",
+            childIds: []
+        };
+        if (n.known) {
+            row.alternate = "@ipc:wifi.forget:" + n.name;
+            row.alternateLabel = "Forget";
+        }
+        return row;
+    });
 }
 
 function lightsEntries(available, effects) {

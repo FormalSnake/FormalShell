@@ -514,8 +514,13 @@ PanelWindow {
         // the discrete card is Shift+Enter on the app row itself
         // (_activateRowAlternate below), not a route mirroring the
         // whole app list a second time.
-        gpu: function () { return Providers.gpuProvider(GpuService.cards); }
+        gpu: function () { return Providers.gpuProvider(GpuService.cards); },
+        wifi: function () { return Providers.wifiRows(liveSources.wifi); }
     })
+
+    // The scanner runs while the wifi level is the one on screen.
+    readonly property bool _wantsWifiScan: root.isOpen && root.currentNodeId === "wifi"
+    on_WantsWifiScanChanged: WifiService.holdScan("launcher", root._wantsWifiScan)
     readonly property var _nodes: root._tree.nodes
 
     // The resolver the window switcher's tiles take too (AppIconService,
@@ -1883,6 +1888,25 @@ PanelWindow {
                 LightsService.setSpeed(lightsValue);
             else if (lightsVerb === "brightness")
                 LightsService.setBrightness(parseInt(lightsValue, 10));
+            return;
+        }
+        // "wifi.<verb>[:<ssid>]" (providers.js's wifiRows).
+        if (name.indexOf("wifi.") === 0) {
+            var wifiSep = name.indexOf(":");
+            var wifiVerb = wifiSep > 0 ? name.slice("wifi.".length, wifiSep) : name.slice("wifi.".length);
+            var wifiSsid = wifiSep > 0 ? name.slice(wifiSep + 1) : "";
+            var wifiNet = WifiService.findNetwork(wifiSsid);
+            if (wifiVerb === "enable") {
+                WifiService.setEnabled(true);
+            } else if (wifiVerb === "forget") {
+                if (wifiNet) WifiService.forget(wifiNet);
+            } else if (wifiVerb === "activate" && wifiNet) {
+                if (WifiService.activate(wifiNet) === "needsSecret") {
+                    var wifiPrompt = WifiService.requestSecret(wifiSsid);
+                    // Deferred for the same reason reminder.set is below.
+                    Qt.callLater(function () { root.openInput(wifiPrompt.prompt, wifiPrompt.token, true); });
+                }
+            }
             return;
         }
         if (name.indexOf("nix.run:") === 0) {

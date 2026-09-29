@@ -100,7 +100,7 @@ Item {
         "lights.colour": LightsService.source === "custom" ? LightsService.customColour : "",
         "lights.speed": LightsService.speed,
         "lights.brightness": String(LightsService.brightness),
-        "wifi.ssid": "",
+        "wifi.ssid": WifiService.connectedSsid,
         "audio.sink": "",
         "audio.source": "",
         "radio.station": RadioService.station ? RadioService.station.uuid : "",
