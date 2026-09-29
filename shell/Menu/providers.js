@@ -1266,6 +1266,7 @@ function wifiRows(state) {
             aliases: [],
             kind: "action",
             action: "@ipc:wifi.enable",
+            verb: "Turn on",
             keepOpen: true,
             childIds: []
         }];
@@ -1301,6 +1302,7 @@ function wifiRows(state) {
             aliases: [],
             kind: "action",
             action: "@ipc:wifi.activate:" + n.name,
+            verb: n.connected ? "Disconnect" : "Connect",
             checked: "@state:wifi.ssid=" + n.name,
             keepOpen: true,
             localOnly: !n.known,
@@ -1332,6 +1334,7 @@ function bluetoothRows(state) {
             aliases: [],
             kind: "action",
             action: "@ipc:bluetooth.power:on",
+            verb: "Turn on",
             keepOpen: true,
             childIds: []
         }];
@@ -1351,6 +1354,7 @@ function bluetoothRows(state) {
             aliases: [],
             kind: "action",
             action: "@ipc:bluetooth.toggle:" + d.address,
+            verb: d.connected ? "Disconnect" : "Connect",
             checked: "@state:bluetooth.connected=" + String(d.address).toUpperCase(),
             keepOpen: true,
             childIds: []
@@ -1375,6 +1379,7 @@ function audioRows(devices) {
             aliases: [],
             kind: "action",
             action: "@ipc:audio." + verb + ":" + d.name,
+            verb: "Use",
             checked: "@state:audio." + verb + "=" + d.name,
             keepOpen: true,
             childIds: []
@@ -1409,6 +1414,7 @@ function radioRows(state) {
             aliases: [],
             kind: "action",
             action: "@ipc:radio.stop",
+            verb: "Stop",
             keepOpen: true,
             childIds: []
         });
@@ -1424,6 +1430,7 @@ function radioRows(state) {
             aliases: [],
             kind: "action",
             action: "@ipc:radio.fav:" + s.uuid,
+            verb: "Play",
             checked: _radioTick(s.uuid),
             keepOpen: true,
             alternate: "@ipc:radio.unfavorite:" + s.uuid,
@@ -1450,6 +1457,7 @@ function radioResultRows(results, favoriteSet) {
             aliases: [],
             kind: "action",
             action: "@ipc:radio.play:" + s.uuid,
+            verb: "Play",
             checked: _radioTick(s.uuid),
             localOnly: true,
             alternate: "@ipc:radio." + (fav ? "unfavorite:" : "favorite:") + s.uuid,

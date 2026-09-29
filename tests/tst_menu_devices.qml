@@ -1,6 +1,7 @@
 import QtQuick
 import QtTest
 import "../shell/Menu/actions.js" as Actions
+import "../shell/Menu/hints.js" as Hints
 import "../shell/Menu/providers.js" as Providers
 
 TestCase {
@@ -185,6 +186,26 @@ TestCase {
         compare(rows[0].action, "@ipc:bluetooth.toggle:aa:bb");
         compare(rows[0].checked, "@state:bluetooth.connected=AA:BB");
         compare(rows[0].keepOpen, true);
+    }
+
+    // A device row names what Enter does to it, and carries no "Command"
+    // badge beside its label.
+    function test_device_rows_carry_their_own_verb() {
+        var wifi = _wifi([_net("Home", { known: true, connected: true }), _net("Cafe")]);
+        compare(Actions.primaryAction({ node: wifi[0] }).label, "Disconnect");
+        compare(Actions.primaryAction({ node: wifi[1] }).label, "Connect");
+        var bt = _bt([_dev("aa:bb", "Buds", { connected: true }), _dev("cc:dd", "Pad")]);
+        compare(bt[0].verb, "Disconnect");
+        compare(bt[1].verb, "Connect");
+        var audio = Providers.audioRows([{ name: "sink", label: "Speakers", isSink: true }]);
+        compare(audio[0].verb, "Use");
+        var radio = Providers.radioRows({ running: true, favorites: [{ uuid: "u1", name: "Jazz" }] });
+        compare(radio[0].verb, "Stop");
+        compare(radio[1].verb, "Play");
+        compare(Providers.radioResultRows([{ uuid: "u2", name: "Rock" }], {})[0].verb, "Play");
+        [wifi[0], bt[0], audio[0], radio[1]].forEach(function (row) {
+            compare(Hints.accessoryFor(row), "");
+        });
     }
 
     function test_audio_no_devices_is_one_note() {
