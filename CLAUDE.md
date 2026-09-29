@@ -199,6 +199,13 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   re-rank it and desktop entry rescans while it is closed and open, read
   off `menu status`'s `cells`: eight ids, none twice, the launched app
   first.
+- `hdr.sh` `--hdr`: HDR on the rig's EDID-less vkms output, so the honest
+  unavailable path: `hdr status` unsupported with a reason, `enable`,
+  `toggle` and `setOutput` refusing with their error strings and leaving
+  state.json alone, the Display panel frame carrying the dim "HDR
+  unavailable" line, and `hdr rule <output>` (the rule an enable would
+  send, unsent) restating the mode, position, scale, transform and vrr
+  `hyprctl monitors all -j` reports. The real toggle is g815's to confirm.
 - `hotcorner.sh` `--hotcorner`: both hot corner surfaces mapped on the right
   layer, which is all a rig with no synthetic pointer can observe.
 - `hotcorner_relock.sh` `--hotcorner-relock`: locks from the corner, unlocks

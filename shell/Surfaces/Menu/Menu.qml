@@ -1882,6 +1882,9 @@ PanelWindow {
         case "nightlight.toggle":
             NightLightService.toggle();
             break;
+        case "hdr.toggle":
+            HdrService.toggle();
+            break;
         case "overnight.toggle":
             OvernightService.toggle();
             break;

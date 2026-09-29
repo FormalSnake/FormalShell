@@ -471,13 +471,30 @@ Scope {
         root._keyword(Outputs.hyprlandMonitorArg(row, { mirrorOf: sourceName }));
     }
 
+    // `keyword` is refused under a Lua config ("Use eval"), and `eval` under a
+    // hyprlang one, so a colour change picks by Hyprland.usingLua.
+    function setOutputColor(name, color) {
+        var row = Outputs.findOutput(root.outputs, name);
+        if (!row || !row.enabled)
+            return;
+        var rule = Outputs.hyprlandColorRule(row, color);
+        if (Hyprland.usingLua)
+            root._run(["hyprctl", "eval", Outputs.hyprlandRuleLua(rule)]);
+        else
+            root._keyword(Outputs.hyprlandRuleArg(rule));
+    }
+
     // MIRROR fires one keyword per mirrored output at once, so these queue:
     // reassigning a Process's command while it is still running would drop
     // the in-flight invocation on the floor, silently losing a user action.
     property var _keywordQueue: []
 
     function _keyword(monitorArg) {
-        root._keywordQueue = root._keywordQueue.concat([monitorArg]);
+        root._run(["hyprctl", "keyword", "monitor", monitorArg]);
+    }
+
+    function _run(argv) {
+        root._keywordQueue = root._keywordQueue.concat([argv]);
         root._drainKeywords();
     }
 
@@ -486,7 +503,7 @@ Scope {
             return;
         var next = root._keywordQueue[0];
         root._keywordQueue = root._keywordQueue.slice(1);
-        keywordProc.command = ["hyprctl", "keyword", "monitor", next];
+        keywordProc.command = next;
         keywordProc.running = true;
     }
 

@@ -121,4 +121,7 @@ QtObject {
     function setOutputEnabled(name, enabled) {}
     function setOutputScale(name, scale) {}
     function setOutputMirror(name, sourceName) {} // sourceName "" ends the mirror
+    // Re-states the output's live rule with only its colour fields changed:
+    // color is { cm, bitdepth, sdrbrightness, sdrsaturation } (Display/hdr.js).
+    function setOutputColor(name, color) {}
 }

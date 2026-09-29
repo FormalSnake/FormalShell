@@ -91,6 +91,7 @@ Item {
         "notifications.dnd": NotificationService.dnd,
         "theme.dark": Core.State.mode === "dark",
         "lights.on": LightsService.on,
+        "hdr.active": HdrService.active,
         "lights.effect": LightsService.effect,
         "lights.source": LightsService.source,
         "lights.colour": LightsService.source === "custom" ? LightsService.customColour : "",

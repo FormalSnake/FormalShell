@@ -22,6 +22,7 @@ singleton LockService LockService.qml
 singleton LightsService LightsService.qml
 singleton LocationService LocationService.qml
 singleton LyricsService LyricsService.qml
+singleton HdrService HdrService.qml
 singleton MainOutputService MainOutputService.qml
 singleton MediaService MediaService.qml
 singleton NightLightService NightLightService.qml

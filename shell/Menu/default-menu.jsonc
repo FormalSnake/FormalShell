@@ -174,6 +174,12 @@
         "checked": "@state:caffeinate.active",
         "keepOpen": true
     },
+    "toggles.hdr": {
+        "label": "HDR",
+        "action": "@ipc:hdr.toggle",
+        "checked": "@state:hdr.active",
+        "keepOpen": true
+    },
     "toggles.dnd": {
         "label": "Do Not Disturb",
         "action": "@ipc:notifications.toggleDnd",

@@ -1170,10 +1170,10 @@ the output height.
 
 ### Toggles
 
-The root `Toggles` node holds five live checkmark rows: night light
+The root `Toggles` node holds six live checkmark rows: night light
 (`toggles.nightlight`, hidden unless `wlsunset` is on PATH), overnight
 (`toggles.overnight`), caffeinate
-(`toggles.caffeinate`), do not disturb (`toggles.dnd`) and dark mode
+(`toggles.caffeinate`), HDR (`toggles.hdr`), do not disturb (`toggles.dnd`) and dark mode
 (`toggles.dark-mode`). Activating one flips it and leaves the menu open, so
 the checkmark changes under the cursor.
 
@@ -1181,7 +1181,7 @@ Those checkmarks are in-process state, not a polled command. A `checked`
 value prefixed `@state:` is answered from the snapshot the menu already
 holds, so it repaints in the same event loop turn the toggle does. The list
 of legal paths is closed: `nightlight.active`, `overnight.active`, `caffeinate.active`,
-`notifications.dnd`, `theme.dark`. Anything else resolves false rather than
+`hdr.active`, `notifications.dnd`, `theme.dark`. Anything else resolves false rather than
 falling through to the command cache, so a typo shows an unchecked box
 instead of a stale one, and a hand-written `menu.jsonc` gets no route into
 the QML engine that way. `@state:` works on `checked` only; a `when`
@@ -2744,6 +2744,34 @@ fs nightlight disable
 fs nightlight toggle
 fs nightlight status   # {"active":…,"temp":…,"lastError":…}
 ```
+
+### HDR
+
+The Display panel gets an `HDR` switch for each lit output whose EDID lists
+BT.2020 and the PQ transfer function, the check Hyprland makes itself before
+it honours `cm = hdr`. Any other output shows `HDR unavailable: <reason>`
+under its name instead. On sets `cm = hdr`, `bitdepth = 10` and the SDR level
+below, restating the output's mode, position, scale, transform and vrr so
+nothing moves; off puts back the colour settings it found. The choice is
+kept in `state.json` and re-applied at shell start, on hotplug and after a
+config reload. Works under both hyprlang and Lua configs.
+
+```jsonc
+// ~/.config/formalshell/settings.json
+{ "display": { "hdr": { "sdrBrightness": 1.2, "sdrSaturation": 1 } } }
+```
+
+```sh
+fs hdr toggle      # every HDR-capable output; "no output supports HDR" if none
+fs hdr enable
+fs hdr disable
+fs hdr setOutput eDP-1 true
+fs hdr rule eDP-1  # the monitor rule an enable would send, unsent
+fs hdr status
+```
+
+A configured `vrr` of 2 or 3 is restated as 1, since `hyprctl monitors -j`
+only reports whether VRR is on.
 
 ### Overnight
 

@@ -66,13 +66,26 @@ Panel {
     readonly property var _focusedOutput: Outputs.findOutput(root._outputs, CompositorService.focusedOutputName)
 
     readonly property int _brightnessCount: BrightnessService.devices.count
+    // One HDR row per lit output whose EDID reports HDR, after the backlight
+    // rows. An output that cannot do it gets a dim reason in its own row and
+    // no cursor stop.
+    readonly property var _hdrNames: {
+        var names = [];
+        for (var i = 0; i < root._outputs.length; i++) {
+            if (root._outputs[i].enabled && HdrService.supported(root._outputs[i].name))
+                names.push(root._outputs[i].name);
+        }
+        return names;
+    }
+    readonly property int _hdrBase: root._outputs.length + root._brightnessCount
+
     // The mirror row is the last cursor stop, and only while it can act on
     // anything.
     readonly property int _mirrorIndex: root._mirrorActionable
-        ? root._outputs.length + root._brightnessCount
+        ? root._hdrBase + root._hdrNames.length
         : -1
 
-    cursorCount: root._outputs.length + root._brightnessCount + (root._mirrorActionable ? 1 : 0)
+    cursorCount: root._hdrBase + root._hdrNames.length + (root._mirrorActionable ? 1 : 0)
     // Left/Right belong to the track on the cursor row, not to the list.
     cursorStepsHorizontally: true
 
@@ -117,6 +130,11 @@ Panel {
     }
 
     onCursorActivated: index => {
+        var hdrAt = index - root._hdrBase;
+        if (hdrAt >= 0 && hdrAt < root._hdrNames.length) {
+            HdrService.set(root._hdrNames[hdrAt], !HdrService.isOn(root._hdrNames[hdrAt]));
+            return;
+        }
         if (index === root._mirrorIndex) {
             root._setMirror(!root._mirrorOn);
             return;
@@ -267,6 +285,13 @@ Panel {
                 SectionLabel {
                     visible: outCell.modelData.mirrorOf !== ""
                     text: "Mirrors " + outCell.modelData.mirrorOf
+                    color: outCell.dimForeground
+                }
+
+                SectionLabel {
+                    visible: outCell.modelData.enabled && !HdrService.supported(outCell.modelData.name)
+                        && HdrService.reason(outCell.modelData.name) !== "Checking"
+                    text: "HDR unavailable: " + HdrService.reason(outCell.modelData.name)
                     color: outCell.dimForeground
                 }
 
@@ -503,6 +528,78 @@ Panel {
             Repeater {
                 model: BrightnessService.devices
                 delegate: brightnessRow
+            }
+        }
+    }
+
+    Column {
+        width: parent.width
+        visible: root._hdrNames.length > 0
+        spacing: Theme.space.rowGap
+
+        SectionLabel {
+            leftPadding: Theme.space.controlPaddingX
+            text: "HDR"
+            count: root._hdrNames.length
+        }
+
+        Column {
+            width: parent.width
+            spacing: 0
+
+            Repeater {
+                model: root._hdrNames
+                delegate: Cell {
+                    id: hdrCell
+                    required property string modelData
+                    required property int index
+                    width: parent.width
+                    ghost: true
+                    cursor: root.cursorActive && root.cursorIndex === root._hdrBase + hdrCell.index
+
+                    interactive: true
+                    acceptedButtons: Qt.NoButton
+                    onContainsPointerChanged: if (hdrCell.containsPointer) {
+                        root.cursorActive = true;
+                        root.cursorIndex = root._hdrBase + hdrCell.index;
+                    }
+
+                    Item {
+                        width: parent.width
+                        height: Math.max(hdrName.implicitHeight, hdrSwitch.height)
+
+                        Icon {
+                            id: hdrIcon
+                            name: "sun"
+                            size: Theme.fontSize.body
+                            color: hdrCell.foreground
+                            anchors.left: parent.left
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+
+                        Text {
+                            id: hdrName
+                            anchors.left: hdrIcon.right
+                            anchors.leftMargin: Theme.space.iconGap
+                            anchors.right: hdrSwitch.left
+                            anchors.rightMargin: Theme.space.iconGap
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: hdrCell.modelData
+                            color: hdrCell.foreground
+                            elide: Text.ElideRight
+                            font.family: Theme.fontFamilyMono
+                            font.pixelSize: Theme.fontSize.body
+                        }
+
+                        Switch {
+                            id: hdrSwitch
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            checked: HdrService.isOn(hdrCell.modelData)
+                            onToggled: checked => HdrService.set(hdrCell.modelData, checked)
+                        }
+                    }
+                }
             }
         }
     }

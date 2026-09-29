@@ -22,7 +22,8 @@ var PATHS = [
     "caffeinate.active",     // IdleService.caffeinated
     "notifications.dnd",     // NotificationService.dnd
     "theme.dark",            // Core.State.mode === "dark"
-    "lights.on"              // LightsService.on
+    "lights.on",             // LightsService.on
+    "hdr.active"             // HdrService.active
 ];
 
 // Paths whose value is a string rather than a flag, matched as

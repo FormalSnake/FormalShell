@@ -11,7 +11,8 @@
 //
 // Row contract, produced by the normalizer and consumed by everything else:
 //
-//   { name, make, model, x, y, width, height, refresh, scale, enabled, mirrorOf }
+//   { name, make, model, x, y, width, height, refresh, scale, enabled, mirrorOf,
+//     transform, vrr, cm, tenBit, sdrBrightness, sdrSaturation }
 //
 // `name` is the compositor's own output name and stays an opaque string end
 // to end: nothing here parses or compares it numerically, and the backend does
@@ -264,7 +265,13 @@ function parseHyprlandOutputs(text) {
             refresh: enabled ? _positive(monitor.refreshRate, 0) : 0,
             scale: enabled ? _positive(monitor.scale, 1) : 1,
             enabled: enabled,
-            mirrorOf: mirrorOf === "none" ? "" : mirrorOf
+            mirrorOf: mirrorOf === "none" ? "" : mirrorOf,
+            transform: _int(monitor.transform),
+            vrr: monitor.vrr === true,
+            cm: _text(monitor.colorManagementPreset),
+            tenBit: _text(monitor.currentFormat).indexOf("2101010") >= 0,
+            sdrBrightness: _positive(monitor.sdrBrightness, 1),
+            sdrSaturation: _positive(monitor.sdrSaturation, 1)
         });
     }
     return sortOutputs(rows);
@@ -288,7 +295,80 @@ function hyprlandMonitorArg(row, overrides) {
     var arg = row.name + "," + _hyprlandMode(row) + ",auto," + _trimNumber(scale, 5);
     if (mirrorOf !== "")
         arg += ",mirror," + mirrorOf;
+    if (isHdrPreset(row.cm))
+        arg += ",bitdepth,10,cm," + row.cm + ",sdrbrightness," + _trimNumber(row.sdrBrightness, 2)
+            + ",sdrsaturation," + _trimNumber(row.sdrSaturation, 2);
     return arg;
+}
+
+function isHdrPreset(cm) {
+    return cm === "hdr" || cm === "hdredid";
+}
+
+// ---- HDR rule ----------------------------------------------------------
+
+// The row's scale as the compositor holds it. `monitors -j` prints scale to
+// two places, so 1.6667 arrives as 1.67; the intended value is the nearest
+// 1/120th when that is within the print rounding. No clamp and no divisor
+// search (cleanScale's job for a scale the user asks for): this one is
+// already live, and a toggle must never rescale.
+function _liveScale(row) {
+    var scale = _positive(row.scale, 1);
+    var snapped = Math.round(scale * 120) / 120;
+    return Math.abs(snapped - scale) <= 0.005 ? snapped : scale;
+}
+
+// A complete monitor rule for `row` that restates mode, position, scale,
+// transform, vrr and mirror as they are now and sets the colour fields from
+// `color` ({ cm, bitdepth, sdrbrightness, sdrsaturation }). Hyprland replaces
+// an output's rule wholesale, so every field the toggle is not changing has
+// to be repeated or it resets to its default. `monitors -j` reports vrr as a
+// flag, so a configured vrr of 2 or 3 comes back as 1.
+function hyprlandColorRule(row, color) {
+    var rule = {
+        output: row.name,
+        mode: _hyprlandMode(row),
+        position: row.width > 0 ? _int(row.x) + "x" + _int(row.y) : "auto",
+        scale: _trimNumber(_liveScale(row), 5),
+        transform: _int(row.transform),
+        vrr: row.vrr === true ? 1 : 0,
+        bitdepth: color.bitdepth === 10 ? 10 : 8,
+        cm: color.cm,
+        sdrbrightness: _trimNumber(color.sdrbrightness, 2),
+        sdrsaturation: _trimNumber(color.sdrsaturation, 2)
+    };
+    if (_text(row.mirrorOf) !== "")
+        rule.mirror = row.mirrorOf;
+    return rule;
+}
+
+// `hyprctl keyword monitor <this>`, legacy (hyprlang) configs only.
+function hyprlandRuleArg(rule) {
+    var arg = [rule.output, rule.mode, rule.position, rule.scale,
+        "transform", rule.transform, "vrr", rule.vrr, "bitdepth", rule.bitdepth,
+        "cm", rule.cm, "sdrbrightness", rule.sdrbrightness, "sdrsaturation", rule.sdrsaturation];
+    if (rule.mirror !== undefined)
+        arg.push("mirror", rule.mirror);
+    return arg.join(",");
+}
+
+// `hyprctl eval <this>`, Lua configs only: `keyword` is refused there.
+function hyprlandRuleLua(rule) {
+    var fields = [
+        "output = " + JSON.stringify(rule.output),
+        "mode = " + JSON.stringify(rule.mode),
+        "position = " + JSON.stringify(rule.position),
+        "scale = " + rule.scale,
+        "transform = " + rule.transform,
+        "vrr = " + rule.vrr,
+        "bitdepth = " + rule.bitdepth,
+        "cm = " + JSON.stringify(rule.cm),
+        "sdrbrightness = " + rule.sdrbrightness,
+        "sdrsaturation = " + rule.sdrsaturation
+    ];
+    if (rule.mirror !== undefined)
+        fields.push("mirror = " + JSON.stringify(rule.mirror));
+    return "hl.monitor({ " + fields.join(", ") + " })";
 }
 
 function _hyprlandMode(row) {

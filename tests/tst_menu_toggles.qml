@@ -111,13 +111,14 @@ TestCase {
 
     // Breaks loudly if a path is added without updating Menu.qml and the docs.
     function test_allow_list_is_exactly_the_documented_paths() {
-        compare(Toggles.PATHS.length, 6);
+        compare(Toggles.PATHS.length, 7);
         verify(Toggles.isKnownPath("lights.on"));
         verify(Toggles.isKnownPath("nightlight.active"));
         verify(Toggles.isKnownPath("overnight.active"));
         verify(Toggles.isKnownPath("caffeinate.active"));
         verify(Toggles.isKnownPath("notifications.dnd"));
         verify(Toggles.isKnownPath("theme.dark"));
+        verify(Toggles.isKnownPath("hdr.active"));
         verify(!Toggles.isKnownPath("bluetooth.powered"));
     }
 
@@ -151,7 +152,7 @@ TestCase {
     // default-menu.jsonc.
     function test_shipped_toggle_subtree_contract() {
         var tree = Model.buildTree(Model.parseJsonc(_read("../shell/Menu/default-menu.jsonc")), {});
-        var ids = ["toggles.nightlight", "toggles.overnight", "toggles.caffeinate", "toggles.dnd", "toggles.dark-mode"];
+        var ids = ["toggles.nightlight", "toggles.overnight", "toggles.caffeinate", "toggles.hdr", "toggles.dnd", "toggles.dark-mode"];
         for (var i = 0; i < ids.length; i++) {
             var node = tree.nodes[ids[i]];
             verify(node);
@@ -162,7 +163,7 @@ TestCase {
             verify(Toggles.isStateCondition(node.checked));
             verify(Toggles.isKnownPath(Toggles.statePath(node.checked)));
         }
-        compare(tree.nodes["toggles"].childIds.length, 5);
+        compare(tree.nodes["toggles"].childIds.length, 6);
         // Dark mode relocated into the hub; the old theme subtree is gone.
         verify(!tree.nodes["theme.mode-toggle"]);
         verify(!tree.nodes["theme"]);

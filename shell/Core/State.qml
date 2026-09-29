@@ -23,6 +23,7 @@ Singleton {
     property alias batteryShowPercent: adapter.batteryShowPercent
     property alias overnight: adapter.overnight
     property alias lights: adapter.lights
+    property alias hdr: adapter.hdr
 
     // `mode` is optional: the picker's Dark/Light sets pass the set the
     // pick came from so wallpaper and mode land in one write. Mode goes
@@ -136,6 +137,13 @@ Singleton {
         stateFile.writeAdapter();
     }
 
+    // The outputs the user wants in HDR, { "<output>": { prior } }, prior
+    // being the colour settings to put back on the way out (Display/hdr.js).
+    function setHdr(record) {
+        adapter.hdr = record;
+        stateFile.writeAdapter();
+    }
+
     readonly property string _stateDir: {
         const xdgState = Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state");
         return xdgState + "/formalshell";
@@ -170,6 +178,7 @@ Singleton {
             property var batteryShowPercent: null
             property var overnight: null
             property var lights: null
+            property var hdr: null
         }
     }
 }
