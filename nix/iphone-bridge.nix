@@ -10,6 +10,13 @@
 # Upstream emits the error and then reports available with no subscription,
 # which is what a phone that is not GATT-ready yet produces right after the
 # bridge sees it connect.
+#
+# The bond patch makes `listen` report connected off the LE bearer alone
+# (BlueZ keeps Device1.Connected true over a BR/EDR audio link with LE down,
+# where ANCS and AMS cannot reach the phone), reports a phone BlueZ still
+# holds a bond for while it is not connected, and gives `pair` a `--forget`
+# that drops that one device's keys before advertising: a phone that forgot
+# this machine fails every new pairing while BlueZ holds the old ones.
 { lib, stdenvNoCC, fetchFromGitHub, python3 }:
 
 let
@@ -26,7 +33,7 @@ stdenvNoCC.mkDerivation {
     hash = "sha256-s6HsH5sz3sXECG8vqZ4fwSWrq5HVa9RLL8dRzGnDDMM=";
   };
 
-  patches = [ ./iphone-ams-subscribe.patch ];
+  patches = [ ./iphone-ams-subscribe.patch ./iphone-bridge-bond.patch ];
 
   dontBuild = true;
 

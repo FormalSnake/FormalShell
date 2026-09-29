@@ -1,0 +1,190 @@
+--- a/bin/omarchy-iphone-bridge
++++ b/bin/omarchy-iphone-bridge
+@@ -134,8 +134,20 @@
+         return -1
+ 
+ 
++def le_connected(interfaces, device):
++    """ANCS and AMS ride the LE link only. BlueZ 5.81+ reports each bearer on
++    its own, and Device1.Connected stays true over a BR/EDR link (A2DP, HFP)
++    with LE down, where every GATT call answers "Not connected".
++    """
++    bearer = interfaces.get("org.bluez.Bearer.LE1")
++    if bearer is not None:
++        return bool(bearer.get("Connected"))
++    return bool(device.get("Connected"))
++
++
+ def connected_phone(bus):
+-    """Return {name, address, battery} for a connected ANCS device, else None."""
++    """Return {name, address, battery, connected, paired} for the ANCS phone
++    BlueZ knows, connected over LE first, then one only bonded, else None."""
+     try:
+         reply = bus.call_sync(
+             "org.bluez",
+@@ -152,24 +164,37 @@
+         return None
+ 
+     objects = reply.unpack()[0]
+-    fallback = None
++    best = None
++    best_rank = 0
+     for _path, interfaces in objects.items():
+         device = interfaces.get("org.bluez.Device1")
+-        if not device or not device.get("Connected"):
++        if not device:
+             continue
+-        info = {
+-            "name": device.get("Alias") or device.get("Name") or "iPhone",
+-            "address": device.get("Address", ""),
+-            "battery": device_battery(interfaces),
+-        }
++        connected = le_connected(interfaces, device)
++        paired = bool(device.get("Paired"))
++        if not connected and not paired:
++            continue
+         uuids = [str(u).lower() for u in device.get("UUIDs", [])]
+-        if ANCS_UUID in uuids:
+-            return info
+         # Some iPhones only advertise ANCS after the GATT client subscribes.
+-        # Remember an Apple-looking device as a weaker signal.
+-        if device.get("Icon") == "phone":
+-            fallback = info
+-    return fallback
++        # An Apple-looking device is the weaker signal.
++        if ANCS_UUID in uuids:
++            rank = 2
++        elif device.get("Icon") == "phone":
++            rank = 1
++        else:
++            continue
++        rank += 4 if connected else 0
++        if rank <= best_rank:
++            continue
++        best_rank = rank
++        best = {
++            "name": device.get("Alias") or device.get("Name") or "iPhone",
++            "address": device.get("Address", ""),
++            "battery": device_battery(interfaces) if connected else -1,
++            "connected": connected,
++            "paired": paired,
++        }
++    return best
+ 
+ 
+ # --------------------------------------------------------------------------
+@@ -238,7 +263,8 @@
+ 
+     # Daemon availability, so the bar can say "not running" instead of lying
+     # with a silent empty list.
+-    state = {"observer": False, "connected": False, "deviceName": "", "battery": -1}
++    state = {"observer": False, "connected": False, "paired": False,
++             "deviceName": "", "address": "", "battery": -1}
+ 
+     def daemon_installed():
+         return any(
+@@ -251,7 +277,9 @@
+             "type": "status",
+             "observer": state["observer"],
+             "connected": state["connected"],
++            "paired": state["paired"],
+             "deviceName": state["deviceName"],
++            "address": state["address"],
+             "battery": state["battery"],
+             "installed": daemon_installed(),
+         })
+@@ -263,7 +291,9 @@
+     def on_name_lost(_conn, _name):
+         state["observer"] = False
+         state["connected"] = False
++        state["paired"] = False
+         state["deviceName"] = ""
++        state["address"] = ""
+         state["battery"] = -1
+         push_status()
+ 
+@@ -273,15 +303,19 @@
+     )
+ 
+     def poll_connection():
+-        phone = connected_phone(bus)
+-        connected = phone is not None
+-        name = phone["name"] if phone else ""
+-        battery = phone["battery"] if phone else -1
+-        if (connected != state["connected"] or name != state["deviceName"]
+-                or battery != state["battery"]):
+-            state["connected"] = connected
+-            state["deviceName"] = name
+-            state["battery"] = battery
++        phone = connected_phone(bus) or {
++            "name": "", "address": "", "battery": -1,
++            "connected": False, "paired": False,
++        }
++        fresh = {
++            "connected": phone["connected"],
++            "paired": phone["paired"],
++            "deviceName": phone["name"],
++            "address": phone["address"],
++            "battery": phone["battery"],
++        }
++        if any(state[k] != v for k, v in fresh.items()):
++            state.update(fresh)
+             push_status()
+         return True
+ 
+@@ -370,6 +404,38 @@
+     return 0
+ 
+ 
++def forget_device(bus, hci_address, address):
++    """Remove one bonded device from the adapter advertising for pairing.
++
++    A phone that forgot this machine refuses the keys BlueZ still holds, and
++    iOS then fails every new pairing until they are gone.
++    """
++    reply = bus.call_sync(
++        "org.bluez", "/", "org.freedesktop.DBus.ObjectManager",
++        "GetManagedObjects", None, GLib.VariantType("(a{oa{sa{sv}}})"),
++        Gio.DBusCallFlags.NONE, 4000, None,
++    )
++    objects = reply.unpack()[0]
++    adapter = None
++    for path, interfaces in objects.items():
++        props = interfaces.get("org.bluez.Adapter1")
++        if props and props.get("Address", "").upper() == hci_address.upper():
++            adapter = path
++    if adapter is None:
++        return False
++    for path, interfaces in objects.items():
++        device = interfaces.get("org.bluez.Device1")
++        if (device and path.startswith(adapter + "/")
++                and device.get("Address", "").upper() == address.upper()):
++            bus.call_sync(
++                "org.bluez", adapter, "org.bluez.Adapter1", "RemoveDevice",
++                GLib.Variant("(o)", (path,)), None, Gio.DBusCallFlags.NONE,
++                10000, None,
++            )
++            return True
++    return False
++
++
+ def cmd_pair(args):
+     """Advertise over BLE so the iPhone can find and pair with this machine."""
+     bus = system_bus()
+@@ -382,6 +448,8 @@
+             emit({"type": "error", "message": "No Bluetooth LE adapter found"})
+             return 1
+         address = args.hci or adapters[0]
++        if args.forget and forget_device(bus, address, args.forget):
++            emit({"type": "forgot", "address": args.forget})
+         bus.call_sync(
+             ADVERTISING, OBJ_PATH, ADVERTISING, "EnableAdvertising",
+             GLib.Variant("(ss)", (address, args.name)),
+@@ -427,6 +495,7 @@
+     p_pair = sub.add_parser("pair")
+     p_pair.add_argument("--name", default="Omarchy")
+     p_pair.add_argument("--hci", default="")
++    p_pair.add_argument("--forget", default="")
+     p_pair.set_defaults(func=cmd_pair)
+ 
+     sub.add_parser("hci").set_defaults(func=cmd_hci)

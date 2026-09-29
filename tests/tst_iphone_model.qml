@@ -86,6 +86,39 @@ TestCase {
         compare(IM.parseEvent("{\"type\":\"status\",\"battery\":-1}").battery, -1);
     }
 
+    // nix/iphone-bridge-bond.patch's status: a bond BlueZ holds while LE is down.
+    function test_parse_status_bond() {
+        var e = IM.parseEvent("{\"type\":\"status\",\"observer\":true,\"connected\":false,\"paired\":true,\"deviceName\":\"FormalPhone\",\"address\":\"10:7d:c8:a5:3b:42\",\"battery\":-1}");
+        compare(e.connected, false);
+        compare(e.paired, true);
+        compare(e.address, "10:7D:C8:A5:3B:42");
+        var old = IM.parseEvent("{\"type\":\"status\",\"observer\":true,\"connected\":true}");
+        compare(old.paired, false);
+        compare(old.address, "");
+        compare(IM.parseEvent("{\"type\":\"forgot\",\"address\":\"10:7d:c8:a5:3b:42\"}").address, "10:7D:C8:A5:3B:42");
+    }
+
+    function test_forget_before_pair_only_for_a_disconnected_bond() {
+        compare(IM.forgetBeforePair({ paired: true, connected: false, address: "10:7D:C8:A5:3B:42" }), true);
+        compare(IM.forgetBeforePair({ paired: true, connected: true, address: "10:7D:C8:A5:3B:42" }), false);
+        compare(IM.forgetBeforePair({ paired: false, connected: false, address: "" }), false);
+        compare(IM.forgetBeforePair({ paired: true, connected: false, address: "" }), false);
+        compare(IM.forgetBeforePair(null), false);
+    }
+
+    function test_explain_error() {
+        compare(IM.explainError("subscribe: g-io-error-quark: GDBus.Error:org.bluez.Error.Failed: Not connected (36)"),
+            "The iPhone is not connected over Bluetooth LE");
+        compare(IM.explainError("GDBus.Error:org.bluez.Error.AuthenticationFailed: Authentication Failed"),
+            "The iPhone refused this laptop's keys. Pair again");
+        compare(IM.explainError("subscribe: g-io-error-quark: GDBus.Error:org.bluez.Error.InProgress: In Progress"),
+            "subscribe: In Progress");
+        compare(IM.explainError("The phone rejected the command"), "The phone rejected the command");
+        compare(IM.explainError(""), "Unknown error");
+        compare(IM.parseAmsLine("{\"type\":\"error\",\"message\":\"subscribe: g-io-error-quark: GDBus.Error:org.bluez.Error.Failed: Not connected (36)\"}").message,
+            "The iPhone is not connected over Bluetooth LE");
+    }
+
     function test_parse_small_events() {
         compare(IM.parseEvent("{\"type\":\"dismiss\",\"id\":4012}").id, 4012);
         compare(IM.parseEvent("{\"type\":\"pairingCode\",\"code\":\"123456\"}").code, "123456");
@@ -416,6 +449,8 @@ TestCase {
         compare(IM.matchDevice([byName], "", "Kyan's iPhone"), byName);
         compare(IM.matchDevice([{ name: "Kyan's iPhone", connected: false }], "", "Kyan's iPhone"), null);
         compare(IM.matchDevice([], "", ""), null);
+        var bonded = { dbusPath: "", address: "10:7D:C8:A5:3B:42", name: "FormalPhone", connected: false };
+        compare(IM.matchDevice([byName, bonded], "", "FormalPhone", "10:7d:c8:a5:3b:42"), bonded);
     }
 
     function test_actionable_only_in_its_session() {

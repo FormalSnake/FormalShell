@@ -43,6 +43,9 @@ Panel {
     readonly property bool _noPhone: IphoneService.available && !IphoneService.connected
     readonly property bool _connected: IphoneService.connected
     readonly property bool _pairing: IphoneService.advertising || IphoneService.pairingCode !== ""
+    // BlueZ still bonded to a phone that is not connected: Pair drops that
+    // bond before advertising (IphoneService.pair).
+    readonly property bool _staleBond: root._noPhone && IphoneService.bonded
     readonly property bool _showFooter: root._noPhone
 
     // The now-playing card (M75 Task 4): a row only once AMS has actually
@@ -245,9 +248,13 @@ Panel {
         id: pairHero
         visible: root._noPhone || root._pairing
         width: parent.width
-        title: root._connected && IphoneService.deviceName !== "" ? "Pairing with " + IphoneService.deviceName : "No phone paired"
+        title: root._connected && IphoneService.deviceName !== "" ? "Pairing with " + IphoneService.deviceName
+            : root._staleBond ? (IphoneService.deviceName !== "" ? IphoneService.deviceName : "iPhone") + " not connected"
+            : "No phone paired"
         meta: IphoneService.pairingCode !== "" ? "Check this matches the code on your iPhone"
-            : root._pairing ? "Advertising for pairing" : "Not paired"
+            : root._pairing ? "Advertising for pairing"
+            : root._staleBond ? "Paired here, not on the phone? Pair again"
+            : "Not paired"
         readout: IphoneService.pairingCode
         readoutSize: "displayLarge"
 
@@ -535,7 +542,7 @@ Panel {
             anchors.verticalCenter: parent.verticalCenter
             variant: "outline"
             icon: "smartphone"
-            text: root._pairing ? "Pairing" : "Pair"
+            text: root._pairing ? "Pairing" : root._staleBond ? "Pair again" : "Pair"
             enabled: !root._pairing
             cursor: root.cursorActive && root.cursorSection === root._footerSection
             onClicked: IphoneService.pair()

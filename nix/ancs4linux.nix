@@ -8,6 +8,12 @@
 # the phone's own timestamp. shell/Services/IphoneService.qml needs Silent for
 # the Focus heuristic and category for routing, so this is applied
 # unconditionally rather than left optional.
+#
+# The authorize patch lets the pairing agent accept AuthorizeService. BlueZ
+# asks it for A2DP and AVRCP the moment a fresh bond lands, before anything
+# can mark the phone trusted, and a rejection there fails the pairing on the
+# phone's side. The agent is only registered while advertising, the window
+# the user opened to pair.
 { lib, python3, fetchFromGitHub, fetchpatch }:
 
 python3.pkgs.buildPythonApplication rec {
@@ -27,6 +33,7 @@ python3.pkgs.buildPythonApplication rec {
       url = "https://raw.githubusercontent.com/kbbahaPro/omarchy-iphone/586f37dce6aceef72376afb8be8bcc8a04de41fe/patches/ancs4linux-metadata.patch";
       hash = "sha256-PKHnQ9/412aMVdznqwQ2KDPgufDWLfbqFgexu4dvBwc=";
     })
+    ./ancs4linux-authorize.patch
   ];
 
   build-system = [ python3.pkgs.hatchling ];

@@ -49,7 +49,14 @@ Singleton {
     property bool bridgeRunning: false
     property bool observer: false
     readonly property bool available: root.enabled && root.bridgeRunning && root.observer
+    // Connected over LE, the link ANCS and AMS ride; the bridge's bond patch
+    // reads it off BlueZ's LE bearer rather than Device1.Connected.
     property bool connected: false
+    // BlueZ holds a bond for the phone at `bondAddress` whether or not it is
+    // connected. Bonded and not connected is also what a phone that forgot
+    // this laptop looks like, so pair() drops that bond first.
+    property bool bonded: false
+    property string bondAddress: ""
     property string deviceName: ""
     // ancs4linux's device handle, the phone's BlueZ object path. Only
     // notifications carry it, so it is "" until the first one arrives.
@@ -61,7 +68,7 @@ Singleton {
     property int session: 0
 
     readonly property var device: IphoneModel.matchDevice(
-        Bluetooth.defaultAdapter ? Bluetooth.defaultAdapter.devices.values : [], root.deviceHandle, root.deviceName)
+        Bluetooth.defaultAdapter ? Bluetooth.defaultAdapter.devices.values : [], root.deviceHandle, root.deviceName, root.bondAddress)
     // 0..1, like every other Quickshell fraction. The matched Bluetooth
     // device first; the bridge's own poll of the same BlueZ interface when
     // no device matched yet.
@@ -86,7 +93,17 @@ Singleton {
     // (180s) has already hidden the classic side anyway.
     property string _hostname: ""
     property string _advertisingHci: ""
-    readonly property bool _pairDone: root.advertising && root.device !== null && root.device.paired
+    // A bond that was already there when pairing started is not the phone
+    // accepting, so the session only ends on one that appeared after the
+    // phone was seen with none.
+    property bool _sawUnpaired: false
+    readonly property bool _deviceUnpaired: root.device === null || !root.device.paired
+    readonly property bool _pairDone: root.advertising && root._sawUnpaired && !root._deviceUnpaired
+
+    on_DeviceUnpairedChanged: {
+        if (root._deviceUnpaired && (root.advertising || pairProc.running))
+            root._sawUnpaired = true;
+    }
 
     property var _arrivals: []
     property double _now: Date.now()
@@ -233,15 +250,22 @@ Singleton {
             return true;
         root.lastError = "";
         root.pairingCode = "";
-        pairProc.command = [root._bridge, "pair", "--name", root._hostname !== "" ? root._hostname : "FormalShell"];
+        root._sawUnpaired = root._deviceUnpaired;
+        var command = [root._bridge, "pair", "--name", root._hostname !== "" ? root._hostname : "FormalShell"];
+        if (IphoneModel.forgetBeforePair({ paired: root.bonded, connected: root.connected, address: root.bondAddress }))
+            command = command.concat(["--forget", root.bondAddress]);
+        pairProc.command = command;
         pairProc.running = true;
         return true;
     }
 
     // ancs4linux's agent confirms the code on its own, so a paired device is
     // the only signal the phone side accepted. Trusted, or BlueZ asks the
-    // agent to authorize every profile on reconnect and ancs4linux's rejects.
+    // agent to authorize every profile on reconnect and, with advertising
+    // over, no agent accepts.
     function _finishPairing() {
+        if (!root._pairDone)
+            return;
         if (!root.device.trusted)
             root.device.trusted = true;
         root._endPairing();
@@ -257,11 +281,13 @@ Singleton {
         root._advertisingHci = "";
         root.advertising = false;
         root.pairingCode = "";
+        root._sawUnpaired = false;
     }
 
+    // Deferred: _endPairing() clears `advertising`, which _pairDone reads.
     on_PairDoneChanged: {
         if (root._pairDone)
-            root._finishPairing();
+            Qt.callLater(root._finishPairing);
     }
 
     // One AMS transport command (play/pause/toggle/next/prev/volup/voldown).
@@ -292,6 +318,8 @@ Singleton {
             root._backoffMs = root._baseBackoffMs;
             root.observer = event.observer;
             root.connected = event.connected;
+            root.bonded = event.paired;
+            root.bondAddress = event.address;
             root.deviceName = event.deviceName;
             root._bridgeBattery = event.battery;
             if (event.observer)
@@ -310,7 +338,15 @@ Singleton {
         case "advertising":
             root._advertisingHci = event.hci;
             root.advertising = true;
+            if (root._deviceUnpaired)
+                root._sawUnpaired = true;
             pairTimer.restart();
+            break;
+        case "forgot":
+            if (root.bondAddress === event.address) {
+                root.bonded = false;
+                root.bondAddress = "";
+            }
             break;
         case "error":
             root.lastError = event.message;
@@ -564,6 +600,8 @@ Singleton {
             root.installed = exitCode !== 127;
             root.observer = false;
             root.connected = false;
+            root.bonded = false;
+            root.bondAddress = "";
             if (root.enabled)
                 retryTimer.start();
         }
@@ -653,6 +691,10 @@ Singleton {
         }
         amsRetryTimer.stop();
         amsProc.running = false;
+        // AMS's failure describes a link that is no longer there to retry on.
+        if (root._amsError !== "" && root.lastError === root._amsError)
+            root.lastError = "";
+        root._amsError = "";
         root.mediaAvailable = false;
         root.mediaTitle = "";
         root.mediaArtist = "";

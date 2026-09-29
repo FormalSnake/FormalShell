@@ -8,10 +8,11 @@
 //
 // The wire is `omarchy-iphone-bridge listen` (omarchy-iphone @ 586f37d,
 // bin/omarchy-iphone-bridge): one JSON object per stdout line, `type` one of
-// history, notification, dismiss, status, pairingCode, advertising, error,
-// hci. A notification's `id` is ancs4linux's per-connection id (the ANCS uid
-// offset by a random base chosen per connection), so it only means anything
-// inside the `session` it arrived in.
+// history, notification, dismiss, status, pairingCode, advertising, forgot,
+// error, hci. nix/iphone-bridge-bond.patch adds `paired`/`address` to status
+// and the `forgot` event. A notification's `id` is ancs4linux's
+// per-connection id (the ANCS uid offset by a random base chosen per
+// connection), so it only means anything inside the `session` it arrived in.
 
 var CATEGORY = {
     Other: 0,
@@ -119,6 +120,8 @@ function parseEvent(line) {
             type: "status",
             observer: raw.observer === true,
             connected: raw.connected === true,
+            paired: raw.paired === true,
+            address: _str(raw.address).toUpperCase(),
             deviceName: _str(raw.deviceName),
             battery: isFinite(battery) && battery >= 0 ? Math.min(100, battery) : -1
         };
@@ -126,10 +129,34 @@ function parseEvent(line) {
         return { type: "pairingCode", code: _str(raw.code) };
     case "advertising":
         return { type: "advertising", hci: _str(raw.hci), name: _str(raw.name) };
+    case "forgot":
+        return { type: "forgot", address: _str(raw.address).toUpperCase() };
     case "error":
-        return { type: "error", message: _str(raw.message) || "Unknown error" };
+        return { type: "error", message: explainError(raw.message) };
     }
     return null;
+}
+
+// BlueZ's errors reach the bridges as GLib's own rendering, e.g.
+// "subscribe: g-io-error-quark: GDBus.Error:org.bluez.Error.Failed: Not
+// connected (36)". The two BlueZ states a person can act on get a sentence;
+// anything else keeps its step and BlueZ's message without the D-Bus wrapping.
+function explainError(message) {
+    var text = _str(message).trim();
+    if (text === "")
+        return "Unknown error";
+    if (/\bNot connected\b/i.test(text))
+        return "The iPhone is not connected over Bluetooth LE";
+    if (/org\.bluez\.Error\.(AuthenticationFailed|AuthenticationRejected|NotPermitted)\b/.test(text))
+        return "The iPhone refused this laptop's keys. Pair again";
+    return text.replace(/g-io-error-quark: /g, "").replace(/GDBus\.Error:[\w.]+: /g, "");
+}
+
+// Whether `pair` has to drop BlueZ's bond first: BlueZ holds one for the
+// phone but it is not connected, which is what a phone that forgot this
+// laptop looks like from here. A connected phone keeps its bond.
+function forgetBeforePair(status) {
+    return !!status && status.paired === true && status.connected !== true && _str(status.address) !== "";
 }
 
 // Newest first, one row per id, capped. ANCS resends an id when the phone
@@ -470,7 +497,7 @@ function parseAmsLine(line) {
             volume: isFinite(volume) && volume >= 0 ? volume : -1
         };
     case "error":
-        return { type: "error", message: _str(raw.message) || "Unknown error" };
+        return { type: "error", message: explainError(raw.message) };
     }
     return null;
 }
@@ -485,10 +512,11 @@ function addressFromHandle(handle) {
 
 // The Quickshell BluetoothDevice that is the phone: its object path first
 // (the bridge's `deviceHandle` is exactly that), then the address encoded
-// in it, then the bridge's reported name. null when none match.
-function matchDevice(devices, handle, name) {
+// in it or the address of the bond the bridge reports, then the bridge's
+// reported name. null when none match.
+function matchDevice(devices, handle, name, bondAddress) {
     var list = devices || [];
-    var address = addressFromHandle(handle);
+    var address = addressFromHandle(handle) || _str(bondAddress).toUpperCase();
     var i;
     if (_str(handle) !== "") {
         for (i = 0; i < list.length; i++)

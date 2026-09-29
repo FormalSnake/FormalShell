@@ -19,6 +19,8 @@ IpcHandler {
             installed: true,
             available: IphoneService.available,
             connected: IphoneService.connected,
+            bonded: IphoneService.bonded,
+            bondAddress: IphoneService.bondAddress,
             deviceName: IphoneService.deviceName,
             batteryAvailable: IphoneService.batteryAvailable,
             battery: IphoneService.battery,

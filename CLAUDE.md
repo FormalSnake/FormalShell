@@ -250,9 +250,14 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   both arrival orders, the local one surviving; and the panel populated,
   Recent and Now playing off the ams shim's own line. The ams shim's first
   run fails its subscribe (error line, then a non-zero exit) the way a phone
-  not yet GATT-ready does: `iphone status` shows the error with no media, ams
-  is started again on its backoff, and the second run's now playing lands
-  with the error cleared.
+  not yet GATT-ready does: `iphone status` shows the error, worded as the
+  LE link being down rather than the GDBus string, with no media, ams is
+  started again on its backoff, and the second run's now playing lands
+  with the error cleared. Then a status line for a phone BlueZ holds a bond
+  for with its LE link down (a phone that forgot this laptop): not
+  connected and bonded, ams not started again, the panel offering "Pair
+  again", and `iphone pair` reaching the bridge shim with `--forget
+  <address>`, the bond cleared and a pairing code landing in the panel.
 - `join.sh` `--join`: the join itself mid-flight under `debug motionScale`,
   four opens sampled frame by frame: a panel against the far end of the
   line, the chevron's second bar, a panel clicked out of a cell inside that
