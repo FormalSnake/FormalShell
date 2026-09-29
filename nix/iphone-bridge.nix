@@ -5,6 +5,11 @@
 # commands. Neither is a Python package (no pyproject.toml, no setup.py), so
 # this installs them as scripts and repoints their shebang at a Python that
 # actually has PyGObject, which plain /usr/bin/env python3 would not.
+#
+# The AMS patch makes `listen` exit non-zero when a subscribe write fails.
+# Upstream emits the error and then reports available with no subscription,
+# which is what a phone that is not GATT-ready yet produces right after the
+# bridge sees it connect.
 { lib, stdenvNoCC, fetchFromGitHub, python3 }:
 
 let
@@ -20,6 +25,8 @@ stdenvNoCC.mkDerivation {
     rev = "586f37dce6aceef72376afb8be8bcc8a04de41fe";
     hash = "sha256-s6HsH5sz3sXECG8vqZ4fwSWrq5HVa9RLL8dRzGnDDMM=";
   };
+
+  patches = [ ./iphone-ams-subscribe.patch ];
 
   dontBuild = true;
 

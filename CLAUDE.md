@@ -230,7 +230,11 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   `com.apple.MobileSMS`/`Messages` dedupe rule collapsing a phone message
   and the same one over a real `notify-send -a Messages` to one card in
   both arrival orders, the local one surviving; and the panel populated,
-  Recent and Now playing off the ams shim's own line.
+  Recent and Now playing off the ams shim's own line. The ams shim's first
+  run fails its subscribe (error line, then a non-zero exit) the way a phone
+  not yet GATT-ready does: `iphone status` shows the error with no media, ams
+  is started again on its backoff, and the second run's now playing lands
+  with the error cleared.
 - `join.sh` `--join`: the join itself mid-flight under `debug motionScale`,
   four opens sampled frame by frame: a panel against the far end of the
   line, the chevron's second bar, a panel clicked out of a cell inside that

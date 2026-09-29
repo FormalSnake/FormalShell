@@ -327,6 +327,9 @@ Singleton {
             root.mediaAvailable = event.available;
             if (event.available) {
                 root._amsBackoffMs = root._baseBackoffMs;
+                if (root._amsError !== "" && root.lastError === root._amsError)
+                    root.lastError = "";
+                root._amsError = "";
             } else {
                 root.mediaTitle = "";
                 root.mediaArtist = "";
@@ -350,6 +353,7 @@ Singleton {
             break;
         case "error":
             root.lastError = event.message;
+            root._amsError = event.message;
             break;
         }
     }
@@ -599,6 +603,7 @@ Singleton {
 
     readonly property string _ams: "omarchy-iphone-ams"
     property int _amsBackoffMs: root._baseBackoffMs
+    property string _amsError: ""
 
     Process {
         id: amsProc

@@ -1,0 +1,11 @@
+--- a/bin/omarchy-iphone-ams
++++ b/bin/omarchy-iphone-ams
+@@ -191,7 +191,8 @@
+         try:
+             write_char(bus, update_path, [entity] + attributes)
+         except GLib.Error as err:
+             emit({"type": "error", "message": "subscribe: " + str(err)})
++            return 1
+ 
+     emit({"type": "status", "available": True})
+     GLib.MainLoop().run()

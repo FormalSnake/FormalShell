@@ -30,6 +30,10 @@
 #    local arrives after).
 #  - the panel (`panel open iphone`), recent list and Now playing populated
 #    from the ams shim's own now-playing line.
+#  - the ams shim's first run failing its subscribe the way a phone that is
+#    not GATT-ready does (error line, then a non-zero exit): the error shows
+#    in `iphone status`, the service starts ams again on its backoff, and
+#    the second run's now playing lands with the error gone.
 #
 # The centre-side checks read `notifications status`'s pending+popups SUM,
 # never either alone: a popup ages into pending on its own 6s clock
@@ -52,6 +56,9 @@ iphone_bridge_events_path="$shot_dir/iphone-bridge-events.jsonl"
 iphone_bridge_calls_path="$shot_dir/iphone-bridge-calls.txt"
 iphone_ams_events_path="$shot_dir/iphone-ams-events.jsonl"
 iphone_ams_calls_path="$shot_dir/iphone-ams-calls.txt"
+iphone_ams_runs_path="$shot_dir/iphone-ams-runs.txt"
+iphone_status_ams_error_path="$shot_dir/iphone-status-ams-error.json"
+iphone_status_ams_recovered_path="$shot_dir/iphone-status-ams-recovered.json"
 
 iphone_device_name="Fixture iPhone 15"
 iphone_device_handle="/org/bluez/hci0/dev_AA_BB_CC_DD_EE_01"
@@ -103,6 +110,7 @@ leg_iphone_fixture() {
     '{"type":"nowplaying","title":"Waves","artist":"Fixture Band","album":"Fixture Album","duration":210,"elapsed":12,"playback":"playing","volume":0.6}' \
     > "$iphone_ams_events_path"
   : > "$iphone_ams_calls_path"
+  : > "$iphone_ams_runs_path"
 
   cat > "$iphone_shim_dir/omarchy-iphone-bridge" <<EOF
 #!/usr/bin/env bash
@@ -126,6 +134,12 @@ EOF
 #!/usr/bin/env bash
 case "\$1" in
   listen)
+    printf 'run\\n' >> "$iphone_ams_runs_path"
+    if [ "\$(wc -l < "$iphone_ams_runs_path")" -eq 1 ]; then
+      printf '%s\\n' '{"type":"error","message":"subscribe: g-io-error-quark: GDBus.Error:org.bluez.Error.Failed: Not connected (36)"}'
+      sleep 15
+      exit 1
+    fi
     exec stdbuf -oL tail -n +1 -F "$iphone_ams_events_path"
     ;;
   command)
@@ -168,6 +182,7 @@ append() { printf '%s\n' "\$1" >> "$iphone_bridge_events_path"; }
 # that depends on it.
 sleep 8
 "$qs_bin" ipc -p "$shell_path" call iphone status > "$iphone_status_connected_path" 2>&1
+cp "$iphone_status_connected_path" "$iphone_status_ams_error_path"
 
 sleep 2
 "$qs_bin" ipc -p "$shell_path" call notifications status > "$iphone_notify_status_0_path" 2>&1
@@ -223,6 +238,8 @@ sleep 2
 "$qs_bin" ipc -p "$shell_path" call notifications status > "$iphone_notify_status_dedupe_l2_path" 2>&1
 "$qs_bin" ipc -p "$shell_path" call debug dump > "$iphone_dump_5_path" 2>&1
 "$grim_bin" "$iphone_dedupe_local_first_png" > /dev/null 2>&1
+
+"$qs_bin" ipc -p "$shell_path" call iphone status > "$iphone_status_ams_recovered_path" 2>&1
 
 # The panel: Recent carrying all five phone-side entries and Now playing
 # off the ams shim's own line.
@@ -286,6 +303,17 @@ leg_iphone_assert() {
     fail "the card's positive action never reached the bridge shim's own record: $(cat "$iphone_bridge_calls_path" 2>/dev/null)"
   fi
   cat "$iphone_bridge_calls_path"
+
+  if [ "$("$jq_bin" -r '.lastError | startswith("subscribe:")' "$iphone_status_ams_error_path")" != "true" ] \
+      || [ "$("$jq_bin" -r '.mediaAvailable' "$iphone_status_ams_error_path")" != "false" ]; then
+    fail "the failed ams subscribe did not surface as an error with no media: $(cat "$iphone_status_ams_error_path")"
+  fi
+  if [ "$(wc -l < "$iphone_ams_runs_path")" -lt 2 ]; then
+    fail "ams was not started again after its first run exited non-zero: $(cat "$iphone_ams_runs_path")"
+  fi
+  if [ "$("$jq_bin" -r '.mediaAvailable and .mediaTitle == "Waves" and .lastError == ""' "$iphone_status_ams_recovered_path")" != "true" ]; then
+    fail "the second ams run did not bring now playing up with the error cleared: $(cat "$iphone_status_ams_recovered_path")"
+  fi
 
   if ! grep -q '^ok$' "$iphone_panel_open_path" 2>/dev/null; then
     fail "panel open iphone did not answer ok, got: $(cat "$iphone_panel_open_path" 2>/dev/null)"

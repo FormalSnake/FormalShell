@@ -27,6 +27,8 @@ IpcHandler {
             pairingCode: IphoneService.pairingCode,
             advertising: IphoneService.advertising,
             lastError: IphoneService.lastError,
+            mediaAvailable: IphoneService.mediaAvailable,
+            mediaTitle: IphoneService.mediaTitle,
             recent: IphoneService.recent
         });
     }
