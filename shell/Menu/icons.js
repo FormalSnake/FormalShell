@@ -105,7 +105,9 @@ var ROUTE_ICONS = {
     "panels.tailscale": "network",
     "panels.systemupdate": "package",
     "panels.display": "monitor",
-    "panels.monitor": "gauge"
+    "panels.monitor": "gauge",
+    "panels.iphone": "smartphone",
+    "panels.radio": "radio"
 };
 
 // Routes whose mark is a real logo rather than an icon, keyed by the

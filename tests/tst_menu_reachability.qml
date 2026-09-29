@@ -2,6 +2,7 @@ import QtQuick
 import QtTest
 import "../shell/Menu/model.js" as Model
 import "../shell/Menu/providers.js" as Providers
+import "../shell/Menu/search.js" as Search
 
 // M38 Task 3: the launcher-reachability guard. Keeps the owner's
 // philosophy true: every panel registered in shell.qml's PanelIpc has a
@@ -19,7 +20,7 @@ TestCase {
     property var panelNames: [
         "appmenu", "audio", "calendar", "network", "bluetooth", "airpods",
         "iphone", "dualsense", "power", "weather", "media", "github", "usage",
-        "tailscale", "systemupdate", "display", "monitor"
+        "tailscale", "systemupdate", "display", "monitor", "radio"
     ]
 
     function _read(path) {
@@ -65,9 +66,10 @@ TestCase {
     }
 
     // Drift guard the other direction: the list this test asserts against
-    // is itself checked against shell.qml's real PanelIpc registry, so an
+    // is checked both ways against shell.qml's real PanelIpc registry, so an
     // added-and-forgotten panel (present in shell.qml, absent here) fails
-    // here rather than silently shipping unrouted.
+    // here rather than silently shipping unrouted. trayoverflow is the one
+    // registry name with no row: the "tray" route already lists its items.
     function test_registry_names_match_the_test_list() {
         var text = _read("../shell/shell.qml");
         var start = text.indexOf("var reg = {");
@@ -77,6 +79,27 @@ TestCase {
         for (var i = 0; i < panelNames.length; i++)
             verify(registryText.indexOf(panelNames[i] + ":") >= 0,
                 "'" + panelNames[i] + "' not found in shell.qml's PanelIpc registry");
+        var keys = registryText.match(/(\w+):\s*\w+Instance/g) || [];
+        verify(keys.length > 0, "no registry entries parsed out of shell.qml");
+        for (var k = 0; k < keys.length; k++) {
+            var name = keys[k].split(":")[0];
+            if (name === "trayoverflow") continue;
+            verify(panelNames.indexOf(name) >= 0,
+                "panel '" + name + "' is registered in shell.qml but has no launcher row");
+        }
+    }
+
+    // A panel is reached by typing its name at root, not only from inside
+    // the Panels route.
+    function test_root_query_reaches_every_panel() {
+        var tree = _realTree();
+        var rows = Providers.panelsProvider("/fake/shell/dir");
+        for (var i = 0; i < rows.length; i++) {
+            var ranked = Search.rank(tree.nodes, rows[i].label, {}, null);
+            var ids = ranked.map(function (n) { return n.id; });
+            verify(ids.indexOf(rows[i].id) >= 0,
+                "root query '" + rows[i].label + "' does not reach " + rows[i].id);
+        }
     }
 
     function test_panels_provider_action_shape() {

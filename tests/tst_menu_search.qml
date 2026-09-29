@@ -95,7 +95,7 @@ TestCase {
     }
 
     // routeOnly: a route whose provider names its rows after things the
-    // launcher already lists elsewhere (the tray, the panels) is walked
+    // launcher already lists elsewhere (the tray) is walked
     // only from inside itself, so a root query returns the app once.
     function _routeOnlyTree() {
         return M.buildTree({

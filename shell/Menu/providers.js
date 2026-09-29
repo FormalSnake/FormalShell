@@ -1038,9 +1038,10 @@ function captureEntries(selfPath) {
     };
 }
 
-// Panel rows (M38 Task 3): one per name in shell.qml's PanelIpc registry.
-// Static list, not a scan, the registry itself is declared in shell.qml,
-// not discoverable at runtime, so a 16th panel needs a new entry here too;
+// Panel rows (M38 Task 3): one per name in shell.qml's PanelIpc registry,
+// trayoverflow aside (the "tray" route already lists its items). Static
+// list, not a scan, the registry itself is declared in shell.qml, not
+// discoverable at runtime, so a new panel needs a new entry here too;
 // tst_menu_reachability.qml is the guard that fails when one is missed.
 // Self-targeted the same way captureEntries above is, and for the same
 // reason (clipboardProvider's own comment has the full mechanism): each
@@ -1066,7 +1067,8 @@ var PANEL_NAMES = [
     { id: "tailscale", label: "Tailscale", icon: "\u{F0318}" }, // md-lan_connect
     { id: "systemupdate", label: "System Update", icon: "\u{F03D3}" }, // md-package
     { id: "display", label: "Display", icon: "\u{F0379}" }, // md-monitor
-    { id: "monitor", label: "Monitor", icon: "\u{F029A}" } // md-gauge, same glyph MonitorWidget's bar cell uses
+    { id: "monitor", label: "Monitor", icon: "\u{F029A}" }, // md-gauge, same glyph MonitorWidget's bar cell uses
+    { id: "radio", label: "Radio", icon: "\u{F0439}" } // md-radio
 ];
 
 function panelsProvider(selfPath) {

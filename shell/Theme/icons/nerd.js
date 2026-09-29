@@ -76,6 +76,7 @@ var ICONS = {
     "repeat": "\u{F0456}",
     "repeat-1": "\u{F0458}",
     "music": "\u{F075A}",
+    "radio": "\u{F0439}",           // md-radio
     "image": "\u{F02E9}",
     "camera": "\u{F0100}",
     "video": "\u{F0567}",
