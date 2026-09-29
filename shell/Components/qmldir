@@ -41,6 +41,7 @@ SectionLabel SectionLabel.qml
 Separator Separator.qml
 Shoulders Shoulders.qml
 SizeMorph SizeMorph.qml
+Sparkline Sparkline.qml
 Segmented Segmented.qml
 Switch Switch.qml
 Tooltip Tooltip.qml

@@ -334,4 +334,19 @@ TestCase {
     function test_respawn_without_a_readable_cwd_still_runs() {
         compare(Procs.respawnCommand(["mpv"], ""), ["sh", "-c", "exec 'mpv'"]);
     }
+
+    function test_state_letters_read_as_words() {
+        compare(Procs.stateLabel("R"), "Running");
+        compare(Procs.stateLabel("S"), "Sleeping");
+        compare(Procs.stateLabel("Z"), "Zombie");
+        compare(Procs.stateLabel("?"), "--");
+        compare(Procs.stateLabel("constructor"), "--");
+    }
+
+    function test_launcher_names_lead_with_the_binary_the_argv_runs() {
+        compare(Procs.launcherNames({ name: ".firefox-wrappe", cmd: "/nix/store/x-firefox/bin/firefox --new-window" }),
+            ["firefox", ".firefox-wrappe"]);
+        compare(Procs.launcherNames({ name: "kthreadd", cmd: "" }), ["kthreadd"]);
+        compare(Procs.launcherNames({ name: "bash", cmd: "bash -l" }), ["bash"]);
+    }
 }

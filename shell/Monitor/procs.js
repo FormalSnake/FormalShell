@@ -214,6 +214,30 @@ function filterRows(rows, query) {
 
 var SORTS = ["cpu", "mem", "pid", "name"];
 
+// What the state letter in /proc/PID/stat is called in a task manager.
+var STATE_LABELS = {
+    R: "Running", S: "Sleeping", D: "Disk wait", Z: "Zombie",
+    T: "Stopped", t: "Traced", I: "Idle", X: "Dead"
+};
+
+function stateLabel(code) {
+    return Object.prototype.hasOwnProperty.call(STATE_LABELS, code) ? STATE_LABELS[code] : "--";
+}
+
+// Names worth trying against the desktop entries, best first: the binary
+// the argv runs (comm is cut at 15 bytes and often names the wrapper), then
+// comm itself.
+function launcherNames(row) {
+    var out = [];
+    var first = String(row.cmd || "").split(" ")[0];
+    var base = first.slice(first.lastIndexOf("/") + 1);
+    if (base !== "")
+        out.push(base);
+    if (row.name && out.indexOf(row.name) < 0)
+        out.push(row.name);
+    return out;
+}
+
 // What the sort control and the column headers call each mode.
 var SORT_LABELS = { cpu: "CPU", mem: "Memory", pid: "PID", name: "Name" };
 
