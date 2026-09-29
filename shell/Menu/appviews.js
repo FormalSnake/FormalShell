@@ -18,7 +18,7 @@
 // them from. This module stays pure (no Qt.resolvedUrl, no imports) so it
 // is testable head-on by qmltestrunner.
 //
-// Four optional seams, each one a property or function Menu.qml looks for
+// Five optional seams, each one a property or function Menu.qml looks for
 // on the loaded item and skips when it is absent, so the simplest possible
 // app view is still a bare Item:
 //
@@ -34,6 +34,10 @@
 //                                    view with a row cursor needs, since
 //                                    ↑↓ and Enter otherwise scroll and do
 //                                    nothing respectively.
+//   property bool live              true while the launcher is open, false
+//                                    from the moment a close starts (the
+//                                    view outlives it by the exit fade). A
+//                                    view holding a device gates it on this.
 //   property var viewActions         { primary, hints } for the action bar
 //                                    (Menu/actions.js's shape), replacing
 //                                    the row list's verbs on this route.
@@ -42,14 +46,14 @@
 //                                    both the footer's own click and the
 //                                    rig's `menu activate <index>`.
 //
-// MonitorView uses all four. It is the only entry so far, and the second
-// one ("processes", M39) lasted a day: the process table belongs inside the
-// monitor rather than beside it (owner, 2026-08-19), so it moved into
-// MonitorView and its route was dropped. The registry is still a registry
-// for the reason it always was, the next app view is one line here plus
-// one file under Surfaces/Menu/views/, with no Menu.qml edit at all.
+// MonitorView uses all but `live`; MirrorView uses `live`, `viewKey`,
+// `viewActions` and `viewActivate`. A second route ("processes", M39)
+// lasted a day: the process table belongs inside the monitor rather than
+// beside it (owner, 2026-08-19), so it moved into MonitorView and its route
+// was dropped.
 var VIEWS = {
-    monitor: "views/MonitorView.qml"
+    monitor: "views/MonitorView.qml",
+    mirror: "views/MirrorView.qml"
 };
 
 // hasOwnProperty rather than a bare lookup: "constructor"/"toString"/

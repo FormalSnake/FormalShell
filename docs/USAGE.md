@@ -13,6 +13,7 @@ what you can drive over IPC. The product overview is in
 - [OSD](#osd)
 - [Panels](#panels)
 - [System monitor](#system-monitor)
+- [Mirror](#mirror)
 - [Clipboard](#clipboard)
 - [Quake console](#quake-console)
 - [Calendar](#calendar)
@@ -1221,13 +1222,15 @@ rather than being true today.
 A route can host a whole view instead of a row list, which is the Raycast
 model: the launcher as a window manager for small apps. `Menu/appviews.js`'s
 registry is the seam, one line plus one QML file under
-`Surfaces/Menu/views/`, and `monitor` is the route registered today (see
-[System monitor](#system-monitor)). A view opts into each piece of chrome by
+`Surfaces/Menu/views/`, and `monitor` and `mirror` are the routes registered
+today (see [System monitor](#system-monitor) and [Mirror](#mirror)). A view opts into each piece of chrome by
 declaring it: `property string query` for the live search field, `property
 Flickable scrollTarget` for what the arrows scroll, `function viewKey(key,
 modifiers)` to claim keys ahead of the menu's own handler, and `property var
 viewActions` plus `function viewActivate(index)` to put its own verbs in the
-action bar. `monitor` uses all four: its own field filters the process
+action bar, and `property bool live` to learn when the launcher closes (true
+while it is open, false the moment a close starts, ahead of the exit fade).
+`monitor` uses the first four: its own field filters the process
 table, and `viewKey` claims `Ctrl+Enter` to arm a kill and send it on the
 next matching press, `Ctrl+R` to arm a restart the same way, and `Ctrl+S` to
 cycle the sort column, each named in the footer through `viewActions`.
@@ -2098,6 +2101,43 @@ fs monitor restart <pid>
 
 `kill` replies that the signal was sent, never that the process died: the
 exit status lands in the next `processes` dump's `lastAction`.
+
+## Mirror
+
+`menu summon mirror`, or `mirror` typed in the launcher, shows the live
+camera feed inside the card, flipped left to right like a mirror. `Tab` (or
+`Enter`, or the footer's Next camera button) steps to the next camera and
+`Shift+Tab` back; the footer offers the step only when there is more than one.
+Cameras are the V4L2 capture nodes QtMultimedia lists, colour ones first and
+IR ones last, each under the device's own name (`ASUS FHD webcam`, `ASUS IR
+camera`). An IR sensor is recognised by an `IR` in its name or by offering
+only grey formats, and gets an ` IR` suffix when its name does not already
+say so. A machine with no camera shows `No camera`, and a device that will
+not open shows the error Qt reports, as text.
+
+The camera opens when the view is shown and is released the moment the
+launcher starts closing, so the webcam light follows the card. Nothing runs
+while it is closed.
+
+An IR sensor is captured like any other node. Its emitter is not touched:
+switching it on is a vendor UVC control that differs per model, so an IR
+feed can come up dark on a laptop whose emitter has not been enabled
+system-wide.
+
+Display mirroring is the Display panel's: `panels` then Display, or
+`mirror display` typed inside `panels`.
+
+```sh
+fs menu summon mirror
+fs mirror toggle             # open the mirror, or close the launcher if it is showing
+fs mirror open|close
+fs mirror next|previous      # error while the mirror is not showing
+fs mirror status             # {"showing":…,"streaming":…,"hasFrame":…,"error":"","current":"/dev/video0","feed":{…},"cameras":[{"id","label","ir"}]}
+```
+
+```lua
+hl.bind("SUPER + CTRL + M", hl.dsp.exec_cmd("fs mirror toggle"))
+```
 
 ## Clipboard
 

@@ -2522,6 +2522,16 @@ PanelWindow {
                 when: appView.item !== null && appView.item.query !== undefined
             }
 
+            // A view holding a device (MirrorView's camera) gates it on this
+            // rather than on its own lifetime: the item outlives a close by
+            // the exit fade, and the camera light should not.
+            Binding {
+                target: appView.item
+                property: "live"
+                value: root.isOpen
+                when: appView.item !== null && appView.item.live !== undefined
+            }
+
             // The split route's right half (M30, M43 D4): the cursor row's
             // full content in the launcher's one inner `Card`, a `sm` gutter
             // off the list and the body's inset off both rules.

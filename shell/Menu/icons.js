@@ -20,6 +20,7 @@ var ROUTE_ICONS = {
     "keybinds": "keyboard",
     "wallpaper": "image",
     "monitor": "cpu",
+    "mirror": "camera",
     "panels": "grid-2x2",
     "tray": "inbox",
     "gpu": "gpu",

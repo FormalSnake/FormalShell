@@ -367,6 +367,7 @@ ShellRoot {
     ClipboardIpc {}
     ConsoleIpc {}
     MonitorIpc {}
+    MirrorIpc { menu: menuInstance }
     NetworkIpc { panel: networkPanelInstance }
     BluetoothIpc {}
     AirpodsIpc {}

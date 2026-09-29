@@ -233,6 +233,7 @@ fs_bind("SUPER + CTRL + R", "menu summon reminder")
 fs_bind("SUPER + Escape", "menu summon system")
 fs_bind("SUPER + K", "menu summon keybinds")
 fs_bind("SUPER + CTRL + Q", "menu summon calc")
+fs_bind("SUPER + CTRL + M", "mirror toggle")
 
 -- The wallpaper route is the picker grid: pick one and the whole palette
 -- follows it. There is no "advance to the next wallpaper" IPC verb.

@@ -25,7 +25,7 @@ nixpkgs.lib.nixosSystem {
     (nixpkgs + "/nixos/modules/virtualisation/qemu-vm.nix")
     self.nixosModules.formalshell
     self.nixosModules.formalshell-greeter
-    ({ pkgs, lib, ... }:
+    ({ pkgs, lib, config, ... }:
       let
         quickshellPkg = quickshell.packages.aarch64-linux.default;
         greeterPkg = self.packages.aarch64-linux.formalshell-greeter;
@@ -411,7 +411,18 @@ nixpkgs.lib.nixosSystem {
         # vkms is the software KMS device dev/smoke.sh's Hyprland renders on
         # (see the services.seatd comment above).
         boot.kernelModules = [ "mac80211_hwsim" "vkms" ];
-        boot.extraModprobeConfig = "options mac80211_hwsim radios=3";
+        # The --mirror leg's cameras: two v4l2loopback nodes it feeds with
+        # ffmpeg (a colour pattern on video10, a GREY one on video11 in the
+        # shape of a laptop's IR sensor). Built, not loaded: the leg
+        # modprobes it itself, so every other run sees no /dev/video* and the
+        # mirror's No camera state stays reachable. exclusive_caps makes a
+        # node advertise capture only once a writer has set its format,
+        # which is how a real webcam looks to a reader.
+        boot.extraModulePackages = [ config.boot.kernelPackages.v4l2loopback ];
+        boot.extraModprobeConfig = ''
+          options mac80211_hwsim radios=3
+          options v4l2loopback devices=2 video_nr=10,11 card_label="Loop Colour,Loop IR" exclusive_caps=1,1
+        '';
         networking.wireless.enable = lib.mkOverride 0 true;
         # Scopes the wireless module's own client/AP-conflict warning to just
         # the one interface it actually manages (wlan1/wlan2 are excluded

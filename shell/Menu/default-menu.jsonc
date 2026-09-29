@@ -58,6 +58,14 @@
     // someone reaching for a process list actually types.
     "monitor": { "label": "System Monitor", "provider": "monitor", "aliases": ["sysmon", "system", "cpu", "gpu", "ps", "top", "htop", "processes", "kill", "task", "tasks", "activity"], "section": "Suggestions", "prompt": "Filter processes" },
 
+    // "mirror" registers no provider fn either, on the same footing as
+    // "monitor" above: an app view (Surfaces/Menu/views/MirrorView.qml,
+    // registered in Menu/appviews.js) showing the live camera feed, Tab
+    // stepping through the cameras. The word "mirror" is this route's; the
+    // display panel's own mirroring is reached by "display", "mirror display"
+    // or "screen mirroring" (Menu/providers.js PANEL_NAMES).
+    "mirror": { "label": "Mirror", "provider": "mirror", "aliases": ["camera", "webcam", "selfie", "ir camera"], "section": "Suggestions", "prompt": "Tab switches camera" },
+
     // "nix" registers no provider fn either: a summonable route
     // (`menu summon nix`) whose level Menu.qml fills from the debounced
     // `nix search nixpkgs` cache; ":nix <query>" reaches the same rows

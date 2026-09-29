@@ -340,6 +340,15 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   ring's top band; a top edge carrying neither prints them as skipped.
 - `mic.sh` `--mic`: the opt-in mic cell rendering its honest no-device state
   on a machine with no capture device.
+- `mirror.sh` `--mirror`: the launcher's camera mirror against two v4l2loopback
+  nodes (built by `nix/testvm.nix`, loaded by the leg) fed by real ffmpeg
+  writers, a colour pattern on video10 and a GREY one on video11 standing in
+  for an IR sensor. The view opened with no `/dev/video*` at all (No camera,
+  no node held), then reopened on the colour camera with non-flat coloured
+  pixels in the feed box and only that node held open by the shell, a real
+  Tab stepping to the grey camera (grey pixels, the other node released),
+  `mirror previous`/`next` over IPC, and the launcher closed with the shell
+  holding no video node, all read off `/proc/<pid>/fd`.
 - `monitor.sh` `--monitor`: the monitor bar cell, its panel and the
   launcher's monitor view, against this machine's own `/proc` and `/sys`.
 - `nightlight.sh` `--nightlight`: the wlsunset-backed night light on and off,

@@ -25,6 +25,7 @@ singleton LyricsService LyricsService.qml
 singleton HdrService HdrService.qml
 singleton MainOutputService MainOutputService.qml
 singleton MediaService MediaService.qml
+singleton MirrorService MirrorService.qml
 singleton NightLightService NightLightService.qml
 singleton OvernightService OvernightService.qml
 singleton PolkitService PolkitService.qml

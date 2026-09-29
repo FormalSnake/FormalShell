@@ -1068,7 +1068,7 @@ var PANEL_NAMES = [
     { id: "usage", label: "Usage", icon: "\u{F16A3}" }, // md-robot_excited
     { id: "tailscale", label: "Tailscale", icon: "\u{F0318}" }, // md-lan_connect
     { id: "systemupdate", label: "System Update", icon: "\u{F03D3}" }, // md-package
-    { id: "display", label: "Display", icon: "\u{F0379}" }, // md-monitor
+    { id: "display", label: "Display", icon: "\u{F0379}", aliases: ["mirror display", "screen mirroring", "screens", "outputs"] }, // md-monitor
     { id: "monitor", label: "Monitor", icon: "\u{F029A}" }, // md-gauge, same glyph MonitorWidget's bar cell uses
     { id: "radio", label: "Radio", icon: "\u{F0439}" } // md-radio
 ];
@@ -1081,7 +1081,7 @@ function panelsProvider(selfPath) {
             label: p.label,
             icon: p.icon,
             title: "",
-            aliases: [],
+            aliases: p.aliases || [],
             kind: "action",
             action: "qs ipc -p " + selfPath + " call panel open " + p.id,
             childIds: []
