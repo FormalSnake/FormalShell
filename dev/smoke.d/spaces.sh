@@ -51,6 +51,13 @@
 #   real mouse does and what a card that primes Exclusive focus fails:
 #   Hyprland pulls the pointer onto a layer that maps Exclusive and hands
 #   it back on the next motion. Moving off it closes it again.
+# - A window of workspace 2 floated and moved mostly past the output's right
+#   edge (`movewindowpixel exact`), the case a scrolling layout produces on
+#   its own: the peeked card's miniature opens scrolled to the output's own
+#   region, lays that window out at its real size and place beyond the
+#   viewport (its thumbnail as wide as the window's rect at the miniature's
+#   scale, not a clamped sliver), and a real wheel notch over the card
+#   scrolls the strip along x, then a notch the other way scrolls it back.
 leg_spaces_flag="--spaces"
 leg_spaces_order=196
 leg_spaces_needs="foot jq convert wlrctl"
@@ -69,6 +76,10 @@ spaces_status_peek_path="$shot_dir/spaces-status-peek.json"
 spaces_status_hover_path="$shot_dir/spaces-status-hover.json"
 spaces_status_left_path="$shot_dir/spaces-status-left.json"
 spaces_status_moved_path="$shot_dir/spaces-status-moved.json"
+spaces_status_pad_path="$shot_dir/spaces-status-pad.json"
+spaces_status_pad_back_path="$shot_dir/spaces-status-pad-back.json"
+spaces_status_wheel_path="$shot_dir/spaces-status-wheel.json"
+spaces_status_wheel_back_path="$shot_dir/spaces-status-wheel-back.json"
 spaces_dump_path="$shot_dir/spaces-dump.json"
 spaces_dump_idle_path="$shot_dir/spaces-dump-idle.json"
 spaces_peek_reply_path="$shot_dir/spaces-peek-reply.txt"
@@ -78,6 +89,7 @@ spaces_blocked_png="$shot_dir/spaces-blocked.png"
 spaces_idle_png="$shot_dir/spaces-idle.png"
 spaces_two_png="$shot_dir/spaces-two.png"
 spaces_peek_png="$shot_dir/spaces-peek.png"
+spaces_wheel_png="$shot_dir/spaces-wheel.png"
 spaces_hover_png="$shot_dir/spaces-hover.png"
 spaces_left_png="$shot_dir/spaces-left.png"
 spaces_crop_dir="$shot_dir/spaces-crops"
@@ -204,6 +216,7 @@ leg_spaces_drive() {
 #!/usr/bin/env bash
 call() { "$qs_bin" ipc -p "$shell_path" call "\$@"; }
 centre() { "$jq_bin" -r ".slots[\$1].rect | \"\\(.x + (.width / 2) | floor) \\(.y + (.height / 2) | floor)\"" "\$2"; }
+card_centre() { "$jq_bin" -r ".preview.rect | \"\\(.x + (.width / 2) | floor) \\(.y + (.height / 2) | floor)\"" "\$1"; }
 park() {
   "$wlrctl_bin" pointer move -4000 -4000 >> "$spaces_dispatch_path" 2>&1
   sleep 0.5
@@ -218,6 +231,13 @@ sleep 1
 sleep 2
 "$hyprctl_bin" dispatch exec "[workspace 2 silent] $foot_bin --app-id=formalshell-spaces-plain sh -c 'sleep 300'" >> "$spaces_dispatch_path" 2>&1
 sleep 2
+# Workspace 2's plain window floated and put mostly past the output's right
+# edge, its real rect kept as it is. Fully past it Hyprland exports no
+# frames for it and the capture count below would drop.
+out_w=\$("$hyprctl_bin" monitors -j | "$jq_bin" -r '.[0] | (.width / .scale) | floor')
+"$hyprctl_bin" dispatch togglefloating "class:^(formalshell-spaces-plain)\$" >> "$spaces_dispatch_path" 2>&1
+"$hyprctl_bin" dispatch resizewindowpixel "exact 640 400,class:^(formalshell-spaces-plain)\$" >> "$spaces_dispatch_path" 2>&1
+"$hyprctl_bin" dispatch movewindowpixel "exact \$((out_w - 200)) 150,class:^(formalshell-spaces-plain)\$" >> "$spaces_dispatch_path" 2>&1
 # A footclient window belongs to the server's pid, which exec's window rules
 # never see, so both are moved by class instead.
 "$hyprctl_bin" dispatch movetoworkspacesilent "1,class:^(formalshell-spaces-blocked)\$" >> "$spaces_dispatch_path" 2>&1
@@ -248,6 +268,15 @@ call workspaces peek 2 > "$spaces_peek_reply_path" 2>&1
 sleep 2
 call workspaces status > "$spaces_status_peek_path" 2>&1
 "$grim_bin" "$spaces_peek_png" > /dev/null 2>&1
+park \$(card_centre "$spaces_status_peek_path")
+sleep 1
+"$wlrctl_bin" pointer scroll 15 0 >> "$spaces_dispatch_path" 2>&1
+sleep 1
+call workspaces status > "$spaces_status_wheel_path" 2>&1
+"$grim_bin" "$spaces_wheel_png" > /dev/null 2>&1
+"$wlrctl_bin" pointer scroll -15 0 >> "$spaces_dispatch_path" 2>&1
+sleep 1
+call workspaces status > "$spaces_status_wheel_back_path" 2>&1
 call workspaces close >> "$spaces_peek_reply_path" 2>&1
 sleep 2
 park \$(centre 1 "$spaces_status_one_path")
@@ -260,6 +289,19 @@ for step in 3 -3 3 -3 3 -3 3 -3 3 -3; do
 done
 sleep 0.5
 call workspaces status > "$spaces_status_moved_path" 2>&1
+# Still the hover-opened card, no keyboard: the pointer crosses onto it and a
+# horizontal axis event (what a trackpad's sideways swipe sends) scrolls the
+# strip without the card closing.
+read -r chip_x chip_y <<< "\$(centre 1 "$spaces_status_one_path")"
+read -r card_x card_y <<< "\$(card_centre "$spaces_status_moved_path")"
+"$wlrctl_bin" pointer move \$((card_x - chip_x)) \$((card_y - chip_y)) >> "$spaces_dispatch_path" 2>&1
+sleep 1
+"$wlrctl_bin" pointer scroll 0 15 >> "$spaces_dispatch_path" 2>&1
+sleep 1
+call workspaces status > "$spaces_status_pad_path" 2>&1
+"$wlrctl_bin" pointer scroll 0 -15 >> "$spaces_dispatch_path" 2>&1
+sleep 1
+call workspaces status > "$spaces_status_pad_back_path" 2>&1
 park 960 900
 sleep 2
 call workspaces status > "$spaces_status_left_path" 2>&1
@@ -282,7 +324,9 @@ leg_spaces_assert() {
   [ -f "$spaces_done_path" ] || fail "the spaces drive never finished; last dispatch output: $(tail -n 5 "$spaces_dispatch_path" 2>/dev/null)"
   for f in "$spaces_status_one_path" "$spaces_dump_path" "$spaces_dump_idle_path" \
     "$spaces_status_two_path" "$spaces_status_peek_path" "$spaces_status_hover_path" \
-    "$spaces_status_moved_path" "$spaces_status_left_path"; do
+    "$spaces_status_moved_path" "$spaces_status_left_path" \
+    "$spaces_status_pad_path" "$spaces_status_pad_back_path" \
+    "$spaces_status_wheel_path" "$spaces_status_wheel_back_path"; do
     [ -s "$f" ] || fail "no read produced at $f"
   done
   cat "$spaces_status_one_path"; echo
@@ -427,12 +471,46 @@ leg_spaces_assert() {
   "$jq_bin" -e '.preview.open and .preview.idx == 2' "$spaces_status_moved_path" > /dev/null \
     || fail "the preview closed while the pointer kept moving over workspace 2's chip: $("$jq_bin" -c .preview "$spaces_status_moved_path")"
 
+  # The window parked past the right edge: the miniature opened on the
+  # output's own region over a strip wider than itself, drew that window
+  # whole beyond the viewport, and a wheel notch scrolls the strip along x.
+  local mini before after back
+  mini=$("$jq_bin" -c .preview.miniature "$spaces_status_peek_path")
+  echo "miniature at peek: $mini"
+  "$jq_bin" -e '.content.width > .view.width and .scroll == .home' <<< "$mini" > /dev/null \
+    || fail "the miniature did not open on the output's own region over a wider strip: $mini"
+  "$jq_bin" -e '
+    .scale as $k | .inset as $i
+    | (.thumbs | max_by(.rect.x)) as $t
+    | ($t.x + $t.width) > .view.width
+      and (($t.width - ($t.rect.width * $k - 2 * $i)) | fabs) <= 2
+      and (($t.height - ($t.rect.height * $k - 2 * $i)) | fabs) <= 2' <<< "$mini" > /dev/null \
+    || fail "the window past the output's edge is not drawn whole beyond the viewport: $mini"
+  before=$("$jq_bin" -r .preview.miniature.scroll.x "$spaces_status_peek_path")
+  after=$("$jq_bin" -r .preview.miniature.scroll.x "$spaces_status_wheel_path")
+  back=$("$jq_bin" -r .preview.miniature.scroll.x "$spaces_status_wheel_back_path")
+  echo "miniature scroll x: peek $before, after a notch $after, after the reverse notch $back"
+  [ "$after" -gt "$before" ] || fail "a wheel notch over the preview did not scroll the miniature right: $before -> $after"
+  [ "$back" -lt "$after" ] || fail "the reverse wheel notch did not scroll the miniature back: $after -> $back"
+  local pad pad_back
+  pad=$("$jq_bin" -r .preview.miniature.scroll.x "$spaces_status_pad_path")
+  pad_back=$("$jq_bin" -r .preview.miniature.scroll.x "$spaces_status_pad_back_path")
+  echo "hover-opened card, horizontal axis: after a sideways notch $pad, back $pad_back"
+  "$jq_bin" -e '.preview.open and .preview.idx == 2 and (.preview.keyboard | not)' "$spaces_status_pad_path" > /dev/null \
+    || fail "the hover-opened preview closed under a horizontal scroll: $("$jq_bin" -c .preview "$spaces_status_pad_path")"
+  [ "$pad" -gt 0 ] || fail "a horizontal axis event over the hover-opened preview did not scroll the miniature: $pad"
+  [ "$pad_back" -lt "$pad" ] || fail "the reverse horizontal event did not scroll the miniature back: $pad -> $pad_back"
+  [ -f "$spaces_wheel_png" ] || fail "no spaces screenshot produced at $spaces_wheel_png"
+  echo "SMOKE_SPACES_WHEEL $spaces_wheel_png"
+
   # The card and the chip row, cropped for reading.
   local card chips
   card=$("$jq_bin" -r '.preview.rect | "\(.width)x\(.height)+\(.x)+\(.y)"' "$spaces_status_peek_path")
   chips=$("$jq_bin" -r '[.slots[].rect] | "\((map(.x + .width) | max) - (map(.x) | min) + 8)x\((map(.y + .height) | max) - (map(.y) | min) + 8)+\((map(.x) | min) - 4)+\((map(.y) | min) - 4)"' "$spaces_status_one_path")
   $convert_bin "$spaces_peek_png" -crop "$card" +repage "$spaces_crop_dir/peek-card.png" \
     || fail "could not crop the preview card at $card"
+  $convert_bin "$spaces_wheel_png" -crop "$card" +repage "$spaces_crop_dir/wheel-card.png" || true
+  echo "SMOKE_SPACES_WHEEL_CARD $spaces_crop_dir/wheel-card.png"
   $convert_bin "$spaces_hover_png" -crop "$card" +repage "$spaces_crop_dir/hover-card.png" || true
   $convert_bin "$spaces_blocked_png" -crop "$chips" +repage -scale 300% "$spaces_crop_dir/chips.png" \
     || fail "could not crop the chip row at $chips"

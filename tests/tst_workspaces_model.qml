@@ -225,22 +225,51 @@ TestCase {
         compare(WorkspacesModel.stepIndex(0, 0, 1), -1);
     }
 
-    function test_preview_layout_scales_and_clamps() {
+    function test_preview_layout_keeps_windows_past_the_edge() {
         var area = { x: 1000, y: 0, width: 1000, height: 500 };
-        var placed = WorkspacesModel.previewLayout([
+        var layout = WorkspacesModel.previewLayout([
             { id: "a", rect: { x: 1000, y: 0, width: 500, height: 500 } },
-            { id: "b", rect: { x: 1900, y: 400, width: 500, height: 500 }, isFloating: true }
+            { id: "b", rect: { x: 2100, y: 100, width: 500, height: 400 } }
         ], area, 200, 100, 4);
+        var placed = layout.windows;
         compare(placed.length, 2);
-        compare(placed[0].id, "a");
         compare(placed[0].x, 0);
         compare(placed[0].width, 100);
         compare(placed[0].height, 100);
-        compare(placed[1].id, "b");
-        compare(placed[1].x, 180);
-        compare(placed[1].y, 80);
-        compare(placed[1].width, 20);
-        compare(placed[1].height, 20);
+        compare(placed[1].x, 220);
+        compare(placed[1].y, 20);
+        compare(placed[1].width, 100);
+        compare(placed[1].height, 80);
+        compare(layout.bounds.width, 320);
+        compare(layout.bounds.height, 100);
+        compare(layout.home.x, 0);
+        compare(layout.home.y, 0);
+    }
+
+    function test_preview_layout_left_and_above_move_the_output_home() {
+        var area = { x: 0, y: 0, width: 1000, height: 500 };
+        var layout = WorkspacesModel.previewLayout([
+            { id: "l", rect: { x: -600, y: -250, width: 500, height: 500 } },
+            { id: "o", rect: { x: 0, y: 0, width: 1000, height: 500 } }
+        ], area, 200, 100, 4);
+        compare(layout.home.x, 120);
+        compare(layout.home.y, 50);
+        compare(layout.windows[0].x, 0);
+        compare(layout.windows[0].y, 0);
+        compare(layout.windows[1].x, layout.home.x);
+        compare(layout.windows[1].y, layout.home.y);
+        compare(layout.bounds.width, 320);
+        compare(layout.bounds.height, 150);
+    }
+
+    function test_preview_layout_bounds_are_the_output_when_windows_fit() {
+        var layout = WorkspacesModel.previewLayout([
+            { id: "a", rect: { x: 10, y: 10, width: 400, height: 300 } }
+        ], { x: 0, y: 0, width: 1000, height: 500 }, 200, 100, 4);
+        compare(layout.bounds.width, 200);
+        compare(layout.bounds.height, 100);
+        compare(layout.home.x, 0);
+        compare(layout.home.y, 0);
     }
 
     function test_preview_layout_floating_draws_last() {
@@ -248,14 +277,14 @@ TestCase {
         var placed = WorkspacesModel.previewLayout([
             { id: "f", rect: { x: 0, y: 0, width: 10, height: 10 }, isFloating: true },
             { id: "t", rect: { x: 0, y: 0, width: 100, height: 100 } }
-        ], area, 100, 100, 4);
+        ], area, 100, 100, 4).windows;
         compare(placed.map(function (p) { return p.id; }).join(","), "t,f");
     }
 
     function test_preview_layout_grid_without_rects() {
         var placed = WorkspacesModel.previewLayout([
             { id: "a", rect: null }, { id: "b", rect: null }, { id: "c", rect: null }
-        ], { x: 0, y: 0, width: 100, height: 100 }, 200, 100, 4);
+        ], { x: 0, y: 0, width: 100, height: 100 }, 200, 100, 4).windows;
         compare(placed.length, 3);
         compare(placed[0].width, 100);
         compare(placed[0].height, 50);

@@ -194,37 +194,48 @@ function stepIndex(count, focusedIndex, delta) {
     return (focusedIndex + (delta > 0 ? 1 : -1) + count) % count;
 }
 
-// Where each window sits in a `width` x `height` miniature of `area` (the
-// output's logical box), at its real place on screen and clamped into the
-// frame: a window hanging off the output's edge would otherwise draw
-// outside the card. Floating windows come last so they draw on top, as
-// they do on screen. If any window has no box, none of them has a place
-// that means anything, and the lot are laid out as an even grid instead.
+// Where each window sits in a miniature drawn at `width` x `height` per
+// `area` (the output's logical box), at its real place and full size. The
+// miniature scrolls over a strip that is the union of the output and every
+// window, so a window past the output's edge (a scrolling layout parks
+// them there) keeps its real position instead of being clamped into the
+// frame. Positions are in the strip's own space, whose origin is the union's
+// top left; `home` is where the output's own box sits in it, which is what
+// is on screen now. Floating windows come last so they draw on top, as they
+// do on screen. If any window has no box, none of them has a place that
+// means anything, and the lot are laid out as an even grid instead.
 function previewLayout(windows, area, width, height, minSize) {
     var min = minSize > 0 ? minSize : 1;
     var placed = [];
     var n = windows.length;
     var known = !!area && area.width > 0 && area.height > 0 && n > 0
         && windows.every(function (w) { return !!w.rect; });
+    var left = 0, top = 0, right = width, bottom = height;
+    var home = { x: 0, y: 0 };
 
     if (known) {
         var sx = width / area.width;
         var sy = height / area.height;
-        for (var i = 0; i < n; i++) {
-            var r = windows[i].rect;
-            var x = (r.x - area.x) * sx;
-            var y = (r.y - area.y) * sy;
-            var cx = Math.max(0, Math.min(width - min, x));
-            var cy = Math.max(0, Math.min(height - min, y));
-            placed.push({
-                id: windows[i].id,
-                x: cx,
-                y: cy,
-                width: Math.max(min, Math.min(width - cx, r.width * sx - (cx - x))),
-                height: Math.max(min, Math.min(height - cy, r.height * sy - (cy - y))),
-                floating: windows[i].isFloating === true
-            });
-        }
+        var raw = windows.map(function (w) {
+            return {
+                id: w.id,
+                x: (w.rect.x - area.x) * sx,
+                y: (w.rect.y - area.y) * sy,
+                width: Math.max(min, w.rect.width * sx),
+                height: Math.max(min, w.rect.height * sy),
+                floating: w.isFloating === true
+            };
+        });
+        raw.forEach(function (p) {
+            left = Math.min(left, p.x);
+            top = Math.min(top, p.y);
+            right = Math.max(right, p.x + p.width);
+            bottom = Math.max(bottom, p.y + p.height);
+        });
+        home = { x: -left, y: -top };
+        placed = raw.map(function (p) {
+            return { id: p.id, x: p.x - left, y: p.y - top, width: p.width, height: p.height, floating: p.floating };
+        });
     } else if (n > 0) {
         var cols = Math.max(1, Math.ceil(Math.sqrt(n)));
         var rows = Math.max(1, Math.ceil(n / cols));
@@ -247,5 +258,9 @@ function previewLayout(windows, area, width, height, minSize) {
         var fa = a.p.floating ? 1 : 0, fb = b.p.floating ? 1 : 0;
         return fa !== fb ? fa - fb : a.at - b.at;
     });
-    return order.map(function (e) { return e.p; });
+    return {
+        windows: order.map(function (e) { return e.p; }),
+        bounds: { width: right - left, height: bottom - top },
+        home: home
+    };
 }

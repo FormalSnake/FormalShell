@@ -9,9 +9,9 @@ import qs.Core
 // hover open for a keybind or the rig. `status` is the chips that cell
 // resolved, for the rig to read the icons and agent badges off rather than
 // pixels, and the preview's state: how many of its thumbnails carry real
-// window pixels, whether it took the keyboard, and its rect in output
-// coordinates. Both answer an error string when no bar carries a Spaces
-// cell.
+// window pixels, whether it took the keyboard, its rect in output
+// coordinates, and the miniature's scroll position, extent and thumbnails.
+// Both answer an error string when no bar carries a Spaces cell.
 IpcHandler {
     id: root
     target: "workspaces"
@@ -59,6 +59,7 @@ IpcHandler {
                 windows: root.preview && root.preview.isOpen ? root.preview.cursorCount : 0,
                 captured: root.preview && root.preview.isOpen ? root.preview.capturedCount() : 0,
                 keyboard: !!root.preview && root.preview.isOpen && root.preview.takesKeyboard,
+                miniature: root.preview && root.preview.isOpen ? root.preview.viewState() : null,
                 rect: root.preview && root.preview.isOpen
                     ? {
                         x: Math.round(root.preview.frameRect.x),

@@ -410,7 +410,13 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   that chip both opening its preview with both windows captured live (the
   hover open without taking the keyboard, and staying open while the
   pointer keeps moving over the chip), and the pointer leaving closing it;
-  the card and the chip row cropped for reading; and herdr badges read off
+  the card and the chip row cropped for reading; a floated window of
+  workspace 2 moved mostly past the output's right edge, the miniature
+  opening on the output's own region over a wider strip with that window's
+  thumbnail at its full size beyond the viewport, a real wheel notch over
+  the peeked card scrolling the strip along x and back, and a horizontal
+  axis event (a trackpad's sideways swipe) doing the same on the
+  hover-opened card without closing it; and herdr badges read off
   shimmed clients
   (`herdr --remote fakehost` answered by an `ssh` shim, a local `herdr`
   answering `working`), agreeing in `debug dump`, `workspaces status` and
