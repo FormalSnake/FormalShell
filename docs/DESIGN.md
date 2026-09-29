@@ -753,7 +753,9 @@ inside its own frame (§1's ladder, rung 5): `radiusMd`, an `sm` gutter off
 the list, flat rows beside it. Nothing inside the pane draws a frame of its
 own, the preview picture included. `menu.appGrid` defaults true under every
 theme (M72 T2), swapping app rows for Slingshot's icon grid; a user `false`
-still wins.
+still wins. A route is where you pick from a list (a network, a sink, a
+station) and a panel is where you watch live state, so a device that has both
+keeps both, and the launcher row never grows the panel's controls.
 
 **Toasts.** The sonner stack as built. `Card` chrome; critical is a
 `destructive` border and icon, not a fill. The card's icon slot resolves the

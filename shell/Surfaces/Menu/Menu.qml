@@ -712,6 +712,25 @@ PanelWindow {
         return out;
     }
 
+    // Every row of the level in `activate` order, for `menu status`: on the
+    // app grid `cellIds` holds only the app cells and the rest sit in the
+    // tail, so it cannot say which index a row is at.
+    function rowIds() {
+        return root._displayRows.map(function (n) { return n.id; });
+    }
+
+    // The ids of the rows carrying a tick, for `menu status`: the tick is
+    // drawn by a delegate, which no status read can see.
+    function checkedIds() {
+        var out = [];
+        for (var i = 0; i < root._displayRows.length; i++) {
+            var n = root._displayRows[i];
+            if (Toggles.checkedFor(n, conditions.stateSnapshot, conditions.checkedResults))
+                out.push(n.id);
+        }
+        return out;
+    }
+
     // What the live view's delegates draw, for `menu status`: the ids above
     // are the model's, and a delegate can hold another.
     function drawnCells() {

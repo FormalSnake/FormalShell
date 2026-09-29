@@ -169,6 +169,21 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   own resting box on at least one frame (the spatial curve's overshoot and
   the velocity deform on top of it) and back on it exactly three clocks
   later, the springs unwound.
+- `device_routes.sh` `--device-routes`: the launcher's Wi-Fi, Bluetooth, Audio
+  and Radio Stations routes over real keys and IPC, read off `menu status`
+  (its `ids` and `checked` lists) and each service's own status. The Wi-Fi
+  row on the two hostapd radios opens the masked password step, a wrong
+  password comes back as "Wrong password" on the row and Enter asks again,
+  the real one connects and ticks the row, Shift+Enter forgets it, and
+  neither password reaches `menu-selection.txt` or the shell log. A null
+  sink of the leg's own becomes the default over Enter, read back with
+  `pactl`, the tick moving with it. Bluetooth is the honest no-adapter row
+  while `panel open bluetooth` still opens the panel. A favourite served by
+  the leg's own looping ffmpeg listener plays and ticks, Shift+Enter
+  removes it, and `:r` leaves its searching row (a failed search passes).
+  A root query reaches the saved network, the sink and the favourite, and
+  never a nearby network or a search result. Refuses `--wifi` and `--radio`
+  in the same run.
 - `display.sh` `--display`: `display scale|mirror|enable` reaching the
   running compositor as `hyprctl eval 'hl.monitor{...}'` calls, each read
   back off `hyprctl monitors all -j`: the rig's output at scale 1.5, then a

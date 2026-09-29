@@ -107,6 +107,9 @@ IpcHandler {
     // a grid of app icons and a row list carrying icons are the same picture
     // from outside.
     //
+    // `ids` lists every row in the order `activate` indexes them, `checked`
+    // the ones that carry a tick.
+    //
     // `cursorId` is the row the cursor is on, and `viewCursor` where the
     // live view itself puts its current item and which row id its own model
     // holds there (M72 T1). The two agreeing is the claim that the row the
@@ -129,6 +132,8 @@ IpcHandler {
             viewCursor: menu.viewCursor(),
             rows: menu.rowCount,
             cells: menu.cellIds(),
+            ids: menu.rowIds(),
+            checked: menu.checkedIds(),
             drawn: menu.drawnCells()
         });
     }
