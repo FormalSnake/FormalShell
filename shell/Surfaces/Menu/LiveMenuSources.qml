@@ -66,6 +66,28 @@ Item {
         root._btLive = root._btNow;
     }
 
+    // The radio route's rows; republished only when a favourite's name or
+    // country, or whether a station is tuned, changes.
+    readonly property var radio: root.active ? root._radioLive : root._radioIdle
+    readonly property var _radioIdle: ({ favorites: [], running: false })
+    property var _radioLive: root._radioIdle
+    property string _radioKey: ""
+
+    readonly property var _radioNow: root.active ? {
+        favorites: RadioService.favorites.map(function (s) { return { uuid: s.uuid, name: s.name, country: s.country }; }),
+        running: RadioService.running
+    } : null
+
+    on_RadioNowChanged: {
+        if (!root._radioNow)
+            return;
+        var key = JSON.stringify(root._radioNow);
+        if (key === root._radioKey)
+            return;
+        root._radioKey = key;
+        root._radioLive = root._radioNow;
+    }
+
     // The audio route's rows; republished only when the device set changes.
     readonly property var audioDevices: root.active ? root._audioLive : []
     property var _audioLive: []

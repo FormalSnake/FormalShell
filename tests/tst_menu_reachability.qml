@@ -175,4 +175,35 @@ TestCase {
         compare(node.provider, "wifi");
         compare(node.parentId, null);
     }
+
+    function _deviceTree() {
+        var tree = _realTree();
+        Providers.applyProviders(tree, {
+            radio: function () {
+                return Providers.radioRows({ running: false, favorites: [{ uuid: "u-1", name: "Groove Salad", country: "" }] })
+                    .concat(Providers.radioResultRows([{ uuid: "u-2", name: "Zebra Jazz", country: "", codec: "" }], {}));
+            }
+        });
+        return tree;
+    }
+
+    function test_device_routes_exist_at_root() {
+        var tree = _deviceTree();
+        var routes = { wifi: "wifi", bluetooth: "bluetooth", audio: "audio", radio: "radio" };
+        for (var id in routes) {
+            verify(tree.nodes[id], "missing route " + id);
+            compare(tree.nodes[id].provider, routes[id]);
+            compare(tree.nodes[id].parentId, null);
+        }
+        compare(tree.nodes["radio.search"].provider, "radioSearch");
+        compare(tree.nodes["radio.search"].parentId, "radio");
+    }
+
+    function test_root_query_finds_a_favorite_but_not_a_search_result() {
+        var tree = _deviceTree();
+        var favIds = Search.rank(tree.nodes, "Groove Salad", {}, null).map(function (n) { return n.id; });
+        verify(favIds.indexOf("radio.fav.u-1") >= 0);
+        var resIds = Search.rank(tree.nodes, "Zebra Jazz", {}, null).map(function (n) { return n.id; });
+        compare(resIds.indexOf("radio.result.u-2"), -1);
+    }
 }

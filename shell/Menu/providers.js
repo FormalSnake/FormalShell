@@ -1382,6 +1382,87 @@ function audioRows(devices) {
     });
 }
 
+// Radio route (M76 Task 5). `state` is LiveMenuSources.radio. Favourites are
+// reachable from a root query; station search results come from
+// radioResultRows and are `localOnly`.
+function radioTriggerQuery(text) {
+    var t = String(text || "");
+    if (t === ":r") return "";
+    if (t.indexOf(":r ") === 0) return t.slice(3);
+    return null;
+}
+
+function _radioTick(uuid) {
+    return "@state:radio.station=" + uuid;
+}
+
+function radioRows(state) {
+    var st = state || {};
+    var rows = [];
+    if (st.running === true) {
+        rows.push({
+            id: "radio.stop",
+            parentId: null,
+            label: "Stop",
+            icon: "",
+            title: "",
+            aliases: [],
+            kind: "action",
+            action: "@ipc:radio.stop",
+            keepOpen: true,
+            childIds: []
+        });
+    }
+    (st.favorites || []).forEach(function (s) {
+        rows.push({
+            id: "radio.fav." + idPart(s.uuid),
+            parentId: null,
+            label: s.name,
+            icon: "",
+            title: "",
+            desc: s.country || "",
+            aliases: [],
+            kind: "action",
+            action: "@ipc:radio.fav:" + s.uuid,
+            checked: _radioTick(s.uuid),
+            keepOpen: true,
+            alternate: "@ipc:radio.unfavorite:" + s.uuid,
+            alternateLabel: "Remove favorite",
+            childIds: []
+        });
+    });
+    return rows;
+}
+
+// Enter closes the launcher on a result: a stream starting is the answer,
+// and the list is a one-off search rather than a set to flip through.
+function radioResultRows(results, favoriteSet) {
+    var favs = favoriteSet || {};
+    return (results || []).map(function (s) {
+        var fav = favs[s.uuid] === true;
+        return {
+            id: "radio.result." + idPart(s.uuid),
+            parentId: null,
+            label: s.name,
+            icon: "",
+            title: "",
+            desc: [s.country, s.codec].filter(function (x) { return !!x; }).join(" "),
+            aliases: [],
+            kind: "action",
+            action: "@ipc:radio.play:" + s.uuid,
+            checked: _radioTick(s.uuid),
+            localOnly: true,
+            alternate: "@ipc:radio." + (fav ? "unfavorite:" : "favorite:") + s.uuid,
+            alternateLabel: fav ? "Remove favorite" : "Add favorite",
+            childIds: []
+        };
+    });
+}
+
+function radioSearchingRow() { return _noteRow("radio.searching", "Searching"); }
+function radioNoResultsRow() { return _noteRow("radio.noresults", "No results"); }
+function radioFailedRow() { return _noteRow("radio.failed", "Search failed"); }
+
 function lightsEntries(available, effects) {
     if (available !== true)
         return {};

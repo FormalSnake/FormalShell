@@ -142,6 +142,10 @@ PanelWindow {
         id: nixProvider
     }
 
+    RadioSearchProvider {
+        id: radioSearch
+    }
+
     // ~/.config/formalshell/menu.jsonc, the per-key user overlay (plan-wide
     // constraint: user wins, `"hidden": true` drops a default node). Same
     // bounded-retry-until-watch-attaches pattern as Config.qml's
@@ -519,7 +523,8 @@ PanelWindow {
         gpu: function () { return Providers.gpuProvider(GpuService.cards); },
         wifi: function () { return Providers.wifiRows(liveSources.wifi); },
         bluetooth: function () { return Providers.bluetoothRows(liveSources.bluetooth); },
-        audio: function () { return Providers.audioRows(liveSources.audioDevices); }
+        audio: function () { return Providers.audioRows(liveSources.audioDevices); },
+        radio: function () { return Providers.radioRows(liveSources.radio); }
     })
 
     // The scanner runs while the wifi level is the one on screen.
@@ -560,13 +565,14 @@ PanelWindow {
         var emojiQuery = menu ? Providers.emojiTriggerQuery(q) : null;
         var nixQuery = menu ? Providers.nixTriggerQuery(q) : null;
         var keysQuery = menu ? Keybinds.triggerQuery(q) : null;
+        var radioQuery = menu ? Providers.radioTriggerQuery(q) : null;
         var emoji = menu && !picker && !split && !appView && (level === "emoji" || emojiQuery !== null);
-        var routeRows = level === "nix" || level === "keybinds" || level === "calc";
+        var routeRows = level === "nix" || level === "keybinds" || level === "calc" || level === "radio.search";
         var kind = appView ? "app"
             : (picker ? "picker"
                 : (emoji ? "emoji"
                     : (menu && root._appGridWanted && !split && !routeRows ? "appGrid" : "rows")));
-        var rows = root._levelRows(q, mode, level, picker, split, emojiQuery, nixQuery, keysQuery);
+        var rows = root._levelRows(q, mode, level, picker, split, emojiQuery, nixQuery, keysQuery, radioQuery);
         // A provider's honest-empty row (NO NIX, an empty history, a gated
         // level) is what the level has instead of rows, not a row of it: it
         // answers no key, so the cursor must never land on it. It is drawn
@@ -605,14 +611,14 @@ PanelWindow {
             // falling through to Search.rank, and its rows belong to that
             // level rather than to a set of results.
             searching: menu && q.length > 0 && !picker && !split && !emoji && !routeRows
-                && nixQuery === null && keysQuery === null
+                && nixQuery === null && keysQuery === null && radioQuery === null
         };
     }
 
     // The level's own rows, before the app grid's split: every branch below
     // is this file's original row resolution and nothing in it knows about
     // the grid.
-    function _levelRows(q, mode, level, picker, split, emojiQuery, nixQuery, keysQuery) {
+    function _levelRows(q, mode, level, picker, split, emojiQuery, nixQuery, keysQuery, radioQuery) {
         if (mode === "select") {
             var query = q.toLowerCase();
             return root._selectOptions
@@ -660,6 +666,8 @@ PanelWindow {
         // drown a root query.
         if (level === "keybinds" || keysQuery !== null)
             return keybindsProvider.rowsFor(keysQuery !== null ? keysQuery : q);
+        if (level === "radio.search" || radioQuery !== null)
+            return radioSearch.rowsFor(radioQuery !== null ? radioQuery : q);
         if (q.length === 0) {
             // Route-summon when-gate guard (M17 review finding, item F):
             // `open(route)` resolves a node by id directly, bypassing the
@@ -1443,6 +1451,14 @@ PanelWindow {
                 return { id: n.id, label: n.label, desc: n.desc || "", kind: n.kind };
             });
         }
+        // ":r" is async the same way ":nix" is: call twice.
+        var radioQuery = Providers.radioTriggerQuery(q);
+        if (radioQuery !== null) {
+            radioSearch.requestSearch(radioQuery);
+            return radioSearch.rowsFor(radioQuery).map(function (n) {
+                return { id: n.id, label: n.label, desc: n.desc || "", kind: n.kind };
+            });
+        }
         conditions.evaluate(root._nodes);
         // iconSource rides along so the smoke rig can assert an app row's
         // themed icon resolved (or honestly didn't) without a screenshot,
@@ -1939,6 +1955,24 @@ PanelWindow {
             else if (auVerb === "source") AudioService.setDefaultSource(auValue);
             return;
         }
+        // "radio.<verb>[:<uuid>]" (providers.js's radioRows, radioResultRows).
+        if (name.indexOf("radio.") === 0) {
+            var raSep = name.indexOf(":");
+            var raVerb = raSep > 0 ? name.slice("radio.".length, raSep) : name.slice("radio.".length);
+            var raUuid = raSep > 0 ? name.slice(raSep + 1) : "";
+            var raStation = radioSearch.findStation(raUuid);
+            if (raVerb === "stop") {
+                RadioService.stop();
+            } else if (raVerb === "fav" && raStation) {
+                RadioService.playFromSaved(raStation, RadioService.favorites);
+            } else if (raVerb === "play" && raStation) {
+                RadioService.play(raStation, radioSearch.results);
+            } else if ((raVerb === "favorite" || raVerb === "unfavorite") && raStation
+                    && RadioService.isFavorite(raUuid) === (raVerb === "unfavorite")) {
+                RadioService.toggleFavorite(raStation);
+            }
+            return;
+        }
         if (name.indexOf("nix.run:") === 0) {
             ConsoleService.runOnce("nix run nixpkgs#" + name.slice("nix.run:".length) + "; read");
             return;
@@ -2195,6 +2229,11 @@ PanelWindow {
                             nixProvider.requestWarm();
                             nixProvider.requestSearch(nixQuery);
                         }
+                        var radioQuery = Providers.radioTriggerQuery(searchInput.text);
+                        if (radioQuery === null && root.currentNodeId === "radio.search")
+                            radioQuery = searchInput.text;
+                        if (radioQuery !== null)
+                            radioSearch.requestSearch(radioQuery);
                     }
                 }
 

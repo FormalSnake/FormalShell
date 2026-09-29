@@ -217,4 +217,50 @@ TestCase {
         compare(rows.length, 1);
         compare(rows[0].kind, "action");
     }
+
+    function test_radio_trigger_parsing() {
+        compare(Providers.radioTriggerQuery(":r"), "");
+        compare(Providers.radioTriggerQuery(":r jazz"), "jazz");
+        compare(Providers.radioTriggerQuery(":radio"), null);
+        compare(Providers.radioTriggerQuery(":rx"), null);
+        compare(Providers.radioTriggerQuery("jazz"), null);
+    }
+
+    function test_radio_favorites_ticks_and_alternates() {
+        var rows = Providers.radioRows({ running: false, favorites: [{ uuid: "u-1", name: "Groove", country: "France" }] });
+        compare(rows.length, 1);
+        compare(rows[0].id, "radio.fav.u-1");
+        compare(rows[0].label, "Groove");
+        compare(rows[0].desc, "France");
+        compare(rows[0].action, "@ipc:radio.fav:u-1");
+        compare(rows[0].checked, "@state:radio.station=u-1");
+        compare(rows[0].keepOpen, true);
+        compare(rows[0].alternate, "@ipc:radio.unfavorite:u-1");
+        compare(rows[0].alternateLabel, "Remove favorite");
+        verify(rows[0].localOnly !== true);
+    }
+
+    function test_radio_stop_only_while_running() {
+        compare(Providers.radioRows({ running: false, favorites: [] }).length, 0);
+        var rows = Providers.radioRows({ running: true, favorites: [] });
+        compare(rows.length, 1);
+        compare(rows[0].id, "radio.stop");
+        compare(rows[0].action, "@ipc:radio.stop");
+    }
+
+    function test_radio_results_are_local_only_with_alternate_per_favorite_set() {
+        var rows = Providers.radioResultRows([
+            { uuid: "a", name: "A", country: "Spain", codec: "MP3" },
+            { uuid: "b", name: "B", country: "", codec: "AAC" }
+        ], { a: true });
+        compare(rows[0].localOnly, true);
+        compare(rows[0].desc, "Spain MP3");
+        compare(rows[0].action, "@ipc:radio.play:a");
+        compare(rows[0].alternate, "@ipc:radio.unfavorite:a");
+        compare(rows[0].alternateLabel, "Remove favorite");
+        compare(rows[1].desc, "AAC");
+        compare(rows[1].alternate, "@ipc:radio.favorite:b");
+        compare(rows[1].alternateLabel, "Add favorite");
+        verify(rows[1].keepOpen !== true);
+    }
 }

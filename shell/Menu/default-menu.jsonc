@@ -88,6 +88,16 @@
     // stays in the "Audio" panel.
     "audio": { "label": "Audio Devices", "provider": "audio", "aliases": ["sound", "output", "input", "speakers", "microphone", "mic", "sink", "source"], "prompt": "Search devices" },
 
+    // "radio" registers a provider fn (providers.js's radioRows): Stop while a
+    // station plays, then the favourites with the tuned one ticked, Enter
+    // playing. "radio.search" registers none, so it stays a listed route
+    // (`menu summon radio.search`) that Menu.qml fills from Radio Browser;
+    // ":r <query>" reaches the same rows from anywhere, and its results are
+    // searchable only from inside that level. The "Radio" row under Panels
+    // opens the card.
+    "radio": { "label": "Radio Stations", "provider": "radio", "aliases": ["stations", "fm", "stream"], "prompt": "Search favorites" },
+    "radio.search": { "label": "Search Stations", "provider": "radioSearch", "prompt": "Search Radio Browser" },
+
     // "panels" registers a provider fn too: one row per name in
     // shell.qml's PanelIpc registry, each spawning "panel open <name>"
     // over IPC (providers.js's panelsProvider) -- the launcher route for
