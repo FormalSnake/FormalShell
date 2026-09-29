@@ -104,6 +104,38 @@ TestCase {
         compare(picture.sourceSize.height, slot);
     }
 
+    // The Image starts its load inside its own setSource, so a themed icon
+    // is only kept off the pixmap reader thread if `asynchronous` has
+    // already gone false by the time the Image emits sourceChanged. Checked
+    // on each way into a themed source a bar cell takes: from nothing, from
+    // a file, and from one themed icon to another.
+    function test_a_themed_source_is_synchronous_before_it_loads() {
+        var picture = make({});
+        var img = imageOf(picture);
+        var seen = [];
+        img.sourceChanged.connect(function () {
+            seen.push(String(img.source) + " " + img.asynchronous);
+        });
+        var steps = [
+            "image://icon/firefox",
+            testCase.whiteSource,
+            "image://icon/kitty",
+            "",
+            "image://icon/org.gnome.Nautilus",
+            "image://icon/firefox"
+        ];
+        for (var i = 0; i < steps.length; i++)
+            picture.source = steps[i];
+        compare(seen, [
+            "image://icon/firefox false",
+            testCase.whiteSource + " true",
+            "image://icon/kitty false",
+            " true",
+            "image://icon/org.gnome.Nautilus false",
+            "image://icon/firefox false"
+        ]);
+    }
+
     // NotificationCard hides its whole art frame on the status the frame
     // reads off this alias, so it has to answer for the Image underneath at
     // every step rather than only once loaded.

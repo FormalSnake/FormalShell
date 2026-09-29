@@ -42,7 +42,13 @@ Item {
     // them. Racing the two returns null icons (an app resolved to no icon
     // for the whole session) and segfaults the shell under load
     // (dev/stress, 2026-09-22).
-    readonly property bool _themed: String(root.source).indexOf("image://icon/") === 0
+    //
+    // The test reads the Image's own source, never root.source: Image
+    // starts its load inside setSource right after emitting sourceChanged,
+    // and a binding on root.source can run after the Image's source binding
+    // has already started that load, leaving every themed icon that
+    // replaces a non-themed source (a bar cell's first icon) on the reader
+    // thread. Two quickshell aborts on g815 at boot, 2026-09-29.
     property bool smooth: true
     property alias sourceSize: img.sourceSize
     readonly property alias status: img.status
@@ -56,7 +62,7 @@ Item {
         source: root.source
         fillMode: root.fillMode
         cache: root.cache
-        asynchronous: root.asynchronous && !root._themed
+        asynchronous: root.asynchronous && String(source).indexOf("image://icon/") !== 0
         smooth: root.smooth
         visible: !ditherLoader.active || !(ditherLoader.item && ditherLoader.item.painted)
     }
