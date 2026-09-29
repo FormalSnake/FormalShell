@@ -21,7 +21,19 @@ var PATHS = [
     "overnight.active",      // OvernightService.active
     "caffeinate.active",     // IdleService.caffeinated
     "notifications.dnd",     // NotificationService.dnd
-    "theme.dark"             // Core.State.mode === "dark"
+    "theme.dark",            // Core.State.mode === "dark"
+    "lights.on"              // LightsService.on
+];
+
+// Paths whose value is a string rather than a flag, matched as
+// "@state:<path>=<value>": one row per choice, checked on the one the
+// snapshot holds. Same closed-list rule and the same drift guard as PATHS.
+var ENUM_PATHS = [
+    "lights.effect",         // LightsService.effect
+    "lights.source",         // LightsService.source
+    "lights.colour",         // LightsService.customColour, "" unless source is custom
+    "lights.speed",          // LightsService.speed
+    "lights.brightness"      // LightsService.brightness, as a string
 ];
 
 // Mirrors Menu.qml's own "@ipc:" prefix test, minus the assumption that the
@@ -38,6 +50,10 @@ function isKnownPath(path) {
     return PATHS.indexOf(path) >= 0;
 }
 
+function isKnownEnumPath(path) {
+    return ENUM_PATHS.indexOf(path) >= 0;
+}
+
 // A NEW object every call, carrying exactly PATHS as keys. QML's var-property
 // change detection compares references, so a snapshot mutated in place would
 // repaint nothing; and normalizing here is what keeps the allow-list and the
@@ -48,6 +64,8 @@ function snapshot(live) {
     var out = {};
     for (var i = 0; i < PATHS.length; i++)
         out[PATHS[i]] = source[PATHS[i]] === true;
+    for (var j = 0; j < ENUM_PATHS.length; j++)
+        out[ENUM_PATHS[j]] = typeof source[ENUM_PATHS[j]] === "string" ? source[ENUM_PATHS[j]] : "";
     return out;
 }
 
@@ -56,7 +74,7 @@ function snapshot(live) {
 function unknownKeys(live) {
     var out = [];
     Object.keys(live || {}).forEach(function (k) {
-        if (!isKnownPath(k)) out.push(k);
+        if (!isKnownPath(k) && !isKnownEnumPath(k)) out.push(k);
     });
     return out;
 }
@@ -69,6 +87,12 @@ function unknownKeys(live) {
 function resolveState(cond, snap) {
     if (!isStateCondition(cond)) return undefined;
     var path = statePath(cond);
+    var eq = path.indexOf("=");
+    if (eq >= 0) {
+        var value = path.slice(eq + 1);
+        path = path.slice(0, eq);
+        return isKnownEnumPath(path) && value !== "" && (snap || {})[path] === value;
+    }
     if (!isKnownPath(path)) return false;
     return (snap || {})[path] === true;
 }

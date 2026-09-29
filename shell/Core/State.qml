@@ -22,6 +22,7 @@ Singleton {
     property alias reminders: adapter.reminders
     property alias batteryShowPercent: adapter.batteryShowPercent
     property alias overnight: adapter.overnight
+    property alias lights: adapter.lights
 
     // `mode` is optional: the picker's Dark/Light sets pass the set the
     // pick came from so wallpaper and mode land in one write. Mode goes
@@ -127,6 +128,14 @@ Singleton {
         stateFile.writeAdapter();
     }
 
+    // LightsService's own choices asusd has no field for: the colour
+    // source, the custom colour, and the level the toggle turns back on to.
+    // null until the first change.
+    function setLights(record) {
+        adapter.lights = record;
+        stateFile.writeAdapter();
+    }
+
     readonly property string _stateDir: {
         const xdgState = Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state");
         return xdgState + "/formalshell";
@@ -160,6 +169,7 @@ Singleton {
             // something on first run, or the widget reads as inert.
             property var batteryShowPercent: null
             property var overnight: null
+            property var lights: null
         }
     }
 }

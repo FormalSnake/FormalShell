@@ -5,7 +5,7 @@ import "../shell/Menu/toggles.js" as Toggles
 
 // Covers shell/Menu/toggles.js plus two drift guards that read shipped files
 // rather than fixtures: the "@state:" allow-list only means anything if
-// ConditionEvaluator.qml's snapshot literal spells the same five paths and
+// ConditionEvaluator.qml's snapshot literal spells the same paths and
 // the shipped toggle subtree names paths that exist. Reading a file outside the test's
 // own directory needs QML_XHR_ALLOW_FILE_READ=1, set by the qmltestrunner
 // invocations in justfile and flake.nix's qml-tests derivation.
@@ -81,7 +81,7 @@ TestCase {
 
     function test_snapshot_normalizes_to_the_allow_list() {
         var snap = Toggles.snapshot({ "nightlight.active": true, "bogus": true });
-        compare(Object.keys(snap).length, Toggles.PATHS.length);
+        compare(Object.keys(snap).length, Toggles.PATHS.length + Toggles.ENUM_PATHS.length);
         for (var i = 0; i < Toggles.PATHS.length; i++)
             verify(snap.hasOwnProperty(Toggles.PATHS[i]));
         verify(!snap.hasOwnProperty("bogus"));
@@ -110,8 +110,9 @@ TestCase {
     }
 
     // Breaks loudly if a path is added without updating Menu.qml and the docs.
-    function test_allow_list_is_exactly_the_five_documented_paths() {
-        compare(Toggles.PATHS.length, 5);
+    function test_allow_list_is_exactly_the_documented_paths() {
+        compare(Toggles.PATHS.length, 6);
+        verify(Toggles.isKnownPath("lights.on"));
         verify(Toggles.isKnownPath("nightlight.active"));
         verify(Toggles.isKnownPath("overnight.active"));
         verify(Toggles.isKnownPath("caffeinate.active"));
@@ -126,8 +127,23 @@ TestCase {
     function test_menu_qml_snapshot_names_every_allow_listed_path() {
         var text = _read("../shell/Surfaces/Menu/ConditionEvaluator.qml");
         verify(text.length > 0);
-        for (var i = 0; i < Toggles.PATHS.length; i++)
-            verify(text.indexOf("\"" + Toggles.PATHS[i] + "\"") >= 0);
+        var paths = Toggles.PATHS.concat(Toggles.ENUM_PATHS);
+        for (var i = 0; i < paths.length; i++)
+            verify(text.indexOf("\"" + paths[i] + "\"") >= 0);
+    }
+
+    function test_enum_condition_matches_only_its_own_value() {
+        var snap = Toggles.snapshot({ "lights.effect": "breathe", "lights.colour": "" });
+        compare(Toggles.resolveState("@state:lights.effect=breathe", snap), true);
+        compare(Toggles.resolveState("@state:lights.effect=static", snap), false);
+        // An empty value never matches, which is what leaves every colour
+        // preset unchecked while the source is the wallpaper.
+        compare(Toggles.resolveState("@state:lights.colour=", snap), false);
+        compare(Toggles.resolveState("@state:lights.bogus=breathe", { "lights.bogus": "breathe" }), false);
+        // A flag path read as an enum answers false rather than comparing a boolean.
+        compare(Toggles.resolveState("@state:lights.on=true", Toggles.snapshot({ "lights.on": true })), false);
+        // A non-string enum value normalizes to "".
+        compare(Toggles.snapshot({ "lights.brightness": 3 })["lights.brightness"], "");
     }
 
     // Contract test against the real shipped tree, not a fixture: this is

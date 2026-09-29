@@ -51,6 +51,15 @@ var ROUTE_ICONS = {
     "toggles.dnd": "bell-off",
     "toggles.dark-mode": "moon",
 
+    // Injected at tree-build time (providers.js's lightsEntries).
+    "lights": "keyboard",
+    "lights.power": "power",
+    "lights.effect": "zap",
+    "lights.color": "palette",
+    "lights.source": "image",
+    "lights.speed": "gauge",
+    "lights.brightness": "sun",
+
     // Injected at tree-build time (providers.js's captureEntries).
     "capture": "camera",
     "capture.text": "scan-text",

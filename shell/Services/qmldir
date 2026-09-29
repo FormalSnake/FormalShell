@@ -19,6 +19,7 @@ InstanceLock InstanceLock.qml
 singleton KeyboardLayoutService KeyboardLayoutService.qml
 singleton LocalsendService LocalsendService.qml
 singleton LockService LockService.qml
+singleton LightsService LightsService.qml
 singleton LocationService LocationService.qml
 singleton LyricsService LyricsService.qml
 singleton MainOutputService MainOutputService.qml

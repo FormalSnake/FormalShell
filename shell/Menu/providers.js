@@ -1201,3 +1201,63 @@ function gpuModeEntry(selfPath, gfxMode) {
         }
     };
 }
+
+// The "lights" route, present only while LightsService found a keyboard it
+// can drive. Every row dispatches in-process ("@ipc:lights.<verb>:<value>")
+// and keeps the launcher open, and every choice row carries an
+// "@state:<path>=<value>" check so the tick moves the moment it lands.
+// `effects` is what the chassis reports, not the whole table.
+var LIGHT_COLORS = [
+    { id: "ff0000", label: "Red" },
+    { id: "ff4000", label: "Orange" },
+    { id: "ffc000", label: "Yellow" },
+    { id: "00ff00", label: "Green" },
+    { id: "00ffff", label: "Cyan" },
+    { id: "0000ff", label: "Blue" },
+    { id: "8000ff", label: "Purple" },
+    { id: "ff0080", label: "Pink" },
+    { id: "ffffff", label: "White" }
+];
+
+function lightsEntries(available, effects) {
+    if (available !== true)
+        return {};
+    function choice(verb, path, value, label) {
+        return {
+            label: label,
+            action: "@ipc:lights." + verb + ":" + value,
+            checked: "@state:lights." + path + "=" + value,
+            keepOpen: true
+        };
+    }
+    var out = {
+        "lights": { label: "Keyboard Lights", aliases: ["rgb", "aura", "led", "leds", "backlight"] },
+        "lights.power": {
+            label: "Lights On",
+            action: "@ipc:lights.toggle",
+            checked: "@state:lights.on",
+            keepOpen: true
+        },
+        "lights.effect": { label: "Effect" },
+        "lights.color": { label: "Color" },
+        "lights.source": { label: "Color Source" },
+        "lights.source.wallpaper": choice("source", "source", "wallpaper", "Wallpaper"),
+        "lights.source.custom": choice("source", "source", "custom", "Custom Color"),
+        "lights.speed": { label: "Speed" },
+        "lights.brightness": { label: "Brightness" }
+    };
+    (effects || []).forEach(function (e) {
+        out["lights.effect." + e.id] = choice("effect", "effect", e.id, e.label);
+    });
+    LIGHT_COLORS.forEach(function (c) {
+        out["lights.color." + c.id] = choice("color", "colour", c.id, c.label);
+    });
+    out["lights.color.hex"] = { label: "Hex Color", action: "@ipc:lights.colorInput" };
+    [["low", "Low"], ["med", "Medium"], ["high", "High"]].forEach(function (s) {
+        out["lights.speed." + s[0]] = choice("speed", "speed", s[0], s[1]);
+    });
+    [["1", "Low"], ["2", "Medium"], ["3", "High"]].forEach(function (b) {
+        out["lights.brightness." + b[0]] = choice("brightness", "brightness", b[0], b[1]);
+    });
+    return out;
+}

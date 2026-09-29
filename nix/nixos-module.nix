@@ -94,6 +94,13 @@ in
       7000/7001/7100, UDP 6000/6001/7011, the set `-p` with no argument
       opens) for AirplayService's receiver
     '';
+
+    # LightsService drives keyboard RGB through asusctl, which is only a
+    # client: the Aura object it talks to belongs to the asusd system daemon.
+    lights.asus.enable = lib.mkEnableOption ''
+      asusd, the daemon behind the keyboard lights route on ASUS ROG and TUF
+      laptops
+    '';
   };
 
   config = lib.mkMerge [
@@ -183,6 +190,10 @@ in
           ExecStart = "${ancs4linux}/bin/ancs4linux-advertising";
         };
       };
+    })
+
+    (lib.mkIf cfg.lights.asus.enable {
+      services.asusd.enable = lib.mkDefault true;
     })
 
     (lib.mkIf cfg.localsend.enable {

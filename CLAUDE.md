@@ -230,6 +230,12 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   top bar, so those runs print each claim as skipped and are read by eye.
 - `keybinds.sh` `--keybinds`: the launcher's binds route rendering rows off
   Hyprland's own expanded bind table.
+- `lights.sh` `--lights`: LightsService against PATH-shimmed `asusctl` and
+  `busctl` standing in for asusd's Aura object: the startup repaint off the
+  palette under the default wallpaper source, effect and speed, a custom
+  colour switching the source, the toggle off and back to its level, an
+  unknown effect refused, and the launcher's effect level with its tick,
+  each read off `lights status` and the shim's own argv log.
 - `lock.sh` `--lock`: the lock round trip over real PAM, wrong password to
   unlocked, typed by a real virtual-keyboard client, with a staged `~/.face`
   found in the locked frame as the avatar over the clock.

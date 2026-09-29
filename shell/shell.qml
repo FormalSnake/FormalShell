@@ -321,6 +321,7 @@ ShellRoot {
         target: menuInstance
         function onSelectionResolved(token, value, cancelled) {
             ReminderService.resolveInput(token, value, cancelled);
+            LightsService.resolveInput(token, value, cancelled);
         }
     }
 
@@ -383,6 +384,7 @@ ShellRoot {
     ReminderIpc {}
     NightLightIpc {}
     OvernightIpc {}
+    LightsIpc {}
     CaffeinateIpc { caffeinate: caffeinateInstance }
     GalleryIpc { gallery: galleryInstance }
     PluginsIpc {}

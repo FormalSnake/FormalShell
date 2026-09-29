@@ -445,6 +445,7 @@ PanelWindow {
         // M38 Task 8: the "gpu.mode" fragment, present only when
         // supergfxctl is -- see gpuModeEntry's own header.
         var gpuMode = Providers.gpuModeEntry(Quickshell.shellDir, GpuService.gfxMode);
+        var lights = Providers.lightsEntries(LightsService.available, LightsService.effects);
         // Live-while-open, unlike wallpaper/buttons above: liveSources.
         // clipboardItems rides this same binding for _defaultObj (and
         // _tree below) to recompute whenever it changes, but only while
@@ -466,6 +467,7 @@ PanelWindow {
         Object.keys(share).forEach(function (k) { merged[k] = share[k]; });
         Object.keys(capture).forEach(function (k) { merged[k] = capture[k]; });
         Object.keys(gpuMode).forEach(function (k) { merged[k] = gpuMode[k]; });
+        Object.keys(lights).forEach(function (k) { merged[k] = lights[k]; });
         Object.keys(buttons).forEach(function (k) { merged[k] = buttons[k]; });
         return merged;
     }
@@ -1233,6 +1235,8 @@ PanelWindow {
         // pay another 4s wait (LocalsendService.scan's own header).
         LocalsendService.scan(false);
         keybindsProvider.refresh();
+        // The keyboard's Fn keys change brightness behind asusd's back.
+        LightsService.refresh();
         // A ":"-led route is a search prefill, not a node id: `menu summon
         // ':nix hello'` opens root with the trigger query already typed
         // (onTextChanged side effects included, so the debounced search
@@ -1845,6 +1849,22 @@ PanelWindow {
         // watch, and a drop-down over the current workspace is where this
         // shell already puts one. `read` holds the window after it exits so
         // its last output is still readable.
+        // "lights.<verb>:<value>" (providers.js's lightsEntries).
+        if (name.indexOf("lights.") === 0 && name.indexOf(":") > 0) {
+            var lightsVerb = name.slice("lights.".length, name.indexOf(":"));
+            var lightsValue = name.slice(name.indexOf(":") + 1);
+            if (lightsVerb === "effect")
+                LightsService.setEffect(lightsValue);
+            else if (lightsVerb === "color")
+                LightsService.setColour(lightsValue);
+            else if (lightsVerb === "source")
+                LightsService.setSource(lightsValue);
+            else if (lightsVerb === "speed")
+                LightsService.setSpeed(lightsValue);
+            else if (lightsVerb === "brightness")
+                LightsService.setBrightness(parseInt(lightsValue, 10));
+            return;
+        }
         if (name.indexOf("nix.run:") === 0) {
             ConsoleService.runOnce("nix run nixpkgs#" + name.slice("nix.run:".length) + "; read");
             return;
@@ -1864,6 +1884,13 @@ PanelWindow {
             break;
         case "overnight.toggle":
             OvernightService.toggle();
+            break;
+        case "lights.toggle":
+            LightsService.toggle();
+            break;
+        case "lights.colorInput":
+            // Deferred for the same reason reminder.set is below.
+            Qt.callLater(function () { root.openInput("Hex color (ff8800)", LightsService.inputToken); });
             break;
         case "caffeinate.toggle":
             IdleService.toggleCaffeinated();

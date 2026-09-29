@@ -78,10 +78,10 @@ Item {
 
     // Live source for "@state:" `checked` conditions (toggles.js). Every
     // read here is a plain property read, so this binding re-evaluates the
-    // instant any of the five flips and hands a fresh object to the
+    // instant any of them flips and hands a fresh object to the
     // delegate binding that reads it, the same var-change-detection
     // contract the condResults merge already depends on. Not gated on
-    // isOpen the way LiveMenuSources is: five scalars cost nothing, and the
+    // isOpen the way LiveMenuSources is: a few scalars cost nothing, and the
     // NightLightService read is a second construction site for that lazy
     // singleton, which Indicators.qml wants.
     readonly property var stateSnapshot: Toggles.snapshot({
@@ -89,6 +89,12 @@ Item {
         "overnight.active": OvernightService.active,
         "caffeinate.active": IdleService.caffeinated,
         "notifications.dnd": NotificationService.dnd,
-        "theme.dark": Core.State.mode === "dark"
+        "theme.dark": Core.State.mode === "dark",
+        "lights.on": LightsService.on,
+        "lights.effect": LightsService.effect,
+        "lights.source": LightsService.source,
+        "lights.colour": LightsService.source === "custom" ? LightsService.customColour : "",
+        "lights.speed": LightsService.speed,
+        "lights.brightness": String(LightsService.brightness)
     })
 }
