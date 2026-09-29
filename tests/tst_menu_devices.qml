@@ -186,4 +186,35 @@ TestCase {
         compare(rows[0].checked, "@state:bluetooth.connected=AA:BB");
         compare(rows[0].keepOpen, true);
     }
+
+    function test_audio_no_devices_is_one_note() {
+        var rows = Providers.audioRows([]);
+        compare(rows.length, 1);
+        compare(rows[0].id, "audio.unavailable");
+        compare(rows[0].kind, "note");
+    }
+
+    function test_audio_sections_actions_and_ticks() {
+        var rows = Providers.audioRows([
+            { name: "alsa_output.pci-0000_00_1f.3.analog-stereo", label: "Speakers", isSink: true },
+            { name: "alsa_input.usb", label: "Mic", isSink: false }
+        ]);
+        compare(rows.length, 2);
+        compare(rows[0].id, "audio.output.alsa_output%2Epci-0000_00_1f%2E3%2Eanalog-stereo");
+        compare(rows[0].section, "Output");
+        compare(rows[0].action, "@ipc:audio.sink:alsa_output.pci-0000_00_1f.3.analog-stereo");
+        compare(rows[0].checked, "@state:audio.sink=alsa_output.pci-0000_00_1f.3.analog-stereo");
+        compare(rows[1].id, "audio.input.alsa_input%2Eusb");
+        compare(rows[1].section, "Input");
+        compare(rows[1].action, "@ipc:audio.source:alsa_input.usb");
+        compare(rows[1].checked, "@state:audio.source=alsa_input.usb");
+        compare(rows[0].keepOpen, true);
+        compare(rows[1].keepOpen, true);
+    }
+
+    function test_audio_outputs_only_has_no_input_note() {
+        var rows = Providers.audioRows([{ name: "o", label: "O", isSink: true }]);
+        compare(rows.length, 1);
+        compare(rows[0].kind, "action");
+    }
 }

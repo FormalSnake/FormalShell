@@ -126,4 +126,30 @@ TestCase {
     function test_source_state_live_when_available_and_unmuted() {
         compare(AudioModel.sourceState(true, false), "live");
     }
+
+    // deviceRows
+
+    function test_device_rows_drops_streams_and_audioless_nodes() {
+        var rows = AudioModel.deviceRows([
+            { name: "s", audio: {}, isStream: true, isSink: true },
+            { name: "n", audio: null, isStream: false, isSink: true },
+            { name: "ok", description: "Ok", audio: {}, isStream: false, isSink: true }
+        ]);
+        compare(rows.map(function (r) { return r.name; }), ["ok"]);
+    }
+
+    function test_device_rows_label_falls_back_to_name() {
+        var rows = AudioModel.deviceRows([{ name: "raw", description: "", audio: {}, isStream: false, isSink: false }]);
+        compare(rows[0].label, "raw");
+    }
+
+    function test_device_rows_outputs_first_each_half_by_label() {
+        var rows = AudioModel.deviceRows([
+            { name: "i2", description: "Zmic", audio: {}, isStream: false, isSink: false },
+            { name: "o2", description: "Zspk", audio: {}, isStream: false, isSink: true },
+            { name: "i1", description: "Amic", audio: {}, isStream: false, isSink: false },
+            { name: "o1", description: "Aspk", audio: {}, isStream: false, isSink: true }
+        ]);
+        compare(rows.map(function (r) { return r.name; }), ["o1", "o2", "i1", "i2"]);
+    }
 }

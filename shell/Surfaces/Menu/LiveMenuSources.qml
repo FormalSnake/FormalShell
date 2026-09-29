@@ -1,6 +1,8 @@
 import QtQuick
 import qs.Compositor
 import Quickshell.Bluetooth
+import Quickshell.Services.Pipewire
+import "../../Audio/model.js" as AudioModel
 import qs.Services
 import "../../Bluetooth/model.js" as BluetoothModel
 import "../../Network/model.js" as NetworkModel
@@ -62,6 +64,23 @@ Item {
             return;
         root._btKey = key;
         root._btLive = root._btNow;
+    }
+
+    // The audio route's rows; republished only when the device set changes.
+    readonly property var audioDevices: root.active ? root._audioLive : []
+    property var _audioLive: []
+    property string _audioKey: ""
+
+    readonly property var _audioNow: root.active ? AudioModel.deviceRows(Pipewire.nodes.values) : null
+
+    on_AudioNowChanged: {
+        if (!root._audioNow)
+            return;
+        var key = JSON.stringify(root._audioNow);
+        if (key === root._audioKey)
+            return;
+        root._audioKey = key;
+        root._audioLive = root._audioNow;
     }
 
     // The wifi route's rows are built from this, only while active and only

@@ -1358,6 +1358,30 @@ function bluetoothRows(state) {
     });
 }
 
+// Audio route (M76 Task 4). `devices` is Audio/model.js's deviceRows.
+function audioRows(devices) {
+    var list = devices || [];
+    if (list.length === 0)
+        return [_noteRow("audio.unavailable", "No audio devices")];
+    return list.map(function (d) {
+        var verb = d.isSink ? "sink" : "source";
+        return {
+            id: "audio." + (d.isSink ? "output." : "input.") + idPart(d.name),
+            parentId: null,
+            label: d.label,
+            icon: "",
+            title: "",
+            section: d.isSink ? "Output" : "Input",
+            aliases: [],
+            kind: "action",
+            action: "@ipc:audio." + verb + ":" + d.name,
+            checked: "@state:audio." + verb + "=" + d.name,
+            keepOpen: true,
+            childIds: []
+        };
+    });
+}
+
 function lightsEntries(available, effects) {
     if (available !== true)
         return {};

@@ -101,8 +101,8 @@ Item {
         "lights.speed": LightsService.speed,
         "lights.brightness": String(LightsService.brightness),
         "wifi.ssid": WifiService.connectedSsid,
-        "audio.sink": "",
-        "audio.source": "",
+        "audio.sink": AudioService.sinkName,
+        "audio.source": AudioService.sourceName,
         "radio.station": RadioService.station ? RadioService.station.uuid : "",
         "bluetooth.connected": root.bluetoothConnected
     })

@@ -83,6 +83,11 @@
     // disconnecting. No pairing here, that stays the "Bluetooth" panel's job.
     "bluetooth": { "label": "Bluetooth Devices", "provider": "bluetooth", "aliases": ["bt", "headphones", "earbuds", "speaker"], "prompt": "Search devices" },
 
+    // "audio" registers a provider fn (providers.js's audioRows): outputs then
+    // inputs, the default ticked, Enter making a device the default. Volume
+    // stays in the "Audio" panel.
+    "audio": { "label": "Audio Devices", "provider": "audio", "aliases": ["sound", "output", "input", "speakers", "microphone", "mic", "sink", "source"], "prompt": "Search devices" },
+
     // "panels" registers a provider fn too: one row per name in
     // shell.qml's PanelIpc registry, each spawning "panel open <name>"
     // over IPC (providers.js's panelsProvider) -- the launcher route for

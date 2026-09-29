@@ -41,6 +41,34 @@ Singleton {
     readonly property bool sourceAvailable: _sourceAudio !== null
     property bool sourceMuted: _sourceAudio ? _sourceAudio.muted : false
 
+    readonly property string sinkName: root._sink?.name ?? ""
+    readonly property string sourceName: root._source?.name ?? ""
+
+    function _find(name) {
+        var nodes = Pipewire.nodes.values;
+        for (var i = 0; i < nodes.length; i++) {
+            if (nodes[i].name === name && nodes[i].audio !== null && !nodes[i].isStream)
+                return nodes[i];
+        }
+        return null;
+    }
+
+    function setDefaultSink(name) {
+        var node = root._find(name);
+        if (!node || !node.isSink)
+            return false;
+        Pipewire.preferredDefaultAudioSink = node;
+        return true;
+    }
+
+    function setDefaultSource(name) {
+        var node = root._find(name);
+        if (!node || node.isSink)
+            return false;
+        Pipewire.preferredDefaultAudioSource = node;
+        return true;
+    }
+
     // Fired whenever the bound sink's volume or mute state changes, ours or
     // someone else's, the OSD (M5 Task 6) shows on this, not on setVolume()
     // being called directly.

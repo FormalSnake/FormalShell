@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell.Services.Pipewire
 import qs.Core
 import qs.Components
+import qs.Services
 import "../../Audio/model.js" as AudioModel
 
 // Audio panel (DESIGN.md §3 "Panel", spec "Panels"): a hero card for the
@@ -203,9 +204,9 @@ Panel {
         if (!row)
             return;
         if (row.isOutput)
-            Pipewire.preferredDefaultAudioSink = row.node;
+            AudioService.setDefaultSink(row.node.name);
         else
-            Pipewire.preferredDefaultAudioSource = row.node;
+            AudioService.setDefaultSource(row.node.name);
     }
 
     cursorCount: root._cursorEntries.length

@@ -518,7 +518,8 @@ PanelWindow {
         // whole app list a second time.
         gpu: function () { return Providers.gpuProvider(GpuService.cards); },
         wifi: function () { return Providers.wifiRows(liveSources.wifi); },
-        bluetooth: function () { return Providers.bluetoothRows(liveSources.bluetooth); }
+        bluetooth: function () { return Providers.bluetoothRows(liveSources.bluetooth); },
+        audio: function () { return Providers.audioRows(liveSources.audioDevices); }
     })
 
     // The scanner runs while the wifi level is the one on screen.
@@ -1927,6 +1928,15 @@ PanelWindow {
                     else btDev.connect();
                 }
             }
+            return;
+        }
+        // "audio.<sink|source>:<node name>" (providers.js's audioRows).
+        if (name.indexOf("audio.") === 0) {
+            var auSep = name.indexOf(":");
+            var auVerb = auSep > 0 ? name.slice("audio.".length, auSep) : "";
+            var auValue = auSep > 0 ? name.slice(auSep + 1) : "";
+            if (auVerb === "sink") AudioService.setDefaultSink(auValue);
+            else if (auVerb === "source") AudioService.setDefaultSource(auValue);
             return;
         }
         if (name.indexOf("nix.run:") === 0) {

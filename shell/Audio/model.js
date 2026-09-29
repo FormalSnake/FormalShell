@@ -53,3 +53,20 @@ function sourceState(available, muted) {
         return "unavailable";
     return muted === true ? "muted" : "live";
 }
+
+// Launcher rows: real devices only, outputs first, each half by label. Reads
+// pre-bind-safe fields only, same constraint as isPlaybackStream.
+function deviceRows(nodes) {
+    var out = [];
+    var list = nodes || [];
+    for (var i = 0; i < list.length; i++) {
+        var n = list[i];
+        if (!n || n.audio === null || n.audio === undefined || n.isStream) continue;
+        out.push({ name: String(n.name || ""), label: n.description || n.name || "", isSink: n.isSink === true });
+    }
+    out.sort(function (a, b) {
+        if (a.isSink !== b.isSink) return a.isSink ? -1 : 1;
+        return a.label.localeCompare(b.label);
+    });
+    return out;
+}
