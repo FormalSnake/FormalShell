@@ -22,10 +22,14 @@ Singleton {
     property bool open: false
     property bool streaming: false
     property bool hasFrame: false
+    // The IR camera's lit-frame filter (views/IrFeed.qml) is what draws.
+    property bool irFilter: false
     property string error: ""
 
     // The box the feed is drawn in, for `mirror status` to report its rect.
     property Item feedItem: null
+    // The VideoOutput inside it, whose contentRect is the picture itself.
+    property Item videoItem: null
 
     readonly property var current: {
         var at = Camera.indexOf(root.cameras, root.currentId);
@@ -53,7 +57,9 @@ Singleton {
         root.open = false;
         root.streaming = false;
         root.hasFrame = false;
+        root.irFilter = false;
         root.error = "";
         root.feedItem = null;
+        root.videoItem = null;
     }
 }

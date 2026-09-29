@@ -19,10 +19,10 @@ import "../../../Menu/actions.js" as Actions
 // the exit fade that keeps this item alive, and leaving the route destroys
 // the item. Both end with the Camera inactive and the descriptor closed.
 //
-// The IR emitter is not touched. It is a UVC extension-unit control that
-// differs per model, and V4L2 streaming alone leaves it however the firmware
-// wants it, so an IR feed can come up dark on a laptop whose emitter has not
-// been enabled system-wide.
+// An IR camera is drawn through IrFeed rather than straight off the
+// VideoOutput: its emitter lights every other frame, and IrFeed keeps those
+// and levels them. No extension-unit control is written; streaming alone
+// fires the emitter on the laptops this was measured on.
 Item {
     id: root
 
@@ -35,10 +35,12 @@ Item {
 
     readonly property bool _multiple: MirrorService.cameras.length > 1
     readonly property var _device: root._find(MirrorService.currentId)
+    readonly property bool _ir: MirrorService.current !== null && MirrorService.current.ir
 
     Component.onCompleted: {
         MirrorService.open = true;
         MirrorService.feedItem = frame;
+        MirrorService.videoItem = feed;
         root._publish();
     }
     Component.onDestruction: MirrorService.reset()
@@ -107,12 +109,20 @@ Item {
         value: camera.active
     }
 
+    Binding {
+        target: MirrorService
+        property: "irFilter"
+        value: irFeed.status === Loader.Ready
+    }
+
     // Per camera: the first frame after a switch is what turns "Starting"
     // into a picture.
     Connections {
         target: feed.videoSink
         function onVideoFrameChanged() {
             MirrorService.hasFrame = true;
+            if (irFeed.item)
+                irFeed.item.frame();
         }
     }
 
@@ -169,6 +179,21 @@ Item {
             transform: Scale {
                 origin.x: feed.width / 2
                 xScale: -1
+            }
+        }
+
+        // Keyed on the camera, so a switch starts from an empty hold.
+        Loader {
+            id: irFeed
+            x: feed.x + feed.contentRect.x
+            y: feed.y + feed.contentRect.y
+            width: feed.contentRect.width
+            height: feed.contentRect.height
+            visible: feed.visible
+            active: root._ir && root.live
+            sourceComponent: IrFeed {
+                source: feed
+                sourceRect: feed.contentRect
             }
         }
 

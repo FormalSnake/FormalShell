@@ -2119,10 +2119,12 @@ The camera opens when the view is shown and is released the moment the
 launcher starts closing, so the webcam light follows the card. Nothing runs
 while it is closed.
 
-An IR sensor is captured like any other node. Its emitter is not touched:
-switching it on is a vendor UVC control that differs per model, so an IR
-feed can come up dark on a laptop whose emitter has not been enabled
-system-wide.
+An IR sensor's emitter lights every other frame while it streams, so the
+view keeps only the lit frames, holding the last one while an unlit frame
+passes, and levels them up for a grey near-infrared picture. A frame counts
+as lit when it is brighter than the one before it; a stream that stops
+alternating still moves after four held frames. Colour cameras are drawn as
+they come. No UVC control is written.
 
 Display mirroring is the Display panel's: `panels` then Display, or
 `mirror display` typed inside `panels`.
@@ -2132,7 +2134,7 @@ fs menu summon mirror
 fs mirror toggle             # open the mirror, or close the launcher if it is showing
 fs mirror open|close
 fs mirror next|previous      # error while the mirror is not showing
-fs mirror status             # {"showing":…,"streaming":…,"hasFrame":…,"error":"","current":"/dev/video0","feed":{…},"cameras":[{"id","label","ir"}]}
+fs mirror status             # {"showing":…,"streaming":…,"hasFrame":…,"irFilter":false,"error":"","current":"/dev/video0","feed":{…},"picture":{…},"cameras":[{"id","label","ir"}]}
 ```
 
 ```lua

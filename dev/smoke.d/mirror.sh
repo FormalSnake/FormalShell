@@ -16,16 +16,23 @@
 # finds the nodes; a node appearing under an open view is Qt's own inotify
 # watch and is not asserted here.
 #
-# What the rig cannot show is a real UVC IR sensor's emitter: it is a
-# vendor extension-unit control, and a loopback node has none.
+# The GREY feed alternates a dim frame and a near-black one, the way a
+# laptop IR sensor's emitter lights every other frame. A burst of frames on
+# the IR camera must never show the dark one, and must show the dim one
+# levelled up: brighter and wider in spread than the raw frame, both read
+# off the picture rect `mirror status` reports against the same two frames
+# rendered by ffmpeg straight to PNG.
 leg_mirror_flag="--mirror"
 leg_mirror_order=145
 leg_mirror_needs="convert ffmpeg jq wtype"
 
 mirror_dir="$shot_dir/mirror"
 
+# Odd frames lit (the pattern at 35% plus a floor), even ones nearly black.
+mirror_ir_filter="format=gray,geq=lum='if(mod(N,2),lum(X,Y)*0.35+20,lum(X,Y)*0.04)'"
+
 leg_mirror_timing() {
-  leg_timing 42 70
+  leg_timing 48 76
 }
 
 leg_mirror_drive() {
@@ -65,7 +72,7 @@ sudo -n modprobe v4l2loopback
 for i in \$(seq 1 40); do [ -w /dev/video10 ] && [ -w /dev/video11 ] && break; sleep 0.5; done
 "$ffmpeg_bin" -nostdin -loglevel error -re -f lavfi -i "testsrc2=size=640x480:rate=15" -pix_fmt yuyv422 -f v4l2 /dev/video10 2> "$mirror_dir/feed-colour.log" &
 echo \$! > "$mirror_dir/feed-colour.pid"
-"$ffmpeg_bin" -nostdin -loglevel error -re -f lavfi -i "testsrc2=size=640x360:rate=15" -vf format=gray -pix_fmt gray -f v4l2 /dev/video11 2> "$mirror_dir/feed-ir.log" &
+"$ffmpeg_bin" -nostdin -loglevel error -re -f lavfi -i "testsrc2=size=640x360:rate=15" -vf "$mirror_ir_filter" -pix_fmt gray -f v4l2 /dev/video11 2> "$mirror_dir/feed-ir.log" &
 echo \$! > "$mirror_dir/feed-ir.pid"
 sleep 3
 # Qt lists cameras again only when /dev changes. The loopback nodes appeared
@@ -82,6 +89,10 @@ snap first
 "$wtype_bin" -k Tab
 sleep 3
 snap second
+for i in \$(seq 1 10); do
+  "$grim_bin" "$mirror_dir/burst-\$i.png" > /dev/null 2>&1
+  sleep 0.13
+done
 ipc mirror previous > /dev/null 2>&1
 sleep 2
 snap back
@@ -114,6 +125,19 @@ mirror_measure() {
   sd=$($convert_bin "$png" -crop "$crop" +repage -colorspace Gray -format '%[fx:int(standard_deviation*255)]' info: 2>/dev/null)
   sat=$($convert_bin "$png" -crop "$crop" +repage -colorspace HSL -channel G -separate +channel -format '%[fx:int(mean*100)]' info: 2>/dev/null)
   echo "$sd $sat"
+}
+
+# Mean and standard deviation of luma, 0..255, over the middle half of a
+# rect of a PNG (the whole PNG when the rect is empty).
+mirror_levels() {
+  local png="$1" rect="$2" crop="" x y w h
+  if [ -n "$rect" ]; then
+    read -r x y w h < <(jq -r '"\(.x + .width / 4 | floor) \(.y + .height / 4 | floor) \(.width / 2 | floor) \(.height / 2 | floor)"' <<<"$rect")
+    crop="${w}x${h}+${x}+${y}"
+  else
+    crop="320x180+160+90"
+  fi
+  echo "$($convert_bin "$png" -crop "$crop" +repage -colorspace Gray -format '%[fx:int(mean*255)] %[fx:int(standard_deviation*255)]' info: 2>/dev/null)"
 }
 
 mirror_field() {
@@ -169,6 +193,28 @@ leg_mirror_assert() {
   echo "second (IR): luma sd $sd, saturation $sat"
   [ "$sd" -ge 40 ] || fail "the IR feed is flat (luma sd $sd)"
   [ "$sat" -le 5 ] || fail "the IR feed is not grey (saturation $sat)"
+
+  # The IR camera draws through the lit-frame filter, the colour one never.
+  jq -e '.irFilter == false' "$mirror_dir/status-first.json" > /dev/null || fail "the colour camera drew through the IR filter"
+  jq -e '.irFilter and .picture != null' "$mirror_dir/status-second.json" > /dev/null \
+    || fail "the IR camera did not draw through its lit-frame filter: $(cat "$mirror_dir/status-second.json")"
+  "$ffmpeg_bin" -nostdin -loglevel error -f lavfi -i "testsrc2=size=640x360:rate=15" -vf "$mirror_ir_filter" \
+    -frames:v 2 "$mirror_dir/raw-%d.png" || fail "ffmpeg could not render the raw IR frames"
+  local dark_mean dark_sd lit_mean lit_sd mean sd picture i
+  read -r dark_mean dark_sd < <(mirror_levels "$mirror_dir/raw-1.png" "")
+  read -r lit_mean lit_sd < <(mirror_levels "$mirror_dir/raw-2.png" "")
+  echo "raw IR frames: dark mean $dark_mean sd $dark_sd, lit mean $lit_mean sd $lit_sd"
+  [ "$lit_mean" -gt $((dark_mean + 30)) ] || fail "the raw lit and dark frames are not apart (lit $lit_mean, dark $dark_mean)"
+  picture=$(jq -c .picture "$mirror_dir/status-second.json")
+  for i in $(seq 1 10); do
+    [ -f "$mirror_dir/burst-$i.png" ] || fail "no IR burst frame $i"
+    read -r mean sd < <(mirror_levels "$mirror_dir/burst-$i.png" "$picture")
+    echo "IR burst $i: mean $mean sd $sd"
+    [ "$mean" -ge $((lit_mean * 13 / 10)) ] \
+      || fail "IR burst frame $i is not the lit frame levelled up (mean $mean, raw lit $lit_mean, raw dark $dark_mean)"
+    [ "$sd" -ge $((lit_sd * 13 / 10)) ] || fail "IR burst frame $i is not stretched (sd $sd, raw lit sd $lit_sd)"
+  done
+  echo "SMOKE_MIRROR_BURST $mirror_dir/burst-5.png"
 
   jq -e '.current == "/dev/video10"' "$mirror_dir/status-back.json" > /dev/null || fail "mirror previous did not return to the colour camera"
   jq -e '.current == "/dev/video11"' "$mirror_dir/status-again.json" > /dev/null || fail "mirror next did not return to the IR camera"

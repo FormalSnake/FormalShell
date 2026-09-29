@@ -346,12 +346,17 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `mirror.sh` `--mirror`: the launcher's camera mirror against two v4l2loopback
   nodes (built by `nix/testvm.nix`, loaded by the leg) fed by real ffmpeg
   writers, a colour pattern on video10 and a GREY one on video11 standing in
-  for an IR sensor. The view opened with no `/dev/video*` at all (No camera,
+  for an IR sensor, alternating a dim frame and a near-black one the way an
+  emitter lights every other frame. The view opened with no `/dev/video*` at all (No camera,
   no node held), then reopened on the colour camera with non-flat coloured
   pixels in the feed box and only that node held open by the shell, a real
   Tab stepping to the grey camera (grey pixels, the other node released),
   `mirror previous`/`next` over IPC, and the launcher closed with the shell
-  holding no video node, all read off `/proc/<pid>/fd`.
+  holding no video node, all read off `/proc/<pid>/fd`. On the IR camera
+  `mirror status` reports `irFilter`, and ten frames grabbed in a burst
+  never show the dark frame and show the dim one levelled up: mean and
+  spread each at least 1.3 times the raw frame's, measured on the
+  `picture` rect against both frames rendered by ffmpeg to PNG.
 - `monitor.sh` `--monitor`: the monitor bar cell, its panel and the
   launcher's monitor view, against this machine's own `/proc` and `/sys`.
 - `nightlight.sh` `--nightlight`: the wlsunset-backed night light on and off,

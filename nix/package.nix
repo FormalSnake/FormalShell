@@ -11,6 +11,10 @@ stdenvNoCC.mkDerivation {
     runHook preInstall
     mkdir -p $out/share/formalshell $out/bin
     cp -r . $out/share/formalshell/
+    # A ShaderEffect loads its shaders as .qsb, never as GLSL source.
+    for f in $(find $out/share/formalshell -name '*.frag'); do
+      ${lib.getExe' qt6.qtshadertools "qsb"} --qt6 -o "$f.qsb" "$f"
+    done
     # Bundled default screensaver banner (M8b Task 7) — a sibling of shell/
     # in the repo, so Quickshell.shellPath("branding/...") still resolves it
     # once installed here alongside the copied shell tree.
