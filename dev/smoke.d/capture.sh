@@ -147,7 +147,7 @@ sleep 2
 sleep 1
 "$qs_bin" ipc -p "$shell_path" call screenshot pickerStatus > "$capture_escape_status_path" 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_capture_assert() {

@@ -120,7 +120,7 @@ sleep 1
 sleep 4
 ipc "$hotcorner_relock_s5_path"
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 hotcorner_relock_expect() {

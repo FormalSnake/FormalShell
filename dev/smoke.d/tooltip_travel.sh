@@ -74,7 +74,7 @@ sleep 0.25
 sleep 1
 "$grim_bin" -c "$tooltip_travel_second_path" > /dev/null 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 tooltip_travel_count() {

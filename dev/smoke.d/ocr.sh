@@ -114,8 +114,8 @@ for _ in \$(seq 1 30); do
 done
 "$wl_paste_bin" --no-newline > "$ocr_colorat_clipboard_path" 2>&1 || true
 EOF
-  echo "exec-once = bash $fixture_script"
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $fixture_script"
+  hypr_exec_once "bash $script"
   # The fixture terminal has no auto-close of its own.
   add_cleanup "kill \"\$(cat '$ocr_pid_path' 2>/dev/null)\" 2>/dev/null || true"
 }

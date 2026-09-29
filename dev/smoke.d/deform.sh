@@ -110,7 +110,7 @@ sleep 2
 "$grim_bin" "$deform_settled_path" > /dev/null 2>&1
 "$qs_bin" ipc -p "$shell_path" call panel state > "$deform_state_path" 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 # The card's box in one frame: everything under the bar's line that differs

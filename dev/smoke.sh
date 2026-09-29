@@ -91,7 +91,7 @@ $1"
   fi
 }
 
-# Every leg is a standalone script rather than an inline exec-once string:
+# Every leg is a standalone script rather than an inline autostart string:
 # `menu select`'s JSON array argument would otherwise have to survive both
 # this generator and Hyprland's own config parsing.
 write_script() {
@@ -108,7 +108,7 @@ for leg_file in "$script_dir"/smoke.d/*.sh; do
 done
 
 # Sourcing is alphabetical; the flag list, the settings fragments, the
-# exec-once lines and the results all follow leg_<name>_order instead.
+# autostart lines and the results all follow leg_<name>_order instead.
 leg_order_list() {
   local n v
   for n in "${legs[@]}"; do
@@ -414,6 +414,43 @@ host_notifications_owner() {
 }
 host_notifications_owner_before=$(host_notifications_owner)
 
+# The rig boots from a Lua config, the only format Hyprland is supported on.
+# Legs append to it through this helper, one autostart line per drive script.
+hypr_exec_once() {
+  printf 'hl.on("hyprland.start", function() hl.exec_cmd([==[%s]==]) end)\n' "$1"
+}
+
+# The session shape every run boots with, shared with --screensaver-gif's
+# per-effect sessions.
+hypr_base_config() {
+  # Pinned in both session modes: the vkms connector otherwise comes up
+  # 1024x768 at scale 2, and a nested window takes aquamarine's own default
+  # rather than a size the bar is worth reading at.
+  echo 'hl.monitor({ output = "", mode = "1920x1080@60", position = "0x0", scale = 1 })'
+  echo "hl.config({"
+  echo "  general = { gaps_in = 0, gaps_out = 0, border_size = 0 },"
+  # DESIGN.md: nothing in the shell blurs anything, and a compositor blur
+  # behind the bar's own transparent strip is exactly the frame this rig
+  # exists to catch.
+  echo "  decoration = { rounding = 0, blur = { enabled = false } },"
+  echo "  animations = { enabled = false },"
+  # disable_watchdog_warning: without start-hyprland (a watchdog wrapper this
+  # rig has no use for) Hyprland posts a red full-width notification across
+  # the top of the screen for 15s, which is exactly where the bar is.
+  echo "  misc = {"
+  echo "    disable_watchdog_warning = true,"
+  echo "    disable_hyprland_logo = true,"
+  echo "    disable_splash_rendering = true,"
+  echo "    force_default_wallpaper = 0,"
+  echo "    disable_autoreload = true,"
+  echo "  },"
+  # suppress_errors: Hyprland's error overlay is a full-width banner across
+  # the top of the screen, which is where the bar is. It renders over the
+  # exact thing every leg here photographs.
+  echo "  debug = { suppress_errors = true, disable_logs = false, enable_stdout_logs = true },"
+  echo "})"
+}
+
 # A leg that cannot share the single session below takes the run over here,
 # with the build done, the binaries resolved and the bus baseline captured,
 # and exits itself: --screensaver-gif pins screensaver.effect through the
@@ -426,7 +463,7 @@ done
 shot_path="$shot_dir/smoke.png"
 shell_log_path="$shot_dir/shell.log"
 hypr_log_path="$shot_dir/hyprland.log"
-cfg="$shot_dir/hyprland.conf"
+cfg="$shot_dir/hyprland.lua"
 
 # Isolated HOME for the Hyprland process and everything it spawns, see the
 # host-session safety note in the header.
@@ -533,64 +570,26 @@ wait
 EOF
 
 if $fixture_window_mode; then
-  # Spawned through the compositor (hyprctl dispatch exec), so the window is
+  # Spawned through the compositor (hl.dsp.exec_cmd), so the window is
   # tracked from the moment it maps and dies with the session.
   fixture_script="$shot_dir/fixture-window.sh"
   write_script "$fixture_script" <<EOF
 #!/usr/bin/env bash
 sleep 2
-"$hyprctl_bin" dispatch exec "$foot_bin --app-id=formalshell-smoke-iconic --title='formalshell smoke session' sh -c 'sleep 300'"
+"$hyprctl_bin" dispatch "hl.dsp.exec_cmd([==[$foot_bin --app-id=formalshell-smoke-iconic --title='formalshell smoke session' sh -c 'sleep 300']==])"
 EOF
 fi
 
 {
-  # Pinned in both session modes: the vkms connector otherwise comes up
-  # 1024x768 at scale 2, and a nested window takes aquamarine's own default
-  # rather than a size the bar is worth reading at.
-  echo "monitor = , 1920x1080@60, 0x0, 1"
-  echo "general {"
-  echo "    gaps_in = 0"
-  echo "    gaps_out = 0"
-  echo "    border_size = 0"
-  echo "}"
-  # DESIGN.md: nothing in the shell blurs anything, and a compositor blur
-  # behind the bar's own transparent strip is exactly the frame this rig
-  # exists to catch.
-  echo "decoration {"
-  echo "    rounding = 0"
-  echo "    blur {"
-  echo "        enabled = false"
-  echo "    }"
-  echo "}"
-  echo "animations {"
-  echo "    enabled = false"
-  echo "}"
-  # disable_watchdog_warning: without start-hyprland (a watchdog wrapper this
-  # rig has no use for) Hyprland posts a red full-width notification across
-  # the top of the screen for 15s, which is exactly where the bar is.
-  echo "misc {"
-  echo "    disable_watchdog_warning = true"
-  echo "    disable_hyprland_logo = true"
-  echo "    disable_splash_rendering = true"
-  echo "    force_default_wallpaper = 0"
-  echo "    disable_autoreload = true"
-  echo "}"
-  # suppress_errors: Hyprland's error overlay is a full-width banner across
-  # the top of the screen, which is where the bar is. It renders over the
-  # exact thing every leg here photographs.
-  echo "debug {"
-  echo "    suppress_errors = true"
-  echo "    disable_logs = false"
-  echo "    enable_stdout_logs = true"
-  echo "}"
-  echo "exec-once = bash $shell_start_script"
+  hypr_base_config
+  hypr_exec_once "bash $shell_start_script"
   if $fixture_window_mode; then
-    echo "exec-once = bash $fixture_script"
+    hypr_exec_once "bash $fixture_script"
   fi
 } > "$cfg"
 
 # Not a subshell: a drive function writes its own scripts, echoes its
-# exec-once lines onto the config, and may register a teardown line.
+# autostart lines onto the config, and may register a teardown line.
 for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
   if declare -F "leg_${leg_name}_drive" >/dev/null; then "leg_${leg_name}_drive" >> "$cfg"; fi
 done
@@ -614,9 +613,9 @@ if shell_pid=\$(cat "$shot_dir/shell.pid" 2>/dev/null) && [ -r "/proc/\$shell_pi
   echo "SMOKE_MEM rss_kb=\$rss_kb jsheap_kb=\$js_kb" > "$shot_dir/mem.txt"
 fi
 $fixture_cleanup
-"$hyprctl_bin" dispatch exit
+"$hyprctl_bin" dispatch "hl.dsp.exit()"
 EOF
-echo "exec-once = bash $shot_script" >> "$cfg"
+hypr_exec_once "bash $shot_script" >> "$cfg"
 
 session_env=(
   "HOME=$iso_home"

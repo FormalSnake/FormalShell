@@ -123,7 +123,7 @@ sleep 1
 sleep 2
 "$qs_bin" ipc -p "$shell_path" call bar chevron status > "$chevron_status_closed_again_path" 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 # One statistic of one patch of a frame, 0..255. Read off the red channel

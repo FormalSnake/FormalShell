@@ -9,7 +9,7 @@
 # begin with.
 #
 # The base run's own focused fixture window is what gets fullscreened
-# (leg_fullscreen_fixture_window=keep), so `hyprctl dispatch fullscreen 2`
+# (leg_fullscreen_fixture_window=keep), so `hl.dsp.window.fullscreen`
 # lands on it. Three `hyprctl -j layers` dumps off one timeline: before, while
 # fullscreen, and after `fullscreen 0`. The claim is read off the compositor's
 # own layer list, not the pixels: the formalshell chrome namespaces are gone
@@ -51,7 +51,7 @@ leg_fullscreen_drive() {
 sleep 5
 "$hyprctl_bin" -j layers > "$fullscreen_before_layers" 2>&1
 "$grim_bin" "$fullscreen_before_path" > /dev/null 2>&1
-"$hyprctl_bin" dispatch fullscreen 2 > /dev/null 2>&1
+"$hyprctl_bin" dispatch "hl.dsp.window.fullscreen({ mode = 'fullscreen', action = 'set' })" > /dev/null 2>&1
 sleep 3
 "$hyprctl_bin" -j layers > "$fullscreen_on_layers" 2>&1
 "$hyprctl_bin" -j clients > "$fullscreen_on_clients" 2>&1
@@ -62,12 +62,12 @@ sleep 2
 "$grim_bin" "$fullscreen_menu_path" > /dev/null 2>&1
 "$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
 sleep 1
-"$hyprctl_bin" dispatch fullscreen 0 > /dev/null 2>&1
+"$hyprctl_bin" dispatch "hl.dsp.window.fullscreen({ mode = 'fullscreen', action = 'unset' })" > /dev/null 2>&1
 sleep 3
 "$hyprctl_bin" -j layers > "$fullscreen_after_layers" 2>&1
 "$grim_bin" "$fullscreen_after_path" > /dev/null 2>&1
 EOS
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 # Count layer surfaces across every output whose namespace starts with the

@@ -44,7 +44,7 @@ sleep 6
 "$qs_bin" ipc -p "$shell_path" call screensaver stop > /dev/null 2>&1
 "$qs_bin" ipc -p "$shell_path" call caffeinate enable > /dev/null 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 caffeinate_layer_count() {

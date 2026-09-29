@@ -21,7 +21,7 @@ import "../Bar/layout.js" as BarLayout
 // the compositor's `ignore_alpha` for the modal namespaces sits above the
 // scrim's own alpha and below the card's, so what the scrim does to the
 // desktop is darken it and what the card keeps is its blur
-// (docs/examples/hyprland/formalshell.conf).
+// (docs/examples/hyprland/formalshell.lua).
 Item {
     id: root
 

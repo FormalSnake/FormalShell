@@ -60,7 +60,7 @@ sleep 2
 "$hyprctl_bin" -j layers > "$tooltip_layers_after_path" 2>&1
 "$grim_bin" -c "$tooltip_path" > /dev/null 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_tooltip_assert() {

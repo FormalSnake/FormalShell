@@ -170,8 +170,8 @@ sleep 3
 sleep 1
 "$qs_bin" ipc -p "$shell_path" call screensaver status > "$ss_final_status_path" 2>&1
 EOF
-  echo "exec-once = bash $play_script"
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $play_script"
+  hypr_exec_once "bash $script"
 }
 
 # Reduces the converged-banner frame to a two-colour mask: every pixel within

@@ -99,7 +99,7 @@ TestCase {
         compare(rule.bitdepth, 10);
         compare(rule.cm, "hdr");
         compare(rule.sdrbrightness, "1.2");
-        verify(rule.mirror === undefined);
+        compare(rule.mirror, "");
     }
 
     function test_color_rule_does_not_clamp_a_live_scale_below_one() {
@@ -110,25 +110,19 @@ TestCase {
     function test_color_rule_carries_a_mirror() {
         var rule = Outputs.hyprlandColorRule(_row({ mirrorOf: "DP-1" }), Hdr.onColor(1, 1));
         compare(rule.mirror, "DP-1");
-        verify(Outputs.hyprlandRuleArg(rule).indexOf(",mirror,DP-1") > 0);
-    }
-
-    function test_rule_arg_is_the_hyprlang_monitor_line() {
-        var rule = Outputs.hyprlandColorRule(_row({ scale: 1 }), Hdr.onColor(1.2, 1));
-        compare(Outputs.hyprlandRuleArg(rule),
-            "eDP-1,2560x1600@165,0x0,1,transform,0,vrr,0,bitdepth,10,cm,hdr,sdrbrightness,1.2,sdrsaturation,1");
+        verify(Outputs.hyprlandRuleLua(rule).indexOf("mirror = \"DP-1\"") > 0);
     }
 
     function test_rule_lua_is_an_hl_monitor_call() {
         var rule = Outputs.hyprlandColorRule(_row({ scale: 1 }), Hdr.onColor(1.2, 1));
         compare(Outputs.hyprlandRuleLua(rule),
-            "hl.monitor({ output = \"eDP-1\", mode = \"2560x1600@165\", position = \"0x0\", scale = 1, transform = 0, vrr = 0, bitdepth = 10, cm = \"hdr\", sdrbrightness = 1.2, sdrsaturation = 1 })");
+            "hl.monitor({ output = \"eDP-1\", mode = \"2560x1600@165\", position = \"0x0\", scale = 1, transform = 0, vrr = 0, bitdepth = 10, cm = \"hdr\", sdrbrightness = 1.2, sdrsaturation = 1, mirror = \"\" })");
     }
 
     // A scale or mirror change on an output in HDR must not drop HDR.
     function test_scale_change_keeps_an_active_hdr_preset() {
-        var arg = Outputs.hyprlandMonitorArg(_row({ cm: "hdr", tenBit: true, sdrBrightness: 1.2 }), { scale: 2 });
-        verify(arg.indexOf(",bitdepth,10,cm,hdr,sdrbrightness,1.2,sdrsaturation,1") > 0);
+        var lua = Outputs.hyprlandRuleLua(Outputs.hyprlandMonitorRule(_row({ cm: "hdr", tenBit: true, sdrBrightness: 1.2 }), { scale: 2 }));
+        verify(lua.indexOf("bitdepth = 10, cm = \"hdr\", sdrbrightness = 1.2, sdrsaturation = 1") > 0);
     }
 
     function test_parse_reads_the_colour_fields() {

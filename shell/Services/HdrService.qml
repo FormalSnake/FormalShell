@@ -12,7 +12,7 @@ import "../Display/outputs.js" as Outputs
 // /sys/class/drm. The choice lives in Core.State.hdr, never settings.json,
 // and is re-applied whenever an output that should be in HDR shows up
 // without it: shell start, hotplug, and a config reload that reset the rules
-// (Hyprland replaces an output's rule wholesale, so a reload drops it).
+// (a reload re-runs the Lua config, which drops a rule sent through eval).
 //
 // Each output is re-applied at most once per reset. An apply Hyprland ignores
 // leaves the output out of HDR and would otherwise retry on every refresh.
@@ -151,7 +151,7 @@ Singleton {
         if (!row)
             return "unknown output: " + name;
         var rule = Outputs.hyprlandColorRule(row, Hdr.onColor(root._sdrBrightness, root._sdrSaturation));
-        return JSON.stringify({ rule: rule, legacy: Outputs.hyprlandRuleArg(rule), lua: Outputs.hyprlandRuleLua(rule) });
+        return JSON.stringify({ rule: rule, lua: Outputs.hyprlandRuleLua(rule) });
     }
 
     function _reconcile() {

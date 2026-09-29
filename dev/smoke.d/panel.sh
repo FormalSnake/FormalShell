@@ -42,7 +42,7 @@ sleep 3
 sleep 2
 "$qs_bin" ipc -p "$shell_path" call panel state > "$panel_state_path" 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_panel_assert() {

@@ -58,7 +58,7 @@ sleep 5
 "$qs_bin" ipc -p "$shell_path" call plugins status > "$plugins_status_path" 2>&1
 "$grim_bin" "$plugins_bar_png" > /dev/null 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_plugins_assert() {

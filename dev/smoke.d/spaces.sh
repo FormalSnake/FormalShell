@@ -223,25 +223,25 @@ park() {
   "$wlrctl_bin" pointer move "\$1" "\$2" >> "$spaces_dispatch_path" 2>&1
 }
 sleep 4
-"$hyprctl_bin" dispatch exec "$foot_bin --server=$spaces_foot_socket" > "$spaces_dispatch_path" 2>&1
+"$hyprctl_bin" dispatch "hl.dsp.exec_cmd([==[$foot_bin --server=$spaces_foot_socket]==])" > "$spaces_dispatch_path" 2>&1
 sleep 1
-"$hyprctl_bin" dispatch exec "${foot_bin%/*}/footclient --server-socket=$spaces_foot_socket --app-id=formalshell-spaces-blocked herdr --remote fakehost" >> "$spaces_dispatch_path" 2>&1
-"$hyprctl_bin" dispatch exec "${foot_bin%/*}/footclient --server-socket=$spaces_foot_socket --app-id=formalshell-spaces-sibling sh -c 'sleep 300'" >> "$spaces_dispatch_path" 2>&1
-"$hyprctl_bin" dispatch exec "[workspace 2 silent] $foot_bin --app-id=formalshell-spaces-working herdr" >> "$spaces_dispatch_path" 2>&1
+"$hyprctl_bin" dispatch "hl.dsp.exec_cmd([==[${foot_bin%/*}/footclient --server-socket=$spaces_foot_socket --app-id=formalshell-spaces-blocked herdr --remote fakehost]==])" >> "$spaces_dispatch_path" 2>&1
+"$hyprctl_bin" dispatch "hl.dsp.exec_cmd([==[${foot_bin%/*}/footclient --server-socket=$spaces_foot_socket --app-id=formalshell-spaces-sibling sh -c 'sleep 300']==])" >> "$spaces_dispatch_path" 2>&1
+"$hyprctl_bin" dispatch "hl.dsp.exec_cmd([==[$foot_bin --app-id=formalshell-spaces-working herdr]==], { workspace = '2 silent' })" >> "$spaces_dispatch_path" 2>&1
 sleep 2
-"$hyprctl_bin" dispatch exec "[workspace 2 silent] $foot_bin --app-id=formalshell-spaces-plain sh -c 'sleep 300'" >> "$spaces_dispatch_path" 2>&1
+"$hyprctl_bin" dispatch "hl.dsp.exec_cmd([==[$foot_bin --app-id=formalshell-spaces-plain sh -c 'sleep 300']==], { workspace = '2 silent' })" >> "$spaces_dispatch_path" 2>&1
 sleep 2
 # Workspace 2's plain window floated and put mostly past the output's right
 # edge, its real rect kept as it is. Fully past it Hyprland exports no
 # frames for it and the capture count below would drop.
 out_w=\$("$hyprctl_bin" monitors -j | "$jq_bin" -r '.[0] | (.width / .scale) | floor')
-"$hyprctl_bin" dispatch togglefloating "class:^(formalshell-spaces-plain)\$" >> "$spaces_dispatch_path" 2>&1
-"$hyprctl_bin" dispatch resizewindowpixel "exact 640 400,class:^(formalshell-spaces-plain)\$" >> "$spaces_dispatch_path" 2>&1
-"$hyprctl_bin" dispatch movewindowpixel "exact \$((out_w - 200)) 150,class:^(formalshell-spaces-plain)\$" >> "$spaces_dispatch_path" 2>&1
+"$hyprctl_bin" dispatch "hl.dsp.window.float({ window = 'class:^(formalshell-spaces-plain)\$', action = 'toggle' })" >> "$spaces_dispatch_path" 2>&1
+"$hyprctl_bin" dispatch "hl.dsp.window.resize({ x = 640, y = 400, window = 'class:^(formalshell-spaces-plain)\$' })" >> "$spaces_dispatch_path" 2>&1
+"$hyprctl_bin" dispatch "hl.dsp.window.move({ x = \$((out_w - 200)), y = 150, window = 'class:^(formalshell-spaces-plain)\$' })" >> "$spaces_dispatch_path" 2>&1
 # A footclient window belongs to the server's pid, which exec's window rules
 # never see, so both are moved by class instead.
-"$hyprctl_bin" dispatch movetoworkspacesilent "1,class:^(formalshell-spaces-blocked)\$" >> "$spaces_dispatch_path" 2>&1
-"$hyprctl_bin" dispatch movetoworkspacesilent "1,class:^(formalshell-spaces-sibling)\$" >> "$spaces_dispatch_path" 2>&1
+"$hyprctl_bin" dispatch "hl.dsp.window.move({ workspace = 1, follow = false, window = 'class:^(formalshell-spaces-blocked)\$' })" >> "$spaces_dispatch_path" 2>&1
+"$hyprctl_bin" dispatch "hl.dsp.window.move({ workspace = 1, follow = false, window = 'class:^(formalshell-spaces-sibling)\$' })" >> "$spaces_dispatch_path" 2>&1
 sleep 6
 call workspaces status > "$spaces_status_one_path" 2>&1
 call debug dump > "$spaces_dump_path" 2>&1
@@ -309,7 +309,7 @@ call workspaces status > "$spaces_status_left_path" 2>&1
 touch "$spaces_done_path"
 EOF
   add_cleanup "pkill -f formalshell-spaces- 2>/dev/null || true"
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 # The icon a fixture app id resolved to in one status read, as a jq object

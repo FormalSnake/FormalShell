@@ -100,7 +100,7 @@ EOF
 true
 EOF
   add_cleanup "bash $kill_script"
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 # The first output's report out of a `lock status` reply.

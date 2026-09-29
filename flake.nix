@@ -34,7 +34,7 @@
         # The one file tst_menu_hints.qml reads out of docs/, copied by
         # itself: the rest of that tree is screenshots and recorded GIFs.
         mkdir -p docs/examples/hyprland
-        cp ${./docs/examples/hyprland/formalshell.conf} docs/examples/hyprland/formalshell.conf
+        cp ${./docs/examples/hyprland/formalshell.lua} docs/examples/hyprland/formalshell.lua
         # QML_XHR_ALLOW_FILE_READ: tst_menu_emoji.qml XHR-loads
         # shell/Menu/emoji.json, outside the test's own directory subtree.
         # -import tests/stubs: resolves the `qs.Core` module for the tests

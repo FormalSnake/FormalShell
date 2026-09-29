@@ -110,7 +110,7 @@ echo \$((SECONDS - start)) > "$config_reload_elapsed_path"
 bar_box > "$config_reload_after_path"
 "$grim_bin" "$config_reload_shot_path" > /dev/null 2>&1
 EOS
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_config_reload_assert() {

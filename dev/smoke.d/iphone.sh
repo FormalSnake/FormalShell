@@ -239,7 +239,7 @@ sleep 0.3
 "$qs_bin" ipc -p "$shell_path" call visualizer status > "$iphone_visualizer_b_path" 2>&1
 "$grim_bin" "$iphone_media_png" > /dev/null 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_iphone_assert() {

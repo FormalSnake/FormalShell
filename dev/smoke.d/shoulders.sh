@@ -96,7 +96,7 @@ sleep 0.6
 "$qs_bin" ipc -p "$shell_path" call debug dump > "$shoulders_dump_cleared_path" 2>&1
 "$grim_bin" "$shoulders_cleared_path" > /dev/null 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 # One field off a dump, rounded to the pixel: at rest every one of these is a

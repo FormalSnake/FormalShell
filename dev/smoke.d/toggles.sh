@@ -67,7 +67,7 @@ sleep 2
 "$qs_bin" ipc -p "$shell_path" call menu status > "$toggles_menu_status2_path" 2>&1
 "$grim_bin" "$toggles_toggled_png" > /dev/null 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 # One ranked row out of a debug query reply. The row objects hold no nested

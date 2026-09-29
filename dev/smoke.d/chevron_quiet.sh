@@ -169,7 +169,7 @@ sleep 1
 sleep 0.5
 "$grim_bin" -g "$chevron_quiet_band_region" "$chevron_quiet_rest_path" > /dev/null 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 # How wide the card is in one band, in pixels: the bounding box of everything

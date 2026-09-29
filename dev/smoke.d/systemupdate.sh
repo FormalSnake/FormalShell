@@ -45,7 +45,7 @@ sleep 20
 "$grim_bin" "$systemupdate_panel_png" > /dev/null 2>&1
 "$qs_bin" ipc -p "$shell_path" call debug dump > "$systemupdate_dump_path" 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_systemupdate_assert() {

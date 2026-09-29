@@ -139,7 +139,7 @@ PanelWindow {
     }
 
     // What a compositor layer rule addresses this strip by: the shipped
-    // Hyprland example (docs/examples/hyprland/formalshell.conf) blurs
+    // Hyprland example (docs/examples/hyprland/formalshell.lua) blurs
     // `formalshell:bar` behind the translucent cells.
     WlrLayershell.namespace: "formalshell:bar"
 

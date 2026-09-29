@@ -88,7 +88,7 @@ shell/
     ThemeEngine.qml             singleton: serialized matugen Process queue
     templates/
       theme.json.tmpl           matugen template rendering theme.json
-      hyprland-colors.conf.tmpl matugen template rendering the hyprlang colour variables
+      hyprland-colors.lua.tmpl matugen template rendering the Lua colour table
     qmldir
   Compositor/
     BackendBase.qml           the CompositorBackend contract (base component)
@@ -106,7 +106,7 @@ shell/
     hyprland/
       model.js                  pure JS: Hyprland workspaces onto the contract, dropping the
                                  negative-id special:* overlays the quake console parks on
-      HyprlandBackend.qml       Quickshell.Hyprland wrapper, usingLua dual dispatch
+      HyprlandBackend.qml       Quickshell.Hyprland wrapper, hl.dsp.* dispatch
   Components/
     Box.qml                     the one chrome renderer (M59): draws Theme.style's role+state as
                                  casts, rings, fill+border, face, hairlines and the pointer's wash,
@@ -541,21 +541,21 @@ Theme.ThemeEngine (running/pending queue; a retheme() mid-run just sets pending)
   |     <source>`, then the same static write with the palette's shadcn view
   |     for the shell's own outputs)
   v
-matugen renders templates/theme.json.tmpl + templates/hyprland-colors.conf.tmpl
-  -> <state-dir>/{theme.json,formalshell-colors.conf}.tmp
+matugen renders templates/theme.json.tmpl + templates/hyprland-colors.lua.tmpl
+  -> <state-dir>/{theme.json,formalshell-colors.lua}.tmp
   |  atomic `mv` into place on success: theme.json into the state dir,
-  |    formalshell-colors.conf into ~/.config/hypr/
+  |    formalshell-colors.lua into ~/.config/hypr/
   |  (same run also renders templates/gtk-colors.css.tmpl ->
   |   ~/.config/gtk-{3,4}.0/formalshell-colors.css and
   |   templates/qtct-colors.conf.tmpl -> ~/.config/qt{5,6}ct/colors/matugen.conf,
   |   written directly: apps read those at launch, nothing watches them)
   v
-$XDG_STATE_HOME/formalshell/theme.json          ~/.config/hypr/formalshell-colors.conf
-  |  FileView watch (Core/Theme.qml)               |  the user's hyprland.conf sources this path
+$XDG_STATE_HOME/formalshell/theme.json          ~/.config/hypr/formalshell-colors.lua
+  |  FileView watch (Core/Theme.qml)               |  the user's hyprland.lua dofiles this path
   v                                                  v
-Theme.color.* properties update live              Hyprland reloads on config write, so
-  -> every Bar/widget token recolors                 col.active_border and friends apply live
-     (plain property bindings, no restart)           with no action from the shell
+Theme.color.* properties update live              the shell runs `hyprctl reload`, so
+  -> every Bar/widget token recolors                 col.active_border and friends apply
+     (plain property bindings, no restart)           after each publish
 ```
 
 `Core/Theme.qml` parses `theme.json`, validates it with `palette.js#validate()`,

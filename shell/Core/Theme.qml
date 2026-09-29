@@ -160,8 +160,8 @@ Singleton {
     }
 
     // The `window` role's two states, unresolved (M60 P7): ThemeEngine
-    // publishes them to Hyprland as hyprlang variables, where a palette
-    // role names the variable formalshell-colors.conf carries rather than a
+    // publishes them to Hyprland as a Lua table, where a palette
+    // role names the key formalshell-colors.lua carries rather than a
     // colour this palette could hand over, so the compositor's frame keeps
     // following the wallpaper without the chrome file being rewritten.
     readonly property var windowChrome: ({

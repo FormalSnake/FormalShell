@@ -153,7 +153,7 @@ sleep 3
 sleep 3
 "$grim_bin" "$gpu_monitor_png" > /dev/null 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_gpu_assert() {

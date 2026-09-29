@@ -86,7 +86,7 @@ sleep 2
 call notifications status > "$notify_close_status_after_path" 2>&1
 "$grim_bin" -c "$notify_close_after_path" > /dev/null 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_notify_close_assert() {

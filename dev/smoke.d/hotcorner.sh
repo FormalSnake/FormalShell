@@ -24,7 +24,7 @@ leg_hotcorner_drive() {
 sleep 4
 "$hyprctl_bin" -j layers > "$hotcorner_layers_path" 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_hotcorner_assert() {

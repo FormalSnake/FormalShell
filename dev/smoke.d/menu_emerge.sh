@@ -140,7 +140,7 @@ call menu status > "$menu_emerge_status_path" 2>&1
 call menu close > "$menu_emerge_close_path" 2>&1
 call debug motionScale 100 > /dev/null 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 # How bright one box is on average. The card's own fill sits several times

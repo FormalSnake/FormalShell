@@ -119,7 +119,7 @@ sleep 2
 "$grim_bin" "$grid_relaunch_return_png" > /dev/null 2>&1
 "$qs_bin" ipc -p "$shell_path" call menu status > "$grid_relaunch_return_path" 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 grid_relaunch_check() {

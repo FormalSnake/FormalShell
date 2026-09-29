@@ -1,10 +1,11 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
 # --keybinds: the launcher's parsed-binds route. The fixture is a real set of
-# `bind =` lines written into this session's own hyprland.conf, and the route
+# `hl.bind` calls written into this session's own hyprland.lua, and the route
 # answers `hyprctl binds`, so what is asserted is that hyprland's own expanded
 # bind table came back as rows carrying the fixture's chords and their
-# actions.
+# descriptions. A Lua bind reports the anonymous `__lua` dispatcher, so the
+# description is the whole action text a row has.
 #
 # Two passes on the query, the same idiom the nix route uses: the hyprctl
 # Process is async, so the first pass can land before it has exited. The rows
@@ -12,7 +13,7 @@
 # Enter that is the launcher), so there is no activation to drive.
 #
 # The fixture carries one commented-out bind, which must NOT come back as a
-# live row, and an argument holding "//" and braces, which must survive
+# live row, and a description holding "//" and braces, which must survive
 # hyprland's config parser and the JSON round trip intact. An exact row count
 # is what makes the commented-out assertion mean anything: the scaffold's
 # base config declares no binds at all, so these are the whole table.
@@ -52,12 +53,12 @@ leg_keybinds_drive() {
   t0=$(keybinds_t0)
   # The fixture itself. hyprland reads this config, so these are real binds in
   # a real bind table, not a file the shell is pointed at.
-  echo "bind = SUPER SHIFT, slash, exec, hyprctl version"
-  echo "bindd = SUPER, T, Open a Terminal, exec, ghostty"
-  echo "bind = SUPER, Q, killactive"
-  echo "bind = SUPER CTRL, 1, movetoworkspace, 1"
-  echo "bind = SUPER, N, exec, notify-send {braces} // not-a-comment"
-  echo "#bind = SUPER, Z, exit"
+  echo 'hl.bind("SUPER + SHIFT + slash", hl.dsp.exec_cmd("hyprctl version"), { description = "exec hyprctl version" })'
+  echo 'hl.bind("SUPER + T", hl.dsp.exec_cmd("ghostty"), { description = "Open a Terminal" })'
+  echo 'hl.bind("SUPER + Q", hl.dsp.window.close(), { description = "killactive" })'
+  echo 'hl.bind("SUPER + CTRL + 1", hl.dsp.focus({ workspace = 1 }), { description = "workspace 1" })'
+  echo 'hl.bind("SUPER + N", hl.dsp.exec_cmd("notify-send"), { description = "exec notify-send {braces} // not-a-comment" })'
+  echo '-- hl.bind("SUPER + Z", hl.dsp.exit())'
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep $t0
@@ -71,7 +72,7 @@ sleep 2
 "$qs_bin" ipc -p "$shell_path" call menu status > "$keybinds_menu_status_path" 2>&1
 "$grim_bin" "$keybinds_menu_png" > /dev/null 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_keybinds_assert() {
@@ -84,7 +85,7 @@ leg_keybinds_assert() {
   # made of it, and none of it means anything until the fixture is really in
   # there and really readable.
   cat "$keybinds_hyprctl_plain_path"
-  if [ "$(grep -c '^bindd\?$' "$keybinds_hyprctl_plain_path" | tr -d ' ')" != "5" ]; then
+  if [ "$(grep -c '^bind[a-z]*$' "$keybinds_hyprctl_plain_path" | tr -d ' ')" != "5" ]; then
     fail "hyprland's own bind table does not hold the fixture's 5 binds: $(cat "$keybinds_hyprctl_plain_path")"
   fi
   cat "$keybinds_query1_path"; echo
@@ -102,11 +103,10 @@ leg_keybinds_assert() {
     fail "keybinds route did not parse the fixture's first bind: $(cat "$keybinds_query1_path")"
   fi
   if ! grep -qF '"desc":"killactive"' "$keybinds_query1_path" \
-    || ! grep -qF '"desc":"movetoworkspace 1"' "$keybinds_query1_path"; then
-    fail "keybinds route lost a dispatcher-only or argument-carrying bind: $(cat "$keybinds_query1_path")"
+    || ! grep -qF '"desc":"workspace 1"' "$keybinds_query1_path"; then
+    fail "keybinds route lost a described bind: $(cat "$keybinds_query1_path")"
   fi
-  # Survives hyprland's own config parser and the round trip out of it: "//"
-  # is not a comment there, and the braces are not a block.
+  # Survives hyprland's own config parser and the round trip out of it.
   if ! grep -qF '"desc":"exec notify-send {braces} // not-a-comment"' "$keybinds_query1_path"; then
     fail "the fixture's brace-and-slash argument did not survive intact: $(cat "$keybinds_query1_path")"
   fi
@@ -119,7 +119,7 @@ leg_keybinds_assert() {
   fi
   cat "$keybinds_query2_path"; echo
   if ! grep -qiF '"label":"SUPER+T' "$keybinds_query2_path" \
-    || ! grep -qF '"desc":"exec ghostty"' "$keybinds_query2_path"; then
+    || ! grep -qF '"desc":"Open a Terminal"' "$keybinds_query2_path"; then
     fail "':k SUPER+T' did not rank the fixture's own chord with its action: $(cat "$keybinds_query2_path")"
   fi
   if ! grep -qF '"isOpen":true' "$keybinds_menu_status_path" \

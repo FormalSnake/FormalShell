@@ -124,7 +124,7 @@ sleep 1
 "$hyprctl_bin" -j monitors > "$bar_position_monitors_path" 2>&1
 $own
 EOS
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_bar_position_assert() {

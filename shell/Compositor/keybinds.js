@@ -4,7 +4,7 @@
 // testable head-on (tests/tst_keybinds.qml); the hyprctl process stays in the
 // menu surface.
 //
-// The input is `hyprctl binds`, with hyprland's own sources and submaps
+// The input is `hyprctl binds`, with hyprland's own dofiles and submaps
 // already expanded, so there is no include chain to walk here. Nothing
 // throws: unreadable output yields an empty list, which the surface renders
 // as an honest unavailable row rather than a warning.
@@ -55,12 +55,16 @@ function _bindFromFields(fields) {
     if (key === "")
         key = "code:" + String(fields.keycode === undefined ? "" : fields.keycode);
     var arg = String(fields.arg === undefined ? "" : fields.arg);
+    // A Lua bind reports the dispatcher `__lua` and, as its arg, an internal
+    // reference number: neither says anything, so the bind's own description
+    // is the only action text it has.
+    var isLua = fields.dispatcher === "__lua";
     return {
         chord: mods.concat([key]).join("+"),
         mods: mods,
         key: key,
-        action: String(fields.dispatcher || ""),
-        args: arg === "" ? [] : [arg],
+        action: isLua ? "" : String(fields.dispatcher || ""),
+        args: arg === "" || isLua ? [] : [arg],
         title: String(fields.description || ""),
         props: {
             submap: String(fields.submap || ""),
@@ -75,8 +79,9 @@ function _bindFromFields(fields) {
 // so the reply is not JSON and JSON.parse throws on it, which cost the route
 // every row it had. The text table carries the same binds correctly.
 //
-// One block per bind, headed by a bare `bind` (or `bindd`, a bind carrying a
-// description) line, then one tab-indented `name: value` field per line,
+// One block per bind, headed by a bare `bind` line with one letter per flag
+// the bind carries (`bindd` a description, `bindel` locked and repeating),
+// then one tab-indented `name: value` field per line,
 // blocks separated by a blank line. A value may be empty and may itself hold
 // a colon, so only the first one splits.
 function parseHyprlandBinds(text) {
@@ -86,7 +91,7 @@ function parseHyprlandBinds(text) {
 
     for (var i = 0; i < lines.length; i++) {
         var line = lines[i].replace(/\s+$/, "");
-        if (line === "bind" || line === "bindd") {
+        if (/^bind[a-z]*$/.test(line)) {
             if (fields)
                 out.push(_bindFromFields(fields));
             fields = {};
@@ -114,7 +119,8 @@ function describeAction(bind) {
     (bind.args || []).forEach(function (arg) {
         parts.push(String(arg));
     });
-    return parts.join(" ").trim();
+    var text = parts.join(" ").trim();
+    return text === "" ? String(bind.title || "") : text;
 }
 
 // ":k" root trigger, the same shape providers.js's ":e"/":nix" triggers
@@ -243,7 +249,7 @@ function _noteRow(id, label, desc) {
 }
 
 function noBindsRow() {
-    return _noteRow("keybinds.nobinds", "No binds", "no bind lines in the hyprland config");
+    return _noteRow("keybinds.nobinds", "No binds", "no binds in the hyprland config");
 }
 
 function failedRow() {

@@ -9,9 +9,8 @@ import "model.js" as Model
 
 // Hyprland backend over Quickshell's native Hyprland IPC module. Hyprland.workspaces/
 // toplevels/monitors are already-reactive ObjectModels, so this file only maps their
-// shapes onto the contract and dispatches actions. Every dispatch branches on Hyprland.usingLua (Hyprland >=0.55's
-// Lua config migration changed dispatcher call syntax; there is no upstream shim), e.g.
-// focusWorkspace: Lua -> hl.dsp.focus({workspace=...}), legacy -> "workspace <id>".
+// shapes onto the contract and dispatches actions. Lua is the only config format, so
+// every dispatch is an hl.dsp.* call, e.g. focusWorkspace: hl.dsp.focus({workspace=...}).
 // Portions from DankMaterialShell (MIT, Copyright 2025 Avenge Media LLC).
 Scope {
     id: root
@@ -272,10 +271,7 @@ Scope {
     }
 
     function focusWorkspace(id) {
-        if (Hyprland.usingLua)
-            Hyprland.dispatch("hl.dsp.focus({ workspace = " + root._luaValue(id) + " })");
-        else
-            Hyprland.dispatch("workspace " + id);
+        Hyprland.dispatch("hl.dsp.focus({ workspace = " + root._luaValue(id) + " })");
     }
 
     // Hyprland's `idx` is its numeric workspace id (model.js), and its
@@ -289,48 +285,31 @@ Scope {
 
     function focusWindow(id) {
         var selector = root._windowSelector(id);
-        if (Hyprland.usingLua)
-            Hyprland.dispatch("hl.dsp.focus({ window = " + root._luaString(selector) + " })");
-        else
-            Hyprland.dispatch("focuswindow " + selector);
+        Hyprland.dispatch("hl.dsp.focus({ window = " + root._luaString(selector) + " })");
     }
 
     function closeWindow(id) {
         var selector = root._windowSelector(id);
-        if (Hyprland.usingLua)
-            Hyprland.dispatch("hl.dsp.window.close(" + root._luaString(selector) + ")");
-        else
-            Hyprland.dispatch("closewindow " + selector);
+        Hyprland.dispatch("hl.dsp.window.close(" + root._luaString(selector) + ")");
     }
 
     function spawn(argv) {
         var cmd = argv.map(root._quoteArg).join(" ");
-        if (Hyprland.usingLua)
-            Hyprland.dispatch("hl.dsp.exec_cmd(" + root._luaString(cmd) + ")");
-        else
-            Hyprland.dispatch("exec " + cmd);
+        Hyprland.dispatch("hl.dsp.exec_cmd(" + root._luaString(cmd) + ")");
     }
 
     function powerOffMonitors() {
-        if (Hyprland.usingLua)
-            Hyprland.dispatch("hl.dsp.dpms({ action = \"disable\" })");
-        else
-            Hyprland.dispatch("dpms off");
+        Hyprland.dispatch("hl.dsp.dpms({ action = \"disable\" })");
     }
 
     function powerOnMonitors() {
-        if (Hyprland.usingLua)
-            Hyprland.dispatch("hl.dsp.dpms({ action = \"enable\" })");
-        else
-            Hyprland.dispatch("dpms on");
+        Hyprland.dispatch("hl.dsp.dpms({ action = \"enable\" })");
     }
 
-    // Webcam overlay placement (M27 Task 5), the exact dual dispatch
+    // Webcam overlay placement (M27 Task 5), the hl.dsp.window.* calls
     // omarchy-capture-webcam-resize's own hypr_dispatch already establishes
-    // (Lua hl.dsp.window.* first, legacy dispatcher string on Hyprland <0.55,
-    // MIT). `setfloating` is a toggle in the legacy dispatcher, unlike Lua's
-    // `action = "set"`, so both branches skip the call once `isFloating` is
-    // already true rather than risk tiling a window back.
+    // (MIT). The call is skipped once `isFloating` is already true rather
+    // than risk tiling a window back.
     readonly property bool floatingPlacementAvailable: true
 
     // The three lookups below read `_mappedWindows`, not the published list: a
@@ -341,10 +320,7 @@ Scope {
         if (w && w.isFloating)
             return;
         const selector = root._windowSelector(id);
-        if (Hyprland.usingLua)
-            Hyprland.dispatch("hl.dsp.window.float({ window = " + root._luaString(selector) + ", action = \"set\" })");
-        else
-            Hyprland.dispatch("setfloating " + selector);
+        Hyprland.dispatch("hl.dsp.window.float({ window = " + root._luaString(selector) + ", action = \"set\" })");
     }
 
     // Parking (M37), the primitive omarchy's own Quake console is built on
@@ -369,10 +345,7 @@ Scope {
     }
 
     function _toggleSpecial() {
-        if (Hyprland.usingLua)
-            Hyprland.dispatch("hl.dsp.workspace.toggle_special(" + root._luaString("formalshell-console") + ")");
-        else
-            Hyprland.dispatch("togglespecialworkspace formalshell-console");
+        Hyprland.dispatch("hl.dsp.workspace.toggle_special(" + root._luaString("formalshell-console") + ")");
         Hyprland.refreshMonitors();
     }
 
@@ -382,11 +355,8 @@ Scope {
         if (win && Number(win.workspaceId) < 0)
             return;
         const selector = root._windowSelector(id);
-        if (Hyprland.usingLua)
-            Hyprland.dispatch("hl.dsp.window.move({ window = " + root._luaString(selector)
-                + ", workspace = " + root._luaString(root._parkWorkspace) + ", follow = false })");
-        else
-            Hyprland.dispatch("movetoworkspacesilent " + root._parkWorkspace + "," + selector);
+        Hyprland.dispatch("hl.dsp.window.move({ window = " + root._luaString(selector)
+            + ", workspace = " + root._luaString(root._parkWorkspace) + ", follow = false })");
     }
 
     function parkWindow(id) {
@@ -420,22 +390,18 @@ Scope {
         const h = Math.max(1, Math.round(height));
         const px = Math.round(x);
         const py = Math.round(y);
-        if (Hyprland.usingLua) {
-            Hyprland.dispatch("hl.dsp.window.resize({ window = " + root._luaString(selector) + ", x = " + w + ", y = " + h + " })");
-            Hyprland.dispatch("hl.dsp.window.move({ window = " + root._luaString(selector) + ", x = " + px + ", y = " + py + " })");
-        } else {
-            Hyprland.dispatch("resizewindowpixel exact " + w + " " + h + "," + selector);
-            Hyprland.dispatch("movewindowpixel exact " + px + " " + py + "," + selector);
-        }
+        Hyprland.dispatch("hl.dsp.window.resize({ window = " + root._luaString(selector) + ", x = " + w + ", y = " + h + " })");
+        Hyprland.dispatch("hl.dsp.window.move({ window = " + root._luaString(selector) + ", x = " + px + ", y = " + py + " })");
     }
 
     readonly property bool outputConfigAvailable: true
     readonly property bool mirrorSupported: true
 
-    // Output configuration goes through `hyprctl keyword monitor` rather than
-    // Hyprland.dispatch(): monitor layout is a config keyword, not a
+    // Output configuration goes through `hyprctl eval 'hl.monitor{...}'`
+    // rather than Hyprland.dispatch(): monitor layout is a config call, not a
     // dispatcher, and Quickshell exposes only dispatch() plus the request
     // socket's path (qml.hpp:52 there), makeRequest() itself is C++-private.
+    // `hyprctl keyword` is refused under a Lua config ("Use eval").
     // hyprctl is guaranteed present wherever HYPRLAND_INSTANCE_SIGNATURE is
     // set, and that env guard matters: this backend is instantiated
     // unconditionally, so without it a session that is not Hyprland would
@@ -446,65 +412,48 @@ Scope {
         outputsProc.running = true;
     }
 
-    // Output names are plain strings on the wire and the `monitor` keyword
-    // takes the name verbatim, so none of the requests
-    // below carry any id conversion, unlike the window selectors above.
     function setOutputEnabled(name, enabled) {
-        // Re-enabling deliberately re-derives the mode, position and scale
-        // (`preferred,auto,auto`) instead of restating the row's own: a
-        // disabled monitor reports a zero mode, so there is nothing truthful
-        // left to restate.
-        root._keyword(enabled ? name + ",preferred,auto,auto" : name + ",disable");
+        root._eval(Outputs.hyprlandEnabledLua(name, enabled));
     }
 
     function setOutputScale(name, scale) {
         var row = Outputs.findOutput(root.outputs, name);
         if (!row)
             return;
-        root._keyword(Outputs.hyprlandMonitorArg(row, { scale: scale }));
+        root._eval(Outputs.hyprlandRuleLua(Outputs.hyprlandMonitorRule(row, { scale: scale })));
     }
 
     function setOutputMirror(name, sourceName) {
         var row = Outputs.findOutput(root.outputs, name);
         if (!row)
             return;
-        root._keyword(Outputs.hyprlandMonitorArg(row, { mirrorOf: sourceName }));
+        root._eval(Outputs.hyprlandRuleLua(Outputs.hyprlandMonitorRule(row, { mirrorOf: sourceName })));
     }
 
-    // `keyword` is refused under a Lua config ("Use eval"), and `eval` under a
-    // hyprlang one, so a colour change picks by Hyprland.usingLua.
     function setOutputColor(name, color) {
         var row = Outputs.findOutput(root.outputs, name);
         if (!row || !row.enabled)
             return;
-        var rule = Outputs.hyprlandColorRule(row, color);
-        if (Hyprland.usingLua)
-            root._run(["hyprctl", "eval", Outputs.hyprlandRuleLua(rule)]);
-        else
-            root._keyword(Outputs.hyprlandRuleArg(rule));
+        root._eval(Outputs.hyprlandRuleLua(Outputs.hyprlandColorRule(row, color)));
     }
 
-    // MIRROR fires one keyword per mirrored output at once, so these queue:
+    // MIRROR fires one call per mirrored output at once, so these queue:
     // reassigning a Process's command while it is still running would drop
     // the in-flight invocation on the floor, silently losing a user action.
-    property var _keywordQueue: []
+    property var _evalQueue: []
 
-    function _keyword(monitorArg) {
-        root._run(["hyprctl", "keyword", "monitor", monitorArg]);
+    function _eval(code) {
+        root._evalQueue = root._evalQueue.concat([code]);
+        root._drainEvals();
     }
 
-    function _run(argv) {
-        root._keywordQueue = root._keywordQueue.concat([argv]);
-        root._drainKeywords();
-    }
-
-    function _drainKeywords() {
-        if (keywordProc.running || root._keywordQueue.length === 0)
+    function _drainEvals() {
+        if (evalProc.running || root._evalQueue.length === 0)
             return;
-        var next = root._keywordQueue[0];
-        root._keywordQueue = root._keywordQueue.slice(1);
-        keywordProc.command = next;
-        keywordProc.running = true;
+        var next = root._evalQueue[0];
+        root._evalQueue = root._evalQueue.slice(1);
+        evalProc.command = ["hyprctl", "eval", next];
+        evalProc.running = true;
     }
 
     Process {
@@ -528,14 +477,14 @@ Scope {
         }
     }
 
-    // Hyprland applies a monitor keyword before hyprctl exits, so no settling
+    // Hyprland applies a monitor rule before hyprctl exits, so no settling
     // delay is needed, but the re-read waits until the whole queue has
     // drained, so a mirror of three outputs reports once, not once per leg.
     Process {
-        id: keywordProc
+        id: evalProc
         onExited: {
-            if (root._keywordQueue.length > 0)
-                root._drainKeywords();
+            if (root._evalQueue.length > 0)
+                root._drainEvals();
             else
                 root.refreshOutputs();
         }

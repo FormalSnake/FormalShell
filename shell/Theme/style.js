@@ -48,7 +48,7 @@
 // of the names wingpanel's band paints take.
 //
 // `window` is the one role nothing in the shell draws. Hyprland does, off
-// the variables ThemeEngine publishes into formalshell-chrome.conf
+// the table ThemeEngine publishes into formalshell-chrome.lua
 // (chrome.js, M60 P7), so it carries a `shadow` the compositor can render
 // rather than the layer list a Box would: `{ enabled, range, renderPower,
 // offset, color, alpha }`, and its `inactive` state is read for the colour

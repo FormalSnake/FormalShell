@@ -581,8 +581,8 @@ var STYLE = {
         },
 
         // The window itself, which the shell does not draw: Hyprland does,
-        // off the variables ThemeEngine publishes into
-        // formalshell-chrome.conf (chrome.js, M60 P7). elementary's focused
+        // off the table ThemeEngine publishes into
+        // formalshell-chrome.lua (chrome.js, M60 P7). elementary's focused
         // window is a 1px `borders` frame over `shadow(4)` and a backdrop
         // one drops to `shadow(2)`, and what a compositor can take of that
         // is one cast: the range, the power and the offset below are the

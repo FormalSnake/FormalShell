@@ -206,7 +206,7 @@ call panel close
 sample d-close
 call debug motionScale 100
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 # One pixel out of a frame, as six hex digits.

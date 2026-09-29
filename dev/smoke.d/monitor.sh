@@ -64,7 +64,7 @@ sleep 3
 "$grim_bin" "$monitor_view_png" > /dev/null 2>&1
 touch "$monitor_done_path"
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_monitor_assert() {

@@ -169,6 +169,11 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   own resting box on at least one frame (the spatial curve's overshoot and
   the velocity deform on top of it) and back on it exactly three clocks
   later, the springs unwound.
+- `display.sh` `--display`: `display scale|mirror|enable` reaching the
+  running compositor as `hyprctl eval 'hl.monitor{...}'` calls, each read
+  back off `hyprctl monitors all -j`: the rig's output at scale 1.5, then a
+  headless second output created for the purpose mirroring it, unmirrored,
+  disabled and enabled again, removed before the panel frame is taken.
 - `dump.sh` `--dump`: the `debug` target's whole state dump, saved as the
   run's JSON sidecar and read by other legs for what the shell resolved.
 - `emoji.sh` `--emoji`: the launcher's emoji route by search and by order:
@@ -703,6 +708,10 @@ behavior on hosts where a real owner exists.
   `shell/Compositor/BackendBase.qml` stays as the contract every surface is
   written against, so a second backend would be a new file rather than a
   sweep.
+- Lua (`hyprland.lua`) is the only Hyprland config format (owner,
+  2026-09-29). Runtime changes go through `hyprctl eval` with the `hl.*` API,
+  never `hyprctl keyword`, and nothing the shell or the nix module writes is
+  hyprlang. The smoke rig boots from a Lua config too.
 - ⚠️ Quickshell percentage/fraction-shaped properties are 0..1, not 0..100
   (`UPowerDevice.percentage`, `WifiNetwork.signalStrength` — both confirmed
   from C++ source: `src/network/wifi.hpp:22`, `src/network/nm/network.cpp:260`).

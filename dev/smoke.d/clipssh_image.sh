@@ -97,7 +97,7 @@ sleep 2
 "$qs_bin" ipc -p "$shell_path" call menu activateAlternate 0 > "$clipssh_image_alt_reply_path" 2>&1
 sleep 5
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_clipssh_image_assert() {

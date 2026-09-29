@@ -7,7 +7,7 @@ import qs.Core
 // surface takes the keyboard while it is open but never a modifier, so
 // Alt+Tab, Alt+Shift+Tab and the commit on the modifier's release are the
 // compositor's own binds calling in here
-// (docs/examples/hyprland/formalshell.conf).
+// (docs/examples/hyprland/formalshell.lua).
 //
 // `switcher.enabled: false` never instantiates the surface (shell.qml's
 // Loader), and this target says so instead of accepting a call that would

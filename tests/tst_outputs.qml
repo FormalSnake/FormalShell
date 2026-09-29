@@ -206,6 +206,16 @@ TestCase {
         compare(rows.length, 0);
     }
 
+    // Hyprland 0.56 prints the mirrored monitor's numeric id, not its name.
+    function test_parse_hyprland_resolves_a_mirror_id_to_the_name() {
+        var rows = Outputs.parseHyprlandOutputs(JSON.stringify([
+            { id: 0, name: "eDP-1", width: 1920, height: 1080, refreshRate: 60, scale: 1, disabled: false, mirrorOf: "none" },
+            { id: 1, name: "DP-1", width: 1920, height: 1080, refreshRate: 60, scale: 1, disabled: false, mirrorOf: "0" }
+        ]));
+        compare(Outputs.findOutput(rows, "DP-1").mirrorOf, "eDP-1");
+        compare(Outputs.findOutput(rows, "eDP-1").mirrorOf, "");
+    }
+
     function test_parse_hyprland_malformed_json() {
         compare(Outputs.parseHyprlandOutputs("not json{{{").length, 0);
     }
@@ -214,32 +224,54 @@ TestCase {
         compare(Outputs.parseHyprlandOutputs(JSON.stringify({ name: "eDP-1" })).length, 0);
     }
 
-    // hyprlandMonitorArg
+    // hyprlandMonitorRule
 
-    function test_hyprland_arg_restates_the_row_and_applies_the_scale() {
-        var arg = Outputs.hyprlandMonitorArg(_row({ name: "DP-1", width: 3840, height: 2160, refresh: 60 }), { scale: 2 });
-        compare(arg, "DP-1,3840x2160@60,auto,2");
+    function _lua(row, overrides) {
+        return Outputs.hyprlandRuleLua(Outputs.hyprlandMonitorRule(row, overrides));
+    }
+
+    function test_hyprland_rule_restates_the_row_and_applies_the_scale() {
+        var rule = Outputs.hyprlandMonitorRule(_row({ name: "DP-1", width: 3840, height: 2160, refresh: 60 }), { scale: 2 });
+        compare(rule.output, "DP-1");
+        compare(rule.mode, "3840x2160@60");
+        compare(rule.position, "auto");
+        compare(rule.scale, "2");
+        compare(rule.mirror, "");
     }
 
     // A scale change must not silently drop an active mirror, and a mirror
     // change must not silently reset the scale.
-    function test_hyprland_arg_carries_an_existing_mirror_through_a_scale_change() {
-        var arg = Outputs.hyprlandMonitorArg(_row({ name: "DP-1", mirrorOf: "eDP-1" }), { scale: 2 });
-        compare(arg, "DP-1,1920x1080@60,auto,2,mirror,eDP-1");
+    function test_hyprland_rule_carries_an_existing_mirror_through_a_scale_change() {
+        var rule = Outputs.hyprlandMonitorRule(_row({ name: "DP-1", mirrorOf: "eDP-1" }), { scale: 2 });
+        compare(rule.scale, "2");
+        compare(rule.mirror, "eDP-1");
     }
 
-    function test_hyprland_arg_keeps_the_scale_through_a_mirror_change() {
-        var arg = Outputs.hyprlandMonitorArg(_row({ name: "DP-1", scale: 1.5 }), { mirrorOf: "eDP-1" });
-        compare(arg, "DP-1,1920x1080@60,auto,1.5,mirror,eDP-1");
+    function test_hyprland_rule_keeps_the_scale_through_a_mirror_change() {
+        var rule = Outputs.hyprlandMonitorRule(_row({ name: "DP-1", scale: 1.5 }), { mirrorOf: "eDP-1" });
+        compare(rule.scale, "1.5");
+        compare(rule.mirror, "eDP-1");
     }
 
-    function test_hyprland_arg_clears_a_mirror_with_an_empty_source() {
-        var arg = Outputs.hyprlandMonitorArg(_row({ name: "DP-1", mirrorOf: "eDP-1" }), { mirrorOf: "" });
-        compare(arg, "DP-1,1920x1080@60,auto,1");
+    function test_hyprland_rule_clears_a_mirror_with_an_empty_source() {
+        var rule = Outputs.hyprlandMonitorRule(_row({ name: "DP-1", mirrorOf: "eDP-1" }), { mirrorOf: "" });
+        compare(rule.mirror, "");
     }
 
-    function test_hyprland_arg_falls_back_to_preferred_without_a_mode() {
-        var arg = Outputs.hyprlandMonitorArg(_row({ name: "DP-1", width: 0, height: 0, refresh: 0 }), {});
-        compare(arg, "DP-1,preferred,auto,1");
+    function test_hyprland_rule_falls_back_to_preferred_without_a_mode() {
+        var rule = Outputs.hyprlandMonitorRule(_row({ name: "DP-1", width: 0, height: 0, refresh: 0 }), {});
+        compare(rule.mode, "preferred");
+    }
+
+    function test_hyprland_rule_is_an_hl_monitor_call() {
+        compare(_lua(_row({ name: "DP-1", width: 3840, height: 2160, refresh: 60 }), { scale: 2 }),
+            "hl.monitor({ output = \"DP-1\", mode = \"3840x2160@60\", position = \"auto\", scale = 2, transform = 0, vrr = 0, bitdepth = 8, cm = \"srgb\", sdrbrightness = 1, sdrsaturation = 1, mirror = \"\" })");
+        compare(_lua(_row({ name: "DP-1", mirrorOf: "eDP-1" }), { scale: 2 }).indexOf("mirror = \"eDP-1\" })") > 0, true);
+    }
+
+    function test_enable_and_disable_lua() {
+        compare(Outputs.hyprlandEnabledLua("DP-1", false), "hl.monitor({ output = \"DP-1\", disabled = true })");
+        compare(Outputs.hyprlandEnabledLua("DP-1", true),
+            "hl.monitor({ output = \"DP-1\", disabled = false, mode = \"preferred\", position = \"auto\", scale = \"auto\" })");
     }
 }

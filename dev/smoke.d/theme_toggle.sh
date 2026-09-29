@@ -70,7 +70,7 @@ sleep $gap
 "$qs_bin" ipc -p "$shell_path" call theme status > "$theme_toggle_status2_path" 2>&1
 $dump_post
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_theme_toggle_assert() {

@@ -20,7 +20,7 @@ TestCase {
         xhr.onreadystatechange = function () {
             if (xhr.readyState === XMLHttpRequest.DONE) done = true;
         };
-        xhr.open("GET", Qt.resolvedUrl("../docs/examples/hyprland/formalshell.conf"));
+        xhr.open("GET", Qt.resolvedUrl("../docs/examples/hyprland/formalshell.lua"));
         xhr.send();
         tryVerify(function () { return done; }, 5000);
         conf = xhr.responseText;
@@ -30,29 +30,17 @@ TestCase {
         return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
     }
 
-    // `bind = SUPER CTRL, E, exec, $fs menu summon emoji` -> emoji:
+    // `fs_bind("SUPER + CTRL + E", "menu summon emoji")` -> emoji:
     // "Super+Ctrl+E". Only the summon binds matter; `menu toggle` reaches no
     // route in particular.
     function _confChords() {
         var out = {};
         var lines = conf.split("\n");
         for (var i = 0; i < lines.length; i++) {
-            var line = lines[i].trim();
-            if (line.indexOf("bind") !== 0)
+            var m = lines[i].trim().match(/^fs_bind\("([^"]+)",\s*"menu summon ([a-z][a-z.]*)"\)/);
+            if (!m)
                 continue;
-            var eq = line.indexOf("=");
-            if (eq < 0)
-                continue;
-            var fields = line.slice(eq + 1).split(",");
-            if (fields.length < 4)
-                continue;
-            var route = fields.slice(3).join(",").trim().match(/menu summon ([a-z][a-z.]*)$/);
-            if (!route)
-                continue;
-            var mods = fields[0].trim();
-            var parts = mods === "" ? [] : mods.split(/\s+/);
-            parts.push(fields[1].trim());
-            out[route[1]] = parts.map(_titleCase).join("+");
+            out[m[2]] = m[1].split(" + ").map(_titleCase).join("+");
         }
         return out;
     }

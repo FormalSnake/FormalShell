@@ -60,7 +60,7 @@ lists), never in the surface, and a row never insets itself.
 **Translucency and blur**: the bar strip, panels, the launcher card and the
 polkit consent card paint `Theme.surface(Theme.color.card)`, the card colour
 at `theme.surfaceOpacity` (0.85). Hyprland blurs what is behind them
-(`layerrule = blur` + `ignore_alpha` on `formalshell:bar`, `formalshell:panel`,
+(`hl.layer_rule` `blur` + `ignore_alpha` on `formalshell:bar`, `formalshell:panel`,
 `formalshell:menu`, `formalshell:polkit`, and the rest, in the example
 config); the shell itself never blurs outside the lyrics pane's own depth
 of field and sung-chunk glow (owner, 2026-09-17, gated behind
@@ -487,7 +487,7 @@ active-window icons, notification images, album art) through `Picture`'s
 retro pass, paints a `Track` groove as `DitherFill`, and is the default
 for `wallpaper.dither` and `lock.dither`; tray icons, the picker grid and
 clipboard thumbnails stay true colour. Hyprland follows through
-`formalshell-chrome.conf` (`$rounding`, `$blur`, and the `window` role's own
+`formalshell-chrome.lua` (`rounding`, `blur`, and the `window` role's own
 gaps, frame and cast), published beside the colours. A surface reads
 `Theme.radius*`, `Theme.fontFamilySans`, `Theme.iconSet`, `Theme.dither`
 and `Theme.pillRadius`, and never `Theme.preset`.
@@ -807,7 +807,7 @@ ring; the launcher shows it as the `accent` row. A panel opened by pointer
 hides the cursor until the first key, and a pointer moving the cursor takes
 the ring off it again (§1 "Ring"). `panel toggle <name>`, `panel toggleAt
 <n>` and `menu summon <route>` are the keybind entry points; the shipped
-Hyprland bindings are in `docs/examples/hyprland/formalshell.conf`.
+Hyprland bindings are in `docs/examples/hyprland/formalshell.lua`.
 
 ## 5. Never
 

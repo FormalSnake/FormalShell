@@ -201,7 +201,7 @@ done
 sleep 1
 "$grim_bin" "$lyrics_blur_off_png_path" > /dev/null 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 
   write_script "$kill_script" <<EOF
 #!/usr/bin/env bash

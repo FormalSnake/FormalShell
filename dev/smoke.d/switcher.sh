@@ -85,15 +85,15 @@ leg_switcher_drive() {
 sleep 4
 # Two more windows of the same app id as the base fixture's, spawned through
 # the compositor so they are tracked from the moment they map.
-"$hyprctl_bin" dispatch exec "$foot_bin --app-id=formalshell-smoke-iconic --title='formalshell smoke two' sh -c 'sleep 300'"
+"$hyprctl_bin" dispatch "hl.dsp.exec_cmd([==[$foot_bin --app-id=formalshell-smoke-iconic --title='formalshell smoke two' sh -c 'sleep 300']==])"
 sleep 2
-"$hyprctl_bin" dispatch exec "$foot_bin --app-id=formalshell-smoke-iconic --title='formalshell smoke three' sh -c 'sleep 300'"
+"$hyprctl_bin" dispatch "hl.dsp.exec_cmd([==[$foot_bin --app-id=formalshell-smoke-iconic --title='formalshell smoke three' sh -c 'sleep 300']==])"
 sleep 3
 # And one the card must not hold, moved off silently so the monitor stays on
 # the workspace the other three are on.
-"$hyprctl_bin" dispatch exec "$foot_bin --app-id=formalshell-smoke-elsewhere --title='formalshell smoke elsewhere' sh -c 'sleep 300'"
+"$hyprctl_bin" dispatch "hl.dsp.exec_cmd([==[$foot_bin --app-id=formalshell-smoke-elsewhere --title='formalshell smoke elsewhere' sh -c 'sleep 300']==])"
 sleep 3
-"$hyprctl_bin" dispatch movetoworkspacesilent "2,class:formalshell-smoke-elsewhere"
+"$hyprctl_bin" dispatch "hl.dsp.window.move({ workspace = 2, follow = false, window = 'class:formalshell-smoke-elsewhere' })"
 sleep 3
 "$hyprctl_bin" -j clients > "$switcher_clients_json" 2>&1
 
@@ -118,7 +118,7 @@ sleep 3
 "$hyprctl_bin" -j layers > "$switcher_layers_closed" 2>&1
 "$hyprctl_bin" -j activewindow > "$switcher_active_json" 2>&1
 EOS
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 # One patch of a frame as its own mean colour, as a plain string: two crops of

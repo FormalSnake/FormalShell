@@ -68,7 +68,7 @@ sleep 3
 cat "$iso_home/.local/state/formalshell/state.json" > "$emoji_state_path" 2>&1
 "$qs_bin" ipc -p "$shell_path" call debug query ':e cry' > "$emoji_after_path" 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 # The glyph of the row at `$2`, off `debug query`'s own JSON: the rows carry

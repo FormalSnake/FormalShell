@@ -123,20 +123,18 @@ EOS
   # same answer either way. Nothing else about the bind table changes: the
   # modifier mask, the shadowing and the release path are what this leg
   # reads, and none of them go near keysym resolution.
-  echo "input {"
-  echo "    resolve_binds_by_sym = true"
-  echo "}"
-  # Real binds in this session's real hyprland.conf, the shipped example's
+  echo "hl.config({ input = { resolve_binds_by_sym = true } })"
+  # Real binds in this session's real hyprland.lua, the shipped example's
   # three plus the probes, so what is exercised is hyprland's own bind table
   # rather than anything this rig invented.
-  echo "bind = ALT, Tab, exec, $qs_bin ipc -p $shell_path call switcher next"
-  echo "bind = ALT SHIFT, Tab, exec, $qs_bin ipc -p $shell_path call switcher prev"
-  echo "bindrt = ALT, Alt_L, exec, $qs_bin ipc -p $shell_path call switcher commit"
-  echo "bindr = ALT, Alt_L, exec, bash $probe plain"
-  echo "bindrt = , Alt_L, exec, bash $probe nomods"
+  echo "hl.bind(\"ALT + Tab\", hl.dsp.exec_cmd([==[$qs_bin ipc -p $shell_path call switcher next]==]))"
+  echo "hl.bind(\"ALT + SHIFT + Tab\", hl.dsp.exec_cmd([==[$qs_bin ipc -p $shell_path call switcher prev]==]))"
+  echo "hl.bind(\"ALT + Alt_L\", hl.dsp.exec_cmd([==[$qs_bin ipc -p $shell_path call switcher commit]==]), { release = true, transparent = true })"
+  echo "hl.bind(\"ALT + Alt_L\", hl.dsp.exec_cmd([==[bash $probe plain]==]), { release = true })"
+  echo "hl.bind(\"Alt_L\", hl.dsp.exec_cmd([==[bash $probe nomods]==]), { release = true, transparent = true })"
   # An ordinary key, as the floor under every claim below: a release bind on
   # something that is not a modifier, fired by the same wtype.
-  echo "bindr = , F13, exec, bash $probe f13"
+  echo "hl.bind(\"F13\", hl.dsp.exec_cmd([==[bash $probe f13]==]), { release = true })"
   write_script "$script" <<EOS
 #!/usr/bin/env bash
 mkdir -p "$switcher_keys_probe_dir"
@@ -144,15 +142,15 @@ sleep 4
 "$hyprctl_bin" binds > "$switcher_keys_binds_path" 2>&1
 # Two more windows of the same app id as the base fixture's, spawned through
 # the compositor so they are tracked from the moment they map.
-"$hyprctl_bin" dispatch exec "$foot_bin --app-id=formalshell-smoke-iconic --title='formalshell smoke two' sh -c 'sleep 300'"
+"$hyprctl_bin" dispatch "hl.dsp.exec_cmd([==[$foot_bin --app-id=formalshell-smoke-iconic --title='formalshell smoke two' sh -c 'sleep 300']==])"
 sleep 2
-"$hyprctl_bin" dispatch exec "$foot_bin --app-id=formalshell-smoke-iconic --title='formalshell smoke three' sh -c 'sleep 300'"
+"$hyprctl_bin" dispatch "hl.dsp.exec_cmd([==[$foot_bin --app-id=formalshell-smoke-iconic --title='formalshell smoke three' sh -c 'sleep 300']==])"
 sleep 3
 # And one the card must not hold, moved off silently so the monitor stays on
 # the workspace the other three are on.
-"$hyprctl_bin" dispatch exec "$foot_bin --app-id=formalshell-smoke-elsewhere --title='formalshell smoke elsewhere' sh -c 'sleep 300'"
+"$hyprctl_bin" dispatch "hl.dsp.exec_cmd([==[$foot_bin --app-id=formalshell-smoke-elsewhere --title='formalshell smoke elsewhere' sh -c 'sleep 300']==])"
 sleep 3
-"$hyprctl_bin" dispatch movetoworkspacesilent "2,class:formalshell-smoke-elsewhere"
+"$hyprctl_bin" dispatch "hl.dsp.window.move({ workspace = 2, follow = false, window = 'class:formalshell-smoke-elsewhere' })"
 sleep 3
 "$hyprctl_bin" -j clients > "$switcher_keys_clients_json" 2>&1
 
@@ -197,7 +195,7 @@ sleep 1
 "$hyprctl_bin" -j activewindow > "$switcher_keys_fast_3_json" 2>&1
 "$qs_bin" ipc -p "$shell_path" call switcher state > "$switcher_keys_fast_state_json" 2>&1
 EOS
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 _switcher_keys_layers() {

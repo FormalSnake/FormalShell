@@ -298,9 +298,9 @@ var STYLE = {
         },
 
         // The one role the shell does not draw: Hyprland does, off
-        // formalshell-chrome.conf (chrome.js). The frame is the wallpaper's
+        // formalshell-chrome.lua (chrome.js). The frame is the wallpaper's
         // own colour at the compositor's default width, which is what
-        // docs/examples/hyprland/formalshell.conf has hung on
+        // docs/examples/hyprland/formalshell.lua has hung on
         // `col.active_border` since it shipped, so a host on this table
         // sees the window chrome it already had.
         "window": {

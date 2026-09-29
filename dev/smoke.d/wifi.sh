@@ -148,7 +148,7 @@ while [ "\$SECONDS" -lt 15 ]; do
   sleep 1
 done
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_wifi_assert() {

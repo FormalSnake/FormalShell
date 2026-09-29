@@ -65,24 +65,32 @@ Every example from here on is written against that alias: `fs menu summon`,
 
 **Binds** need the whole thing spelled out:
 
-```conf
-bind = SUPER, Space, exec, qs ipc --any-display -p <store-path>/share/formalshell call menu summon
+```lua
+hl.bind("SUPER + Space", hl.dsp.exec_cmd("qs ipc --any-display -p <store-path>/share/formalshell call menu summon"))
 ```
+
+Hyprland is configured in Lua (`~/.config/hypr/hyprland.lua`) and nothing
+here ships in hyprlang. The shell changes the running compositor through
+`hyprctl eval` and never `hyprctl keyword`.
 
 ## Keybinds
 
 Every default bind ships as
-[`docs/examples/hyprland/formalshell.conf`](examples/hyprland/formalshell.conf),
-next to the blur layer rules and the `source` line for the colours file. A
+[`docs/examples/hyprland/formalshell.lua`](examples/hyprland/formalshell.lua),
+next to the blur layer rules and the read of the colours and chrome files. A
 nix install carries the same file at
-`<store-path>/share/formalshell/examples/hyprland/formalshell.conf`. Copy it
-beside your own config, fill in `<store-path>` once at the `$fs` line, and
-source it:
+`<store-path>/share/formalshell/examples/hyprland/formalshell.lua`. Copy it
+beside your own config, fill in `<store-path>` once at the `fs_call` line, and
+`dofile` it:
 
-```conf
-# ~/.config/hypr/hyprland.conf
-source = ~/.config/hypr/formalshell.conf
+```lua
+-- ~/.config/hypr/hyprland.lua
+dofile(os.getenv("HOME") .. "/.config/hypr/formalshell.lua")
 ```
+
+Each bind carries a description, since a Lua bind shows up in `hyprctl binds`
+as an anonymous function and the launcher's keybinds route prints that
+description as the bind's action.
 
 Fifty binds in three groups. Utilities:
 
@@ -518,13 +526,12 @@ Colors come out of your wallpaper, with no restart anywhere in the loop:
    Runs are serialized, and a wallpaper change mid-run supersedes the
    pending one rather than killing the one in flight.
 3. The output is published atomically to
-   `$XDG_STATE_HOME/formalshell/theme.json`,
-   `$XDG_CONFIG_HOME/hypr/formalshell-colors.conf` and
+   `$XDG_STATE_HOME/formalshell/theme.json` and
    `$XDG_CONFIG_HOME/hypr/formalshell-colors.lua`.
 4. The shell's color singleton watches `theme.json`, so every token
-   recolors on the next paint. Hyprland re-reads a `source`d colours file
-   itself; for the Lua one the shell runs `hyprctl reload` once per publish,
-   and only when `HYPRLAND_INSTANCE_SIGNATURE` is set.
+   recolors on the next paint. The shell runs `hyprctl reload` once per
+   publish so Hyprland re-reads the colours file, and only when
+   `HYPRLAND_INSTANCE_SIGNATURE` is set.
 
 With no wallpaper set, `theme.json` is written from the bundled shadcn zinc
 palette instead, in the variant matching the current mode, so
@@ -642,40 +649,9 @@ shipped default, and a pywal template ships alongside it
 its output at `$XDG_STATE_HOME/formalshell/theme.json`. The file watch picks
 up any writer.
 
-`formalshell-colors.conf` is the same palette in hyprlang, written to your
-own Hyprland config directory so window borders track the wallpaper:
-
-```conf
-$primary = rgb(9ecafc)
-$primaryForeground = rgb(00325a)
-$background = rgb(101418)
-$foreground = rgb(e0e2e8)
-$border = rgb(42474e)
-$destructive = rgb(ffb4ab)
-$warning = rgb(bdc9d3)
-```
-
-Source it once, above anything that uses the variables. Hyprland watches
-every file it sourced, so each rewrite reloads the borders on its own and
-nothing calls back into the compositor:
-
-```conf
-# ~/.config/hypr/hyprland.conf
-source = ~/.config/hypr/formalshell-colors.conf
-
-general {
-    col.active_border = $primary
-    col.inactive_border = $border
-}
-```
-
-The file exists from the shell's first run whether or not a wallpaper is
-set: with none, the bundled zinc palette renders the same seven variables,
-so the `source` line never points at nothing.
-
-Hyprland 0.55 replaced hyprlang with Lua, and a `hyprland.lua` cannot
-`source` hyprlang, so the same seven roles also ship as
-`formalshell-colors.lua`, a table a `dofile` returns:
+`formalshell-colors.lua` is the same palette as a Lua table, written to your
+own Hyprland config directory so window borders track the wallpaper. It is a
+table a `dofile` returns:
 
 ```lua
 -- ~/.config/hypr/hyprland.lua
@@ -692,13 +668,16 @@ hl.config({
 })
 ```
 
-Keep the literal table as a fallback: the file is absent until the shell's
-first run, and `pcall` is what stops that from killing the rest of the
-config. A `dofile`d file is not a `source`d one, so Hyprland does not watch
-it; the shell runs `hyprctl reload` itself after every publish, which is
-what re-runs the config and picks the new colours up. That call only fires
-when `HYPRLAND_INSTANCE_SIGNATURE` is set, so nothing spawns a doomed
-`hyprctl` under niri.
+The table carries seven roles: `primary`, `primaryForeground`, `background`,
+`foreground`, `border`, `destructive` and `warning`. The file exists from the
+shell's first run whether or not a wallpaper is set: with none, the bundled
+zinc palette renders the same seven keys. Keep the literal table as a
+fallback anyway, and `pcall` is what stops a missing file from killing the
+rest of the config. Hyprland does not watch a `dofile`d file, so the shell
+runs `hyprctl reload` itself after every publish, which re-runs the config
+and picks the new colours up. That call only fires when
+`HYPRLAND_INSTANCE_SIGNATURE` is set, so nothing spawns a doomed `hyprctl`
+outside Hyprland.
 
 ### Presets
 
@@ -773,8 +752,8 @@ mono alias for both).
 `theme.surfaceOpacity` (0 to 1, default 0.85) is the alpha of the bar
 cells, the panels and the launcher card. The shell blurs nothing itself:
 that alpha is what lets a compositor blur read through. On Hyprland, copy
-this repo's `docs/examples/hyprland/formalshell.conf` next to your own
-config and source it: it turns the blur on and points it at the
+this repo's `docs/examples/hyprland/formalshell.lua` next to your own
+config and `dofile` it: it turns the blur on and points it at the
 `formalshell:bar`, `formalshell:panel` and `formalshell:menu` layer
 namespaces, and it carries the whole default bind set (fill in the
 `<store-path>` at the top of the file first). Under a compositor with blur
@@ -787,11 +766,6 @@ or below 0.6 unblurred: the scrim darkens the desktop and the card over it
 keeps its blur. A `surfaceOpacity` under 0.6 puts the card under that mark
 too and it loses its blur on those three surfaces; lower the scrim's own
 namespaces' `ignore_alpha` to match if you want it back.
-
-```conf
-# ~/.config/hypr/hyprland.conf
-source = ~/.config/hypr/formalshell.conf
-```
 
 The shell asks fontconfig for `sans-serif` and `monospace` and never names
 a family, so the pair of faces is yours to pick. Geist Sans and Geist Mono
@@ -814,53 +788,52 @@ fonts.fontconfig.defaultFonts.monospace = [ "Geist Mono" ];
 
 ### Hyprland rounding, blur and window chrome
 
-The shell publishes `formalshell-chrome.conf` next to the colours file,
-carrying `$rounding` (the value of `theme.radius`), `$blur` (`theme.blur`)
-and the window gaps, frame and shadow the preset's theme table declares
-(`$gapsIn`, `$gapsOut`, `$borderSize`, `$borderColor`, `$shadow`,
-`$shadowRange`, `$shadowPower`, `$shadowOffset`, `$shadowColor`,
-`$shadowInactiveColor`), rewritten whenever any of them changes. The example
-config sources it and reads all of them, so window corners, the blur behind
-the shell's surfaces and the chrome round every window follow the preset:
-`metamorphosis` and `retro` cast no shadow and hang
-the wallpaper's `$primary` on the focused window, `pantheon` casts
-elementary's own (range 24, offset `0 6`) under a quiet 1px `$border` frame.
-The gaps follow the same rule: 4 and 8 under `metamorphosis` and `retro`, 4 and 6
-under `pantheon`, which wears no screen frame and so has no band to leave
-room for.
+The shell publishes `formalshell-chrome.lua` next to the colours file, a
+table a `dofile` returns. It carries `rounding` (the value of `theme.radius`),
+`blur` (`theme.blur`) and the window gaps, frame and shadow the preset's
+theme table declares (`gapsIn`, `gapsOut`, `borderSize`, `borderColor`,
+`shadow`, `shadowRange`, `shadowPower`, `shadowOffset`, `shadowColor`,
+`shadowInactiveColor`), rewritten whenever any of them changes and reloaded
+the way the colours table is. The example config reads all of them, so window
+corners, the blur behind the shell's surfaces and the chrome round every
+window follow the preset: `metamorphosis` and `retro` cast no shadow and hang
+the wallpaper's `primary` on the focused window, `pantheon` casts
+elementary's own (range 24, offset `{ 0, 6 }`) under a quiet 1px `border`
+frame. The gaps follow the same rule: 4 and 8 under `metamorphosis` and
+`retro`, 4 and 6 under `pantheon`, which wears no screen frame and so has no
+band to leave room for.
 
-```conf
-# ~/.config/hypr/hyprland.conf
-source = ~/.config/hypr/formalshell-chrome.conf
+```lua
+-- ~/.config/hypr/hyprland.lua
+local colors = dofile(os.getenv("HOME") .. "/.config/hypr/formalshell-colors.lua")
+local chrome = dofile(os.getenv("HOME") .. "/.config/hypr/formalshell-chrome.lua")
 
-decoration {
-    rounding = $rounding
-    blur {
-        enabled = $blur
-    }
-    shadow {
-        enabled = $shadow
-        range = $shadowRange
-        render_power = $shadowPower
-        offset = $shadowOffset
-        color = $shadowColor
-        color_inactive = $shadowInactiveColor
-    }
-}
-
-general {
-    gaps_in = $gapsIn
-    gaps_out = $gapsOut
-    border_size = $borderSize
-    col.active_border = $borderColor
-}
+hl.config({
+  decoration = {
+    rounding = chrome.rounding,
+    blur = { enabled = chrome.blur },
+    shadow = {
+      enabled = chrome.shadow,
+      range = chrome.shadowRange,
+      render_power = chrome.shadowPower,
+      offset = chrome.shadowOffset,
+      color = colors[chrome.shadowColor] or chrome.shadowColor,
+      color_inactive = colors[chrome.shadowInactiveColor] or chrome.shadowInactiveColor,
+    },
+  },
+  general = {
+    gaps_in = chrome.gapsIn,
+    gaps_out = chrome.gapsOut,
+    border_size = chrome.borderSize,
+    col = { active_border = colors[chrome.borderColor] or chrome.borderColor },
+  },
+})
 ```
 
-`formalshell-chrome.lua` is the same values as a table for a `hyprland.lua`,
-published and reloaded the way the colours table is, one key per variable
-above. A colour there is either an `rgba(...)` literal or the name of a role
-in `formalshell-colors.lua`, since Lua has no variable to substitute, so
-`colors[c] or c` reads both.
+A colour there is either an `rgba(...)` literal or the name of a role in
+`formalshell-colors.lua`, so `colors[c] or c` reads both. The shipped example
+already does this, with fallbacks for a first run before either file exists.
+
 
 ### Dither
 
@@ -1117,7 +1090,7 @@ A row's right edge carries a hint in mono, where it has one: the chord that
 summons that route directly (`Super+Ctrl+E` on `Emoji`), or, for a route
 whose children are a listing rather than a handful of commands, how many
 rows it holds. The chords are the ones in
-[`docs/examples/hyprland/formalshell.conf`](examples/hyprland/formalshell.conf),
+[`docs/examples/hyprland/formalshell.lua`](examples/hyprland/formalshell.lua),
 not a read of your live bindings: they are what the shipped config binds, and
 a test fails the build if the two ever disagree. Rebind a route and the hint
 still names the shipped chord, so change both or drop the entry from
@@ -1586,7 +1559,7 @@ Right and Down walk the row, Shift+Tab, Left and Up walk it back, Enter
 commits, Escape cancels, and nothing else types anywhere. Holding a modifier
 is the compositor's job, so the shipped Hyprland example binds Alt+Tab to
 `switcher next`, Alt+Shift+Tab to `switcher prev` and the release of Alt to
-`switcher commit` (`docs/examples/hyprland/formalshell.conf`). A release bind
+`switcher commit` (`docs/examples/hyprland/formalshell.lua`). A release bind
 takes the modifier as a keysym (`Alt_L`), so it fires on every Alt release,
 open or not; a commit with nothing open is a no-op that says so. Where a
 release bind cannot be made to fire, Enter commits from the card itself.
@@ -1920,7 +1893,7 @@ no-op.
 skipping the ones that open no panel (tray, bell, indicators) and counting
 the ones a collapsed chevron is currently hiding, so with the default layout
 1 to 5 are power, audio, network, bluetooth and weather; past the end it
-answers `no panel at <n>`. `docs/examples/hyprland/formalshell.conf` binds
+answers `no panel at <n>`. `docs/examples/hyprland/formalshell.lua` binds
 1..9 to `SUPER+CTRL+1..9`.
 
 ```kdl
@@ -2296,8 +2269,8 @@ binds {
 }
 ```
 
-```conf
-bind = SUPER, plus, exec, qs ipc --any-display -p <store-path>/share/formalshell call console toggle
+```lua
+hl.bind("SUPER + plus", hl.dsp.exec_cmd("qs ipc --any-display -p <store-path>/share/formalshell call console toggle"))
 ```
 
 **Keep it out of your layout.** The shell spawns the terminal and then
@@ -2305,9 +2278,13 @@ floats it, so for the frames in between it is an ordinary new window and
 Hyprland tiles it into whatever you were looking at, reflowing twice. One
 rule per compositor has it map floating from the start. Neither is required.
 
-```conf
-windowrule = float, class:^(dev.formalshell.console)$
-windowrule = workspace special:formalshell-console silent, class:^(dev.formalshell.console)$
+```lua
+hl.window_rule({
+  name = "formalshell-console",
+  match = { class = "^(dev.formalshell.console)$" },
+  float = true,
+  workspace = "special:formalshell-console silent",
+})
 ```
 
 ```kdl
@@ -2745,6 +2722,19 @@ fs nightlight toggle
 fs nightlight status   # {"active":…,"temp":…,"lastError":…}
 ```
 
+### Display outputs
+
+The Display panel's scale slider, output switch and mirror control send a
+`hl.monitor{...}` call through `hyprctl eval`, restating the output's mode,
+transform, vrr and colour settings so only the changed field moves. The same
+three are available without the panel:
+
+```sh
+fs display scale eDP-1 1.5
+fs display mirror DP-1 eDP-1   # DP-1 shows eDP-1; an empty source clears it
+fs display enable DP-1 false
+```
+
 ### HDR
 
 The Display panel gets an `HDR` switch for each lit output whose EDID lists
@@ -2754,7 +2744,7 @@ under its name instead. On sets `cm = hdr`, `bitdepth = 10` and the SDR level
 below, restating the output's mode, position, scale, transform and vrr so
 nothing moves; off puts back the colour settings it found. The choice is
 kept in `state.json` and re-applied at shell start, on hotplug and after a
-config reload. Works under both hyprlang and Lua configs.
+config reload.
 
 ```jsonc
 // ~/.config/formalshell/settings.json

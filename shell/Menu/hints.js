@@ -5,13 +5,13 @@
 // route holds, or nothing at all.
 //
 // The chords are a table here rather than a parse of
-// docs/examples/hyprland/formalshell.conf at runtime: that file is an
+// docs/examples/hyprland/formalshell.lua at runtime: that file is an
 // EXAMPLE the reader copies and edits, so what it says is what the shipped
 // bindings are, not what any given session actually has bound. Reading a
 // user's live `hyprctl binds` instead would be honest about one session and
 // wrong about the row's identity (two chords can summon one route, a submap
 // can shadow one), and it would put a process behind a per-row property.
-// tests/tst_menu_hints.qml derives the same table from that conf and fails
+// tests/tst_menu_hints.qml derives the same table from that file and fails
 // when the two drift, which is what keeps this honest without a runtime
 // dependency.
 //

@@ -87,7 +87,7 @@ if [ -f "$visualizer_pid_path" ]; then
 fi
 EOF
   add_cleanup "bash $kill_script"
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_visualizer_assert() {

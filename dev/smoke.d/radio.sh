@@ -105,7 +105,7 @@ EOF
   add_cleanup "[ -s '$radio_module_path' ] && '$pactl_bin' unload-module \"\$(cat '$radio_module_path')\" 2>/dev/null || true"
   add_cleanup "kill \"\$(cat '$radio_leftover_pid_path')\" 2>/dev/null || true"
   add_cleanup "pkill -f 'listen 1 http://127.0.0.1:$radio_port' 2>/dev/null || true"
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_radio_assert() {

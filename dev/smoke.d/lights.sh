@@ -110,7 +110,7 @@ ipc source wallpaper > /dev/null 2>&1
 sleep 1.5
 st 6
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_lights_assert() {

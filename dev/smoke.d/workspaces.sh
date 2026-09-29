@@ -8,7 +8,7 @@
 # A second foot window is spawned on workspace 2 first, so the slot it
 # leaves has an icon of its own to fold away rather than only a label.
 #
-# `hyprctl dispatch workspace 1` then fires and the run takes a burst of
+# `hl.dsp.focus({ workspace = 1 })` then fires and the run takes a burst of
 # frames across the pill's own travel, plus a settled one three seconds on.
 # Every frame is cropped to the workspace cell alone, never the whole bar:
 # the switch changes the active-window title two cells over, so a wider crop
@@ -93,19 +93,19 @@ leg_workspaces_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 5
-"$hyprctl_bin" dispatch workspace 2 > "$workspaces_dispatch_path" 2>&1
+"$hyprctl_bin" dispatch "hl.dsp.focus({ workspace = 2 })" > "$workspaces_dispatch_path" 2>&1
 sleep 1
-"$hyprctl_bin" dispatch exec "$foot_bin --app-id=formalshell-smoke-workspace --title='formalshell workspace two' sh -c 'sleep 300'" >> "$workspaces_dispatch_path" 2>&1
+"$hyprctl_bin" dispatch "hl.dsp.exec_cmd([==[$foot_bin --app-id=formalshell-smoke-workspace --title='formalshell workspace two' sh -c 'sleep 300']==])" >> "$workspaces_dispatch_path" 2>&1
 sleep 3
 "$grim_bin" "$workspaces_two_path" > /dev/null 2>&1
-"$hyprctl_bin" dispatch workspace 1 >> "$workspaces_dispatch_path" 2>&1
+"$hyprctl_bin" dispatch "hl.dsp.focus({ workspace = 1 })" >> "$workspaces_dispatch_path" 2>&1
 $arm
 wait
 sleep 3
 "$grim_bin" "$workspaces_settled_path" > /dev/null 2>&1
 EOF
   add_cleanup "pkill -f formalshell-smoke-workspace 2>/dev/null || true"
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_workspaces_assert() {

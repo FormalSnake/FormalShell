@@ -102,7 +102,7 @@ sleep 4
 call notifications status > "$notify_emerge_status_path" 2>&1
 call debug motionScale 100 > /dev/null 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 # One box out of a saved frame, named after what it is looking at. -strip

@@ -234,7 +234,7 @@ sleep 14
 call network wifi true
 call debug motionScale 100
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 # One frame as per-row coverage over the closed output, top of the band down:

@@ -13,7 +13,7 @@
 # without a second flag.
 #
 # The same retheme also publishes the compositor's own palette, so the leg
-# reads both hypr files back and then asks the running Hyprland what its
+# reads the hypr file back and then asks the running Hyprland what its
 # active border actually is: the files being right proves the write, and only
 # the running value proves the reload.
 leg_wallpaper_flag="--wallpaper"
@@ -28,10 +28,9 @@ wp_path="$shot_dir/wp.png"
 wp2_path="$shot_dir/wp2.png"
 wallpaper_dither=false
 
-# The palette's second half: theme.json themes the shell, these two theme the
+# The palette's second half: theme.json themes the shell, this file themes the
 # compositor. hyprland_border_path is what proves the reload, see the fixture.
 hypr_dir="$iso_home/.config/hypr"
-hypr_conf_path="$hypr_dir/formalshell-colors.conf"
 hypr_lua_path="$hypr_dir/formalshell-colors.lua"
 hypr_border_path="$shot_dir/hyprland-border.txt"
 theme_json_path="$iso_home/.local/state/formalshell/theme.json"
@@ -47,7 +46,7 @@ leg_wallpaper_fixture() {
     # defaults to it, so the quantized strip is the expected frame here.
     wallpaper_dither=true
   fi
-  # Seeded before Hyprland starts, because the config below sources it and
+  # Seeded before Hyprland starts, because the config below dofiles it and
   # the shell does not write its own copy until a second or two into the
   # session. Every value is the sentinel, so anything else read back off
   # `hyprctl getoption` later came from a rewrite the shell published.
@@ -57,14 +56,16 @@ leg_wallpaper_fixture() {
   # the only thing that can put a new colour into the running compositor is
   # the explicit `hyprctl reload` ThemeEngine issues after each publish.
   mkdir -p "$hypr_dir"
-  cat > "$hypr_conf_path" <<EOF
-\$primary = rgb($hypr_sentinel)
-\$primaryForeground = rgb($hypr_sentinel)
-\$background = rgb($hypr_sentinel)
-\$foreground = rgb($hypr_sentinel)
-\$border = rgb($hypr_sentinel)
-\$destructive = rgb($hypr_sentinel)
-\$warning = rgb($hypr_sentinel)
+  cat > "$hypr_lua_path" <<EOF
+return {
+  primary = "rgb($hypr_sentinel)",
+  primaryForeground = "rgb($hypr_sentinel)",
+  background = "rgb($hypr_sentinel)",
+  foreground = "rgb($hypr_sentinel)",
+  border = "rgb($hypr_sentinel)",
+  destructive = "rgb($hypr_sentinel)",
+  warning = "rgb($hypr_sentinel)",
+}
 EOF
   # 1920x1080, not something small: a source below the screen's own size
   # never exercises Background/LockSurface's sourceSize cap at all (Qt only
@@ -105,14 +106,12 @@ sleep 1
 sleep 2
 "$hyprctl_bin" getoption general:col.active_border > "$hypr_border_path" 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
   # The compositor half of the palette, wired the way docs/USAGE.md tells a
-  # hyprlang user to wire it. Appended after the base config's own `general`
-  # block, so this is the value that survives.
-  echo "source = $hypr_conf_path"
-  echo "general {"
-  echo "    col.active_border = \$primary"
-  echo "}"
+  # user to wire it. Appended after the base config's own `general` block, so
+  # this is the value that survives.
+  echo "local colors = dofile([==[$hypr_lua_path]==])"
+  echo "hl.config({ general = { col = { active_border = colors.primary } } })"
 }
 
 # Reads whole pixels out of a cropped patch. The trailing [,)] tolerates an
@@ -125,7 +124,7 @@ wallpaper_read_patch() {
 
 leg_wallpaper_assert() {
   local f wallpaper_solid_pixels wallpaper_solid_off wallpaper_patch_pixels wallpaper_patch_colors
-  local theme_primary lua_primary conf_primary
+  local theme_primary lua_primary
   if [ ! -s "$theme_status_path" ]; then
     fail "no theme status produced"
   fi
@@ -138,23 +137,17 @@ leg_wallpaper_assert() {
   if [ -z "$theme_primary" ]; then
     fail "no primary in $theme_json_path"
   fi
-  for f in "$hypr_conf_path" "$hypr_lua_path"; do
-    [ -s "$f" ] || fail "no Hyprland palette written at $f"
-  done
+  [ -s "$hypr_lua_path" ] || fail "no Hyprland palette written at $hypr_lua_path"
   # dofile is what a hyprland.lua reads this with, so a file that is not a
   # table literal comes back nil and every colour silently falls through to
   # the config's static fallback.
   head -c 8 "$hypr_lua_path" | grep -q '^--' || fail "$hypr_lua_path does not start with a Lua comment"
   grep -q '^return {' "$hypr_lua_path" || fail "$hypr_lua_path has no 'return {' table literal"
   lua_primary=$(sed -n 's/^ *primary = "rgb(\([0-9a-fA-F]\{6\}\))",$/\1/p' "$hypr_lua_path" | head -1)
-  conf_primary=$(sed -n 's/^\$primary = rgb(\([0-9a-fA-F]\{6\}\))$/\1/p' "$hypr_conf_path" | head -1)
   if [ "$lua_primary" != "$theme_primary" ]; then
     fail "formalshell-colors.lua primary is '$lua_primary', theme.json's is '$theme_primary'"
   fi
-  if [ "$conf_primary" != "$theme_primary" ]; then
-    fail "formalshell-colors.conf primary is '$conf_primary', theme.json's is '$theme_primary'"
-  fi
-  echo "SMOKE_WALLPAPER_HYPRCOLORS primary $theme_primary in theme.json, formalshell-colors.conf and formalshell-colors.lua"
+  echo "SMOKE_WALLPAPER_HYPRCOLORS primary $theme_primary in theme.json and formalshell-colors.lua"
 
   # And the claim neither file can make on its own: the value reached the
   # RUNNING compositor. The rig disables Hyprland's config watcher, so the

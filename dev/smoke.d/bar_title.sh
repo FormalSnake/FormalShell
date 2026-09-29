@@ -94,7 +94,7 @@ for _ in \$(seq 1 16); do
   grep -qF "\"title\":\"$bar_title_track\"" "$bar_title_status_path" && break
   sleep 0.5
 done
-"$hyprctl_bin" dispatch exec "$foot_bin --app-id=formalshell-bar-title --title='$bar_title_text' sh -c 'sleep 300'"
+"$hyprctl_bin" dispatch "hl.dsp.exec_cmd([==[$foot_bin --app-id=formalshell-bar-title --title='$bar_title_text' sh -c 'sleep 300']==])"
 # Waits for the title to reach the cell rather than sleeping at it; the
 # beat after is the label refit (Theme.motion.spatial past the last change)
 # and the cells' own width glide settling behind it.
@@ -111,11 +111,11 @@ sleep 1
 # Focus to a short title and back, sampling the strip as fast as the IPC
 # answers while the title cell, the centre and both region clips travel.
 mkdir -p "$bar_title_samples_dir"
-"$hyprctl_bin" dispatch exec "$foot_bin --app-id=formalshell-bar-short --title=short sh -c 'sleep 300'"
+"$hyprctl_bin" dispatch "hl.dsp.exec_cmd([==[$foot_bin --app-id=formalshell-bar-short --title=short sh -c 'sleep 300']==])"
 for i in \$(seq 1 12); do
   "$qs_bin" ipc -p "$shell_path" call bar room > "$bar_title_samples_dir/to-short-\$i.json" 2>&1
 done
-"$hyprctl_bin" dispatch focuswindow class:formalshell-bar-title > /dev/null 2>&1
+"$hyprctl_bin" dispatch "hl.dsp.focus({ window = 'class:formalshell-bar-title' })" > /dev/null 2>&1
 for i in \$(seq 1 12); do
   "$qs_bin" ipc -p "$shell_path" call bar room > "$bar_title_samples_dir/to-long-\$i.json" 2>&1
 done
@@ -139,7 +139,7 @@ EOF
 true
 EOF
   add_cleanup "bash $kill_script"
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 # Shared with --bar-room: every drawn cell in one `bar room` answer held

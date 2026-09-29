@@ -191,10 +191,10 @@ true
 EOF
   add_cleanup "bash $kill_script"
 
-  echo "exec-once = bash $play_script"
-  echo "exec-once = bash $open_script"
-  echo "exec-once = bash $marquee_script"
-  echo "exec-once = bash $controls_script"
+  hypr_exec_once "bash $play_script"
+  hypr_exec_once "bash $open_script"
+  hypr_exec_once "bash $marquee_script"
+  hypr_exec_once "bash $controls_script"
 }
 
 leg_media_assert() {

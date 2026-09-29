@@ -1,7 +1,7 @@
 import QtQuick
 import QtTest
 
-// The blur half of docs/examples/hyprland/formalshell.conf, read out of the
+// The blur half of docs/examples/hyprland/formalshell.lua, read out of the
 // file the package actually ships rather than out of a copy of the same
 // strings. DESIGN.md pairs the two properties: a surface either paints
 // `Theme.surface(card)` and takes a blur layerrule, or it is opaque and takes
@@ -25,42 +25,44 @@ TestCase {
         xhr.onreadystatechange = function () {
             if (xhr.readyState === XMLHttpRequest.DONE) done = true;
         };
-        xhr.open("GET", Qt.resolvedUrl("../docs/examples/hyprland/formalshell.conf"));
+        xhr.open("GET", Qt.resolvedUrl("../docs/examples/hyprland/formalshell.lua"));
         xhr.send();
         tryVerify(function () { return done; }, 5000);
         conf = xhr.responseText;
     }
 
-    // Hyprland 0.56 takes layer rules as a named block, so this walks brace
-    // depth rather than matching one line: `namespace`, `blur` and
-    // `ignore_alpha` sit at three different depths inside one rule.
+    // Each rule is one `hl.layer_rule({ ... })` call, so this walks from the
+    // opening line to the closing `})` and reads the three fields and the
+    // namespace out of it.
     function _rules() {
         var out = [];
         var current = null;
-        var depth = 0;
         var lines = conf.split("\n");
         for (var i = 0; i < lines.length; i++) {
-            var line = lines[i].replace(/#.*$/, "").trim();
+            var line = lines[i].replace(/--.*$/, "").trim();
             if (line === "")
                 continue;
-            if (line.indexOf("layerrule") === 0 && current === null) {
+            if (line.indexOf("hl.layer_rule(") === 0) {
                 current = { namespace: "", blur: "", ignoreAlpha: "", noAnim: "" };
-                depth = 0;
+                continue;
             }
             if (current === null)
                 continue;
-            var m = line.match(/^(namespace|blur|ignore_alpha|no_anim)\s*=\s*(.+)$/);
-            if (m) {
-                if (m[1] === "namespace") current.namespace = m[2].trim();
-                else if (m[1] === "blur") current.blur = m[2].trim();
-                else if (m[1] === "no_anim") current.noAnim = m[2].trim();
-                else current.ignoreAlpha = m[2].trim();
-            }
-            depth += (line.match(/{/g) || []).length;
-            depth -= (line.match(/}/g) || []).length;
-            if (depth <= 0) {
+            if (line === "})") {
                 out.push(current);
                 current = null;
+                continue;
+            }
+            var ns = line.match(/namespace\s*=\s*"([^"]+)"/);
+            if (ns) {
+                current.namespace = ns[1];
+                continue;
+            }
+            var m = line.match(/^(blur|ignore_alpha|no_anim)\s*=\s*(.+?),?$/);
+            if (m) {
+                if (m[1] === "blur") current.blur = m[2].trim();
+                else if (m[1] === "no_anim") current.noAnim = m[2].trim();
+                else current.ignoreAlpha = m[2].trim();
             }
         }
         return out;
@@ -94,7 +96,7 @@ TestCase {
         for (var i = 0; i < translucent.length; i++) {
             var rule = _byNamespace(translucent[i]);
             verify(rule !== null, translucent[i] + " has no layerrule at all");
-            compare(rule.blur, "$blur", translucent[i] + " does not take the theme's blur");
+            compare(rule.blur, "chrome.blur", translucent[i] + " does not take the theme's blur");
         }
     }
 
@@ -115,7 +117,7 @@ TestCase {
         }
     }
 
-    // $blur is what ThemeEngine writes into formalshell-chrome.conf, so the
+    // chrome.blur is what ThemeEngine writes into formalshell-chrome.lua, so the
     // retro preset turning blur off has to reach every one of these. A rule
     // hardcoding `true` would keep blurring under a preset that asked for
     // none.
@@ -123,7 +125,7 @@ TestCase {
         var rules = _rules();
         for (var i = 0; i < rules.length; i++) {
             if (rules[i].blur !== "")
-                compare(rules[i].blur, "$blur", rules[i].namespace + " hardcodes its blur");
+                compare(rules[i].blur, "chrome.blur", rules[i].namespace + " hardcodes its blur");
         }
     }
 

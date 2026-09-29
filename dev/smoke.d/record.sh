@@ -105,7 +105,7 @@ while [ "\$SECONDS" -lt 40 ]; do
   sleep 1
 done
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_record_assert() {

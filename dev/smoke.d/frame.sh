@@ -49,7 +49,7 @@ sleep 5
 "$hyprctl_bin" -j monitors > "$frame_monitors_path" 2>&1
 "$qs_bin" ipc -p "$shell_path" call debug dump > "$frame_dump_path" 2>&1
 EOS
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_frame_assert() {

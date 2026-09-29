@@ -134,7 +134,7 @@ sleep 5
 "$qs_bin" ipc -p "$shell_path" call debug motionScale 100 > /dev/null 2>&1
 "$qs_bin" ipc -p "$shell_path" call notifications showHistory > /dev/null 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_center_assert() {

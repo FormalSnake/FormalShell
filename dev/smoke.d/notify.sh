@@ -89,7 +89,7 @@ sleep 2
 sleep 1
 "$qs_bin" ipc -p "$shell_path" call notifications expand off > /dev/null 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_notify_assert() {

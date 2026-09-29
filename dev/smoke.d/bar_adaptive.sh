@@ -102,15 +102,15 @@ sleep 6
 # the paint can only be the window's doing.
 "$qs_bin" ipc -p "$shell_path" call wallpaper set "$bar_adaptive_dark_wp" > /dev/null 2>&1
 sleep 5
-"$hyprctl_bin" dispatch fullscreen 2 > /dev/null 2>&1
+"$hyprctl_bin" dispatch "hl.dsp.window.fullscreen({ mode = 'fullscreen', action = 'set' })" > /dev/null 2>&1
 sleep 6
 "$qs_bin" ipc -p "$shell_path" call bar paint > "$bar_adaptive_max_json" 2>&1
 "$qs_bin" ipc -p "$shell_path" call debug dump > "$bar_adaptive_max_dump" 2>&1
 "$hyprctl_bin" -j clients > "$bar_adaptive_max_clients" 2>&1
 "$grim_bin" "$bar_adaptive_max_png" > /dev/null 2>&1
-"$hyprctl_bin" dispatch fullscreen 0 > /dev/null 2>&1
+"$hyprctl_bin" dispatch "hl.dsp.window.fullscreen({ mode = 'fullscreen', action = 'unset' })" > /dev/null 2>&1
 EOS
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 # The paint the first mapped bar reported, and the three numbers with it.

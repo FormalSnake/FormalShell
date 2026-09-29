@@ -110,6 +110,30 @@ TestCase {
         compare(binds[0].title, "");
     }
 
+    // A Lua config reports every bind as the `__lua` dispatcher with a
+    // reference number for an arg, and the header letters follow the flags
+    // (`bindeld`: repeating, locked, described). The description is then the
+    // only action text there is.
+    function test_lua_bind_reads_its_description_as_the_action() {
+        var parsed = Keybinds.parseHyprlandBinds([
+            "bindeld",
+            "\tmodmask: 0",
+            "\tsubmap: ",
+            "\tkey: XF86AudioRaiseVolume",
+            "\tkeycode: 0",
+            "\tcatchall: false",
+            "\tdescription: volume up",
+            "\tdispatcher: __lua",
+            "\targ: 12",
+            ""
+        ].join("\n"));
+        compare(parsed.length, 1);
+        compare(parsed[0].chord, "XF86AudioRaiseVolume");
+        compare(parsed[0].action, "");
+        compare(parsed[0].args.length, 0);
+        compare(Keybinds.describeAction(parsed[0]), "volume up");
+    }
+
     function test_props_carry_the_fields_the_table_reports() {
         compare(binds[0].props["submap"], "");
         compare(binds[0].props["catchall"], "false");

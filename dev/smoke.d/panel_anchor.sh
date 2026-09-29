@@ -72,7 +72,7 @@ sleep 2
 "$grim_bin" "$panel_anchor_anchorless_path" > /dev/null 2>&1
 "$grim_bin" -g "$panel_anchor_crop_geometry" "$panel_anchor_anchorless_crop_path" > /dev/null 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_panel_anchor_assert() {

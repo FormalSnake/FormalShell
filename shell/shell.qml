@@ -384,6 +384,7 @@ ShellRoot {
     RecordIpc {}
     ReminderIpc {}
     NightLightIpc {}
+    DisplayIpc {}
     HdrIpc {}
     OvernightIpc {}
     LightsIpc {}

@@ -36,7 +36,7 @@ sleep $t0
 "$qs_bin" ipc -p "$shell_path" call gallery open > "$gallery_log_path" 2>&1
 "$qs_bin" ipc -p "$shell_path" call gallery status >> "$gallery_log_path" 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_gallery_assert() {

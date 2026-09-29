@@ -19,7 +19,7 @@ leg_dump_drive() {
 sleep 4
 "$qs_bin" ipc -p "$shell_path" call debug dump > "$dump_path" 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_dump_assert() {

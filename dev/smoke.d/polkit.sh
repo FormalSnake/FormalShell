@@ -8,7 +8,7 @@
 # out to PAM.
 #
 # pkexec runs backgrounded inside the drive script with a trailing `wait`
-# rather than as its own exec-once entry: the script has to keep typing into
+# rather than as its own autostart entry: the script has to keep typing into
 # the dialog while pkexec sits blocked on the conversation, then collect its
 # real exit code once that resolves.
 #
@@ -108,7 +108,7 @@ polkit_rc=\$?
 log "pkexec exited rc=\$polkit_rc"
 echo \$polkit_rc > "$polkit_rc_path"
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_polkit_assert() {

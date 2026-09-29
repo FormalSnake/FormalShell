@@ -232,7 +232,9 @@ function mirrorSource(rows) {
 // also why Quickshell's own Hyprland.monitors model, populated from
 // `j/monitors`, cannot back this panel: an output switched off would vanish
 // from the very list the user needs to switch it back on from). `mirrorOf` is
-// the literal string "none" when the monitor is not mirroring.
+// the literal string "none" when the monitor is not mirroring, and otherwise
+// the mirrored monitor's numeric id (HyprCtl.cpp prints `m_mirrorOf->m_id`),
+// which is turned back into the name every rule and row here speaks in.
 function parseHyprlandOutputs(text) {
     var data;
     try {
@@ -242,6 +244,12 @@ function parseHyprlandOutputs(text) {
     }
     if (!Array.isArray(data))
         return [];
+
+    var names = {};
+    for (var n = 0; n < data.length; n++) {
+        if (data[n] && typeof data[n] === "object" && data[n].id !== undefined)
+            names[String(data[n].id)] = _text(data[n].name);
+    }
 
     var rows = [];
     for (var i = 0; i < data.length; i++) {
@@ -254,6 +262,8 @@ function parseHyprlandOutputs(text) {
 
         var enabled = monitor.disabled !== true;
         var mirrorOf = _text(monitor.mirrorOf);
+        if (names[mirrorOf] !== undefined)
+            mirrorOf = names[mirrorOf];
         rows.push({
             name: name,
             make: _text(monitor.make),
@@ -277,35 +287,53 @@ function parseHyprlandOutputs(text) {
     return sortOutputs(rows);
 }
 
-// The single comma-joined argument Hyprland's `monitor` keyword takes:
-//
-//   <name>,<mode>,<position>,<scale>[,mirror,<source>]
-//
-// `overrides` carries only what the caller means to change (`scale`,
-// `mirrorOf`); everything else is re-stated from the row so a scale change
-// never silently drops an active mirror, and vice versa. Position stays
-// "auto", omarchy's own scale and mirror scripts do the same, and a literal
-// x/y here would fight the compositor's layout on every change when neither
-// control means to move anything.
-function hyprlandMonitorArg(row, overrides) {
-    var changes = overrides || {};
-    var scale = cleanScale(changes.scale !== undefined ? changes.scale : row.scale, row.width, row.height);
-    var mirrorOf = changes.mirrorOf !== undefined ? _text(changes.mirrorOf) : _text(row.mirrorOf);
-
-    var arg = row.name + "," + _hyprlandMode(row) + ",auto," + _trimNumber(scale, 5);
-    if (mirrorOf !== "")
-        arg += ",mirror," + mirrorOf;
-    if (isHdrPreset(row.cm))
-        arg += ",bitdepth,10,cm," + row.cm + ",sdrbrightness," + _trimNumber(row.sdrBrightness, 2)
-            + ",sdrsaturation," + _trimNumber(row.sdrSaturation, 2);
-    return arg;
-}
-
 function isHdrPreset(cm) {
     return cm === "hdr" || cm === "hdredid";
 }
 
-// ---- HDR rule ----------------------------------------------------------
+// ---- Monitor rules -----------------------------------------------------
+
+// `hl.monitor` merges into the output's existing rule, but an output with no
+// rule of its own starts from the defaults (mode preferred, scale auto), so
+// every rule below restates mode, position, scale, transform, vrr, mirror and
+// the colour fields, and overrides only the ones the caller means to change.
+// The mirror is always sent, empty to clear it, because an omitted one keeps
+// the previous rule's. `monitors -j` reports vrr as a flag, so a configured
+// vrr of 2 or 3 comes back as 1.
+function _rule(row, position, scale, mirror, color) {
+    var rule = {
+        output: row.name,
+        mode: _hyprlandMode(row),
+        position: position,
+        scale: _trimNumber(scale, 5),
+        transform: _int(row.transform),
+        vrr: row.vrr === true ? 1 : 0,
+        bitdepth: color.bitdepth === 10 ? 10 : 8,
+        cm: color.cm,
+        sdrbrightness: _trimNumber(color.sdrbrightness, 2),
+        sdrsaturation: _trimNumber(color.sdrsaturation, 2),
+        mirror: mirror
+    };
+    return rule;
+}
+
+// A scale or mirror change. `overrides` carries `scale` and/or `mirrorOf`;
+// the colour fields stay as the row holds them, so a scale change on an
+// output in HDR does not drop HDR. Position stays "auto", omarchy's own
+// scale and mirror scripts do the same, and a literal x/y here would fight
+// the compositor's layout on every change when neither control means to move
+// anything.
+function hyprlandMonitorRule(row, overrides) {
+    var changes = overrides || {};
+    var scale = cleanScale(changes.scale !== undefined ? changes.scale : row.scale, row.width, row.height);
+    var mirrorOf = changes.mirrorOf !== undefined ? _text(changes.mirrorOf) : _text(row.mirrorOf);
+    return _rule(row, "auto", scale, mirrorOf, {
+        cm: _text(row.cm) || "srgb",
+        bitdepth: row.tenBit ? 10 : 8,
+        sdrbrightness: _positive(row.sdrBrightness, 1),
+        sdrsaturation: _positive(row.sdrSaturation, 1)
+    });
+}
 
 // The row's scale as the compositor holds it. `monitors -j` prints scale to
 // two places, so 1.6667 arrives as 1.67; the intended value is the nearest
@@ -320,39 +348,14 @@ function _liveScale(row) {
 
 // A complete monitor rule for `row` that restates mode, position, scale,
 // transform, vrr and mirror as they are now and sets the colour fields from
-// `color` ({ cm, bitdepth, sdrbrightness, sdrsaturation }). Hyprland replaces
-// an output's rule wholesale, so every field the toggle is not changing has
-// to be repeated or it resets to its default. `monitors -j` reports vrr as a
-// flag, so a configured vrr of 2 or 3 comes back as 1.
+// `color` ({ cm, bitdepth, sdrbrightness, sdrsaturation }).
 function hyprlandColorRule(row, color) {
-    var rule = {
-        output: row.name,
-        mode: _hyprlandMode(row),
-        position: row.width > 0 ? _int(row.x) + "x" + _int(row.y) : "auto",
-        scale: _trimNumber(_liveScale(row), 5),
-        transform: _int(row.transform),
-        vrr: row.vrr === true ? 1 : 0,
-        bitdepth: color.bitdepth === 10 ? 10 : 8,
-        cm: color.cm,
-        sdrbrightness: _trimNumber(color.sdrbrightness, 2),
-        sdrsaturation: _trimNumber(color.sdrsaturation, 2)
-    };
-    if (_text(row.mirrorOf) !== "")
-        rule.mirror = row.mirrorOf;
-    return rule;
+    var position = row.width > 0 ? _int(row.x) + "x" + _int(row.y) : "auto";
+    return _rule(row, position, _liveScale(row), _text(row.mirrorOf), color);
 }
 
-// `hyprctl keyword monitor <this>`, legacy (hyprlang) configs only.
-function hyprlandRuleArg(rule) {
-    var arg = [rule.output, rule.mode, rule.position, rule.scale,
-        "transform", rule.transform, "vrr", rule.vrr, "bitdepth", rule.bitdepth,
-        "cm", rule.cm, "sdrbrightness", rule.sdrbrightness, "sdrsaturation", rule.sdrsaturation];
-    if (rule.mirror !== undefined)
-        arg.push("mirror", rule.mirror);
-    return arg.join(",");
-}
-
-// `hyprctl eval <this>`, Lua configs only: `keyword` is refused there.
+// The `hyprctl eval` argument for a rule. `hyprctl keyword` is refused under
+// a Lua config ("Use eval").
 function hyprlandRuleLua(rule) {
     var fields = [
         "output = " + JSON.stringify(rule.output),
@@ -364,11 +367,21 @@ function hyprlandRuleLua(rule) {
         "bitdepth = " + rule.bitdepth,
         "cm = " + JSON.stringify(rule.cm),
         "sdrbrightness = " + rule.sdrbrightness,
-        "sdrsaturation = " + rule.sdrsaturation
+        "sdrsaturation = " + rule.sdrsaturation,
+        "mirror = " + JSON.stringify(rule.mirror)
     ];
-    if (rule.mirror !== undefined)
-        fields.push("mirror = " + JSON.stringify(rule.mirror));
     return "hl.monitor({ " + fields.join(", ") + " })";
+}
+
+// Switching an output back on re-derives mode, position and scale instead of
+// restating the row's own: a disabled monitor reports a zero mode, so there
+// is nothing truthful left to restate. `disabled = false` is explicit because
+// the merge would otherwise keep the rule's `disabled = true`.
+function hyprlandEnabledLua(name, enabled) {
+    if (!enabled)
+        return "hl.monitor({ output = " + JSON.stringify(name) + ", disabled = true })";
+    return "hl.monitor({ output = " + JSON.stringify(name)
+        + ", disabled = false, mode = \"preferred\", position = \"auto\", scale = \"auto\" })";
 }
 
 function _hyprlandMode(row) {

@@ -81,7 +81,7 @@ sleep 1
 "$qs_bin" ipc -p "$shell_path" call lock isLocked > "$lock_islocked2_path" 2>&1
 "$qs_bin" ipc -p "$shell_path" call lock status > "$lock_status_path" 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_lock_assert() {

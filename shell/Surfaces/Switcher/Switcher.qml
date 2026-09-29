@@ -19,7 +19,7 @@ import "switcher.js" as Model
 // carry Hyprland's `t` flag (`bindrt`, M64): a bind whose key is held while
 // another bind fires is shadowed for as long as that key stays down, and a
 // transparent bind is the only kind `shadowKeybinds` leaves alone
-// (docs/examples/hyprland/formalshell.conf).
+// (docs/examples/hyprland/formalshell.lua).
 //
 // One instance rather than one per output, the same reasoning Menu, Center
 // and Osd carry: it is summoned rather than resident, it lands on the

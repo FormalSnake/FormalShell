@@ -50,7 +50,7 @@ sleep 3
 "$grim_bin" "$hdr_panel_png" > /dev/null 2>&1
 cp "$iso_home/.local/state/formalshell/state.json" "$hdr_state_path" 2>/dev/null
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_hdr_assert() {

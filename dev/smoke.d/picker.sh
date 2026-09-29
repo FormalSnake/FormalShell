@@ -119,7 +119,7 @@ sleep 3
 ls -1 "$iso_home/.cache/formalshell/thumbnails" > "$picker_cache_listing_path" 2>&1
 touch "$picker_done_path"
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_picker_assert() {

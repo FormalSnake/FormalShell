@@ -155,7 +155,7 @@ sleep 2
 sleep 3
 "$grim_bin" "$clip_emoji_png" > /dev/null 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_clipboard_assert() {

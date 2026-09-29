@@ -75,7 +75,7 @@ EOF
   # poll -> parse -> "3/2" path without network or auth. Real gh behaviour
   # (auth, exit code 4) stays host-trial territory. Exported onto this
   # script's own PATH rather than spliced into a launch command: dev/smoke.sh
-  # owns the shell's exec-once line, and `env` hands the session whatever
+  # owns the shell's autostart line, and `env` hands the session whatever
   # environment this process carries. A directory holding nothing but `gh`
   # shadows nothing else the run resolves.
   mkdir -p "$bar_gh_shim_dir"
@@ -110,7 +110,7 @@ leg_bar_layout_drive() {
 sleep 5
 "$grim_bin" "$bar_layout_path" > /dev/null 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_bar_layout_assert() {

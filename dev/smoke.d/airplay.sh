@@ -106,7 +106,7 @@ sleep 3
 "$qs_bin" ipc -p "$shell_path" call media status > "$airplay_media_disconnected_path" 2>&1
 "$grim_bin" "$airplay_gone_png" > /dev/null 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_airplay_assert() {

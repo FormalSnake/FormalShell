@@ -44,7 +44,7 @@ sleep 13
 cat "$iso_home/.local/state/formalshell/state.json" > "$reminder_state2_path" 2>&1
 "$grim_bin" "$reminder_fired_png" > /dev/null 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_reminder_assert() {

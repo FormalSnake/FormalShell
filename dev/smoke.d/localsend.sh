@@ -82,7 +82,7 @@ sleep 2
 "$qs_bin" ipc -p "$shell_path" call notifications status > "$localsend_notify_after_path" 2>&1
 "$grim_bin" "$localsend_received_png" > /dev/null 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_localsend_assert() {

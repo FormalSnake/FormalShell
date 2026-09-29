@@ -35,7 +35,7 @@ sleep 1
 "$qs_bin" ipc -p "$shell_path" call overnight status > "$overnight_status2_path" 2>&1
 cp "$iso_home/.local/state/formalshell/state.json" "$overnight_state_path" 2>/dev/null
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_overnight_assert() {

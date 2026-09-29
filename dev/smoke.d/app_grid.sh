@@ -217,7 +217,7 @@ cat "$app_grid_settings_on" > "$app_grid_settings"
 sleep 2
 "$qs_bin" ipc -p "$shell_path" call menu summon apps > /dev/null 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 # How many pixels of the probe entry's own colour one box of the frame

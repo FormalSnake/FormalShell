@@ -93,7 +93,7 @@ sleep 7
 sleep 1
 "$grim_bin" "$flexoki_shot_path" > /dev/null 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 # key=value out of the probe, so a missing line fails loudly rather than

@@ -52,7 +52,7 @@ sleep 3
 cat "$theme_auto_state_json" > "$theme_auto_state_path" 2>&1
 "$grim_bin" "$theme_auto_after_png" > /dev/null 2>&1
 DRIVE
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 # "HH:MM" to minutes since midnight, base 10 so an 08:xx hour is not read as

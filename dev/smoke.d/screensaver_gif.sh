@@ -51,7 +51,7 @@ leg_screensaver_gif_takeover() {
     effect_dir=$(mktemp -d)
     frames_dir="$effect_dir/frames"
     mkdir -p "$frames_dir"
-    cfg="$effect_dir/hyprland.conf"
+    cfg="$effect_dir/hyprland.lua"
     info_path="$frames_dir/frame-info.json"
     shell_script="$effect_dir/shell-start.sh"
     shell_log="$effect_dir/shell.log"
@@ -101,7 +101,7 @@ for ((h = 0; h < $hold; h++)); do
   cp "$frames_dir/frame-\$last.png" "$frames_dir/frame-\$padded.png"
 done
 "$qs_bin" ipc -p "$shell_path" call screensaver stop > /dev/null 2>&1
-"$hyprctl_bin" dispatch exit
+"$hyprctl_bin" dispatch "hl.dsp.exit()"
 EOF
 
     # The same session shape dev/smoke.sh builds for the shared run: the size
@@ -110,35 +110,9 @@ EOF
     # and the error overlay) suppressed, since every frame here is a picture
     # of the whole output.
     {
-      echo "monitor = , 1920x1080@60, 0x0, 1"
-      echo "general {"
-      echo "    gaps_in = 0"
-      echo "    gaps_out = 0"
-      echo "    border_size = 0"
-      echo "}"
-      echo "decoration {"
-      echo "    rounding = 0"
-      echo "    blur {"
-      echo "        enabled = false"
-      echo "    }"
-      echo "}"
-      echo "animations {"
-      echo "    enabled = false"
-      echo "}"
-      echo "misc {"
-      echo "    disable_watchdog_warning = true"
-      echo "    disable_hyprland_logo = true"
-      echo "    disable_splash_rendering = true"
-      echo "    force_default_wallpaper = 0"
-      echo "    disable_autoreload = true"
-      echo "}"
-      echo "debug {"
-      echo "    suppress_errors = true"
-      echo "    disable_logs = false"
-      echo "    enable_stdout_logs = true"
-      echo "}"
-      echo "exec-once = bash $shell_script"
-      echo "exec-once = bash $drive_script"
+      hypr_base_config
+      hypr_exec_once "bash $shell_script"
+      hypr_exec_once "bash $drive_script"
     } > "$cfg"
 
     gif_env=(

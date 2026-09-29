@@ -129,8 +129,8 @@ sleep $((t0 + 19))
 sleep 1
 cat "$iso_home/.local/state/formalshell/menu-selection.txt" > "$selection_path" 2>&1
 EOF
-  echo "exec-once = bash $menu_script"
-  echo "exec-once = bash $menu_finish_script"
+  hypr_exec_once "bash $menu_script"
+  hypr_exec_once "bash $menu_finish_script"
 }
 
 menu_field() {

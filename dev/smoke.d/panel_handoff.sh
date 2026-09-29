@@ -125,7 +125,7 @@ sleep 2
 "$qs_bin" ipc -p "$shell_path" call panel state > "$panel_handoff_state_path" 2>&1
 "$grim_bin" "$panel_handoff_settled_path" > /dev/null 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 # One box out of a saved frame, named after the two, so a comparison below

@@ -80,7 +80,7 @@ kill -0 \$(cat "$processes_victim_pid_path") 2>/dev/null; echo \$? > "$processes
 sleep 6
 pgrep -f smokerestart > "$processes_restart_pids_path"
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_processes_assert() {

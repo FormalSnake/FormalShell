@@ -18,11 +18,9 @@ TestCase {
         verify(iCfg < iShell && iShell < iUser && iUser < iDrop);
         verify(cfg.indexOf("/state/theme.json.tmp") >= 0);
         verify(cfg.indexOf("[templates.formalshell-hyprland]") >= 0);
-        verify(cfg.indexOf("/shell/tpl/hyprland-colors.conf.tmpl") >= 0);
-        verify(cfg.indexOf("/state/formalshell-colors.conf.tmp") >= 0);
-        verify(cfg.indexOf("[templates.formalshell-hyprland-lua]") >= 0);
         verify(cfg.indexOf("/shell/tpl/hyprland-colors.lua.tmpl") >= 0);
         verify(cfg.indexOf("/state/formalshell-colors.lua.tmp") >= 0);
+        verify(cfg.indexOf("hyprland-colors.conf") < 0);
         verify(cfg.indexOf("/home/u/.config/gtk-3.0/formalshell-colors.css") >= 0);
         verify(cfg.indexOf("/home/u/.config/gtk-4.0/formalshell-colors.css") >= 0);
         verify(cfg.indexOf("/home/u/.config/qt5ct/colors/matugen.conf") >= 0);
@@ -55,33 +53,12 @@ TestCase {
         "[2026-08-14T13:38:49.596362Z DEBUG matugen::color::color] Chose 1\n"
 
     // The no-wallpaper path renders these seven itself, so the names, the
-    // order and the rgb() form all have to match hyprland-colors.conf.tmpl:
-    // a hyprland.conf sourcing the file reads whichever writer produced it.
-    function test_hyprland_colors() {
-        var out = M.hyprlandColors({
-            primary: "#648db8", primaryForeground: "#ffffff",
-            background: "#09090b", foreground: "#fafafa",
-            border: "#27272a", destructive: "#e7000b", warning: "#d97706"
-        });
-        var lines = out.trim().split("\n");
-        compare(lines[0].charAt(0), "#");
-        compare(lines[1].charAt(0), "#");
-        compare(lines.slice(2).join("\n"),
-            "$primary = rgb(648db8)\n"
-            + "$primaryForeground = rgb(ffffff)\n"
-            + "$background = rgb(09090b)\n"
-            + "$foreground = rgb(fafafa)\n"
-            + "$border = rgb(27272a)\n"
-            + "$destructive = rgb(e7000b)\n"
-            + "$warning = rgb(d97706)");
-    }
-
-    // Same seven roles again, as the Lua table a hyprland.lua dofiles. The
+    // order and the rgb() form all have to match hyprland-colors.lua.tmpl. The
     // `return` and the string quoting are load-bearing: a config reads this
     // through dofile, so anything that is not a table literal comes back nil
     // and the whole palette silently falls through to the static fallback.
-    function test_hyprland_colors_lua() {
-        var out = M.hyprlandColorsLua({
+    function test_hyprland_colors() {
+        var out = M.hyprlandColors({
             primary: "#648db8", primaryForeground: "#ffffff",
             background: "#09090b", foreground: "#fafafa",
             border: "#27272a", destructive: "#e7000b", warning: "#d97706"

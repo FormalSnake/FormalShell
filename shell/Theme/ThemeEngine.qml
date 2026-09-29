@@ -24,9 +24,8 @@ import "sun.js" as Sun
 // Quickshell.Io has no directory-listing API, merges it via matugen.js's
 // buildConfig(), writes matugen-merged.toml, then runs matugen against it.
 // matugen's own template output_paths land on <state-dir>/{theme.json,
-// formalshell-colors.conf, formalshell-colors.lua}.tmp; on success those are
-// renamed into place atomically, theme.json into the state dir and both
-// Hyprland palettes (hyprlang for a hyprland.conf that sources it, a Lua
+// formalshell-colors.lua}.tmp; on success those are renamed into place
+// atomically, theme.json into the state dir and the Hyprland palette (a Lua
 // table for a hyprland.lua that dofiles it) into the user's hypr config dir,
 // followed by one `hyprctl reload`. No wallpaper set → skip matugen
 // entirely and write palette.fallback(State.mode) — the zinc variant for
@@ -45,7 +44,7 @@ import "sun.js" as Sun
 // scheme grown from one seed. The run itself is `color hex` on the
 // palette's source colour rather than `image`, which only seeds the
 // keywords no rewrite covers; the shell's own outputs of it are discarded
-// and theme.json plus both Hyprland palettes take the palette's shadcn view
+// and theme.json plus the Hyprland palette take the palette's shadcn view
 // through the static write.
 // theme.json's own FileView drives the "run once if
 // absent" startup behavior declaratively; State.mode defaults to dark, so
@@ -108,15 +107,11 @@ Singleton {
     readonly property string _mergedConfigPath: root.stateDir + "/matugen-merged.toml"
     readonly property string _themeJsonPath: root.stateDir + "/theme.json"
     readonly property string _configDir: Quickshell.env("XDG_CONFIG_HOME") || (root._homeDir + "/.config")
-    readonly property string _hyprColorsTmp: root.stateDir + "/formalshell-colors.conf.tmp"
-    readonly property string _hyprColorsPath: root._configDir + "/hypr/formalshell-colors.conf"
-    readonly property string _hyprColorsLuaTmp: root.stateDir + "/formalshell-colors.lua.tmp"
-    readonly property string _hyprColorsLuaPath: root._configDir + "/hypr/formalshell-colors.lua"
-    readonly property string _hyprChromePath: root._configDir + "/hypr/formalshell-chrome.conf"
-    readonly property string _hyprChromeLuaPath: root._configDir + "/hypr/formalshell-chrome.lua"
+    readonly property string _hyprColorsTmp: root.stateDir + "/formalshell-colors.lua.tmp"
+    readonly property string _hyprColorsPath: root._configDir + "/hypr/formalshell-colors.lua"
+    readonly property string _hyprChromePath: root._configDir + "/hypr/formalshell-chrome.lua"
     readonly property string _dropInBoundary: "#--formalshell-dropin-boundary--"
     readonly property string _templateBoundary: "#--formalshell-template-boundary--"
-    readonly property string _chromeBoundary: "#--formalshell-chrome-boundary--"
     // Where a pinned run stages the rewritten copy of every template it is
     // about to hand matugen. Regenerated per run, never read back.
     readonly property string _pinnedDir: root.stateDir + "/pinned-templates"
@@ -307,9 +302,8 @@ Singleton {
     }
 
     // The atomic twin of _writeFile, for a path another process reads out of
-    // band: Hyprland re-reads a sourced file the moment it changes, and
-    // dofiles the Lua one on the reload below, so neither can be caught half
-    // written. Creates the parent directory too, since ~/.config/hypr need
+    // band: Hyprland dofiles the Lua files on the reload below, so neither can
+    // be caught half written. Creates the parent directory too, since ~/.config/hypr need
     // not exist on a fresh install.
     //
     // The staging name carries the writing shell's own pid: two publishes of
@@ -327,19 +321,15 @@ Singleton {
         proc.running = true;
     }
 
-    // Both Hyprland palettes at once, for the no-wallpaper path: matugen
-    // renders them from its own templates on a real run, but the fallback
-    // has to write them itself or a hyprland config reading either one finds
-    // nothing until the first wallpaper is set.
+    // The Hyprland palette for the no-wallpaper path: matugen renders it from
+    // its own template on a real run, but the fallback has to write it itself
+    // or a hyprland config reading it finds nothing until the first wallpaper
+    // is set.
     function _publishHyprColors(palette, onDone) {
-        root._publishFile(root._hyprColorsPath, Matugen.hyprlandColors(palette), confCode => {
-            if (confCode !== 0)
-                console.warn("ThemeEngine: failed to write fallback formalshell-colors.conf, code", confCode);
-            root._publishFile(root._hyprColorsLuaPath, Matugen.hyprlandColorsLua(palette), luaCode => {
-                if (luaCode !== 0)
-                    console.warn("ThemeEngine: failed to write fallback formalshell-colors.lua, code", luaCode);
-                onDone();
-            });
+        root._publishFile(root._hyprColorsPath, Matugen.hyprlandColors(palette), code => {
+            if (code !== 0)
+                console.warn("ThemeEngine: failed to write fallback formalshell-colors.lua, code", code);
+            onDone();
         });
     }
 
@@ -347,33 +337,27 @@ Singleton {
     // the matugen pipeline: every value comes from settings.json or the theme
     // table, which no matugen template can read, and none of it has anything
     // to do with the wallpaper. Runs on startup as well as on change so a
-    // hyprland config reading them finds them from the shell's first run, the
-    // same
-    // guarantee the colours file gives. Deliberately clear of running/pending:
-    // _publishFile is atomic per file, so two overlapping writes of the same
-    // content cannot tear, and queueing them behind a matugen run would only
-    // delay a value that is already known.
-    function _writeChromeFiles(confText, luaText, onDone) {
-        root._publishFile(root._hyprChromePath, confText, confCode => {
-            if (confCode !== 0)
-                console.warn("ThemeEngine: failed to write formalshell-chrome.conf, code", confCode);
-            root._publishFile(root._hyprChromeLuaPath, luaText, luaCode => {
-                if (luaCode !== 0)
-                    console.warn("ThemeEngine: failed to write formalshell-chrome.lua, code", luaCode);
-                onDone();
-            });
+    // hyprland config reading it finds it from the shell's first run, the
+    // same guarantee the colours file gives. Deliberately clear of
+    // running/pending: _publishFile is atomic per file, so two overlapping
+    // writes of the same content cannot tear, and queueing them behind a
+    // matugen run would only delay a value that is already known.
+    function _writeChromeFile(text, onDone) {
+        root._publishFile(root._hyprChromePath, text, code => {
+            if (code !== 0)
+                console.warn("ThemeEngine: failed to write formalshell-chrome.lua, code", code);
+            onDone();
         });
     }
 
-    // Hyprland re-reads a sourced hyprlang file the moment it changes, so an
-    // unchanged startup still re-arranges every layer if this writes and
-    // reloads unconditionally. Probes the two files on disk first (a `cat`,
-    // empty when either is absent, which never equals real chrome text --
-    // a fresh install still gets its first write, docs/DESIGN.md's "must
-    // exist from first run") and skips both the write and the reload when
-    // the rendered text already matches. A probe that can't say (failed to
-    // start, or `text` null below) publishes unconditionally rather than
-    // risk silently skipping a real change.
+    // An unchanged startup still re-arranges every layer if this writes and
+    // reloads unconditionally. Probes the file on disk first (a `cat`, empty
+    // when absent, which never equals real chrome text -- a fresh install
+    // still gets its first write, docs/DESIGN.md's "must exist from first
+    // run") and skips both the write and the reload when the rendered text
+    // already matches. A probe that can't say (failed to start, or `text`
+    // null below) publishes unconditionally rather than risk silently
+    // skipping a real change.
     function _publishHyprChrome(onDone) {
         var chrome = {
             rounding: Core.Theme.radius,
@@ -381,23 +365,17 @@ Singleton {
             window: Core.Theme.windowChrome.focused,
             windowInactive: Core.Theme.windowChrome.backdrop
         };
-        var confText = Chrome.hyprlandChrome(chrome);
-        var luaText = Chrome.hyprlandChromeLua(chrome);
+        var text = Chrome.hyprlandChrome(chrome);
         var probe = chromeProbeComponent.createObject(root, {
-            _onResult: function (text) {
-                if (text !== null) {
-                    var parts = text.split(root._chromeBoundary);
-                    if ((parts[0] || "") === confText && (parts[1] || "") === luaText) {
-                        onDone();
-                        return;
-                    }
+            _onResult: function (current) {
+                if (current === text) {
+                    onDone();
+                    return;
                 }
-                root._writeChromeFiles(confText, luaText, onDone);
+                root._writeChromeFile(text, onDone);
             }
         });
-        probe.command = ["sh", "-c",
-            'cat "$1" 2>/dev/null; printf \'%s\' "$3"; cat "$2" 2>/dev/null',
-            "sh", root._hyprChromePath, root._hyprChromeLuaPath, root._chromeBoundary];
+        probe.command = ["sh", "-c", 'cat "$1" 2>/dev/null', "sh", root._hyprChromePath];
         probe.running = true;
     }
 
@@ -431,14 +409,12 @@ Singleton {
         }
     }
 
-    // Hyprland re-reads a hyprlang file it sourced itself the moment it
-    // changes, so formalshell-colors.conf needs no call. Hyprland 0.55's Lua
-    // config cannot source hyprlang and reads formalshell-colors.lua with
-    // dofile instead, which is not a sourced file and gets no re-read, so
-    // that half has to be asked for. Guarded on the env var for the same
-    // reason HyprlandBackend.refreshOutputs() is: this singleton runs under
-    // niri too. One call per publish: retheme() queues rather than
-    // overlapping, so a run in flight can never land a second one here.
+    // The Lua config reads formalshell-colors.lua and formalshell-chrome.lua
+    // with dofile, which Hyprland does not watch, so a publish has to ask for
+    // the re-run. Guarded on the env var for the same reason
+    // HyprlandBackend.refreshOutputs() is: this singleton runs under niri
+    // too. One call per publish: retheme() queues rather than overlapping, so
+    // a run in flight can never land a second one here.
     function _reloadHyprland() {
         if (!Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") || reloadProc.running)
             return;
@@ -520,8 +496,8 @@ Singleton {
     }
 
     // The static write the no-wallpaper zinc path and a pinned run both end
-    // on: theme.json straight from the palette object, then both Hyprland
-    // colours files, then one reload. Goes through _publishFile rather than
+    // on: theme.json straight from the palette object, then the Hyprland
+    // colours file, then one reload. Goes through _publishFile rather than
     // _writeFile: Core/Theme.qml watches theme.json directly, and _writeFile
     // truncates before writing, so a reload catching that window would flip
     // the shell to the fallback palette (the matugen path already renames
@@ -783,8 +759,8 @@ Singleton {
             }
             if (root._pinnedRun) {
                 // The rewritten templates rendered these three in the
-                // pinned palette too, but theme.json and both Hyprland
-                // palettes stay the static write's: the palette's shadcn
+                // pinned palette too, but theme.json and the Hyprland
+                // palette stay the static write's: the palette's shadcn
                 // view is the shell's own authority for them (the greeter
                 // reads the same table with no matugen in reach), and its
                 // chart ramp walks accents no Material role carries.
@@ -795,18 +771,16 @@ Singleton {
                     }
                 });
                 discard.command = ["rm", "-f", root.stateDir + "/theme.json.tmp",
-                    root._hyprColorsTmp, root._hyprColorsLuaTmp];
+                    root._hyprColorsTmp];
                 discard.running = true;
                 return;
             }
-            // One mkdir covers both Hyprland paths, they share a directory.
             renameProc._sawExit = false;
             renameProc.command = ["sh", "-c",
-                'mv -f "$1" "$2" && mkdir -p "$(dirname "$4")" && mv -f "$3" "$4" && mv -f "$5" "$6"',
+                'mv -f "$1" "$2" && mkdir -p "$(dirname "$4")" && mv -f "$3" "$4"',
                 "sh",
                 root.stateDir + "/theme.json.tmp", root._themeJsonPath,
-                root._hyprColorsTmp, root._hyprColorsPath,
-                root._hyprColorsLuaTmp, root._hyprColorsLuaPath];
+                root._hyprColorsTmp, root._hyprColorsPath];
             renameProc.running = true;
         }
     }
@@ -824,7 +798,7 @@ Singleton {
         onExited: exitCode => {
             renameProc._sawExit = true;
             if (exitCode !== 0) {
-                console.warn("ThemeEngine: failed to publish theme.json/formalshell-colors.{conf,lua}, code", exitCode);
+                console.warn("ThemeEngine: failed to publish theme.json/formalshell-colors.lua, code", exitCode);
                 root._finish();
                 return;
             }

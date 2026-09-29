@@ -35,7 +35,7 @@ while [ "\$SECONDS" -lt 25 ]; do
 done
 "$grim_bin" "$speedtest_panel_path" > /dev/null 2>&1
 EOF
-  echo "exec-once = bash $script"
+  hypr_exec_once "bash $script"
 }
 
 leg_speedtest_assert() {
