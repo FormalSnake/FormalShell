@@ -10,10 +10,8 @@
 // crate). `scan -t <seconds>` prints one line per discovered peer to
 // stdout under a "Found Devices:" header, or "No device found" to stderr
 // when nothing answered (scan.go's own Fprintf calls). `send`/`recv` log
-// every event through Go's log/slog default text handler, one
-// space-separated `key=value` pair per field, string values quoted only
-// when they contain a space (slog's own quoting rule) -- that shape is
-// what parseSlogLine reads, not a fixed field list.
+// every event through Go's log/slog default handler; parseSlogLine reads
+// that line shape, not a fixed field list.
 
 // --- scan ------------------------------------------------------------------
 
@@ -55,6 +53,12 @@ function resolvePeer(peers, name) {
 
 var _KV_RE = /([A-Za-z_][\w.]*)=("(?:[^"\\]|\\.)*"|\S+)/g;
 
+// Neither subcommand installs a slog handler, so lines come out of the
+// default one, which writes through log/log.go: "<date> <time> <LEVEL>
+// <msg> key=value ...". The message is unquoted; values are quoted only
+// when they contain a space.
+var _SLOG_RE = /^\d{4}\/\d\d\/\d\d \d\d:\d\d:\d\d (DEBUG|INFO|WARN|ERROR)(?:[+-]\d+)? (.*)$/;
+
 function _unquote(value) {
     if (value.length >= 2 && value.charAt(0) === "\"" && value.charAt(value.length - 1) === "\"")
         return value.slice(1, -1).replace(/\\(.)/g, "$1");
@@ -62,22 +66,24 @@ function _unquote(value) {
 }
 
 // One send/recv stderr line to { level, msg, fields }, or null for a line
-// that carries no `level=` at all (a stray warning from a dependency, a
-// blank line). `fields` is every key=value pair on the line including
-// `level`/`msg` themselves, so a caller after `file`/`error`/`remote`/
-// `session` (whichever the event actually carries) just reads it off there.
+// that is not a slog record at all (a stray warning from a dependency, a
+// blank line). `fields` is every key=value pair after the message, so a
+// caller after `file`/`error`/`remote`/`session` reads it off there.
 function parseSlogLine(line) {
-    var text = String(line || "");
-    if (!/\blevel=\w+\b/.test(text))
+    var m = String(line || "").match(_SLOG_RE);
+    if (!m)
         return null;
+    var rest = m[2];
+    var kvStart = rest.search(/(^| )[A-Za-z_][\w.]*=/);
+    var msg = kvStart < 0 ? rest : rest.slice(0, kvStart);
     var fields = {};
     var re = new RegExp(_KV_RE.source, "g");
     var kv;
-    while ((kv = re.exec(text)) !== null)
+    while (kvStart >= 0 && (kv = re.exec(rest.slice(kvStart))) !== null)
         fields[kv[1]] = _unquote(kv[2]);
     return {
-        level: fields.level || "",
-        msg: fields.msg || "",
+        level: m[1],
+        msg: msg.trim(),
         fields: fields
     };
 }
@@ -112,11 +118,9 @@ function sendOutcome(exitCode, stderrText) {
 
 // --- recv lines ----------------------------------------------------------
 
-// `recv` logs an accept ("Accepting file", before the PIN/no-prompt path in
-// preUploadHandler ever gets to the upload itself) but never a per-file
-// "saved" line, so this is read for the in-flight indicator only; the toast
-// on an actual arrival comes from LocalsendService's own directory watch,
-// the one place a save is ever observable.
+// `recv` logs "Accepting file" when a session opens, and "Recv file" from
+// session/recv.go's SaveFile once the bytes are written and the checksum
+// verified. The file is `<dir>/<file>`, overwriting on a name collision.
 function parseRecvLine(line) {
     var e = parseSlogLine(line);
     if (e === null)
@@ -125,17 +129,7 @@ function parseRecvLine(line) {
         return { type: "error", message: e.msg + (e.fields.error ? ": " + e.fields.error : "") };
     if (e.msg === "Accepting file")
         return { type: "accepting", remote: e.fields.remote || "", session: e.fields.session || "" };
+    if (e.msg === "Recv file" && e.fields.file)
+        return { type: "received", file: e.fields.file, session: e.fields.session || "" };
     return { type: "other" };
-}
-
-// --- directory watch -------------------------------------------------------
-
-// `current` against `prev` (both plain filename arrays, one `find -maxdepth
-// 1 -type f -printf '%f\n'` snapshot each), newest-appearance order not
-// tracked since a listing carries none: the caller announces them in
-// whatever order the snapshot did.
-function newFiles(prevNames, currentNames) {
-    var prev = {};
-    (prevNames || []).forEach(function (n) { prev[n] = true; });
-    return (currentNames || []).filter(function (n) { return !prev[n]; });
 }

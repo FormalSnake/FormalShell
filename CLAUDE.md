@@ -276,7 +276,9 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `localsend.sh` `--localsend`: a real loopback transfer, a second
   independent `localsend-cli send` process against the shell's own real
   receiver child. The file lands byte-identical (sha256) in the fixture
-  directory and a RECEIVED toast follows. The reverse direction (the
+  directory and one RECEIVED toast follows, raised by `recv`'s own `Recv
+  file` log line; three files something else writes into that directory
+  (a `cp`, a `.part` name, a late `cp`) raise none. The reverse direction (the
   shell's own `send` IPC route against a second real `recv`) can't run
   here: 0w0mewo/localsend-cli hardcodes the receive port to 53317 with no
   flag to move it, so a second `recv` on the same host only collides with

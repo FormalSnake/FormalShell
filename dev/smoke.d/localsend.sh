@@ -12,8 +12,10 @@
 # What is under test is the shell's receiver end to end: LocalsendService
 # spawns the real CLI, the file lands in the real fixture directory over the
 # real LocalSend v2 HTTPS handshake (LocalsendService.qml's header on why no
-# `--https=false`), the directory watch notices a name that wasn't there
-# before, and the RECEIVED toast carries it. A sha256 match against the
+# `--https=false`), `recv`'s own `Recv file` log line raises the RECEIVED toast, and
+# files something else writes into the same directory (a browser download,
+# here a `cp` and a `.part` temp name before the transfer and a second
+# `cp` after it) raise none: exactly one toast for the run. A sha256 match against the
 # source file is the one claim a screenshot cannot make: a truncated or
 # corrupted transfer would still produce a same-named file and a toast.
 #
@@ -52,7 +54,7 @@ leg_localsend_timing() {
   # up-to-30s poll for the file landing, and the notify status check),
   # since the base run's teardown (shot.sh) fires at that mark and tears
   # the session down under whatever the drive script is still doing.
-  leg_timing 45 75
+  leg_timing 50 80
 }
 
 leg_localsend_drive() {
@@ -70,6 +72,8 @@ for _ in \$(seq 1 40); do
   curl -skf -o /dev/null https://127.0.0.1:53317/api/localsend/v2/info && break
   sleep 0.5
 done
+cp "$localsend_payload_path" "$localsend_receive_dir/browser-download.txt"
+: > "$localsend_receive_dir/browser-download.bin.part"
 "$localsend_cli_bin" send --ip 127.0.0.1 -f "$localsend_payload_path" > "$localsend_send_out_path" 2>&1
 
 for _ in \$(seq 1 30); do
@@ -78,7 +82,8 @@ for _ in \$(seq 1 30); do
 done
 sha256sum "$localsend_receive_dir/$localsend_payload_name" > "$localsend_received_sha_path" 2>/dev/null
 
-sleep 2
+cp "$localsend_payload_path" "$localsend_receive_dir/browser-download-late.txt"
+sleep 5
 "$qs_bin" ipc -p "$shell_path" call notifications status > "$localsend_notify_after_path" 2>&1
 "$grim_bin" "$localsend_received_png" > /dev/null 2>&1
 EOF
@@ -114,7 +119,7 @@ leg_localsend_assert() {
   total_after=$("$jq_bin" -r '.pending + .popups' "$localsend_notify_after_path" 2>/dev/null)
   echo "notification centre totals (pending+popups): before=$total_before after=$total_after"
   [ -n "$total_before" ] && [ -n "$total_after" ] || fail "no notifications status reply to read a RECEIVED toast off"
-  [ "$total_after" -eq $((total_before + 1)) ] || fail "no LOCALSEND RECEIVED toast landed: $total_before -> $total_after"
+  [ "$total_after" -eq $((total_before + 1)) ] || fail "expected exactly one LOCALSEND RECEIVED toast (the real transfer, none for the three foreign files): $total_before -> $total_after"
 
   if [ ! -f "$localsend_received_png" ]; then fail "no localsend-received screenshot produced"; fi
   echo "SMOKE_LOCALSEND_RECEIVED $localsend_received_png"

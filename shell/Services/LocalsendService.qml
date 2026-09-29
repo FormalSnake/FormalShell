@@ -30,12 +30,12 @@ import "../Core/proc.js" as Proc
 // metadata (silently dropping the unknown key), and the sender's real
 // upload lands and gets written to `saveToDir` as an ordinary small text
 // file, same as any other. Nothing is dropped, so a phone-sent text message
-// needs no special case here: the directory watch below already toasts it
-// like any other received file.
+// needs no special case here: it is toasted like any other received file.
 //
-// The toast comes from watching the receive directory for a filename that
-// wasn't there last poll rather than from `recv`'s `Recv file file=<name>`
-// log line, so the Open action points at what actually landed on disk.
+// The toast comes from `recv`'s own `Recv file file=<name>` log line, which
+// is written after the file is on disk and checksummed. The receive
+// directory defaults to ~/Downloads, so watching it would toast every
+// browser download too.
 Singleton {
     id: root
 
@@ -214,8 +214,12 @@ Singleton {
         stderr: SplitParser {
             onRead: line => {
                 var event = LocalsendModel.parseRecvLine(line);
-                if (event && event.type === "error")
+                if (!event)
+                    return;
+                if (event.type === "error")
                     root.lastError = event.message;
+                else if (event.type === "received")
+                    root._announce(event.file);
             }
         }
         onRunningChanged: root.receiving = recvProc.running
@@ -241,55 +245,40 @@ Singleton {
                 root._backoffMs = root._baseBackoffMs;
                 recvProc.running = true;
             }
-            root._knownFiles = null;
-            watchTimer.start();
         } else {
             retryTimer.stop();
             recvProc.running = false;
-            watchTimer.stop();
-            root._knownFiles = null;
         }
     }
 
     on_ShouldReceiveChanged: root._applyReceive()
 
-    // --- receive directory watch ----------------------------------------------
+    property var _announceQueue: []
 
-    // null means "not primed yet": the first listing after the watch
-    // (re)starts seeds the known set silently, so a file already sitting in
-    // the directory before this session never reads as freshly received.
-    property var _knownFiles: null
+    function _announce(name) {
+        root._announceQueue.push({ name: name, path: root.dir + "/" + name });
+        if (!existsProc.running)
+            root._checkNext();
+    }
 
-    // Started/stopped from _applyReceive() rather than bound to
-    // `running`, since Timer.stop() on a running property with a live
-    // binding would silence the binding for good, the same start/stop
-    // shape retryTimer above already uses.
-    Timer {
-        id: watchTimer
-        interval: 2000
-        repeat: true
-        onTriggered: watchProc.running = true
+    function _checkNext() {
+        if (root._announceQueue.length === 0)
+            return;
+        existsProc.command = ["test", "-f", root._announceQueue[0].path];
+        existsProc.running = true;
     }
 
     Process {
-        id: watchProc
-        command: ["sh", "-c", 'find "$1" -maxdepth 1 -type f -printf "%f\\n" 2>/dev/null', "sh", root.dir]
-        stdout: StdioCollector {
-            id: watchStdout
-            onStreamFinished: {
-                var names = watchStdout.text.split("\n").filter(function (n) { return n !== ""; });
-                if (root._knownFiles !== null) {
-                    LocalsendModel.newFiles(root._knownFiles, names).forEach(function (n) {
-                        root._announce(n);
-                    });
-                }
-                root._knownFiles = names;
-            }
+        id: existsProc
+        onExited: exitCode => {
+            var item = root._announceQueue.shift();
+            if (exitCode === 0)
+                root._toast(item.name, item.path);
+            root._checkNext();
         }
     }
 
-    function _announce(name) {
-        var path = root.dir + "/" + name;
+    function _toast(name, path) {
         NotificationService.notify("LOCALSEND RECEIVED", name, 1, [
             { key: "open", label: "Open", invoke: () => root._launch([path]) },
             { key: "reveal", label: "Show in Folder", invoke: () => root._launch([root.dir]) }
