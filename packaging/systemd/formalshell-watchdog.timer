@@ -1,0 +1,12 @@
+[Unit]
+Description=FormalShell liveness probe
+PartOf=graphical-session.target
+
+[Timer]
+OnActiveSec=30s
+OnUnitActiveSec=30s
+AccuracySec=5s
+Unit=formalshell-watchdog.service
+
+[Install]
+WantedBy=graphical-session.target

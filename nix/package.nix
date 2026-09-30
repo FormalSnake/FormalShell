@@ -129,11 +129,9 @@ stdenvNoCC.mkDerivation {
     # can never block suspend. `qs ipc call` itself exits nonzero (255) when
     # no shell instance is running at all — this wrapper is the actual
     # command such a unit invokes, and it never propagates that.
-    cat > $out/bin/formalshell-lock-before-sleep <<SCRIPT
-#!/usr/bin/env bash
-${lib.getExe' quickshell "qs"} ipc --any-display -p $out/share/formalshell call lock lock >/dev/null 2>&1 || true
-exit 0
-SCRIPT
+    substitute ${../packaging/formalshell-lock-before-sleep.in} $out/bin/formalshell-lock-before-sleep \
+      --subst-var-by QS ${lib.getExe' quickshell "qs"} \
+      --subst-var-by SHAREDIR $out/share/formalshell
     chmod +x $out/bin/formalshell-lock-before-sleep
 
     # Liveness probe for the home-manager module's formalshell-watchdog
@@ -144,17 +142,11 @@ SCRIPT
     # timeout here means that loop is stuck. Two timeouts in a row restart
     # the service; "no running instance" exits fast with 255 and is a
     # stopped shell, not a hung one, so it clears the strike and does nothing.
-    cat > $out/bin/formalshell-watchdog <<SCRIPT
-#!/usr/bin/env bash
-strikes=\''${XDG_RUNTIME_DIR:-/tmp}/formalshell-watchdog.strikes
-${lib.getExe' coreutils "timeout"} -k 5 20 ${lib.getExe' quickshell "qs"} ipc --any-display -p $out/share/formalshell show >/dev/null 2>&1
-if [ \$? -ne 124 ]; then rm -f "\$strikes"; exit 0; fi
-n=\$(( \$(cat "\$strikes" 2>/dev/null || echo 0) + 1 ))
-if [ \$n -lt 2 ]; then echo "\$n" > "\$strikes"; exit 0; fi
-rm -f "\$strikes"
-echo "formalshell answered no IPC probe twice in a row, restarting it" >&2
-exec ${lib.getExe' systemd "systemctl"} --user restart formalshell.service
-SCRIPT
+    substitute ${../packaging/formalshell-watchdog.in} $out/bin/formalshell-watchdog \
+      --subst-var-by QS ${lib.getExe' quickshell "qs"} \
+      --subst-var-by SHAREDIR $out/share/formalshell \
+      --subst-var-by TIMEOUT ${lib.getExe' coreutils "timeout"} \
+      --subst-var-by SYSTEMCTL ${lib.getExe' systemd "systemctl"}
     chmod +x $out/bin/formalshell-watchdog
     runHook postInstall
   '';

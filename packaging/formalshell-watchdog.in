@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+strikes=${XDG_RUNTIME_DIR:-/tmp}/formalshell-watchdog.strikes
+@TIMEOUT@ -k 5 20 @QS@ ipc --any-display -p @SHAREDIR@ show >/dev/null 2>&1
+if [ $? -ne 124 ]; then rm -f "$strikes"; exit 0; fi
+n=$(( $(cat "$strikes" 2>/dev/null || echo 0) + 1 ))
+if [ $n -lt 2 ]; then echo "$n" > "$strikes"; exit 0; fi
+rm -f "$strikes"
+echo "formalshell answered no IPC probe twice in a row, restarting it" >&2
+exec @SYSTEMCTL@ --user restart formalshell.service

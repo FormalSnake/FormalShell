@@ -1,0 +1,4 @@
+#!/bin/sh
+export QSG_RENDER_LOOP="${QSG_RENDER_LOOP-threaded}"
+export QT_FFMPEG_DECODING_HW_DEVICE_TYPES=""
+exec @QS@ -p @SHAREDIR@ "$@"

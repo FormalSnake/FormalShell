@@ -1,0 +1,10 @@
+[Unit]
+Description=Lock FormalShell before sleep
+Before=sleep.target
+
+[Service]
+Type=oneshot
+ExecStart=@BINDIR@/formalshell-lock-before-sleep
+
+[Install]
+WantedBy=sleep.target
