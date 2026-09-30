@@ -1,0 +1,271 @@
+# shellcheck shell=bash
+# shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
+# --earbuds proves the earbuds panel (spec 2026-09-30-m77-earbuds.md
+# "Verification") against PATH-shimmed `nothingctl` and `openscq30`. Every
+# line either shim prints is a fixture from tests/ read out of the test file
+# at fixture time (tst_earbuds_nothing.qml's `b175Custom`, nothingctl's own
+# serialisation; tst_earbuds_soundcore.qml's `paired`, `settingsEarbuds` and
+# `valuesEdited`, captured from a real openscq30 2.12.0;
+# tst_earbuds_airpods.qml's `fixturePro3`, the librepods daemon's own
+# status.json), so the shims never invent a shape. The nothingctl shim logs
+# every `watch` it is asked for and every stdin line it gets, and answers a
+# line the way nothingctl does (`{"cmd":...,"type":"ack"}`); the openscq30
+# shim logs its argv.
+#
+# BlueZ: the VM has no Bluetooth controller, so Quickshell.Bluetooth has no
+# adapter and no device. The Nothing backend does not need one (discovery
+# is `nothingctl list --json`, re-run on acquire), but the Soundcore
+# backend crosses openscq30's paired list with BlueZ's connected devices.
+# The leg exports FORMALSHELL_SMOKE_BLUETOOTH, a JSON device list that
+# replaces the adapter's in Model.bluetoothDevices (the same env-var seam
+# FORMALSHELL_SMOKE_OPEN_MENU is), with the Soundcore pair connected.
+#
+# Which devices exist in each phase is the shims' own list files, rewritten
+# by the drive script between phases; closing and reopening the panel
+# releases and reacquires the service, which runs discovery again. Phases:
+#  1. the B175 alone, on its custom preset: wrapped listening mode and EQ
+#     rows, three bands in signed dB. `earbuds set anc transparency` and
+#     `earbuds set eq-bass 5` over IPC reach the shim's stdin as exactly
+#     `anc transparency` and `eq-custom 5 0 -2`.
+#  2. the Soundcore pair alone; `earbuds set mode NoiseCanceling` reaches
+#     openscq30 as one `setting --set ambientSoundMode=NoiseCanceling`.
+#  3. both at once, the device choice heading the panel.
+#  4. the AirPods path off a staged status.json, nothing else connected.
+#  5. a device nothingctl refuses: its `watch` prints the v0.1.1
+#     `unsupported-model` line and exits 3. Twelve seconds later (past the
+#     5s first backoff every other exit gets) it was started exactly once
+#     and no device is listed.
+leg_earbuds_flag="--earbuds"
+leg_earbuds_order=176
+leg_earbuds_needs="jq"
+
+earbuds_dir="$shot_dir/earbuds"
+earbuds_shim_dir="$earbuds_dir/shim"
+earbuds_nothing_list="$earbuds_dir/nothing-list.json"
+earbuds_nothing_runs="$earbuds_dir/nothing-runs.txt"
+earbuds_nothing_stdin="$earbuds_dir/nothing-stdin.txt"
+earbuds_scq_paired="$earbuds_dir/soundcore-paired.json"
+earbuds_scq_argv="$earbuds_dir/soundcore-argv.txt"
+
+earbuds_b175_address="AA:BB:CC:DD:EE:FF"
+earbuds_refused_address="AA:BB:CC:00:00:01"
+earbuds_scq_address="AC:12:2F:11:22:33"
+
+earbuds_b175_png="$shot_dir/earbuds-b175.png"
+earbuds_soundcore_png="$shot_dir/earbuds-soundcore.png"
+earbuds_both_png="$shot_dir/earbuds-both.png"
+earbuds_airpods_png="$shot_dir/earbuds-airpods.png"
+earbuds_refused_png="$shot_dir/earbuds-refused.png"
+
+earbuds_devices_b175="$shot_dir/earbuds-devices-b175.json"
+earbuds_devices_soundcore="$shot_dir/earbuds-devices-soundcore.json"
+earbuds_devices_both="$shot_dir/earbuds-devices-both.json"
+earbuds_devices_airpods="$shot_dir/earbuds-devices-airpods.json"
+earbuds_devices_refused="$shot_dir/earbuds-devices-refused.json"
+earbuds_status_b175="$shot_dir/earbuds-status-b175.json"
+earbuds_replies="$shot_dir/earbuds-set-replies.txt"
+
+# One `property string <name>: "<json>"` line of a test file, decoded: a QML
+# string literal with only \" and \\ escapes is a JSON string.
+earbuds_fixture() {
+  sed -n "s/^ *property string $2: \(\".*\"\)\$/\1/p" "tests/$1" | "$jq_bin" -r .
+}
+
+leg_earbuds_fixture() {
+  local b175 settings values airpods
+  mkdir -p "$earbuds_shim_dir"
+  b175=$(earbuds_fixture tst_earbuds_nothing.qml b175Custom)
+  settings=$(earbuds_fixture tst_earbuds_soundcore.qml settingsEarbuds)
+  values=$(earbuds_fixture tst_earbuds_soundcore.qml valuesEdited)
+  airpods=$(earbuds_fixture tst_earbuds_airpods.qml fixturePro3)
+  earbuds_fixture tst_earbuds_soundcore.qml paired > "$earbuds_dir/soundcore-paired-fixture.json"
+  printf '%s\n' "$airpods" > "$earbuds_dir/airpods-status.json"
+  for f in "$b175" "$settings" "$values" "$airpods"; do
+    [ -n "$f" ] || { echo "earbuds: a fixture did not decode out of tests/" >&2; exit 1; }
+  done
+
+  printf '[{"address":"%s","name":"CMF Headphone Pro","connected":true}]\n' "$earbuds_b175_address" > "$earbuds_nothing_list"
+  printf '[]\n' > "$earbuds_scq_paired"
+  : > "$earbuds_nothing_runs"
+  : > "$earbuds_nothing_stdin"
+  : > "$earbuds_scq_argv"
+
+  cat > "$earbuds_shim_dir/nothingctl" <<EOF
+#!/usr/bin/env bash
+case "\$1" in
+  list)
+    cat "$earbuds_nothing_list"
+    ;;
+  watch)
+    printf 'watch %s %s\n' "\$3" "\$(date +%s)" >> "$earbuds_nothing_runs"
+    if [ "\$3" = "$earbuds_refused_address" ]; then
+      printf '%s\n' '{"code":"unsupported-model","message":"model id 0A1B2C on $earbuds_refused_address is not supported (supported: B175 CMF Headphone Pro); nothing was sent","modelId":"0A1B2C","type":"error"}'
+      echo "error: model id 0A1B2C on $earbuds_refused_address is not supported (supported: B175 CMF Headphone Pro); nothing was sent" >&2
+      exit 3
+    fi
+    printf '%s\n' '$b175'
+    while IFS= read -r line; do
+      printf '%s\n' "\$line" >> "$earbuds_nothing_stdin"
+      printf '{"cmd":"%s","type":"ack"}\n' "\$line"
+    done
+    ;;
+  *)
+    exit 2
+    ;;
+esac
+EOF
+  chmod +x "$earbuds_shim_dir/nothingctl"
+
+  cat > "$earbuds_shim_dir/openscq30" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$earbuds_scq_argv"
+case "\$*" in
+  "paired-devices list --json")
+    cat "$earbuds_scq_paired"
+    ;;
+  "device -a $earbuds_scq_address list-settings --no-categories --json")
+    printf '%s\n' '$settings'
+    ;;
+  "device -a $earbuds_scq_address setting --get"*)
+    printf '%s\n' '$values'
+    ;;
+  "device -a $earbuds_scq_address setting --set"*)
+    ;;
+  *)
+    exit 1
+    ;;
+esac
+EOF
+  chmod +x "$earbuds_shim_dir/openscq30"
+
+  # Not in session_env (dev/smoke.sh's header on clipssh's own PATH trick):
+  # Hyprland and everything it spawns inherit this script's environment.
+  export PATH="$earbuds_shim_dir:$PATH"
+  export FORMALSHELL_SMOKE_BLUETOOTH='[{"address":"'"$earbuds_scq_address"'","name":"Liberty 4 NC","connected":true}]'
+}
+
+leg_earbuds_timing() {
+  # Five phases of sleeps (~45s) plus some twenty `qs ipc` round trips at
+  # about a second each on llvmpipe.
+  leg_timing 80 120
+}
+
+leg_earbuds_drive() {
+  local script="$shot_dir/earbuds-drive.sh"
+  local state_dir="$iso_home/.local/state/librepods"
+  write_script "$script" <<EOF
+#!/usr/bin/env bash
+ipc() { "$qs_bin" ipc -p "$shell_path" call "\$@"; }
+nothing_list() { printf '%s\n' "\$1" > "$earbuds_nothing_list"; }
+scq_paired() { cp "\$1" "$earbuds_scq_paired"; }
+none='[]'
+
+sleep 3
+ipc panel open earbuds > /dev/null 2>&1
+sleep 3
+ipc earbuds devices > "$earbuds_devices_b175" 2>&1
+ipc earbuds status > "$earbuds_status_b175" 2>&1
+"$grim_bin" "$earbuds_b175_png" > /dev/null 2>&1
+{
+  echo "anc: \$(ipc earbuds set anc transparency 2>&1)"
+  echo "eq-bass: \$(ipc earbuds set eq-bass 5 2>&1)"
+} >> "$earbuds_replies"
+sleep 1
+ipc panel close > /dev/null 2>&1
+
+nothing_list "\$none"
+scq_paired "$earbuds_dir/soundcore-paired-fixture.json"
+sleep 1
+ipc panel open earbuds > /dev/null 2>&1
+sleep 4
+ipc earbuds devices > "$earbuds_devices_soundcore" 2>&1
+"$grim_bin" "$earbuds_soundcore_png" > /dev/null 2>&1
+echo "mode: \$(ipc earbuds set mode NoiseCanceling 2>&1)" >> "$earbuds_replies"
+sleep 2
+ipc panel close > /dev/null 2>&1
+
+nothing_list '[{"address":"$earbuds_b175_address","name":"CMF Headphone Pro","connected":true}]'
+sleep 1
+ipc panel open earbuds > /dev/null 2>&1
+sleep 5
+ipc earbuds devices > "$earbuds_devices_both" 2>&1
+"$grim_bin" "$earbuds_both_png" > /dev/null 2>&1
+ipc panel close > /dev/null 2>&1
+
+nothing_list "\$none"
+printf '[]\n' > "$earbuds_scq_paired"
+mkdir -p "$state_dir"
+cp "$earbuds_dir/airpods-status.json" "$state_dir/status.json"
+sleep 1
+ipc panel open earbuds > /dev/null 2>&1
+sleep 3
+ipc earbuds devices > "$earbuds_devices_airpods" 2>&1
+"$grim_bin" "$earbuds_airpods_png" > /dev/null 2>&1
+ipc panel close > /dev/null 2>&1
+rm -f "$state_dir/status.json"
+
+nothing_list '[{"address":"$earbuds_refused_address","name":"Ear (3)","connected":true}]'
+sleep 1
+ipc panel open earbuds > /dev/null 2>&1
+sleep 12
+ipc earbuds devices > "$earbuds_devices_refused" 2>&1
+"$grim_bin" "$earbuds_refused_png" > /dev/null 2>&1
+ipc panel close > /dev/null 2>&1
+EOF
+  hypr_exec_once "bash $script"
+}
+
+leg_earbuds_assert() {
+  local png count expected
+  for png in "$earbuds_b175_png" "$earbuds_soundcore_png" "$earbuds_both_png" "$earbuds_airpods_png" "$earbuds_refused_png"; do
+    [ -s "$png" ] || fail "earbuds: no screenshot at $png"
+  done
+  echo "SMOKE_EARBUDS_B175 $earbuds_b175_png"
+  echo "SMOKE_EARBUDS_SOUNDCORE $earbuds_soundcore_png"
+  echo "SMOKE_EARBUDS_BOTH $earbuds_both_png"
+  echo "SMOKE_EARBUDS_AIRPODS $earbuds_airpods_png"
+  echo "SMOKE_EARBUDS_REFUSED $earbuds_refused_png"
+  echo "SMOKE_EARBUDS_STATUS $earbuds_status_b175"
+
+  cat "$earbuds_devices_b175"; echo
+  [ "$("$jq_bin" -r 'map(.key) | join(",")' "$earbuds_devices_b175" 2>/dev/null)" = "nothing:$earbuds_b175_address" ] \
+    || fail "earbuds: phase 1 should list the B175 alone, got $(cat "$earbuds_devices_b175")"
+  [ "$("$jq_bin" -r '.device.controls | map(select(.key == "eq-bass"))[0].unit' "$earbuds_status_b175" 2>/dev/null)" = "db" ] \
+    || fail "earbuds: the B175's bass band is not a dB range: $(cat "$earbuds_status_b175")"
+
+  cat "$earbuds_replies"
+  expected="anc: ok
+eq-bass: ok
+mode: ok"
+  [ "$(cat "$earbuds_replies")" = "$expected" ] || fail "earbuds: an IPC set was refused: $(cat "$earbuds_replies")"
+
+  echo "nothingctl stdin:"; cat "$earbuds_nothing_stdin"
+  expected="anc transparency
+eq-custom 5 0 -2"
+  [ "$(cat "$earbuds_nothing_stdin")" = "$expected" ] \
+    || fail "earbuds: nothingctl's stdin should be exactly '$expected', got '$(cat "$earbuds_nothing_stdin")'"
+
+  count=$(grep -c -- "--set" "$earbuds_scq_argv" || true)
+  grep -- "--set" "$earbuds_scq_argv" || true
+  [ "$count" = "1" ] && grep -qxF "device -a $earbuds_scq_address setting --set ambientSoundMode=NoiseCanceling --json" "$earbuds_scq_argv" \
+    || fail "earbuds: openscq30 should get one ambientSoundMode=NoiseCanceling set, got: $(grep -- "--set" "$earbuds_scq_argv")"
+
+  cat "$earbuds_devices_soundcore"; echo
+  [ "$("$jq_bin" -r 'map(.key) | join(",")' "$earbuds_devices_soundcore" 2>/dev/null)" = "soundcore:$earbuds_scq_address" ] \
+    || fail "earbuds: phase 2 should list the Soundcore pair alone, got $(cat "$earbuds_devices_soundcore")"
+
+  cat "$earbuds_devices_both"; echo
+  [ "$("$jq_bin" -r 'map(.key) | sort | join(",")' "$earbuds_devices_both" 2>/dev/null)" = "nothing:$earbuds_b175_address,soundcore:$earbuds_scq_address" ] \
+    || fail "earbuds: phase 3 should list both devices, got $(cat "$earbuds_devices_both")"
+
+  cat "$earbuds_devices_airpods"; echo
+  [ "$("$jq_bin" -r 'map(.backend) | join(",")' "$earbuds_devices_airpods" 2>/dev/null)" = "airpods" ] \
+    || fail "earbuds: phase 4 should list the AirPods alone, got $(cat "$earbuds_devices_airpods")"
+
+  echo "nothingctl watch runs:"; cat "$earbuds_nothing_runs"
+  cat "$earbuds_devices_refused"; echo
+  count=$(grep -c "^watch $earbuds_refused_address " "$earbuds_nothing_runs" || true)
+  [ "$count" = "1" ] || fail "earbuds: the refused device was started $count times in 12s, expected once"
+  [ "$("$jq_bin" -r 'length' "$earbuds_devices_refused" 2>/dev/null)" = "0" ] \
+    || fail "earbuds: the refused device is listed: $(cat "$earbuds_devices_refused")"
+}

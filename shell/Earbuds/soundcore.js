@@ -24,8 +24,9 @@ var _MODES = [
     { value: "Transparency", label: "Transparency", icon: "ear" }
 ];
 
-// presetEqualizerProfile has 22 options on most models, far more than one
-// row of buttons holds, so the row carries these four.
+// presetEqualizerProfile has 22 options on most models. Even wrapped, with
+// every label as short as "Treble reducer", that is more than four rows at
+// the panel's width, so the group carries these four.
 var _PRESETS = [
     { value: "SoundcoreSignature", label: "Signature", icon: "" },
     { value: "BassBooster", label: "Bass boost", icon: "" },

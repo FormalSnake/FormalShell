@@ -86,4 +86,34 @@ TestCase {
         compare(Model.pickActive([a, b, c], "gone").key, "b");
         compare(Model.pickActive([a], "").key, "a");
     }
+
+    function test_range_readout_and_fill() {
+        var pct = Model.range("adaptive", "Adaptive noise", "S", 40, 0, 100, 5);
+        compare(pct.unit, "percent");
+        compare(Model.rangeText(pct), "40%");
+        compare(Model.rangeFraction(pct), 0.4);
+
+        var band = function (v) { return Model.range("eq-bass", "Bass", "S", v, -6, 6, 1, "db"); };
+        compare(Model.rangeText(band(5)), "+5\u00a0dB");
+        compare(Model.rangeText(band(0)), "0\u00a0dB");
+        compare(Model.rangeText(band(-2)), "-2\u00a0dB");
+        compare(Model.rangeText(band(-0.4)), "0\u00a0dB");
+        compare(Model.rangeFraction(band(-6)), 0);
+        compare(Model.rangeFraction(band(0)), 0.5);
+        compare(Model.rangeFraction(band(6)), 1);
+        compare(Model.rangeFraction(band(-3)), 0.25);
+        compare(Model.choice("c", "C", "S", null, []).unit, "");
+    }
+
+    function test_bluetooth_devices_and_the_smoke_override() {
+        var live = [{ address: "aa:bb:cc:dd:ee:ff", name: "Buds", deviceName: "Buds", connected: true }];
+        compare(Model.bluetoothDevices(live, "")[0].address, "AA:BB:CC:DD:EE:FF");
+        compare(Model.bluetoothDevices([], "").length, 0);
+        compare(Model.bluetoothDevices(live, "not json")[0].name, "Buds");
+        var o = Model.bluetoothDevices(live, "[{\"address\":\"ac:12:2f:11:22:33\",\"name\":\"Liberty\",\"connected\":true},{\"name\":\"no address\"}]");
+        compare(o.length, 1);
+        compare(o[0].address, "AC:12:2F:11:22:33");
+        compare(o[0].deviceName, "Liberty");
+        compare(o[0].connected, true);
+    }
 }

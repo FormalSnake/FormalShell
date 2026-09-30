@@ -25,6 +25,14 @@ import qs.Core
 // field optional: `icon` is a name for Icon.qml, `label` a sans string,
 // `value` whatever the owner wants back out of `valueAt()`, `enabled`
 // defaults true and `active` false.
+//
+// `wrap` lets a group whose buttons cannot all show their whole label in the
+// width it was given break into rows: as many columns as fit the widest
+// label, rows filled evenly (six options that fit four across draw as two
+// rows of three), every button the same width. A group that fits stays one
+// row. Indices, `cursorIndex` and `step()` keep counting in reading order,
+// so an arrow walks off the end of one row onto the start of the next. Off
+// by default, and off is the single row the group always drew.
 Item {
     id: root
 
@@ -33,6 +41,7 @@ Item {
     property int index: 0
     property int cursorIndex: 0
     property bool cursor: false
+    property bool wrap: false
 
     // The gap between the trough's edge and a button, which is also the gap
     // between two buttons. The concentric rule (spec "Radius") takes the
@@ -132,15 +141,23 @@ Item {
     // take the tighter gutter (Button's `paddingX`).
     readonly property real _buttonPaddingX: Theme.space.md
 
-    readonly property real _buttonHeight: Math.max(0, root.height - root.padding * 2)
+    // How many whole-label buttons fit across, then the fewest rows that
+    // hold every option and the fewest columns that fill those rows.
+    readonly property int _fitColumns: Math.max(1, Math.floor((root.width - root.padding) / (root._naturalButtonWidth + root.padding)))
+    readonly property int _rows: root.wrap && root.count > 0 ? Math.ceil(root.count / root._fitColumns) : 1
+    readonly property int _columns: Math.max(1, root.wrap ? Math.ceil(root.count / root._rows) : root.count)
+
+    readonly property real _buttonHeight: root.wrap
+        ? Theme.space.controlHeight
+        : Math.max(0, root.height - root.padding * 2)
     readonly property real _buttonWidth: root.count > 0
-        ? Math.max(0, (buttonRow.width - root.padding * (root.count - 1)) / root.count)
+        ? Math.max(0, (buttonRow.width - root.padding * (root._columns - 1)) / root._columns)
         : 0
 
     implicitWidth: root.count > 0
         ? root._naturalButtonWidth * root.count + root.padding * (root.count + 1)
         : 0
-    implicitHeight: Theme.space.controlHeight + root.padding * 2
+    implicitHeight: Theme.space.controlHeight * root._rows + root.padding * (root._rows + 1)
 
     FontMetrics {
         id: metrics
@@ -154,11 +171,13 @@ Item {
         role: "trough"
     }
 
-    Row {
+    Grid {
         id: buttonRow
         anchors.fill: parent
         anchors.margins: root.padding
-        spacing: root.padding
+        columns: root._columns
+        rowSpacing: root.padding
+        columnSpacing: root.padding
 
         Repeater {
             model: root.options

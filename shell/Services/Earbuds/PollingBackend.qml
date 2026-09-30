@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Bluetooth
+import "../../Earbuds/model.js" as Model
 
 // The poll half of the earbuds backend contract (EarbudsService.qml's
 // header), shared by the CLI-driven backends. A vendor file instantiates
@@ -42,17 +43,17 @@ Scope {
     property var _jobs: []
     property bool _busy: false
 
+    // Read here rather than inside the helper, so the binding above tracks
+    // every device's `connected`.
     function _snapshot() {
         var adapter = Bluetooth.defaultAdapter;
-        if (!adapter)
-            return [];
-        var values = adapter.devices.values;
+        var values = adapter ? adapter.devices.values : [];
         var out = [];
         for (var i = 0; i < values.length; i++) {
             var d = values[i];
             out.push({ address: d.address, name: d.name, deviceName: d.deviceName, connected: d.connected });
         }
-        return out;
+        return Model.bluetoothDevices(out, Quickshell.env("FORMALSHELL_SMOKE_BLUETOOTH"));
     }
 
     function acquire() {

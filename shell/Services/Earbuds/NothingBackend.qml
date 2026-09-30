@@ -13,13 +13,15 @@ import "../../Earbuds/nothing.js" as Nothing
 // change, one command per line on stdin. A device is listed only once its
 // child has printed a state line.
 //
-// `watch` exits 1 after `disconnected` when the link drops, and also exits 1
-// with no line at all when it cannot open the device (an unsupported model,
-// a control service that will not connect). Either way the device is
-// dropped and discovery runs again only after a backoff, starting at 5s and
-// doubling up to 5 minutes while the child keeps dying before its first
-// state line, so a device nothingctl refuses is not reconnected in a loop.
-// A restart needs `list` to report the device connected again.
+// A device nothingctl refuses over its model prints one `unsupported-model`
+// error line and exits 3 (nothingctl's README "Exit codes"). Retrying cannot
+// change that answer, so the address is marked and left alone, never
+// listed, until BlueZ reports it disconnected and then connected again.
+// Every other exit (1 after `disconnected` when the link drops, or 1 with no
+// line when the control service will not connect) drops the device and runs
+// discovery again only after a backoff, starting at 5s and doubling up to 5
+// minutes while the child keeps dying before its first state line. A
+// restart needs `list` to report the device connected again.
 Scope {
     id: root
 
@@ -39,22 +41,25 @@ Scope {
     property var _states: ({})
     property var _failures: ({})
     property var _retry: ({})
+    // address -> { seenDown }, kept across release so closing and reopening
+    // the panel is not a way round it (Nothing.rearm).
+    property var _unsupported: ({})
 
-    readonly property string _btKey: root._held ? root._connectedKey() : ""
-
-    function _connectedKey() {
+    // Live whether held or not: a refused device's disconnect has to be
+    // seen even while nothing is showing the panel.
+    readonly property var _btConnected: {
         var adapter = Bluetooth.defaultAdapter;
-        if (!adapter)
-            return "[]";
-        var values = adapter.devices.values;
+        var values = adapter ? adapter.devices.values : [];
         var out = [];
         for (var i = 0; i < values.length; i++)
-            if (values[i].connected)
-                out.push(values[i].address);
-        return JSON.stringify(out.sort());
+            out.push({ address: values[i].address, name: values[i].name, deviceName: values[i].deviceName, connected: values[i].connected });
+        return Model.bluetoothDevices(out, Quickshell.env("FORMALSHELL_SMOKE_BLUETOOTH")).filter(d => d.connected).map(d => d.address).sort();
     }
 
-    on_BtKeyChanged: root._discover()
+    on_BtConnectedChanged: {
+        root._unsupported = Nothing.rearm(root._unsupported, root._btConnected);
+        root._discover();
+    }
 
     function acquire() {
         root._held = true;
@@ -108,7 +113,7 @@ Scope {
         if (code === 0) {
             Nothing.parseList(text).forEach(d => {
                 var retry = root._retry[d.address];
-                if (!d.connected || root._watchers[d.address] || (retry && retry.at > now))
+                if (!d.connected || root._watchers[d.address] || root._unsupported[d.address] || (retry && retry.at > now))
                     return;
                 root._startWatch(d.address);
             });
@@ -142,6 +147,9 @@ Scope {
             delete root._retry[address];
         } else if (msg.type === "ack") {
             delete root._failures[address];
+        } else if (msg.type === "error" && msg.code === Nothing.UNSUPPORTED) {
+            root._markUnsupported(address, msg.message);
+            return;
         } else if (msg.type === "error") {
             console.warn("nothingctl " + address + ": " + msg.message);
             root._failures[address] = Nothing.FAILED;
@@ -154,7 +162,17 @@ Scope {
         root._publish();
     }
 
-    function _onExit(p) {
+    function _markUnsupported(address, message) {
+        if (root._unsupported[address])
+            return;
+        console.warn("nothingctl " + address + ": " + (message || "unsupported model") + "; not retried until it reconnects");
+        var next = Object.assign({}, root._unsupported);
+        next[address] = { seenDown: false };
+        root._unsupported = next;
+    }
+
+    // code: the exit code, or -1 for a child that never started.
+    function _onExit(p, code) {
         if (p.done)
             return;
         p.done = true;
@@ -162,11 +180,15 @@ Scope {
         if (root._watchers[address] === p)
             delete root._watchers[address];
         p.destroy();
+        if (code === Nothing.UNSUPPORTED_EXIT)
+            root._markUnsupported(address, "");
         if (!root._held)
             return;
         delete root._states[address];
         delete root._failures[address];
         root._publish();
+        if (root._unsupported[address])
+            return;
         var last = root._retry[address];
         var delay = last ? Math.min(last.delay * 2, root._backoffMax) : root._backoffMin;
         root._retry[address] = { at: Date.now() + delay, delay: delay };
@@ -230,10 +252,10 @@ Scope {
                 onRead: line => console.warn("nothingctl " + w.address + ": " + line)
             }
             onStarted: w.started = true
-            onExited: root._onExit(w)
+            onExited: code => root._onExit(w, code)
             onRunningChanged: {
                 if (!w.running && !w.started)
-                    root._onExit(w);
+                    root._onExit(w, -1);
             }
         }
     }

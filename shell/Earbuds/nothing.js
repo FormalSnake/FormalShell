@@ -2,7 +2,7 @@
 .import "model.js" as Model
 
 // Nothing and CMF adapter for the earbuds model, over `nothingctl`
-// (github.com/FormalSnake/nothingctl v0.1.0). Field names are the CLI's own
+// (github.com/FormalSnake/nothingctl v0.1.1). Field names are the CLI's own
 // serde output: the snapshot is src/protocol/state.rs `Snapshot`, a `list
 // --json` row is src/transport/mod.rs `DeviceInfo`, and `watch` prints the
 // `ack`, `error` and `disconnected` lines from src/session.rs and
@@ -17,6 +17,12 @@
 
 var BACKEND = "nothing";
 var BINARY = "nothingctl";
+
+// A device nothingctl refused over its model (README "Exit codes"): `watch`
+// prints an error line carrying this code, then exits with UNSUPPORTED_EXIT.
+// Nothing was sent to it, and retrying cannot change the answer.
+var UNSUPPORTED = "unsupported-model";
+var UNSUPPORTED_EXIT = 3;
 
 var _MAC = /^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$/;
 // Every name nothingctl reports is one word of lowercase ASCII. Checked on
@@ -129,11 +135,32 @@ function parseLine(line) {
     case "ack":
         return { type: "ack", cmd: typeof raw.cmd === "string" ? raw.cmd : "" };
     case "error":
-        return { type: "error", message: typeof raw.message === "string" ? raw.message : "" };
+        return {
+            type: "error",
+            code: typeof raw.code === "string" ? raw.code : "",
+            modelId: typeof raw.modelId === "string" ? raw.modelId : null,
+            message: typeof raw.message === "string" ? raw.message : ""
+        };
     case "disconnected":
         return { type: "disconnected" };
     }
     return null;
+}
+
+// marks: address -> { seenDown }, the devices refused over their model.
+// connected: the addresses BlueZ reports connected right now. A mark is
+// armed once its device is seen disconnected and dropped when it is seen
+// connected after that, so a refused device is tried again only after a
+// real reconnect. Returns a new object.
+function rearm(marks, connected) {
+    var out = {};
+    Object.keys(marks).forEach(function (a) {
+        var up = connected.indexOf(a) !== -1;
+        if (up && marks[a].seenDown)
+            return;
+        out[a] = { seenDown: marks[a].seenDown || !up };
+    });
+    return out;
 }
 
 function _options(names, labels) {
@@ -170,7 +197,7 @@ function normalise(state, failure) {
     if (_customShown(state)) {
         var gain = _gain(state);
         _BANDS.forEach(function (band, i) {
-            controls.push(Model.range(band.key, band.label, "Equalizer", Math.max(gain.min, Math.min(gain.max, state.eq.custom[i])), gain.min, gain.max, 1));
+            controls.push(Model.range(band.key, band.label, "Equalizer", Math.max(gain.min, Math.min(gain.max, state.eq.custom[i])), gain.min, gain.max, 1, "db"));
         });
     }
     if (state.spatial && state.spatial.available.length > 0)

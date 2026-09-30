@@ -196,7 +196,21 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   disabled and enabled again, removed before the panel frame is taken.
 - `dump.sh` `--dump`: the `debug` target's whole state dump, saved as the
   run's JSON sidecar and read by other legs for what the shell resolved.
-- `emoji.sh` `--emoji`: the launcher's emoji route by search and by order:
+- `earbuds.sh` `--earbuds`: the earbuds panel against PATH-shimmed
+  `nothingctl` and `openscq30` answering with fixtures read out of
+  `tests/tst_earbuds_*.qml`, and a staged librepods status.json, in five
+  phases: the B175 alone (wrapped listening mode and EQ rows, custom bands
+  in signed dB), the Soundcore pair alone, both with the device choice
+  heading the panel, the AirPods, and a device nothingctl refuses. `earbuds
+  set` over IPC reaches nothingctl's stdin as exactly `anc transparency`
+  and `eq-custom 5 0 -2` and openscq30 as one `--set
+  ambientSoundMode=NoiseCanceling`; the refused device's `watch` prints the
+  `unsupported-model` line and exits 3, and 12s later it was started once
+  and no device is listed. The VM has no Bluetooth controller, so the leg
+  exports `FORMALSHELL_SMOKE_BLUETOOTH`, a device list that replaces the
+  adapter's (`Earbuds/model.js` `bluetoothDevices`), with the Soundcore
+  pair connected.
+ the launcher's emoji route by search and by order:
   `:e sob` reaching 😭 through CLDR's keywords (its Unicode name has no
   "sob" in it), and one copy through the row's own Enter path putting that
   emoji at the head of its own rank and no higher, with no settings key

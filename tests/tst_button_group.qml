@@ -74,7 +74,7 @@ TestCase {
 
     // The trough is the group's first child, a `Box`, so its fill is the
     // rectangle that Box draws rather than the item itself; the buttons live
-    // in the Row after it, alongside the Repeater that created them.
+    // in the Grid after it, alongside the Repeater that created them.
     function troughFill(group) { return body(group.children[0]); }
 
     function buttons(group) {
@@ -250,5 +250,61 @@ TestCase {
         compare(group.count, 0);
         compare(group.implicitWidth, 0);
         compare(buttons(group).length, 0);
+    }
+
+    readonly property var ancOptions: [
+        { label: "Off", value: "off" },
+        { label: "Transparency", value: "transparency" },
+        { label: "High", value: "high" },
+        { label: "Mid", value: "mid" },
+        { label: "Low", value: "low" },
+        { label: "Adaptive", value: "adaptive" }
+    ]
+
+    // Off, the group is the one row it always drew: button i at
+    // padding + i * (width + padding), all on the same line, the group's
+    // own height unchanged.
+    function test_without_wrap_the_buttons_sit_on_one_row() {
+        var group = make({ options: testCase.ancOptions, width: 300 });
+        var items = buttons(group);
+        compare(group.height, Theme.space.controlHeight + group.padding * 2);
+        for (var i = 0; i < items.length; i++) {
+            compare(items[i].y, 0);
+            compare(items[i].x, i * (items[0].width + group.padding));
+        }
+    }
+
+    function test_wrap_breaks_into_even_rows_of_whole_labels() {
+        var group = make({ options: testCase.ancOptions, wrap: true, width: 360 });
+        var items = buttons(group);
+        verify(group._naturalButtonWidth * 6 + group.padding * 7 > 360);
+        verify(group._rows > 1);
+        compare(group._columns * group._rows >= 6, true);
+        compare(group._columns, Math.ceil(6 / group._rows));
+        for (var i = 0; i < items.length; i++) {
+            compare(items[i].width, items[0].width);
+            verify(items[i].width >= group._naturalButtonWidth);
+            compare(items[i].y, Math.floor(i / group._columns) * (Theme.space.controlHeight + group.padding));
+        }
+        compare(group.height, Theme.space.controlHeight * group._rows + group.padding * (group._rows + 1));
+    }
+
+    function test_wrap_keeps_one_row_when_everything_fits() {
+        var group = make({ options: testCase.profileOptions, wrap: true, width: 480 });
+        compare(group._rows, 1);
+        compare(group.height, Theme.space.controlHeight + group.padding * 2);
+        var items = buttons(group);
+        compare(items[2].y, 0);
+    }
+
+    function test_wrap_steps_across_rows_in_reading_order() {
+        var group = make({ options: testCase.ancOptions, wrap: true, width: 360, cursor: true });
+        verify(group._rows > 1);
+        group.cursorIndex = group._columns - 1;
+        group.step(1);
+        compare(group.cursorIndex, group._columns);
+        verify(buttons(group)[group._columns].cursor);
+        group.step(-1);
+        compare(group.cursorIndex, group._columns - 1);
     }
 }

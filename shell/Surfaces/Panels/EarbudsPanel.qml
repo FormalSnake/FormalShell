@@ -18,7 +18,8 @@ import "../../Earbuds/model.js" as Model
 //
 // Keyboard (spec "Keyboard model"): one cursor walks the device choice and
 // then every control in visual order. On a group Left and Right move the
-// ring inside it and Enter presses the button under it; on a range they
+// ring inside it, across the rows of a wrapped one in reading order, and
+// Enter presses the button under it; on a range they
 // step by the control's `step`, the same move the track's wheel makes. The
 // cursor and each group's ring are keyed by control key rather than by
 // index (AudioPanel's idiom): a control that appears mid-session must not
@@ -197,6 +198,9 @@ Panel {
             id: group
             property var ctl: null
             width: parent ? parent.width : 0
+            // Six-option modes and presets do not fit one row at this width
+            // with every label whole.
+            wrap: true
             options: ctl ? ctl.options.map(o => ({ icon: o.icon || "", label: o.label, value: o.value, active: o.value === ctl.value })) : []
             index: Model.optionIndex(ctl)
             cursorIndex: ctl ? root._ringOf(ctl) : 0
@@ -449,12 +453,12 @@ Panel {
 
                 Item {
                     width: parent.width
-                    height: Math.max(rangeLabel.implicitHeight, rangePercent.implicitHeight)
+                    height: Math.max(rangeLabel.implicitHeight, rangeValue.implicitHeight)
 
                     Text {
                         id: rangeLabel
                         anchors.left: parent.left
-                        anchors.right: rangePercent.left
+                        anchors.right: rangeValue.left
                         anchors.rightMargin: Theme.space.iconGap
                         anchors.verticalCenter: parent.verticalCenter
                         text: rangeCell.ctl ? rangeCell.ctl.label : ""
@@ -466,10 +470,10 @@ Panel {
                     }
 
                     Text {
-                        id: rangePercent
+                        id: rangeValue
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
-                        text: Model.rangePercent(rangeCell.ctl) + "%"
+                        text: Model.rangeText(rangeCell.ctl)
                         color: rangeCell.foreground
                         font.family: Theme.fontFamilyMono
                         font.pixelSize: Theme.fontSize.body
@@ -480,7 +484,7 @@ Panel {
                 Track {
                     id: rangeTrack
                     width: parent.width
-                    value: Model.rangePercent(rangeCell.ctl) / 100
+                    value: Model.rangeFraction(rangeCell.ctl)
 
                     MouseArea {
                         anchors.fill: parent

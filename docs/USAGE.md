@@ -1612,7 +1612,7 @@ exclusive-focus surface regardless of which output the cursor is over.
 | `appmenu` | the focused window's desktop entry | `activeWindow` |
 | `systemupdate` | `flake.lock` plus one probe per input | `systemUpdate` |
 | `display` | the compositor's own output contract | `display` |
-| `earbuds` | the librepods daemon (AirPods), `openscq30` (Soundcore), `earbuds` (Samsung Galaxy Buds) | `earbuds` |
+| `earbuds` | the librepods daemon (AirPods), `nothingctl` (Nothing and CMF), `openscq30` (Soundcore), `earbuds` (Samsung Galaxy Buds) | `earbuds` |
 | `dualsense` | sysfs, read-only | `dualsense` |
 | `monitor` | `/proc`, `/sys/class/drm`, `nvidia-smi` | `monitor` |
 
@@ -1820,6 +1820,22 @@ and `One-bud ANC` toggles. `EAR DETECTION` cycles the daemon's host-side
 pause policy, so it stays visible whenever anything about the device is
 known.
 
+Nothing and CMF devices go through `nothingctl`
+(github.com/FormalSnake/nothingctl, shipped on the shell's PATH), the only
+thing that speaks their protocol: the shell hands it nothing but the
+settings the panel draws. Supported today: the CMF Headphone Pro (model
+B175), with listening mode, EQ preset, the three custom EQ bands (shown in
+dB, -6 to +6, while the Custom preset is on), spatial audio and low latency.
+While the panel or cell is up, each connected device gets one `nothingctl
+watch` child. A device nothingctl does not support is refused before
+anything is sent to it (exit code 3, an `unsupported-model` line); the shell
+logs that once, shows nothing for it and does not try it again until
+Bluetooth reports it disconnected and connected again. Any other failure
+(the link dropping, the control service not connecting) is retried after a
+backoff from 5 seconds up to 5 minutes. A row with more options than fit
+the panel's width wraps onto rows of equal buttons, so every label stays
+whole.
+
 Soundcore and Samsung Galaxy Buds are polled every 30 seconds while the
 panel or cell is up, and only while BlueZ reports a matching device
 connected. Each shows a listening mode row, an equalizer row and its battery
@@ -1829,7 +1845,7 @@ id): `openscq30 paired-devices add -a AA:BB:CC:DD:EE:FF -m SoundcoreA3947`.
 A connected Soundcore device that list does not hold is skipped, and
 `--demo` entries never show. The equalizer row carries four of Soundcore's
 presets (Signature, Bass boost, Treble boost, Podcast), and none is lit
-while another preset is active. Samsung uses the `earbuds` CLI, which runs
+while another preset is active: all 22 would wrap past four rows. Samsung uses the `earbuds` CLI, which runs
 its own background daemon: the shell starts it (through the first command)
 only when a Galaxy Buds device is connected, and never stops it. That
 daemon also pauses media when a bud comes out and switches the PulseAudio
@@ -1982,6 +1998,11 @@ fs earbuds set ca on              # AirPods: conversation awareness
 fs earbuds set onebud off
 fs earbuds set ear both           # AirPods: one | both | off
 fs earbuds set adaptive 40        # AirPods: 0-100, only while noise mode is adaptive
+fs earbuds set anc transparency   # Nothing: off | transparency | high | mid | low | adaptive
+fs earbuds set eq custom          # Nothing: rock | electronic | pop | vocals | classical | custom
+fs earbuds set eq-bass 3          # Nothing: -6 to 6 dB, also eq-mid and eq-treble, custom preset only
+fs earbuds set spatial concert    # Nothing: off | concert | theatre
+fs earbuds set low-latency on     # Nothing
 fs earbuds set mode NoiseCanceling # Soundcore: Normal | NoiseCanceling | Transparency, as the model lists them
 fs earbuds set eq BassBooster     # Soundcore: SoundcoreSignature | BassBooster | TrebleBooster | Podcast
 fs earbuds set anc on             # Galaxy Buds: noise cancellation

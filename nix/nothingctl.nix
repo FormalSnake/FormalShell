@@ -5,16 +5,16 @@
 
 rustPlatform.buildRustPackage rec {
   pname = "nothingctl";
-  version = "0.1.0";
+  version = "0.1.1";
 
   src = fetchFromGitHub {
     owner = "FormalSnake";
     repo = "nothingctl";
     rev = "v${version}";
-    hash = "sha256-cZUg81KPth03whCJRQJMM2D4peNkTQk2mNz9VkyM8hg=";
+    hash = "sha256-OjPbHavyLwXEL8Vnn4G6+2gTF4+pEHoCguoxOBTFpJM=";
   };
 
-  cargoHash = "sha256-bfDxHAyNuJ4S/hYIFTmAvvfLqx35ooypQ7SQSHuW7WE=";
+  cargoHash = "sha256-gkVmLnK4xVj0s2ygiFt/PZTQk/T3ebVyc9qjUzQln6k=";
 
   nativeBuildInputs = [ pkg-config ];
   buildInputs = [ dbus ];

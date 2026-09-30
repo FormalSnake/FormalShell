@@ -40,6 +40,38 @@ TestCase {
         compare(Nothing.parseLine("{\"type\":\"disconnected\"}").type, "disconnected");
     }
 
+    // nothingctl v0.1.1's refusal line, src/main.rs `unsupported_line`.
+    function test_unsupported_model_line() {
+        var e = Nothing.parseLine("{\"type\":\"error\",\"code\":\"unsupported-model\",\"modelId\":\"ABCDEF\",\"message\":\"model id ABCDEF on AA:BB:CC:DD:EE:FF is not supported (supported: B175 CMF Headphone Pro); nothing was sent\"}");
+        compare(e.type, "error");
+        compare(e.code, Nothing.UNSUPPORTED);
+        compare(e.modelId, "ABCDEF");
+        compare(Nothing.parseLine("{\"type\":\"error\",\"code\":\"unsupported-model\",\"modelId\":null,\"message\":\"x\"}").modelId, null);
+        compare(Nothing.parseLine("{\"type\":\"error\",\"message\":\"write failed\"}").code, "");
+        compare(Nothing.UNSUPPORTED_EXIT, 3);
+    }
+
+    function test_rearm_needs_a_disconnect_then_a_connect() {
+        var a = "AA:BB:CC:DD:EE:FF";
+        var marks = {};
+        marks[a] = { seenDown: false };
+        marks = Nothing.rearm(marks, [a]);
+        compare(marks[a].seenDown, false);
+        marks = Nothing.rearm(marks, []);
+        compare(marks[a].seenDown, true);
+        marks = Nothing.rearm(marks, []);
+        compare(marks[a].seenDown, true);
+        marks = Nothing.rearm(marks, [a]);
+        compare(marks[a], undefined);
+    }
+
+    function test_custom_bands_read_in_db() {
+        var bass = Model.control(Nothing.normalise(state(b175Custom), ""), "eq-bass");
+        compare(bass.unit, "db");
+        compare(Model.rangeText(bass), "+3\u00a0dB");
+        compare(Model.rangeFraction(bass), 0.75);
+    }
+
     function test_parse_line_garbage() {
         compare(Nothing.parseLine(""), null);
         compare(Nothing.parseLine("error: no Nothing device is connected"), null);
