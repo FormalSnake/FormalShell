@@ -37,10 +37,12 @@ lint /usr/share/formalshell | sort > /tmp/installed.log
 diff /tmp/repo.log /tmp/installed.log
 # Nothing may name a Qt module or type this release lacks. The shell's own
 # types go unresolved under --bare too, so only names with no .qml file in
-# the tree count.
+# the tree count. BoxCast.qml is exempt: Box loads it through cast.js and
+# draws without its casts on a Qt that lacks RectangularShadow.
+grep -v '/BoxCast\.qml:' /tmp/installed.log > /tmp/required.log || true
 missing=$( {
-  sed -n 's/.*Failed to import \([A-Za-z][A-Za-z0-9.]*\).*/\1/p' /tmp/installed.log | grep -v '^qs\.' || true
-  sed -n 's/.*: \([A-Za-z_][A-Za-z0-9_]*\) was not found\..*/\1/p' /tmp/installed.log | sort -u \
+  sed -n 's/.*Failed to import \([A-Za-z][A-Za-z0-9.]*\).*/\1/p' /tmp/required.log | grep -v '^qs\.' || true
+  sed -n 's/.*: \([A-Za-z_][A-Za-z0-9_]*\) was not found\..*/\1/p' /tmp/required.log | sort -u \
     | while read -r t; do [ -n "$(find /usr/share/formalshell -name "$t.qml" -print -quit)" ] || echo "$t"; done
 } | sort -u )
 if [ -n "$missing" ]; then

@@ -48,6 +48,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - { image: "debian:trixie", suite: trixie }
           - { image: "debian:testing", suite: forky }
           - { image: "debian:unstable", suite: sid }
           - { image: "ubuntu:26.04", suite: resolute }

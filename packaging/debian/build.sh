@@ -16,7 +16,8 @@ here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd)
 tag=
 dir=$here/build
-suite=$(. /etc/os-release && echo "$VERSION_CODENAME")
+codename=$(. /etc/os-release && echo "$VERSION_CODENAME")
+suite=$codename
 deps=
 while [ $# -gt 0 ]; do
   case $1 in
@@ -52,9 +53,9 @@ case $(dpkg --print-architecture) in
   *) echo "no zig 0.16.0 build for $(dpkg --print-architecture)" >&2; exit 1 ;;
 esac
 quickshell=(
-  "https://deb.debian.org/debian/pool/main/q/quickshell/quickshell_0.3.1-1.dsc af6e96a2f2692982dccef9b95ebcf2a92157c27f74dd9ab91ae620273752b38e"
-  "https://deb.debian.org/debian/pool/main/q/quickshell/quickshell_0.3.1.orig.tar.xz 9fc8d15ead2b0771fb2202c94d07e3d97c8b7bd1f167d2734fb5fd204ac43851"
-  "https://deb.debian.org/debian/pool/main/q/quickshell/quickshell_0.3.1-1.debian.tar.xz aee7833c44158c5518a5198cd4b1be88042b5533d69db9d9367fc9852af8e27f"
+  "https://snapshot.debian.org/archive/debian/20260912T203535Z/pool/main/q/quickshell/quickshell_0.3.1-1.dsc af6e96a2f2692982dccef9b95ebcf2a92157c27f74dd9ab91ae620273752b38e"
+  "https://snapshot.debian.org/archive/debian/20260912T203535Z/pool/main/q/quickshell/quickshell_0.3.1.orig.tar.xz 9fc8d15ead2b0771fb2202c94d07e3d97c8b7bd1f167d2734fb5fd204ac43851"
+  "https://snapshot.debian.org/archive/debian/20260912T203535Z/pool/main/q/quickshell/quickshell_0.3.1-1.debian.tar.xz aee7833c44158c5518a5198cd4b1be88042b5533d69db9d9367fc9852af8e27f"
 )
 
 fetch() {
@@ -94,8 +95,14 @@ build_quickshell() {
   done
   (cd "$qs" && dpkg-source -x --no-check quickshell_0.3.1-1.dsc src)
   cd "$qs/src"
-  # Ubuntu has no cpptrace; the crash handler is the only thing using it.
-  if ! apt-cache show libcpptrace-dev >/dev/null 2>&1; then
+  # 0.3.1 builds ext-background-effect-v1, which wayland-protocols has since
+  # 1.45; the >= 1.41 in Debian's control lets trixie's 1.44 through.
+  sed -i 's/wayland-protocols (>= 1.41)/wayland-protocols (>= 1.45)/' debian/control
+  grep -q 'wayland-protocols (>= 1.45)' debian/control
+  # Ubuntu has no cpptrace, and trixie's is in backports, which the system
+  # installing the package may not have. The crash handler is the only
+  # thing using it.
+  if [ "$codename" = trixie ] || ! apt-cache show libcpptrace-dev >/dev/null 2>&1; then
     sed -i '/libcpptrace-dev/d' debian/control
     sed -i 's|-DNO_PCH=ON|-DNO_PCH=ON -DCRASH_HANDLER=OFF|' debian/rules
     grep -q CRASH_HANDLER=OFF debian/rules
@@ -104,13 +111,21 @@ build_quickshell() {
       "$suite" "$suite" "$suite" "$(sed -n 's/^Maintainer: //p' "$src/debian/control")" "$(date -R)"
     cat debian/changelog; } > debian/changelog.new
   mv debian/changelog.new debian/changelog
-  [ -n "$deps" ] && apt-get build-dep -y .
+  if [ -n "$deps" ]; then
+    [ "$codename" = trixie ] && apt-get install -y wayland-protocols/trixie-backports
+    apt-get build-dep -y .
+  fi
   dpkg-buildpackage -us -uc -b
   cd "$dir"
   mv "$qs"/quickshell_*.deb "$dir/"
 }
 
 if [ -n "$deps" ]; then
+  # trixie's Go (1.24) and wayland-protocols (1.44) are older than
+  # localsend-cli and quickshell need; backports carries both.
+  if [ "$codename" = trixie ]; then
+    echo 'deb http://deb.debian.org/debian trixie-backports main' > /etc/apt/sources.list.d/trixie-backports.list
+  fi
   apt-get update
   apt-get install -y --no-install-recommends ca-certificates curl dpkg-dev git patch unzip xz-utils
 fi
@@ -140,7 +155,7 @@ for entry in "${sources[@]}"; do
   unpack "$dl/${url##*/}" "$tp/$name" "$strip"
 done
 
-export CARGO_HOME=$tp/cargo-home GOPATH=$tp/gopath GOFLAGS=-modcacherw
+export CARGO_HOME=$tp/cargo-home GOPATH=$tp/gopath GOFLAGS=-modcacherw PATH=/usr/lib/go-1.25/bin:$PATH
 host=$(rustc -vV | sed -n 's/^host: //p')
 rm -f "$tp/tensaku/rust-toolchain.toml"
 for crate in ttfx tensaku matugen; do
