@@ -65,12 +65,12 @@ unavailable states. Verify in an `archlinux` container: `makepkg`, `pacman
 
 ## Task 5: Debian/Ubuntu package
 
-`packaging/debian/` built with `dpkg-buildpackage` in `debian:testing`,
-`debian:trixie` and the newest Ubuntu. Depends on `quickshell (>= 0.3.1)`.
-Where the distro lacks it, the release also ships a quickshell 0.3.1 deb
-rebuilt from Debian's own source for that suite, if the shell runs on that
-suite's Qt; otherwise that suite is documented as unsupported. Same
-verification shape as Task 4 plus `lintian`.
+`packaging/debian/` built with `dpkg-buildpackage` on Debian trixie, forky
+(testing), sid (unstable) and Ubuntu 26.04. Depends on `quickshell (>= 0.3.1)`.
+Where the release lacks it (trixie, Ubuntu), `build.sh` rebuilds Debian's own
+quickshell 0.3.1 source for that suite and the release ships that deb beside
+the others. Trixie's Qt 6.8 has no rectangular shadow, so the pantheon theme
+draws no cast there. Same verification shape as Task 4 plus `lintian`.
 
 ## Task 6: runtime proof of a native install
 

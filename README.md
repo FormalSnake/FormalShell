@@ -68,6 +68,8 @@ inventing data. That holds for every screenshot here.
 
 ## Install
 
+### NixOS
+
 FormalShell is a Nix flake with three modules: home-manager for the shell,
 NixOS for the system pieces it needs (PAM for the lock screen, geoclue,
 NetworkManager, bluez, upower, power-profiles-daemon, pipewire, polkit), and
@@ -88,10 +90,7 @@ an optional greeter.
         {
           home-manager.users.me = {
             imports = [ formalshell.homeModules.default ];
-            programs.formalshell = {
-              enable = true;
-              package = formalshell.packages.x86_64-linux.default;
-            };
+            programs.formalshell.enable = true;
           };
         }
       ];
@@ -110,20 +109,76 @@ Optional login screen:
 imports = [ formalshell.nixosModules.formalshell-greeter ];
 services.formalshell-greeter = {
   enable = true;
-  package = formalshell.packages.x86_64-linux.formalshell-greeter;
   sessionCommand = [ "Hyprland" ];
 };
 ```
 
-Then wire up Hyprland. The default binds, blur layer rules and palette reads
-ship as a Lua file, `share/formalshell/examples/hyprland/formalshell.lua` (the
-home-manager module writes it to `~/.config/hypr/formalshell.lua` itself). Load
-it:
+The default binds, blur layer rules and palette reads ship as a Lua file, and
+the home-manager module writes it to `~/.config/hypr/formalshell.lua` itself,
+so one line is left for you:
 
 ```lua
 -- ~/.config/hypr/hyprland.lua
 dofile(os.getenv("HOME") .. "/.config/hypr/formalshell.lua")
 ```
+
+### Arch
+
+x86_64 and aarch64. Each release publishes an AUR tarball with the checksums
+pinned. It builds `formalshell` and its tool packages (`formalshell-eds`,
+`-ttfx`, `-tensaku`, `-clipssh`, `-localsend-cli`, `-iphone-bridge`,
+`-ancs4linux`):
+
+```sh
+gh release download --repo FormalSnake/FormalShell --pattern 'formalshell-aur-*.tar.gz'
+tar xzf formalshell-aur-*.tar.gz
+makepkg -si
+```
+
+From a checkout, `packaging/arch/build.sh -si` builds the same packages from
+the working tree. Then enable the units:
+
+```sh
+systemctl --user enable formalshell.service formalshell-watchdog.timer
+sudo systemctl enable --now formalshell-power-poll.service
+```
+
+The second one feeds USB-C and CPU draw to the power panel. Load the Hyprland
+file:
+
+```lua
+-- ~/.config/hypr/hyprland.lua
+dofile("/usr/share/formalshell/examples/hyprland/formalshell.lua")
+```
+
+### Debian and Ubuntu
+
+Debian 13 (trixie), testing (forky), unstable (sid) and Ubuntu 26.04. Each
+release attaches one set of `.deb` files per suite, the suite in every file
+name (`formalshell_0.1.0-1+trixie_all.deb`). On trixie and Ubuntu the set also
+carries a `quickshell` rebuilt for that release. Swap `trixie` for `forky`,
+`sid` or `resolute` (Ubuntu 26.04):
+
+```sh
+gh release download --repo FormalSnake/FormalShell --pattern '*trixie*.deb'
+sudo apt install ./*trixie*.deb
+```
+
+Enable the user units, which are installed but not started:
+
+```sh
+systemctl --user enable formalshell.service formalshell-watchdog.timer
+```
+
+Load the Hyprland file:
+
+```lua
+-- ~/.config/hypr/hyprland.lua
+dofile("/usr/share/formalshell/examples/hyprland/formalshell.lua")
+```
+
+Trixie's Qt 6.8 lacks the rectangular shadow the pantheon theme draws its
+cast with, so that theme has no drop shadows there.
 
 ## Usage
 

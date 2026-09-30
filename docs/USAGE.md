@@ -2667,7 +2667,7 @@ by default, in which case no fingerprint glyph appears at all.
 
 `lock.command` is an argv list naming an external locker. Set it and every
 lock trigger in the shell spawns that instead of raising the built-in
-surface: `lock lock` over IPC, lock-before-sleep, the `lock`
+surface: `lock lock` over IPC, locking before sleep, the `lock`
 hot corner, the `screensaver.lockAfterSeconds` chain and the launcher's Lock
 row all go through one place. Empty (the default) keeps the built-in one.
 

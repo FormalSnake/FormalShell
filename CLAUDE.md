@@ -472,6 +472,12 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   the bar opens in its own line read off the shell's numbers as the card's
   rect plus a `radiusXl` fillet at either end, and the pixel where the line
   stops and the arc starts.
+- `sleep.sh` `--sleep`: `sudo systemctl suspend` with the session unlocked,
+  the real logind path with only the kernel's freeze stubbed, the lock read
+  back after wake: the stub's millisecond stamp has to come after the shell
+  let its delay inhibitor go with the surface secure, and the `FormalShell`
+  inhibitor shows in `systemd-inhibit --list` before the suspend and again
+  after wake.
 - `spaces.sh` `--spaces`: the Spaces cell over windows on two workspaces,
   each listed with its icon under its own chip in `workspaces status`, every
   occupied chip showing its icons and every chip its ordinal, and the chip
@@ -717,6 +723,10 @@ behavior on hosts where a real owner exists.
   the wrapper's PATH, and every system piece it needs (a daemon, a D-Bus
   policy, a firewall port, avahi) is a `services.formalshell.*` option in
   `nix/nixos-module.nix`. Never tell a user to install something by hand.
+  The native Arch and Debian/Ubuntu packages under `packaging/` carry the
+  same guarantee through their own dependencies and split packages. A new
+  runtime CLI goes into `nix/package.nix`, the PKGBUILD and
+  `packaging/debian/control` together.
 - **ttfx is a spec addendum, not a conflict.** Spec §10 says the
   screensaver renders "TTE-style rain/decrypt/matrix drawn in QML with the
   shell's mono font and palette — no spawned terminal windows". The
