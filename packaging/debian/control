@@ -1,0 +1,175 @@
+Source: formalshell
+Section: x11
+Priority: optional
+Maintainer: FormalSnake <formalsnake@users.noreply.github.com>
+Build-Depends:
+ debhelper-compat (= 13),
+ dh-python,
+ pybuild-plugin-pyproject,
+ python3-all,
+ python3-hatchling,
+ cargo,
+ rustc,
+ golang-go,
+ nasm,
+ pkgconf,
+ libsystemd-dev,
+ libgtk-4-dev,
+ libgtk4-layer-shell-dev,
+ libadwaita-1-dev,
+ libepoxy-dev,
+ libfontconfig-dev,
+ qt6-shader-baker,
+Standards-Version: 4.7.2
+Homepage: https://github.com/FormalSnake/FormalShell
+Rules-Requires-Root: no
+
+Package: formalshell
+Architecture: all
+Depends:
+ ${misc:Depends},
+ quickshell (>= 0.3.1),
+ qml6-module-qtqml,
+ qml6-module-qtquick,
+ qml6-module-qtquick-effects,
+ qml6-module-qtquick-shapes,
+ qml6-module-qtmultimedia,
+ qml6-module-qtpositioning,
+ libqt6positioning6-plugins,
+ qt6-image-formats-plugins,
+ formalshell-nerd-fonts-symbols,
+ formalshell-eds,
+ formalshell-iphone-bridge,
+ formalshell-matugen | matugen,
+ formalshell-tensaku,
+ brightnessctl,
+ curl,
+ ddcutil,
+ ffmpeg,
+ grim,
+ libglib2.0-bin,
+ mpv,
+ network-manager,
+ openssh-client,
+ pipewire,
+ polkitd,
+ procps,
+ pulseaudio-utils,
+ slurp,
+ systemd,
+ tesseract-ocr,
+ tesseract-ocr-eng,
+ upower,
+ wf-recorder,
+ wl-clipboard,
+ xdg-utils,
+Recommends:
+ bluez,
+ cava,
+ evolution-data-server,
+ formalshell-clipssh,
+ formalshell-localsend-cli,
+ formalshell-ttfx,
+ geoclue-2.0,
+ power-profiles-daemon,
+ qrencode,
+ wtype,
+Suggests:
+ formalshell-ancs4linux,
+ git,
+ uxplay,
+Description: Hyprland desktop shell built on Quickshell
+ FormalShell is a single-process desktop shell for Hyprland: bar,
+ launcher, notifications, lock screen, panels and screensaver, themed
+ from the wallpaper with matugen.
+
+Package: formalshell-eds
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Evolution Data Server calendar companion CLI for FormalShell
+ Reads calendar events from Evolution Data Server over D-Bus and prints
+ them as JSON for FormalShell's calendar.
+
+Package: formalshell-ttfx
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Provides: ttfx (= 0.4.0)
+Conflicts: ttfx
+Replaces: ttfx
+Description: terminal text effects as a single static binary
+ ttfx renders animated terminal text effects. FormalShell's screensaver
+ parses its ANSI frame stream.
+
+Package: formalshell-tensaku
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, wl-clipboard
+Provides: tensaku (= 0.26.6)
+Conflicts: tensaku
+Replaces: tensaku
+Description: screenshot annotation for Wayland
+ Tensaku, a fork of Satty, annotates a screenshot with arrows, text,
+ markers, highlights and blur in a GTK 4 window.
+
+Package: formalshell-matugen
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Provides: matugen (= 4.1.0)
+Conflicts: matugen
+Replaces: matugen
+Description: Material You colour generation from a wallpaper
+ matugen derives a Material colour scheme from an image and renders it
+ through user templates. FormalShell themes itself and GTK and Qt with it.
+
+Package: formalshell-nerd-fonts-symbols
+Architecture: all
+Multi-Arch: foreign
+Depends: ${misc:Depends}
+Description: Nerd Fonts symbols-only font
+ The Symbols Nerd Font from Nerd Fonts, with no text glyphs. FormalShell
+ takes the launcher's distro marks and its nerd icon set from it.
+
+Package: formalshell-clipssh
+Architecture: all
+Depends: ${misc:Depends}, openssh-client, wl-clipboard
+Provides: clipssh
+Conflicts: clipssh
+Replaces: clipssh
+Description: paste local clipboard images into terminal tools over SSH
+ clipssh uploads the image on the local Wayland clipboard to a remote host
+ and copies the uploaded file's path to the clipboard.
+
+Package: formalshell-localsend-cli
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Built-Using: ${misc:Built-Using}
+Description: headless LocalSend v2 client
+ Peer scan, file send and unattended receive over the LocalSend v2
+ protocol, without the GUI app.
+
+Package: formalshell-iphone-bridge
+Architecture: all
+Depends:
+ ${misc:Depends},
+ gir1.2-glib-2.0,
+ libglib2.0-bin,
+ python3,
+ python3-gi,
+Description: JSONL bridges over ancs4linux ANCS and AMS D-Bus signals
+ omarchy-iphone-bridge and omarchy-iphone-ams turn ancs4linux's
+ notification and media D-Bus signals into JSON lines for FormalShell.
+
+Package: formalshell-ancs4linux
+Architecture: all
+Depends:
+ ${misc:Depends},
+ ${python3:Depends},
+ bluez,
+ python3-dasbus,
+ python3-gi,
+ python3-typer,
+Provides: ancs4linux
+Conflicts: ancs4linux
+Replaces: ancs4linux
+Description: ANCS and AMS bridge exposing an iPhone as system D-Bus services
+ ancs4linux pairs with an iPhone over Bluetooth LE and republishes its
+ notifications and now playing state on the system bus.

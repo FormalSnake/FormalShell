@@ -13,3 +13,4 @@ CLAUDE-troubleshooting.md
 CLAUDE-activeContext.md
 CLAUDE-config-variables.md
 packaging/arch/build/
+packaging/debian/build/

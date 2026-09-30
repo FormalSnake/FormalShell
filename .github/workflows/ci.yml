@@ -42,3 +42,24 @@ jobs:
           lint shell | sort > repo.log
           lint /usr/share/formalshell | sort > installed.log
           diff repo.log installed.log
+  debian:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: "debian:testing", suite: forky }
+          - { image: "debian:unstable", suite: sid }
+          - { image: "ubuntu:26.04", suite: resolute }
+    container: ${{ matrix.image }}
+    steps:
+      - run: apt-get update && apt-get install -y --no-install-recommends ca-certificates git lintian
+      - uses: actions/checkout@v4
+      - name: dpkg-buildpackage
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          packaging/debian/build.sh --suite ${{ matrix.suite }} --install-deps
+      - run: lintian --fail-on error packaging/debian/build/*.changes
+      # Installs every package, runs each tool, checks both fonts reach
+      # fontconfig, and diffs qmllint of the installed tree against shell/.
+      - run: packaging/debian/check.sh packaging/debian/build .

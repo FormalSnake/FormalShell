@@ -1,0 +1,96 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: FormalShell
+Upstream-Contact: https://github.com/FormalSnake/FormalShell/issues
+Source: https://github.com/FormalSnake/FormalShell
+Comment: build.sh unpacks every other upstream source under third_party/.
+ The cargo and Go dependencies the Rust and Go tools link statically carry
+ their own licenses in the crate and module sources.
+
+Files: *
+Copyright: 2026 Kyan de Sutter
+           2025 Avenge Media LLC (portions from DankMaterialShell)
+License: MIT
+
+Files: third_party/lucide-font/*
+Copyright: 2026 Lucide Icons and Contributors
+License: ISC
+
+Files: third_party/nerd-fonts-symbols/*
+Copyright: 2014 Ryan L McIntyre
+License: MIT
+
+Files: third_party/ttfx/*
+Copyright: 2026 37signals / omacom-io
+           2023 ChrisBuilds
+License: MIT
+
+Files: third_party/tensaku/*
+Copyright: Matthias Gabriel <gabm+aur@mailbox.org>
+           Jon Kinney
+License: MPL-2.0
+ On Debian systems, the full text of the Mozilla Public License 2.0 can be
+ found in /usr/share/common-licenses/MPL-2.0.
+
+Files: third_party/matugen/*
+Copyright: InioX
+License: GPL-2+
+ This program is free software; you can redistribute it and/or modify it
+ under the terms of the GNU General Public License as published by the Free
+ Software Foundation; either version 2 of the License, or (at your option)
+ any later version.
+ .
+ On Debian systems, the full text of the GNU General Public License version 2
+ can be found in /usr/share/common-licenses/GPL-2.
+
+Files: third_party/clipssh/*
+Copyright: 2025 Samuel Lawerence
+License: MIT
+
+Files: third_party/localsend-cli/*
+Copyright: 2025 0w0mewo
+License: MIT
+
+Files: third_party/omarchy-iphone/*
+Copyright: 2026 kbbahaPro
+License: MIT
+
+Files: third_party/ancs4linux/*
+Copyright: 2019-2026 Paweł Zmarzły
+License: MIT
+
+Files: third_party/zig/*
+Copyright: Zig contributors
+License: MIT
+Comment: Build tool only; nothing from it is installed.
+
+License: MIT
+ Permission is hereby granted, free of charge, to any person obtaining a
+ copy of this software and associated documentation files (the "Software"),
+ to deal in the Software without restriction, including without limitation
+ the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ and/or sell copies of the Software, and to permit persons to whom the
+ Software is furnished to do so, subject to the following conditions:
+ .
+ The above copyright notice and this permission notice shall be included in
+ all copies or substantial portions of the Software.
+ .
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ DEALINGS IN THE SOFTWARE.
+
+License: ISC
+ Permission to use, copy, modify, and/or distribute this software for any
+ purpose with or without fee is hereby granted, provided that the above
+ copyright notice and this permission notice appear in all copies.
+ .
+ THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.

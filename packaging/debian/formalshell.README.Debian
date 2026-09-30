@@ -1,0 +1,17 @@
+FormalShell for Debian and Ubuntu
+=================================
+
+The user units are installed but not enabled, since they would start the
+shell in any graphical session. Enable them for your user:
+
+    systemctl --user enable formalshell.service formalshell-watchdog.timer
+
+Hyprland's binds and layer rules for the shell ship as a Lua file. Load it
+from ~/.config/hypr/hyprland.lua:
+
+    dofile("/usr/share/formalshell/examples/hyprland/formalshell.lua")
+
+formalshell-power-poll.service, which feeds USB-C and CPU draw to the power
+panel, is enabled on install.
+
+ -- FormalSnake <formalsnake@users.noreply.github.com>  Wed, 30 Sep 2026 12:00:00 +0000

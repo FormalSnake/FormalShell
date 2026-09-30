@@ -1,0 +1,80 @@
+#!/usr/bin/make -f
+# Builds offline: build.sh unpacks every upstream source under third_party/
+# and fills the cargo and Go caches there before dpkg-buildpackage runs.
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+export PYBUILD_NAME = ancs4linux
+
+TP := $(CURDIR)/third_party
+ANCS := third_party/ancs4linux
+RUST_HOST := $(shell rustc -vV | sed -n 's/^host: //p')
+
+export CARGO_HOME := $(TP)/cargo-home
+export CARGO_TARGET_DIR := target
+export GOPATH := $(TP)/gopath
+export GOPROXY := off
+export GOTOOLCHAIN := local
+export GOFLAGS := -modcacherw -mod=readonly -trimpath
+
+%:
+	dh $@ --with python3
+
+override_dh_auto_configure:
+	dh_auto_configure --buildsystem=pybuild --sourcedirectory=$(ANCS)
+
+override_dh_auto_build:
+	cd tools/eds && $(TP)/zig/zig build --global-cache-dir $(TP)/zig-cache \
+		--release=safe -Dcpu=baseline --prefix $(TP)/eds
+# The x86-64 engine's asm objects call libc with PC32 relocations, which a
+# PIE link rejects (nix/ttfx-package.nix). An explicit --target keeps the
+# static model off the proc-macros, which have to stay shared objects.
+	cd $(TP)/ttfx && RUSTFLAGS="-C relocation-model=static" \
+		cargo build --frozen --release --target $(RUST_HOST)
+	cd $(TP)/tensaku && cargo build --frozen --release --features ci-release
+	cd $(TP)/matugen && cargo build --frozen --release
+	cd $(TP)/localsend-cli && CGO_CFLAGS="$(CFLAGS)" CGO_LDFLAGS="$(LDFLAGS)" \
+		go build -buildmode=pie -o localsend-cli .
+	dh_auto_build --buildsystem=pybuild --sourcedirectory=$(ANCS)
+
+override_dh_auto_test:
+
+override_dh_auto_install:
+	$(MAKE) -C packaging install DESTDIR=$(CURDIR)/debian/formalshell \
+		PREFIX=/usr PAM=debian LUCIDE_TTF=$(TP)/lucide-font/lucide.ttf
+	install -Dm755 $(TP)/eds/bin/formalshell-eds debian/formalshell-eds/usr/bin/formalshell-eds
+	install -Dm755 $(TP)/ttfx/target/$(RUST_HOST)/release/ttfx debian/formalshell-ttfx/usr/bin/ttfx
+	install -Dm755 $(TP)/matugen/target/release/matugen debian/formalshell-matugen/usr/bin/matugen
+	cd $(TP)/tensaku && \
+		install -Dm755 target/release/tensaku $(CURDIR)/debian/formalshell-tensaku/usr/bin/tensaku && \
+		install -Dm755 assets/tensaku-edit $(CURDIR)/debian/formalshell-tensaku/usr/bin/tensaku-edit && \
+		install -Dm644 dev.tensaku.Tensaku.desktop $(CURDIR)/debian/formalshell-tensaku/usr/share/applications/dev.tensaku.Tensaku.desktop && \
+		install -Dm644 assets/tensaku.svg $(CURDIR)/debian/formalshell-tensaku/usr/share/icons/hicolor/scalable/apps/dev.tensaku.Tensaku.svg
+	install -Dm644 -t debian/formalshell-nerd-fonts-symbols/usr/share/fonts/truetype/nerd-fonts-symbols \
+		$(TP)/nerd-fonts-symbols/SymbolsNerdFont-Regular.ttf $(TP)/nerd-fonts-symbols/SymbolsNerdFontMono-Regular.ttf
+	install -Dm755 $(TP)/clipssh/clipssh debian/formalshell-clipssh/usr/bin/clipssh
+	install -Dm755 $(TP)/localsend-cli/localsend-cli debian/formalshell-localsend-cli/usr/bin/localsend-cli
+	install -Dm755 -t debian/formalshell-iphone-bridge/usr/bin \
+		$(TP)/omarchy-iphone/bin/omarchy-iphone-bridge $(TP)/omarchy-iphone/bin/omarchy-iphone-ams
+	dh_auto_install --buildsystem=pybuild --sourcedirectory=$(ANCS) --destdir=debian/formalshell-ancs4linux
+	for unit in observer advertising; do \
+		sed 's|/usr/local/bin/|/usr/bin/|' $(ANCS)/autorun/ancs4linux-$$unit.service \
+			| install -Dm644 /dev/stdin debian/formalshell-ancs4linux/usr/lib/systemd/system/ancs4linux-$$unit.service && \
+		install -Dm644 $(ANCS)/autorun/ancs4linux-$$unit.xml \
+			debian/formalshell-ancs4linux/usr/share/dbus-1/system.d/ancs4linux-$$unit.conf || exit 1; \
+	done
+
+# The shell's user units start with any graphical session, so they are left
+# for the user to enable, as the Arch package does. ancs4linux advertises
+# the machine over Bluetooth LE and is opt-in the same way.
+override_dh_installsystemd:
+	dh_installsystemd -pformalshell-ancs4linux --no-enable --no-start
+	dh_installsystemd --remaining-packages
+
+override_dh_installsystemduser:
+	dh_installsystemduser --no-enable
+
+# dwz cannot read the DWARF 5 sections Go writes (.debug_addr).
+override_dh_dwz:
+
+override_dh_strip:
+	dh_strip --no-automatic-dbgsym

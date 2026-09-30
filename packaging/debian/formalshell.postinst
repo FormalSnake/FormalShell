@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = configure ] && [ -z "$2" ]; then
+	cat <<'MSG'
+FormalShell: start it with your Hyprland session:
+    systemctl --user enable formalshell.service formalshell-watchdog.timer
+and add one line to ~/.config/hypr/hyprland.lua for its binds and layer rules:
+    dofile("/usr/share/formalshell/examples/hyprland/formalshell.lua")
+MSG
+fi
+
+#DEBHELPER#

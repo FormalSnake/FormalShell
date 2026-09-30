@@ -1,0 +1,2 @@
+# Linked with the static relocation model on purpose, see debian/rules.
+hardening-no-pie [usr/bin/ttfx]

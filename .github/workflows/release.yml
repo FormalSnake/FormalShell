@@ -34,3 +34,22 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
+  debian:
+    needs: release
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { image: "debian:testing", suite: forky }
+          - { image: "debian:unstable", suite: sid }
+          - { image: "ubuntu:26.04", suite: resolute }
+    container: ${{ matrix.image }}
+    steps:
+      - run: apt-get update && apt-get install -y --no-install-recommends ca-certificates git gh
+      - uses: actions/checkout@v4
+      - run: packaging/debian/build.sh --tag "$GITHUB_REF_NAME" --suite ${{ matrix.suite }} --install-deps
+      # Every file name carries the suite, quickshell's rebuild included.
+      - run: gh release upload "$GITHUB_REF_NAME" packaging/debian/build/*.deb
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
