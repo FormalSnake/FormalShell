@@ -116,9 +116,9 @@ services.formalshell-greeter = {
 ```
 
 Then wire up Hyprland. The default binds, blur layer rules and palette reads
-ship as a Lua file: copy
-`<store-path>/share/formalshell/examples/hyprland/formalshell.lua` to
-`~/.config/hypr/`, fill in `<store-path>` at its `fs_call` line, and load it:
+ship as a Lua file, `share/formalshell/examples/hyprland/formalshell.lua` (the
+home-manager module writes it to `~/.config/hypr/formalshell.lua` itself). Load
+it:
 
 ```lua
 -- ~/.config/hypr/hyprland.lua
@@ -143,7 +143,7 @@ dofile(os.getenv("HOME") .. "/.config/hypr/formalshell.lua")
 Everything else goes through IPC:
 
 ```sh
-alias fs='qs ipc --any-display -p <store-path>/share/formalshell call'
+alias fs='formalshell-ipc call'
 
 fs wallpaper set ~/Pictures/wall.jpg   # recolours the whole desktop
 fs theme mode toggle                   # dark / light

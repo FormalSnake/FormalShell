@@ -119,6 +119,11 @@ stdenvNoCC.mkDerivation {
       --set-default QSG_RENDER_LOOP threaded \
       --set QT_FFMPEG_DECODING_HW_DEVICE_TYPES ""
 
+    # Entry point for binds and scripts: the store path is baked in so
+    # nobody types it (`formalshell-ipc call menu toggle`).
+    makeWrapper ${lib.getExe' quickshell "qs"} $out/bin/formalshell-ipc \
+      --add-flags "ipc --any-display -p $out/share/formalshell"
+
     # lock-before-sleep contract (spec §8): whatever a systemd unit calls
     # before suspend must keep an exit-0-always behaviour so a lock failure
     # can never block suspend. `qs ipc call` itself exits nonzero (255) when

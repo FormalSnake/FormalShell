@@ -5,7 +5,7 @@
 FormalShell is a single QuickShell process, launched as:
 
 ```
-qs -p <store-path>/share/formalshell
+formalshell
 ```
 
 (the nix package wraps this as the `formalshell` binary, `nix/package.nix`;

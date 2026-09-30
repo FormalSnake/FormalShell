@@ -205,10 +205,8 @@ hl.layer_rule({
   no_anim = true,
 })
 
--- Replace <store-path> with the installed shell, e.g.
--- /nix/store/...-formalshell-0.1. docs/USAGE.md spells the same invocation
--- out for every other target.
-local fs_call = "qs ipc --any-display -p <store-path>/share/formalshell call "
+-- docs/USAGE.md spells the same invocation out for every other target.
+local fs_call = "formalshell-ipc call "
 
 -- A Lua bind shows up in `hyprctl binds` as an anonymous function, so the
 -- description is all the launcher's keybinds route has to print for it.

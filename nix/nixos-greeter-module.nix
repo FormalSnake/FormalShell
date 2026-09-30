@@ -20,7 +20,7 @@
 # the greeter directly is what lets this script know the exact moment that
 # happens (needed by postGreeterCommand below, and by M8 Task 2's smoke rig
 # specifically) rather than racing an async compositor `exec`.
-{ config, lib, pkgs, ... }:
+self: { config, lib, pkgs, ... }:
 let
   cfg = config.services.formalshell-greeter;
 
@@ -82,10 +82,9 @@ in
 
     package = lib.mkOption {
       type = lib.types.package;
-      description = ''
-        The formalshell-greeter package (the packages.<system>.formalshell-greeter
-        flake output).
-      '';
+      default = self.packages.${pkgs.stdenv.hostPlatform.system}.formalshell-greeter;
+      defaultText = lib.literalExpression "formalshell.packages.\${pkgs.stdenv.hostPlatform.system}.formalshell-greeter";
+      description = "The formalshell-greeter package. Defaults to this flake's build for the host system.";
     };
 
     compositorPackage = lib.mkOption {

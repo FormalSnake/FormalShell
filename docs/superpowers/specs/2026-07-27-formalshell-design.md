@@ -56,7 +56,7 @@ fetch.
 
 ## Architecture
 
-One QuickShell process launched as `qs -p <store-path>/share/formalshell`
+One QuickShell process launched as `formalshell`
 (path baked in by the nix wrapper; non-nix users get the same tree under
 `~/.config/quickshell/formalshell` or `/etc/xdg/quickshell/formalshell`).
 

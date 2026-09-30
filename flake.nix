@@ -91,11 +91,11 @@
           default = formalshell;
         }));
 
-      homeModules = { formalshell = ./nix/hm-module.nix; default = ./nix/hm-module.nix; };
+      homeModules = { formalshell = import ./nix/hm-module.nix self; default = import ./nix/hm-module.nix self; };
 
       nixosModules = {
         formalshell = ./nix/nixos-module.nix;
-        formalshell-greeter = ./nix/nixos-greeter-module.nix;
+        formalshell-greeter = import ./nix/nixos-greeter-module.nix self;
         default = ./nix/nixos-module.nix;
       };
 

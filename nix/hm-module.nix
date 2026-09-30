@@ -1,9 +1,19 @@
-{ config, lib, pkgs, ... }:
+self: { config, lib, pkgs, ... }:
 let cfg = config.programs.formalshell; in
 {
   options.programs.formalshell = {
     enable = lib.mkEnableOption "FormalShell";
-    package = lib.mkOption { type = lib.types.package; description = "FormalShell package (from the flake's packages output)."; };
+    package = lib.mkOption {
+      type = lib.types.package;
+      default = self.packages.${pkgs.stdenv.hostPlatform.system}.formalshell;
+      defaultText = lib.literalExpression "formalshell.packages.\${pkgs.stdenv.hostPlatform.system}.formalshell";
+      description = "FormalShell package. Defaults to this flake's build for the host system.";
+    };
+    hyprland.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Write ~/.config/hypr/formalshell.lua (binds and layer rules). Add `dofile(os.getenv(\"HOME\") .. \"/.config/hypr/formalshell.lua\")` to your hyprland.lua.";
+    };
     settings = lib.mkOption {
       type = (pkgs.formats.json {}).type;
       default = {};
@@ -20,6 +30,9 @@ let cfg = config.programs.formalshell; in
     home.packages = [ cfg.package ];
     xdg.configFile."formalshell/settings.json" = lib.mkIf (cfg.settings != {}) {
       source = (pkgs.formats.json {}).generate "formalshell-settings.json" cfg.settings;
+    };
+    xdg.configFile."hypr/formalshell.lua" = lib.mkIf cfg.hyprland.enable {
+      source = "${cfg.package}/share/formalshell/examples/hyprland/formalshell.lua";
     };
     systemd.user.services.formalshell = lib.mkIf cfg.systemd.enable {
       Unit = { Description = "FormalShell"; PartOf = [ cfg.systemd.target ]; After = [ cfg.systemd.target ]; };

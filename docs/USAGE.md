@@ -53,12 +53,11 @@ Anything the shell needs to remember for itself (wallpaper, mode, frecency,
 pending reminders) goes to `$XDG_STATE_HOME/formalshell/state.json` instead,
 which is the shell's file, not yours.
 
-**IPC.** Everything is driven through QuickShell's IPC, and the full
-invocation is a mouthful, so define it once:
+**IPC.** Everything is driven through QuickShell's IPC. `formalshell-ipc` wraps
+the invocation, and a short alias helps:
 
 ```sh
-# <store-path> is the installed shell, e.g. /nix/store/...-formalshell-0.1
-alias fs='qs ipc --any-display -p <store-path>/share/formalshell call'
+alias fs='formalshell-ipc call'
 ```
 
 Every example from here on is written against that alias: `fs menu summon`,
@@ -67,7 +66,7 @@ Every example from here on is written against that alias: `fs menu summon`,
 **Binds** need the whole thing spelled out:
 
 ```lua
-hl.bind("SUPER + Space", hl.dsp.exec_cmd("qs ipc --any-display -p <store-path>/share/formalshell call menu summon"))
+hl.bind("SUPER + Space", hl.dsp.exec_cmd("formalshell-ipc call menu summon"))
 ```
 
 Hyprland is configured in Lua (`~/.config/hypr/hyprland.lua`) and nothing
@@ -80,9 +79,9 @@ Every default bind ships as
 [`docs/examples/hyprland/formalshell.lua`](examples/hyprland/formalshell.lua),
 next to the blur layer rules and the read of the colours and chrome files. A
 nix install carries the same file at
-`<store-path>/share/formalshell/examples/hyprland/formalshell.lua`. Copy it
-beside your own config, fill in `<store-path>` once at the `fs_call` line, and
-`dofile` it:
+`share/formalshell/examples/hyprland/formalshell.lua`, and the home-manager
+module writes it to `~/.config/hypr/formalshell.lua`. Copy it beside your own
+config and `dofile` it:
 
 ```lua
 -- ~/.config/hypr/hyprland.lua
@@ -756,8 +755,8 @@ that alpha is what lets a compositor blur read through. On Hyprland, copy
 this repo's `docs/examples/hyprland/formalshell.lua` next to your own
 config and `dofile` it: it turns the blur on and points it at the
 `formalshell:bar`, `formalshell:panel` and `formalshell:menu` layer
-namespaces, and it carries the whole default bind set (fill in the
-`<store-path>` at the top of the file first). Under a compositor with blur
+namespaces, and it carries the whole default bind set (`formalshell-ipc` must be on
+PATH, which the nix package and home-manager module arrange). Under a compositor with blur
 off the same alpha reads as a tint. Toasts and the lock screen stay opaque
 either way; the OSD pill is drawn at the same alpha as the line it buds off.
 
@@ -1528,7 +1527,7 @@ poke the OSD:
 
 ```kdl
 binds {
-    XF86MonBrightnessUp { spawn "sh" "-c" "brightnessctl set 5%+ && qs ipc --any-display -p <store-path>/share/formalshell call osd brightness"; }
+    XF86MonBrightnessUp { spawn "sh" "-c" "brightnessctl set 5%+ && formalshell-ipc call osd brightness"; }
 }
 ```
 
@@ -1908,7 +1907,7 @@ answers `no panel at <n>`. `docs/examples/hyprland/formalshell.lua` binds
 
 ```kdl
 binds {
-    Mod+A { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "panel" "toggle" "audio"; }
+    Mod+A { spawn "formalshell-ipc" "call" "panel" "toggle" "audio"; }
 }
 ```
 
@@ -2314,12 +2313,12 @@ console" and "the console is hidden" are different answers.
 
 ```kdl
 binds {
-    Mod+Plus { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "console" "toggle"; }
+    Mod+Plus { spawn "formalshell-ipc" "call" "console" "toggle"; }
 }
 ```
 
 ```lua
-hl.bind("SUPER + plus", hl.dsp.exec_cmd("qs ipc --any-display -p <store-path>/share/formalshell call console toggle"))
+hl.bind("SUPER + plus", hl.dsp.exec_cmd("formalshell-ipc call console toggle"))
 ```
 
 **Keep it out of your layout.** The shell spawns the terminal and then
@@ -3036,7 +3035,7 @@ same code the launcher's own rows go through:
 {
   "hotCorners": {
     "topLeft": "@ipc:theme.toggleMode",
-    "topRight": "qs ipc --any-display -p <store-path>/share/formalshell call menu summon apps"
+    "topRight": "formalshell-ipc call menu summon apps"
   }
 }
 ```
@@ -3288,10 +3287,10 @@ one machine before anyone noticed the bind was wrong, not the shell.
 
 ```kdl
 binds {
-    Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "full"; }
-    Mod+Shift+S { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "pick" "smart" "default"; }
-    Shift+Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "pick" "region" "copy"; }
-    Mod+Print { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "screenshot" "edit" ""; }
+    Print { spawn "formalshell-ipc" "call" "screenshot" "full"; }
+    Mod+Shift+S { spawn "formalshell-ipc" "call" "screenshot" "pick" "smart" "default"; }
+    Shift+Print { spawn "formalshell-ipc" "call" "screenshot" "pick" "region" "copy"; }
+    Mod+Print { spawn "formalshell-ipc" "call" "screenshot" "edit" ""; }
 }
 ```
 
@@ -3458,7 +3457,7 @@ behind) and never derived from `pgrep`.
 
 ```kdl
 binds {
-    Mod+Shift+R { spawn "qs" "ipc" "--any-display" "-p" "<store-path>/share/formalshell" "call" "record" "toggle" "screen" "none"; }
+    Mod+Shift+R { spawn "formalshell-ipc" "call" "record" "toggle" "screen" "none"; }
 }
 ```
 
