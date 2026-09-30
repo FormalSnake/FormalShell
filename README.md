@@ -14,119 +14,64 @@
 [![Wayland](https://img.shields.io/badge/wayland-hyprland-4a9eda?style=for-the-badge&labelColor=161616&logo=wayland&logoColor=white)](#install)
 [![Status](https://img.shields.io/badge/status-pre--alpha-d35f5f?style=for-the-badge&labelColor=161616)](docs/SWITCHOVER.md)
 [![License](https://img.shields.io/badge/license-MIT-cccccc?style=for-the-badge&labelColor=161616)](LICENSE)
-[![Stars](https://img.shields.io/github/stars/FormalSnake/FormalShell?style=for-the-badge&labelColor=161616&color=161616&logo=github&logoColor=white)](https://github.com/FormalSnake/FormalShell/stargazers)
 
-A Wayland desktop shell for [Hyprland](https://hypr.land), written in QML on
-top of [QuickShell](https://quickshell.org/).
-One process draws the bar, the launcher, the notifications, the lock screen
-and the rest of it, and every color on screen is pulled out of your wallpaper
-by matugen.
+A desktop shell for [Hyprland](https://hypr.land), written in QML on
+[QuickShell](https://quickshell.org/). One process draws the bar, launcher,
+panels, notifications, lock screen, greeter and screensaver, and every colour
+comes from your wallpaper through matugen. Everything is reachable from the
+keyboard and drivable over IPC.
 
-It looks like this:
+![The launcher budding off the bar](docs/media/metamorphosis-launcher.gif)
 
-![The FormalShell launcher over a wallpaper-derived palette](docs/screenshots/menu-hyprland.png)
+**Pre-alpha.** [`docs/SWITCHOVER.md`](docs/SWITCHOVER.md) tracks what has run
+on real hardware and what has only run in a VM.
 
-Radius 10, one-pixel borders, sans for words and mono for values, Lucide
-icons instead of Nerd Font glyphs. Surfaces sit at 85% opacity and Hyprland
-does the blurring behind them; the shell draws no shadow and no gradient of
-its own. The wallpaper used to come through a six-colour ordered dither, and
-that is still there behind `wallpaper.dither`, off by default.
+## Themes
 
-**Pre-alpha.** It boots, it is nice to use, and it will still surprise you.
-[`docs/SWITCHOVER.md`](docs/SWITCHOVER.md) tracks what has been proven on
-real hardware versus what has only ever run in a VM. Read it before you put
-this on the laptop you need tomorrow morning.
+`theme.preset` picks one of three looks. The palette follows the wallpaper in
+all of them.
 
-## A tour
+| `metamorphosis` (default) | `pantheon` | `retro` |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/theme-metamorphosis.png" width="280"> | <img src="docs/screenshots/theme-pantheon.png" width="280"> | <img src="docs/screenshots/theme-retro.png" width="280"> |
+| shadcn chrome, translucent cards that bud off the bar's line | elementary OS 8: raised controls, sunken fields, cards on a soft cast | square, mono, Nerd Font glyphs, dithered imagery |
 
-The launcher is the front door. Apps, clipboard history, a calculator, an
-emoji picker that types the emoji for you, `nix run` for anything in nixpkgs,
-your own compositor keybinds, wallpapers, toggles, and a `select`/`input`
-mode that stands in for dmenu. Everything is one fuzzy search away and there
-is a bar at the bottom telling you what Enter is about to do.
+![A panel growing out of the bar](docs/media/metamorphosis-panel.gif)
+
+## What's in it
+
+- Launcher: apps, clipboard history, calculator, emoji, `nix run`,
+  your keybinds, wallpapers, Wi-Fi, Bluetooth, audio devices, radio,
+  toggles, and a `select`/`input` mode that replaces dmenu.
+- Bar: workspaces with live window previews, now playing, tray, and a
+  chevron that tucks cells away into a second bar. Top, bottom, left or right.
+- Panels: audio, network, Bluetooth, calendar, weather, power, displays,
+  system monitor, media with synced lyrics and 31 visualizer styles, iPhone
+  and AirPods, and more.
+- Notifications: toasts, a history centre, grouping and DND.
+- Alt+Tab switcher with window thumbnails.
+- Capture: screenshots with a region picker, screen recording, OCR and a
+  colour picker.
+- Lock screen and greeter over PAM, and a [ttfx](https://github.com/omacom-io/ttfx)
+  screensaver.
+- Night light, caffeinate, reminders, polkit agent, LocalSend, AirPlay.
+
+A widget with nothing behind it says so (`NO ADAPTER`, `NO PLAYER`) instead of
+inventing data. That holds for every screenshot here.
 
 | | |
 | :---: | :---: |
-| <img src="docs/screenshots/notifications-center-hyprland.png" width="420"><br>Notification center, with DND and a real history | <img src="docs/screenshots/media-hyprland.png" width="420"><br>Now playing, over MPRIS |
+| <img src="docs/screenshots/media.png" width="420"><br>Now playing | <img src="docs/screenshots/notifications.png" width="420"><br>Notifications |
+| <img src="docs/screenshots/center.png" width="420"><br>Notification centre | <img src="docs/screenshots/lock.png" width="420"><br>Lock screen |
 
-The now-playing panel's spectrum has thirty-one styles: the plain bar columns
-from before, plus a Winamp LED matrix, an oscilloscope trace, a heartbeat
-that beats on the bass, a synthwave grid, falling sand, stereo meters, a
-tumbling wireframe equalizer, and more. Set one with `media.visualizerStyle`, or
-cycle through them live by clicking the spectrum, scrolling on it, or
-running `qs ipc call visualizer style next`.
-
-![Every visualizer style drawn from the same pink noise](docs/media/visualizer-styles.png)
-
-| id | draws |
-| --- | --- |
-| `bars` | Twelve columns filled from the floor, the default. |
-| `peaks` | Thin columns under falling peak caps, Winamp's classic analyser. |
-| `led` | Segmented LED columns with a lit peak segment, Winamp 2's matrix. |
-| `mirror` | Columns grown both ways from the horizontal centre. |
-| `butterfly` | Bass in the middle, mirrored out to both edges. |
-| `outline` | The column tops alone, joined into one stepped line. |
-| `wave` | A filled curve through every band. |
-| `dots` | A stippled dot grid, one column per band, lit to its level. |
-| `ascii` | Shade glyphs stacked in the mono font. |
-| `matrix` | Mono glyphs falling down each column as fast as it is loud. |
-| `rain` | Droplets falling from each column's top, as many as it is loud. |
-| `flame` | Flickering tips and embers rising off the columns. |
-| `bubbles` | Rings rising off the loudest bands, faster with more energy. |
-| `scope` | An oscilloscope trace, synthesised by summing one sine per band. |
-| `pulse` | A disc breathing on the bass, a ring on the mids, flares on the highs. |
-| `heartbeat` | An ECG trace that beats on every bass onset. |
-| `terrain` | A scrolling ridge of recent loudness over the bass. |
-| `bricks` | Columns stacked from separate bricks, nothing drawn above the stack. |
-| `columns` | Dense one-pixel columns, the bands interpolated between them. |
-| `scatter` | Sparkling dots, denser low down and on the loud bands. |
-| `retro` | A synthwave sun over a perspective grid, the spectrum on the horizon. |
-| `binary` | Streams of 0s and 1s, faster and busier on the loud bands. |
-| `sakura` | Petals drifting down, more of them and faster with more energy. |
-| `firework` | Rockets bursting into falling sparks, one on every bass hit. |
-| `firefly` | Fireflies over a strip of grass, blinking on the highs. |
-| `mosaic` | A fixed grid of tiles, each lit by its own band past its own threshold. |
-| `sand` | Grains poured by each band, piling up until a bass hit drains the bed. |
-| `geyser` | A fountain fed by the bass, a burst shot up on every hit. |
-| `stereo` | Left and right LED meters with a falling peak segment. |
-| `redsector` | A tumbling wireframe equalizer over a starfield, after the 1989 Amiga demo. |
-| `stipple` | Fine dot columns, shaded by height rather than by level. |
-
-Sixteen panels hang off the bar cells (audio, network, bluetooth, calendar,
-weather, power, displays, system monitor, AirPods, and friends). A panel with
-nothing to say prints `NO ADAPTER` rather than inventing a device, which is a
-rule the whole shell follows: no faked values anywhere, including in the
-screenshots above.
-
-There is a full system monitor inside the launcher (per-core CPU, memory,
-temps, disks, network rates, GPU where the driver will talk, plus a process
-table you can kill things from), a screenshot and screen recording suite with
-its own region picker, OCR, a color picker, and reminders that survive the
-shell being restarted.
-
-<img src="docs/screenshots/lock-hyprland.png" width="420"> <img src="docs/media/screensaver-decrypt.gif" width="360">
-
-The lock screen is a real `WlSessionLock` with PAM behind it, and the greeter
-is its twin at the login prompt. The screensaver runs
-[ttfx](https://github.com/omacom-io/ttfx) and rerolls through its 37
-effects until you touch something. Yes, that is what the idle timeout on your
-machine should have been doing all along.
-
-Everything above is driven over IPC, so any of it can be bound to a key:
-
-```sh
-qs ipc --any-display -p <store-path>/share/formalshell call menu summon
-```
-
-[`docs/USAGE.md`](docs/USAGE.md) has the full set of verbs, config keys, and
-copy-paste binds for both compositors.
+<img src="docs/media/visualizer-styles.png" alt="Every visualizer style drawn from the same pink noise">
 
 ## Install
 
-FormalShell is a Nix flake, and it installs as a system rather than as one
-user program: a home-manager module for the shell, plus NixOS modules for the
-things home-manager cannot reach (a PAM service for the lock screen, geoclue
-for weather, greetd for the greeter).
+FormalShell is a Nix flake with three modules: home-manager for the shell,
+NixOS for the system pieces it needs (PAM for the lock screen, geoclue,
+NetworkManager, bluez, upower, power-profiles-daemon, pipewire, polkit), and
+an optional greeter.
 
 ```nix
 {
@@ -155,16 +100,14 @@ for weather, greetd for the greeter).
 }
 ```
 
-`services.formalshell.enable` switches on PAM, geoclue, NetworkManager,
-bluez, upower, power-profiles-daemon and pipewire, each one behind its own
-option and each defaulted with `mkDefault` so your existing config wins.
-Without at least the PAM service the lock screen has nothing to authenticate
-against, so do not skip the NixOS module.
+The home-manager module starts the shell as a systemd user service on
+`graphical-session.target`. Every service the NixOS module enables is
+`mkDefault`, so your own config wins.
 
-For the login screen, add `formalshell.nixosModules.formalshell-greeter` and
-point it at your session:
+Optional login screen:
 
 ```nix
+imports = [ formalshell.nixosModules.formalshell-greeter ];
 services.formalshell-greeter = {
   enable = true;
   package = formalshell.packages.x86_64-linux.formalshell-greeter;
@@ -172,49 +115,77 @@ services.formalshell-greeter = {
 };
 ```
 
-The package wraps its own PATH, so matugen, grim, slurp, wf-recorder,
-tesseract, ttfx and the rest ride along. The tools that have to match
-something already running on your system (`nmcli`, `bluetoothctl`, `pactl`,
-`wlsunset`) are deliberately left out.
+Then wire up Hyprland. The default binds, blur layer rules and palette reads
+ship as a Lua file: copy
+`<store-path>/share/formalshell/examples/hyprland/formalshell.lua` to
+`~/.config/hypr/`, fill in `<store-path>` at its `fs_call` line, and load it:
 
-Config lives in `~/.config/formalshell/settings.json`, which the shell only
-ever reads. Anything it needs to remember goes to
-`$XDG_STATE_HOME/formalshell/state.json` instead, so your config file is
-yours.
-
-## Hacking on it
-
-```bash
-nix develop   # qs, qmllint, qmltestrunner, qmlls, matugen, just
-just build
-just test     # headless qmltestrunner over tests/
-just lint     # nix flake check (qml-tests + qmllint)
-just smoke    # the good one
+```lua
+-- ~/.config/hypr/hyprland.lua
+dofile(os.getenv("HOME") .. "/.config/hypr/formalshell.lua")
 ```
 
-`just smoke` builds the shell, boots it inside a throwaway **nested**
-Hyprland session, screenshots that session, and tears it down. Your real session is
-never a test target, which means you can run the lock screen and the
-notification server over and over without locking yourself out or stealing
-the D-Bus name from your actual desktop. Flags drive individual surfaces
-(`--menu`, `--notify`, `--lock`, `--tray`, `--media`, `--panel <name>`, and
-forty more); each one is a file under `dev/smoke.d/` whose header says what
-it proves. There is a
-matching rig for developing on a Mac, where the whole thing runs in a headless
-aarch64 NixOS VM and hands the screenshots back.
+## Usage
 
-`qs ipc call gallery open` opens a dev gallery of every shared component on
-one sheet, so a regression in the design system shows up in a single frame.
+| chord | does |
+| --- | --- |
+| `Super+Space` | launcher |
+| `Super+Alt+Space` | apps |
+| `Super+Ctrl+V` | clipboard history |
+| `Super+Ctrl+E` | emoji |
+| `Super+Ctrl+Space` | wallpaper picker |
+| `Super+Ctrl+A` / `W` / `B` | audio / network / Bluetooth panel |
+| `Super+Ctrl+L` | lock |
+| `Print` | screenshot |
+| `Alt+Tab` | window switcher |
+| `Super+K` | every bind, searchable |
 
-## License
+Everything else goes through IPC:
 
-MIT. See [`LICENSE`](LICENSE).
+```sh
+alias fs='qs ipc --any-display -p <store-path>/share/formalshell call'
+
+fs wallpaper set ~/Pictures/wall.jpg   # recolours the whole desktop
+fs theme mode toggle                   # dark / light
+fs panel toggle calendar
+fs notifications toggleDnd
+```
+
+Config is `~/.config/formalshell/settings.json`, or
+`programs.formalshell.settings` from home-manager. The shell only reads it;
+its own state goes to `$XDG_STATE_HOME/formalshell/state.json`.
+
+```jsonc
+{
+  "theme": { "preset": "pantheon", "mode": "auto" },
+  "bar": { "position": "bottom" }
+}
+```
+
+[`docs/USAGE.md`](docs/USAGE.md) has every config key, IPC verb and bind.
+
+## Development
+
+```sh
+nix develop   # qs, qmllint, qmltestrunner, matugen, just
+just build
+just test     # headless qmltestrunner over tests/
+just lint     # nix flake check
+just smoke --menu --showcase
+```
+
+`just smoke` boots the shell in a throwaway nested Hyprland session on a
+private D-Bus, drives the surfaces its flags name, screenshots them and tears
+down, so the lock screen and notification server never touch your real
+session. Each flag is a file under [`dev/smoke.d/`](dev/smoke.d/). On a Mac,
+`just vm-smoke` runs the same thing in a headless NixOS VM.
 
 ## Credits
 
-Built on [QuickShell](https://quickshell.org/). The single-process
-architecture and a lot of the interaction language come from
-[Omarchy](https://github.com/basecamp/omarchy)'s `quattro` branch. The
-multi-compositor backend borrows service patterns from
+Built on [QuickShell](https://quickshell.org/). The architecture and much of
+the interaction language come from [Omarchy](https://github.com/basecamp/omarchy)'s
+`quattro` branch. Service patterns borrowed from
 [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) (MIT,
-with attribution in each ported file).
+attributed in each ported file).
+
+MIT licensed. See [`LICENSE`](LICENSE).

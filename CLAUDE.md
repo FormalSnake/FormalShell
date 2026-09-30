@@ -453,6 +453,9 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   full-screen routes.
 - `share.sh` `--share`: the share route present (the copied text reaching
   LocalSend as a real file) and honestly absent with no binary on PATH.
+- `showcase.sh` `--showcase`: seeds state.json with a generated wallpaper
+  before the shell starts, so the leg it rides photographs a matugen palette
+  over a real desktop. The README's screenshots and GIFs are taken under it.
 - `shoulders.sh` `--shoulders`: a join published over `debug join`, the gap
   the bar opens in its own line read off the shell's numbers as the card's
   rect plus a `radiusXl` fillet at either end, and the pixel where the line
