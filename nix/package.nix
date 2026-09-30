@@ -1,7 +1,7 @@
 { lib, stdenvNoCC, makeWrapper, quickshell, brightnessctl, wl-clipboard, curl, grim, slurp, wtype, qt6, formalshell-eds
 , matugen, qrencode, cava, ddcutil, tensaku, ttfx, clipssh, lucide-font, nerd-fonts
 , wf-recorder, tesseract, ffmpeg-headless, pulseaudio, pipewire, git, mpv, util-linux, coreutils, systemd, procps, openssh, xdg-utils
-, iphone-bridge, uxplay, localsend-cli, networkmanager, asusctl, glib, openscq30, earbuds }:
+, iphone-bridge, uxplay, localsend-cli, networkmanager, asusctl, glib, openscq30, nothingctl, earbuds }:
 stdenvNoCC.mkDerivation {
   pname = "formalshell";
   version = "0.1.0-dev";
@@ -82,11 +82,12 @@ stdenvNoCC.mkDerivation {
     # All three are suffixed and every caller guards with `command -v`, so a
     # host install or the rig's PATH shims (--iphone, --airplay) shadow the
     # bundled ones; prefixed, the --iphone shim never ran.
-    # openscq30 (Soundcore) and earbuds (Samsung Galaxy Buds) back the earbuds
-    # panel's two poll backends. Both are suffixed: earbuds is a client of a
-    # daemon the host may already run, which has to match that daemon's own
-    # build, and the rig's --earbuds leg shadows either with a shim. Neither
-    # is run unless BlueZ reports a matching device connected.
+    # nothingctl (Nothing, CMF), openscq30 (Soundcore) and earbuds (Samsung
+    # Galaxy Buds) back the earbuds panel's backends. All three are suffixed:
+    # earbuds is a client of a daemon the host may already run, which has to
+    # match that daemon's own build, and the rig's --earbuds leg shadows any
+    # of them with a shim. openscq30 and earbuds run only while BlueZ reports
+    # a matching device connected.
     # qtimageformats: qtbase alone decodes gif/ico/jpeg/png, so a webp (or
     # avif) wallpaper fails Background.qml's Image with "Unsupported image
     # format" while matugen, which decodes the file itself, keeps recolouring.
@@ -113,7 +114,7 @@ stdenvNoCC.mkDerivation {
     makeWrapper ${lib.getExe' quickshell "qs"} $out/bin/formalshell \
       --add-flags "-p $out/share/formalshell" \
       --prefix PATH : ${lib.makeBinPath [ brightnessctl wl-clipboard curl grim slurp formalshell-eds matugen qrencode cava ddcutil ttfx wf-recorder tesseract ffmpeg-headless pulseaudio git mpv util-linux procps xdg-utils ]} \
-      --suffix PATH : ${lib.makeBinPath ([ wtype tensaku openssh clipssh pipewire uxplay localsend-cli iphone-bridge systemd glib networkmanager ] ++ lib.optional (lib.meta.availableOn stdenvNoCC.hostPlatform asusctl) asusctl ++ lib.optionals (lib.meta.availableOn stdenvNoCC.hostPlatform earbuds) [ earbuds openscq30 ])} \
+      --suffix PATH : ${lib.makeBinPath ([ wtype tensaku openssh clipssh pipewire uxplay localsend-cli iphone-bridge systemd glib networkmanager ] ++ lib.optional (lib.meta.availableOn stdenvNoCC.hostPlatform asusctl) asusctl ++ lib.optionals (lib.meta.availableOn stdenvNoCC.hostPlatform earbuds) [ earbuds openscq30 ] ++ lib.optional (lib.meta.availableOn stdenvNoCC.hostPlatform nothingctl) nothingctl)} \
       --prefix XDG_DATA_DIRS : ${lucide-font}/share \
       --prefix XDG_DATA_DIRS : ${nerd-fonts.symbols-only}/share \
       --prefix NIXPKGS_QT6_QML_IMPORT_PATH : ${qt6.qtpositioning}/lib/qt-6/qml \
