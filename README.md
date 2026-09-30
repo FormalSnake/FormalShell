@@ -184,7 +184,10 @@ session. Each flag is a file under [`dev/smoke.d/`](dev/smoke.d/). On a Mac,
 
 Built on [QuickShell](https://quickshell.org/). The architecture and much of
 the interaction language come from [Omarchy](https://github.com/basecamp/omarchy)'s
-`quattro` branch. Service patterns borrowed from
+`quattro` branch. Other inspiration came from
+[Caelestia](https://github.com/caelestia-dots/shell),
+[Noctalia](https://github.com/noctalia-dev/noctalia-shell) and macOS. Service
+patterns borrowed from
 [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell) (MIT,
 attributed in each ported file).
 
