@@ -1612,7 +1612,7 @@ exclusive-focus surface regardless of which output the cursor is over.
 | `appmenu` | the focused window's desktop entry | `activeWindow` |
 | `systemupdate` | `flake.lock` plus one probe per input | `systemUpdate` |
 | `display` | the compositor's own output contract | `display` |
-| `earbuds` | the librepods daemon (AirPods) | `earbuds` |
+| `earbuds` | the librepods daemon (AirPods), `openscq30` (Soundcore), `earbuds` (Samsung Galaxy Buds) | `earbuds` |
 | `dualsense` | sysfs, read-only | `dualsense` |
 | `monitor` | `/proc`, `/sys/class/drm`, `nvidia-smi` | `monitor` |
 
@@ -1820,6 +1820,24 @@ and `One-bud ANC` toggles. `EAR DETECTION` cycles the daemon's host-side
 pause policy, so it stays visible whenever anything about the device is
 known.
 
+Soundcore and Samsung Galaxy Buds are polled every 30 seconds while the
+panel or cell is up, and only while BlueZ reports a matching device
+connected. Each shows a listening mode row, an equalizer row and its battery
+rows. Soundcore reads `openscq30`'s own device list, which you fill once per
+device (pairing it in Bluetooth first; `openscq30 list-models` names the model
+id): `openscq30 paired-devices add -a AA:BB:CC:DD:EE:FF -m SoundcoreA3947`.
+A connected Soundcore device that list does not hold is skipped, and
+`--demo` entries never show. The equalizer row carries four of Soundcore's
+presets (Signature, Bass boost, Treble boost, Podcast), and none is lit
+while another preset is active. Samsung uses the `earbuds` CLI, which runs
+its own background daemon: the shell starts it (through the first command)
+only when a Galaxy Buds device is connected, and never stops it. That
+daemon also pauses media when a bud comes out and switches the PulseAudio
+sink; turn those off with `earbuds config set auto-pause off` and
+`earbuds config set smart-sink off`. Ambient sound is levels `Off` to `3`
+(`4` on Galaxy Buds+), and noise cancellation shows only on models that have
+it.
+
 **DualSense** is a read-only sysfs readout, tagged `READ ONLY` in the title
 band: battery percent as the headline, a `LIGHTBAR` swatch with its hex, and
 five `PLAYER LEDS` dots, each row shown only while its sysfs node was
@@ -1964,6 +1982,11 @@ fs earbuds set ca on              # AirPods: conversation awareness
 fs earbuds set onebud off
 fs earbuds set ear both           # AirPods: one | both | off
 fs earbuds set adaptive 40        # AirPods: 0-100, only while noise mode is adaptive
+fs earbuds set mode NoiseCanceling # Soundcore: Normal | NoiseCanceling | Transparency, as the model lists them
+fs earbuds set eq BassBooster     # Soundcore: SoundcoreSignature | BassBooster | TrebleBooster | Podcast
+fs earbuds set anc on             # Galaxy Buds: noise cancellation
+fs earbuds set ambient 2          # Galaxy Buds: 0 is off
+fs earbuds set eq bass            # Galaxy Buds: normal | bass | soft | dynamic | clear | treble
 ```
 
 `set` acts on the active device and only on a control it lists right now.

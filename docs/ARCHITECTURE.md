@@ -198,6 +198,11 @@ shell/
     airpods.js                   AirPods adapter: parseStatus() over the omarchy-pods librepods daemon's
                                   status.json (reimplemented independently, GPL read-reference only),
                                   normalise() into the shared shape, command() onto the socket allow-list
+    soundcore.js                 Soundcore adapter over `openscq30 ... --json`: parsePaired()/connectedPaired()
+                                  (openscq30's own list crossed with BlueZ), parseCapabilities() from
+                                  list-settings, parseValues(), normalise(), command() as `--set` arguments
+    samsung.js                   Galaxy Buds adapter over `earbuds status -o json`: connectedBuds() by BlueZ
+                                  name, parseStatus(), a per-model feature table, normalise(), command() argv
   Dualsense/
     model.js                     pure JS, .pragma library: parseSupply()/parseLightbar()/parsePlayerLeds()/
                                   stateLine() over hid-playstation's own sysfs text shapes, warn/critical
@@ -209,6 +214,12 @@ shell/
     Earbuds/AirpodsBackend.qml  earbuds backend: FileView on $XDG_STATE_HOME/librepods/status.json (300ms
                                  rewatch only while held), set() opens a one-shot self-destroying Socket
                                  to $XDG_RUNTIME_DIR/librepods.sock with airpods.js's command()
+    Earbuds/PollingBackend.qml  shared poll half of the CLI backends: 30s Timer and a Bluetooth snapshot that
+                                 exist only while held, a serial one-Process-at-a-time run(argv, done), and
+                                 poll() also fired when the connected set changes
+    Earbuds/SoundcoreBackend.qml, SamsungBackend.qml
+                                 poll backends over openscq30 / earbuds; nothing is spawned without a
+                                 matching BlueZ device connected, a write is one Process then a re-poll
     DualsenseService.qml        singleton: one sh -c glob probe (power_supply capacity/status, leds
                                  multi_intensity, five player-N brightness files) per call; present/battery/
                                  lightbar/playerLeds properties; a 30s Timer that only runs while
@@ -369,6 +380,8 @@ tests/
   tst_systemupdate_model.qml     qmltestrunner tests for SystemUpdate/model.js
   tst_earbuds_model.qml          qmltestrunner tests for Earbuds/model.js
   tst_earbuds_airpods.qml        qmltestrunner tests for Earbuds/airpods.js
+  tst_earbuds_soundcore.qml      qmltestrunner tests for Earbuds/soundcore.js (fixtures from a real openscq30 2.12.0)
+  tst_earbuds_samsung.qml        qmltestrunner tests for Earbuds/samsung.js
   tst_dualsense_model.qml        qmltestrunner tests for Dualsense/model.js
   tst_menu_toggles.qml           qmltestrunner tests for Menu/toggles.js, incl. the allow-list drift guard
   tst_keybinds.qml               qmltestrunner tests for Compositor/keybinds.js

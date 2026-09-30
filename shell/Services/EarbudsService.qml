@@ -30,9 +30,11 @@ import "../Earbuds/model.js" as Model
 Singleton {
     id: root
 
-    readonly property var backends: [airpods]
+    readonly property var backends: [airpods, soundcore, samsung]
 
     AirpodsBackend { id: airpods }
+    SoundcoreBackend { id: soundcore }
+    SamsungBackend { id: samsung }
 
     readonly property bool available: root.backends.some(b => b.available)
     readonly property var devices: {
