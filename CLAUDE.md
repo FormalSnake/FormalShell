@@ -44,6 +44,11 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   `artifacts/parity/diff/`. The one acceptance test for a theme table
   migration: a non-zero diff outside the bar clock, a caret or a toast
   timestamp is a defect, never a pixel to wave off.
+- `dev/native-check.sh [--no-build] [release...]`: the Arch and Debian/Ubuntu
+  packages built for arm64 in a container on the mac, copied into the VM
+  and run through `--native` one release at a time (trixie, forky,
+  resolute, arch by default), frames and logs under
+  `artifacts/native/<release>/`.
 
 How a run works:
 
@@ -366,6 +371,13 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   `picture` rect against both frames rendered by ffmpeg to PNG.
 - `monitor.sh` `--monitor`: the monitor bar cell, its panel and the
   launcher's monitor view, against this machine's own `/proc` and `/sys`.
+- `native.sh` `--native <pkgdir>`: the packages in `<pkgdir>` installed
+  with apt or pacman in a rootless podman image of their release, and the
+  shell they install run from it against the session over its Wayland
+  socket and Hyprland instance directory, on its own private bus: a
+  connected hyprland backend in the dump, the bar, `menu toggle` opening
+  the launcher, and a wrong then the real password through the package's
+  own `formalshell-lock` PAM file.
 - `nightlight.sh` `--nightlight`: the wlsunset-backed night light on and off,
   honest about a session that cannot gamma-control.
 - `notify.sh` `--notify`: the toast stack collapsed and expanded, critical

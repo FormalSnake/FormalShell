@@ -233,6 +233,8 @@ nixpkgs.lib.nixosSystem {
         # mac80211_hwsim already owns.
         services.seatd.enable = true;
 
+        virtualisation.podman.enable = true;
+
         services.openssh = {
           enable = true;
           authorizedKeysFiles = [ "/var/keys/%u_ed25519.pub" ];

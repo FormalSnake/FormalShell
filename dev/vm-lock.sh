@@ -6,9 +6,11 @@
 #
 #   dev/vm-lock.sh just vm-smoke --panel audio
 set -euo pipefail
-exec python3 - "$@" <<'PY'
+# -c, not a heredoc: the command inherits stdin, and dev/native-check.sh
+# pipes its packages through it.
+exec python3 -c '
 import fcntl, subprocess, sys
 with open("/tmp/formalshell-vm.lock", "w") as lock:
     fcntl.flock(lock, fcntl.LOCK_EX)
     sys.exit(subprocess.call(sys.argv[1:]))
-PY
+' "$@"

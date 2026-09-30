@@ -16,6 +16,10 @@ frame, teardown) and sources every file here. A leg defines:
 - `leg_<n>_wayland_debug=1` runs the shell under `WAYLAND_DEBUG`, so
   `$shell_log_path` carries its wire traffic for an assert that has to read
   what the shell sent rather than what the screen shows (`--frame`).
+- `leg_<n>_shell <path>` writes the shell start script at `<path>` in place
+  of the scaffold's, for a leg that runs some other build of the shell
+  (`--native`). It still logs to `$shell_log_path` and may write the
+  shell's pid to `$shot_dir/shell.pid` for the memory sample.
 - `leg_<n>_takeover` runs the whole thing itself and exits, for a leg that
   cannot share the one session (`--screensaver-gif` needs one per effect).
   It runs with the build done, the binaries resolved and the bus baseline

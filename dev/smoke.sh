@@ -549,6 +549,13 @@ for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
 done
 
 shell_start_script="$shot_dir/shell-start.sh"
+shell_launcher=""
+for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
+  if declare -F "leg_${leg_name}_shell" >/dev/null; then shell_launcher="leg_${leg_name}_shell"; fi
+done
+if [ -n "$shell_launcher" ]; then
+  "$shell_launcher" "$shell_start_script"
+else
 write_script "$shell_start_script" <<EOF
 #!/usr/bin/env bash
 # LIBGL_ALWAYS_SOFTWARE: on the vkms card the compositor advertises dmabuf
@@ -568,6 +575,7 @@ $wayland_debug_line
 echo \$! > "$shot_dir/shell.pid"
 wait
 EOF
+fi
 
 if $fixture_window_mode; then
   # Spawned through the compositor (hl.dsp.exec_cmd), so the window is
@@ -683,9 +691,13 @@ fi
 # list it was still LOADING, because one contract property was never
 # declared on the backend (added 2026-08-06, found on e1504g 2026-08-26).
 # Neither pattern can fire transiently, so this is a check on every run
-# rather than a leg of its own.
-if grep -qE "Cannot assign to non-existent property|is not a type" "$shell_log_path" 2>/dev/null; then
-  grep -nE "Cannot assign to non-existent property|is not a type" "$shell_log_path" | head -5 >&2
+# rather than a leg of its own. Components/cast.js loads BoxCast.qml on
+# purpose to find out whether this Qt has RectangularShadow (6.9+), and
+# logs the miss on an older one, which only --native on trixie runs.
+load_errors=$(grep -nE "Cannot assign to non-existent property|is not a type" "$shell_log_path" 2>/dev/null \
+  | grep -v "Box casts unavailable" || true)
+if [ -n "$load_errors" ]; then
+  printf "%s\n" "$load_errors" | head -5 >&2
   fail "the shell logged a QML load error (lines above)"
 fi
 
