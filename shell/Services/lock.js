@@ -56,3 +56,38 @@ function status(command, surface) {
         outputs: surface.outputs || {}
     };
 }
+
+// One line of `gdbus monitor --system --dest org.freedesktop.login1`. logind
+// signals PrepareForSleep(true) before a suspend or hibernate and
+// PrepareForSleep(false) once the machine is back:
+//   /org/freedesktop/login1: org.freedesktop.login1.Manager.PrepareForSleep (true,)
+// Returns that boolean, or null for any other line.
+function prepareForSleep(line) {
+    var m = /\borg\.freedesktop\.login1\.Manager\.PrepareForSleep \((true|false),\)/.exec(line || "");
+    return m ? m[1] === "true" : null;
+}
+
+// The built-in surface gets this long to report `secure` before the sleep
+// inhibitor is let go anyway. logind's own InhibitDelayMaxSec (5s by
+// default) caps the hold regardless; this keeps a lock that never lands from
+// spending all of it.
+var secureWaitMs = 3000;
+
+// An external locker never reports back, so all the shell can give it is a
+// head start before suspend proceeds.
+var externalWaitMs = 1000;
+
+// Why the sleep inhibitor can be released now, or "" to keep holding it.
+// `result` is lock()'s reply, "already" when the session was locked before
+// logind asked.
+function sleepRelease(external, result, secure, elapsedMs) {
+    if (result === "already")
+        return "already";
+    if (external)
+        return elapsedMs >= externalWaitMs ? "external" : "";
+    if (result !== "ok")
+        return "failed";
+    if (secure === true)
+        return "secure";
+    return elapsedMs >= secureWaitMs ? "timeout" : "";
+}

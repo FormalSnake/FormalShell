@@ -14,13 +14,10 @@ import qs.Services
 IpcHandler {
     target: "lock"
 
-    // The command a `lock-before-sleep` systemd unit calls before suspend
-    // (spec §8) must keep an exit-0-always contract so a lock failure can
-    // never block suspend. `qs ipc call` itself only exits nonzero when the
-    // target/function lookup fails or the call never completes at the wire
-    // level (never on the QML function's own return value), and LockService
-    // catches anything the surface throws rather than letting it surface as
-    // an uncaught error.
+    // `qs ipc call` only exits nonzero when the target/function lookup
+    // fails or the call never completes at the wire level (never on the QML
+    // function's own return value), and LockService catches anything the
+    // surface throws rather than letting it surface as an uncaught error.
     function lock(): string {
         return LockService.lock();
     }

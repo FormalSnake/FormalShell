@@ -2,8 +2,7 @@
 # instead of shell/shell.qml — deliberately NOT the same derivation body:
 # the greeter never touches audio/location/media, so it needs none of
 # package.nix's brightnessctl/wl-clipboard/curl PATH entries or
-# qtpositioning/qtmultimedia QML import paths, and it has no
-# lock-before-sleep-style companion script. What IS shared is the actual
+# qtpositioning/qtmultimedia QML import paths. What IS shared is the actual
 # QML source (src = ../shell, same as package.nix) — greeter.qml is
 # layered into that same tree so `import qs.Core`/`qs.Components` resolve
 # to the one real Core/Components, never a second copy.

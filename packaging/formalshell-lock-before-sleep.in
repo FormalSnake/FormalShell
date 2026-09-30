@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-@QS@ ipc --any-display -p @SHAREDIR@ call lock lock >/dev/null 2>&1 || true
-exit 0

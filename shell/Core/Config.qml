@@ -68,7 +68,9 @@ import QtQuick
 // it never starts, M7 Task 4), lock.command (array of strings, default [],
 // an external locker LockService spawns instead of raising the built-in
 // surface: ["hyprlock"], ["loginctl", "lock-session"]; empty keeps the
-// built-in one, and a first word not on PATH falls back to it, M45) and
+// built-in one, and a first word not on PATH falls back to it, M45),
+// lock.beforeSleep (bool, default true, LockService locking on logind's
+// PrepareForSleep behind a delay inhibitor) and
 // lock.dither (bool, default theme.dither, the retro
 // dither pass over the lock backdrop; off means the plain wallpaper
 // draws, M45). caffeinate.onStartup (bool, default false, starts the

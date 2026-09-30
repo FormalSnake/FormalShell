@@ -391,16 +391,15 @@ dev/
                                  rsyncs over the VM's single checkout with --delete
   sni-stub.py                    minimal PyGObject StatusNotifierItem producer for --tray's fixture items: registers for real on the session bus, never faked
 nix/
-  package.nix                   stdenvNoCC derivation wrapping `qs -p`; also installs formalshell-lock-before-sleep,
-                                 the exit-0-always wrapper around `qs ipc call lock lock`, and carries the
-                                 runtime CLI PATH (Process model, above)
+  package.nix                   stdenvNoCC derivation wrapping `qs -p`; carries the runtime CLI PATH
+                                 (Process model, above)
   ttfx-package.nix               the screensaver's frame source (MIT), prefixed onto that PATH
   tensaku-package.nix            the annotation editor `screenshot edit` launches (MPL-2.0), suffixed onto
                                  it; a separate executable, never linked in, so the shell stays MIT
   greeter-package.nix            stdenvNoCC derivation wrapping `qs -p` at greeter/greeter.qml; copies
-                                 shell/ verbatim and layers greeter.qml on top, no lock-before-sleep companion
-  hm-module.nix                 home-manager module (programs.formalshell); wires formalshell-lock-before-sleep
-                                 to a systemd --user oneshot bound to sleep.target (programs.formalshell.systemd.lockBeforeSleep)
+                                 shell/ verbatim and layers greeter.qml on top
+  hm-module.nix                 home-manager module (programs.formalshell): settings.json, the Hyprland
+                                 include, and the shell and watchdog user units
   nixos-module.nix               nixosModules.formalshell: security.pam.services.formalshell-lock,
                                  services.geoclue2 (+ agent), NetworkManager/bluez/upower/
                                  power-profiles-daemon/pipewire, each an mkDefault-guarded sub-option
@@ -1243,12 +1242,12 @@ dithered backdrop: Image { source: Core.State.wallpaper } (hidden) feeding
 A real deployment needs `security.pam.services.formalshell-lock = { };`
 declared system-side (`nix/testvm.nix`'s own copy is the reference), the
 home-manager module alone cannot create a PAM service, only NixOS/system
-config can. The `lock-before-sleep` contract (spec §8) is a separate,
-narrower path: `nix/package.nix`'s `formalshell-lock-before-sleep` wraps
-`qs ipc call lock lock` in `|| true; exit 0`, and `nix/hm-module.nix` binds
-it to a `systemd --user` oneshot on `sleep.target`, so a lock failure can
-never block suspend, verified directly by running the wrapper with no shell
-instance up at all and reading `$?`.
+config can. Lock-before-sleep (spec §8) lives in `Services/LockService.qml`:
+it follows logind's `PrepareForSleep` over a `gdbus monitor` child and holds
+a `systemd-inhibit --mode=delay` child, released once the lock reports
+`secure` (or after 3s), so suspend waits for the lock but a lock failure
+never blocks it; logind's `InhibitDelayMaxSec` caps the hold regardless.
+No systemd unit is involved: a user manager has no `sleep.target` to bind to.
 
 ## Idle → screensaver trigger graph
 

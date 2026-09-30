@@ -1,3 +1,2 @@
 enable formalshell.service
 enable formalshell-watchdog.timer
-enable formalshell-lock-before-sleep.service

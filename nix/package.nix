@@ -1,7 +1,7 @@
 { lib, stdenvNoCC, makeWrapper, quickshell, brightnessctl, wl-clipboard, curl, grim, slurp, wtype, qt6, formalshell-eds
 , matugen, qrencode, cava, ddcutil, tensaku, ttfx, clipssh, lucide-font, nerd-fonts
 , wf-recorder, tesseract, ffmpeg-headless, pulseaudio, pipewire, git, mpv, util-linux, coreutils, systemd, procps, openssh, xdg-utils
-, iphone-bridge, uxplay, localsend-cli, networkmanager, asusctl }:
+, iphone-bridge, uxplay, localsend-cli, networkmanager, asusctl, glib }:
 stdenvNoCC.mkDerivation {
   pname = "formalshell";
   version = "0.1.0-dev";
@@ -108,7 +108,7 @@ stdenvNoCC.mkDerivation {
     makeWrapper ${lib.getExe' quickshell "qs"} $out/bin/formalshell \
       --add-flags "-p $out/share/formalshell" \
       --prefix PATH : ${lib.makeBinPath [ brightnessctl wl-clipboard curl grim slurp formalshell-eds matugen qrencode cava ddcutil ttfx wf-recorder tesseract ffmpeg-headless pulseaudio git mpv util-linux procps xdg-utils ]} \
-      --suffix PATH : ${lib.makeBinPath ([ wtype tensaku openssh clipssh pipewire uxplay localsend-cli iphone-bridge systemd networkmanager ] ++ lib.optional (lib.meta.availableOn stdenvNoCC.hostPlatform asusctl) asusctl)} \
+      --suffix PATH : ${lib.makeBinPath ([ wtype tensaku openssh clipssh pipewire uxplay localsend-cli iphone-bridge systemd glib networkmanager ] ++ lib.optional (lib.meta.availableOn stdenvNoCC.hostPlatform asusctl) asusctl)} \
       --prefix XDG_DATA_DIRS : ${lucide-font}/share \
       --prefix XDG_DATA_DIRS : ${nerd-fonts.symbols-only}/share \
       --prefix NIXPKGS_QT6_QML_IMPORT_PATH : ${qt6.qtpositioning}/lib/qt-6/qml \
@@ -123,16 +123,6 @@ stdenvNoCC.mkDerivation {
     # nobody types it (`formalshell-ipc call menu toggle`).
     makeWrapper ${lib.getExe' quickshell "qs"} $out/bin/formalshell-ipc \
       --add-flags "ipc --any-display -p $out/share/formalshell"
-
-    # lock-before-sleep contract (spec §8): whatever a systemd unit calls
-    # before suspend must keep an exit-0-always behaviour so a lock failure
-    # can never block suspend. `qs ipc call` itself exits nonzero (255) when
-    # no shell instance is running at all — this wrapper is the actual
-    # command such a unit invokes, and it never propagates that.
-    substitute ${../packaging/formalshell-lock-before-sleep.in} $out/bin/formalshell-lock-before-sleep \
-      --subst-var-by QS ${lib.getExe' quickshell "qs"} \
-      --subst-var-by SHAREDIR $out/share/formalshell
-    chmod +x $out/bin/formalshell-lock-before-sleep
 
     # Liveness probe for the home-manager module's formalshell-watchdog
     # timer. A main thread hung on a render thread (the vaSyncSurface case

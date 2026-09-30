@@ -5,11 +5,11 @@ import QtQuick
 import qs.Core
 import qs.Compositor
 import "lock.js" as Lock
+import "../Core/proc.js" as Proc
 
-// The one lock trigger (M45 D2). `lock lock` over IPC (and with it
-// formalshell-lock-before-sleep, which calls that route), the `lock` hot
-// corner, `screensaver.lockAfterSeconds`' chain and the launcher's Lock row
-// all come through here, so the choice between the built-in surface and an
+// The one lock trigger (M45 D2). `lock lock` over IPC, logind's
+// PrepareForSleep, the `lock` hot corner, `screensaver.lockAfterSeconds`'
+// chain and the launcher's Lock row all come through here, so the choice between the built-in surface and an
 // external locker is made in one place rather than five.
 //
 // `lock.command` (argv list, default empty) names that external locker:
@@ -94,6 +94,103 @@ Singleton {
     function status() {
         if (!root.external && !root.lockScreen)
             return null;
-        return Lock.status(root.command, root.lockScreen);
+        const state = Lock.status(root.command, root.lockScreen);
+        state.beforeSleep = {
+            enabled: root.beforeSleep,
+            monitoring: sleepMonitor.running,
+            inhibiting: sleepInhibitor.running,
+            last: root._lastSleep
+        };
+        return state;
+    }
+
+    // Spec §8: lock before suspend, and never block it. logind signals
+    // PrepareForSleep(true), then waits for every delay inhibitor to be
+    // released (or InhibitDelayMaxSec to run out) before it suspends, so
+    // the lock lands before the machine sleeps only while one is held. A
+    // lock that fails or never lands just lets go early; logind's own
+    // timeout covers a shell too stuck to let go at all.
+    readonly property bool beforeSleep: Config.get("lock.beforeSleep", true) !== false
+
+    property bool _preparing: false
+    property var _sleepResult: null
+    property real _sleepStartMs: 0
+    // What the last PrepareForSleep(true) did: lock()'s reply, why the
+    // inhibitor was let go, and the wall clock of each step.
+    property var _lastSleep: null
+
+    function _onPrepareForSleep(sleeping) {
+        if (!sleeping) {
+            root._preparing = false;
+            sleepReleaseTimer.stop();
+            return;
+        }
+        if (root._preparing)
+            return;
+        root._preparing = true;
+        root._sleepStartMs = Date.now();
+        root._sleepResult = root.isLocked() === true ? "already" : root.lock();
+        root._lastSleep = { result: root._sleepResult, release: null, preparedAt: root._sleepStartMs, releasedAt: null };
+        sleepReleaseTimer.start();
+        root._checkSleepRelease();
+    }
+
+    function _checkSleepRelease() {
+        const why = Lock.sleepRelease(root.external && root._missing !== true, root._sleepResult,
+            root.lockScreen ? root.lockScreen.secure : null, Date.now() - root._sleepStartMs);
+        if (why === "")
+            return;
+        sleepReleaseTimer.stop();
+        root._lastSleep = Object.assign({}, root._lastSleep, { release: why, releasedAt: Date.now() });
+        if (why === "failed" || why === "timeout")
+            console.warn("LockService: letting suspend proceed without a lock:", why, root._sleepResult);
+    }
+
+    Timer {
+        id: sleepReleaseTimer
+        interval: 50
+        repeat: true
+        onTriggered: root._checkSleepRelease()
+    }
+
+    // gdbus rather than busctl: `busctl monitor` needs BecomeMonitor, which
+    // the system bus grants root alone, while gdbus subscribes with a plain
+    // match rule.
+    Process {
+        id: sleepMonitor
+        command: Proc.dieWithParent(["gdbus", "monitor", "--system",
+            "--dest", "org.freedesktop.login1", "--object-path", "/org/freedesktop/login1"])
+        running: root.beforeSleep
+        stdout: SplitParser {
+            onRead: line => {
+                const sleeping = Lock.prepareForSleep(line);
+                if (sleeping !== null)
+                    root._onPrepareForSleep(sleeping);
+            }
+        }
+        // A PrepareForSleep(false) sent while nothing was listening would
+        // leave the inhibitor released for good.
+        onRunningChanged: if (running) root._preparing = false
+        onExited: exitCode => {
+            if (root.beforeSleep)
+                sleepMonitorRestart.restart();
+        }
+    }
+
+    Timer {
+        id: sleepMonitorRestart
+        interval: 5000
+        onTriggered: sleepMonitor.running = root.beforeSleep
+    }
+
+    // The inhibitor lives exactly as long as this child. `cat` on the
+    // shell's stdin pipe is the thing held: stopping the Process, or the
+    // shell dying, ends it and logind drops the lock with its fd.
+    Process {
+        id: sleepInhibitor
+        command: Proc.dieWithParent(["systemd-inhibit", "--what=sleep", "--mode=delay",
+            "--who=FormalShell", "--why=Lock the session before sleep", "cat"])
+        stdinEnabled: true
+        running: sleepMonitor.running && !(root._preparing && root._lastSleep !== null && root._lastSleep.release !== null)
     }
 }

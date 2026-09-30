@@ -2667,7 +2667,7 @@ by default, in which case no fingerprint glyph appears at all.
 
 `lock.command` is an argv list naming an external locker. Set it and every
 lock trigger in the shell spawns that instead of raising the built-in
-surface: `lock lock` over IPC, `formalshell-lock-before-sleep`, the `lock`
+surface: `lock lock` over IPC, lock-before-sleep, the `lock`
 hot corner, the `screensaver.lockAfterSeconds` chain and the launcher's Lock
 row all go through one place. Empty (the default) keeps the built-in one.
 
@@ -2688,14 +2688,35 @@ A foreign locker owns the session on its own terms and never reports back, so
 with a null `locked` while one is configured. Nothing else changes: the
 keybind, the corner and the menu row all still work.
 
-`formalshell-lock-before-sleep` wraps `lock lock` and always exits 0, so a
-lock failure can never block suspend. `programs.formalshell.systemd.lockBeforeSleep`
-(on by default) wires it to a user oneshot bound to `sleep.target`.
-
 ```sh
 fs lock lock
 fs lock isLocked   # "true" | "false" | "unknown" (an external locker)
 fs lock status     # {"external":…,"locked":…,"secure":…,"authError":…,"blanked":…}
+```
+
+### Lock before sleep
+
+The shell locks itself before every suspend or hibernate. It listens for
+logind's `PrepareForSleep` on the system bus and holds a delay inhibitor
+(`systemd-inhibit --what=sleep --mode=delay`, listed as `FormalShell`) that it
+lets go once the lock surface reports `secure`, so the machine never sleeps
+with the desktop showing. A lock that fails or takes more than 3s lets
+suspend go ahead unlocked rather than holding it up, and logind's own
+`InhibitDelayMaxSec` (5s by default) caps the wait even if the shell hangs.
+With `lock.command` set, suspend waits 1s for that locker. Nothing needs
+installing: no systemd unit is involved. `lock.beforeSleep: false` turns it
+off.
+
+```jsonc
+// ~/.config/formalshell/settings.json
+{ "lock": { "beforeSleep": false } }
+```
+
+```sh
+systemd-inhibit --list        # FormalShell … sleep … delay
+fs lock status | jq .beforeSleep
+# {"enabled":true,"monitoring":true,"inhibiting":true,
+#  "last":{"result":"ok","release":"secure","preparedAt":…,"releasedAt":…}}
 ```
 
 The greeter is optional in the same way. It ships as its own nix module

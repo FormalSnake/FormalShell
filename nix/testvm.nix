@@ -124,6 +124,19 @@ nixpkgs.lib.nixosSystem {
           password = "formalshell-test";
         };
         security.sudo.wheelNeedsPassword = false;
+        # `--sleep` drives a real `systemctl suspend` through logind
+        # (PrepareForSleep, delay inhibitors, suspend.target), but this VM
+        # never wakes from s2idle under HVF: pl031's wakealarm does not bring
+        # it back (tried 2026-09-30, the guest stayed frozen until killed).
+        # Only the kernel's own freeze is replaced, by a stamp of when logind
+        # got as far as sleeping.
+        systemd.services.systemd-suspend.serviceConfig.ExecStart = [
+          ""
+          "${pkgs.writeShellScript "formalshell-fake-suspend" ''
+            ${pkgs.coreutils}/bin/date +%s%3N > /run/formalshell-suspended-at
+            ${pkgs.coreutils}/bin/sleep 2
+          ''}"
+        ];
         services.getty.autologinUser = "test";
         # M8 Task 3: nixosModules.formalshell declares the
         # "formalshell-lock" PAM service Lock.qml's PamContext authenticates

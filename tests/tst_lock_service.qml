@@ -105,4 +105,38 @@ TestCase {
             outputs: { "Virtual-1": { clockInk: "dark" } } };
         compare(Lock.status([], surface).outputs["Virtual-1"].clockInk, "dark");
     }
+
+    function test_prepare_for_sleep_reads_both_edges_off_gdbus_monitor() {
+        compare(Lock.prepareForSleep("/org/freedesktop/login1: org.freedesktop.login1.Manager.PrepareForSleep (true,)"), true);
+        compare(Lock.prepareForSleep("/org/freedesktop/login1: org.freedesktop.login1.Manager.PrepareForSleep (false,)"), false);
+    }
+
+    function test_prepare_for_sleep_ignores_every_other_line() {
+        compare(Lock.prepareForSleep("Monitoring signals on object /org/freedesktop/login1 owned by org.freedesktop.login1"), null);
+        compare(Lock.prepareForSleep("/org/freedesktop/login1: org.freedesktop.login1.Manager.PrepareForShutdown (true,)"), null);
+        compare(Lock.prepareForSleep("/org/freedesktop/login1: org.freedesktop.login1.Manager.SessionNew ('3', objectpath '/org/freedesktop/login1/session/_33')"), null);
+        compare(Lock.prepareForSleep(""), null);
+        compare(Lock.prepareForSleep(undefined), null);
+    }
+
+    function test_sleep_inhibitor_holds_until_the_surface_is_secure() {
+        compare(Lock.sleepRelease(false, "ok", false, 0), "");
+        compare(Lock.sleepRelease(false, "ok", false, Lock.secureWaitMs - 1), "");
+        compare(Lock.sleepRelease(false, "ok", true, 120), "secure");
+    }
+
+    function test_sleep_inhibitor_never_outlasts_a_lock_that_does_not_land() {
+        compare(Lock.sleepRelease(false, "ok", false, Lock.secureWaitMs), "timeout");
+        compare(Lock.sleepRelease(false, "error: lock not ready", null, 0), "failed");
+    }
+
+    function test_sleep_inhibitor_lets_go_at_once_when_already_locked() {
+        compare(Lock.sleepRelease(false, "already", true, 0), "already");
+        compare(Lock.sleepRelease(true, "already", null, 0), "already");
+    }
+
+    function test_sleep_inhibitor_gives_an_external_locker_a_fixed_head_start() {
+        compare(Lock.sleepRelease(true, "ok", null, Lock.externalWaitMs - 1), "");
+        compare(Lock.sleepRelease(true, "ok", null, Lock.externalWaitMs), "external");
+    }
 }

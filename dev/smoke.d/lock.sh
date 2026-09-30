@@ -22,7 +22,6 @@ lock_islocked1_path="$shot_dir/lock-islocked-1.txt"
 lock_islocked2_path="$shot_dir/lock-islocked-2.txt"
 lock_status_path="$shot_dir/lock-status.json"
 lock_call_rc_path="$shot_dir/lock-call-rc.txt"
-lock_before_sleep_rc_path="$shot_dir/lock-before-sleep-rc.txt"
 
 # This leg's own clock. It starts late under --wallpaper so the two
 # wallpaper frames land first, which puts a real matugen-recoloured gradient
@@ -32,13 +31,6 @@ lock_t0() {
 }
 
 leg_lock_fixture() {
-  # lock-before-sleep's exit-0-always proof (spec §8), run BEFORE the
-  # session ever starts a shell instance: the exact "no running instance"
-  # case a real lock-before-sleep systemd unit has to survive. A bare `qs
-  # ipc call lock lock` exits 255 here; the wrapper must not.
-  local rc=0
-  "$PWD/result/bin/formalshell-lock-before-sleep" || rc=$?
-  echo "$rc" > "$lock_before_sleep_rc_path"
   # A profile picture at the default `avatar.path`, one flat colour nothing
   # else on the lock screen paints, so the locked frame can be searched for it.
   $convert_bin -size 256x256 xc:'#1FB86A' "png:$iso_home/.face"
@@ -86,9 +78,6 @@ EOF
 
 leg_lock_assert() {
   local f
-  if [ ! -s "$lock_before_sleep_rc_path" ] || ! grep -q "^0$" "$lock_before_sleep_rc_path"; then
-    fail "formalshell-lock-before-sleep did not exit 0 with no shell instance running. Got: $(cat "$lock_before_sleep_rc_path" 2>/dev/null)"
-  fi
   if [ ! -s "$lock_call_rc_path" ] || ! grep -q "^0$" "$lock_call_rc_path"; then
     fail "lock lock IPC call exited non-zero. Got: $(cat "$lock_call_rc_path" 2>/dev/null)"
   fi

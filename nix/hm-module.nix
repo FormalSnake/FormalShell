@@ -22,7 +22,6 @@ let cfg = config.programs.formalshell; in
     systemd = {
       enable = lib.mkEnableOption "systemd user service" // { default = true; };
       target = lib.mkOption { type = lib.types.str; default = "graphical-session.target"; };
-      lockBeforeSleep = lib.mkEnableOption "lock-before-sleep systemd user unit" // { default = true; };
       watchdog = lib.mkEnableOption "timer that restarts the shell when its IPC socket stops answering" // { default = true; };
     };
   };
@@ -51,14 +50,6 @@ let cfg = config.programs.formalshell; in
       Unit = { Description = "FormalShell liveness probe"; PartOf = [ cfg.systemd.target ]; };
       Timer = { OnActiveSec = "30s"; OnUnitActiveSec = "30s"; AccuracySec = "5s"; Unit = "formalshell-watchdog.service"; };
       Install = { WantedBy = [ cfg.systemd.target ]; };
-    };
-    # Spec §8's lock-before-sleep contract: `formalshell-lock-before-sleep`
-    # (nix/package.nix) is the exit-0-always wrapper such a unit must call so
-    # a lock failure never blocks suspend.
-    systemd.user.services.formalshell-lock-before-sleep = lib.mkIf cfg.systemd.lockBeforeSleep {
-      Unit = { Description = "Lock FormalShell before sleep"; Before = [ "sleep.target" ]; };
-      Service = { Type = "oneshot"; ExecStart = lib.getExe' cfg.package "formalshell-lock-before-sleep"; };
-      Install = { WantedBy = [ "sleep.target" ]; };
     };
   };
 }

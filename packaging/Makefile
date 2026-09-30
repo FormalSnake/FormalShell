@@ -1,7 +1,7 @@
 # Native install of FormalShell against the distro's quickshell (>= 0.3.1)
 # and Qt, shared by the Arch and Debian packages. It mirrors what
 # nix/package.nix, nix/hm-module.nix and nix/nixos-module.nix install; the
-# watchdog, lock-before-sleep and power poll scripts are the same files the
+# watchdog and power poll scripts are the same files the
 # Nix build substitutes, so the two cannot drift.
 #
 #   make -C packaging install DESTDIR=pkgdir PREFIX=/usr LUCIDE_TTF=lucide.ttf
@@ -38,8 +38,8 @@ SUBST = sed -e 's|@QS@|$(QS)|g' -e 's|@SHAREDIR@|$(SHAREDIR)|g' \
 	-e 's|@BINDIR@|$(BINDIR)|g' -e 's|@LIBEXECDIR@|$(LIBEXECDIR)|g' \
 	-e 's|@TIMEOUT@|$(TIMEOUT)|g' -e 's|@SYSTEMCTL@|$(SYSTEMCTL)|g'
 
-SCRIPTS = formalshell formalshell-ipc formalshell-watchdog formalshell-lock-before-sleep
-USER_UNITS = formalshell.service formalshell-watchdog.service formalshell-lock-before-sleep.service
+SCRIPTS = formalshell formalshell-ipc formalshell-watchdog
+USER_UNITS = formalshell.service formalshell-watchdog.service
 
 .PHONY: all install
 all:
