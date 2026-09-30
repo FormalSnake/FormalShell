@@ -36,7 +36,7 @@ override_dh_auto_build:
 	cd $(TP)/tensaku && cargo build --frozen --release --features ci-release
 	cd $(TP)/matugen && cargo build --frozen --release
 	cd $(TP)/localsend-cli && CGO_CFLAGS="$(CFLAGS)" CGO_LDFLAGS="$(LDFLAGS)" \
-		go build -buildmode=pie -o localsend-cli .
+		go build -buildmode=pie -buildvcs=false -o localsend-cli .
 	dh_auto_build --buildsystem=pybuild --sourcedirectory=$(ANCS)
 
 override_dh_auto_test:

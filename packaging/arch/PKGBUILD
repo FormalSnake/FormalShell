@@ -119,7 +119,7 @@ build() {
   export GOPATH="$srcdir/gopath"
   export CGO_CPPFLAGS="$CPPFLAGS" CGO_CFLAGS="$CFLAGS" CGO_CXXFLAGS="$CXXFLAGS" CGO_LDFLAGS="$LDFLAGS"
   export GOFLAGS="-buildmode=pie -trimpath -ldflags=-linkmode=external -mod=readonly -modcacherw"
-  go build -o localsend-cli .
+  go build -buildvcs=false -o localsend-cli .
 
   cd "$srcdir/ancs4linux-$_ancs"
   python -m build --wheel --no-isolation
