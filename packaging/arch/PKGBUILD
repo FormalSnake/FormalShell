@@ -18,7 +18,7 @@ pkgname=(
   formalshell-iphone-bridge
   formalshell-ancs4linux
 )
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc='Hyprland desktop shell built on Quickshell'
 arch=('x86_64' 'aarch64')

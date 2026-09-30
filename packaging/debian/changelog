@@ -1,3 +1,9 @@
+formalshell (0.1.1-1) unstable; urgency=medium
+
+  * Build localsend-cli without VCS stamping.
+
+ -- FormalSnake <formalsnake@users.noreply.github.com>  Wed, 30 Sep 2026 20:00:00 +0000
+
 formalshell (0.1.0-1) unstable; urgency=medium
 
   * Native Debian and Ubuntu packages.
