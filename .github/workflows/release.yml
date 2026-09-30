@@ -12,3 +12,25 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   # The Arch and Debian package jobs (M77 Tasks 4 and 5) go below, each with
   # `needs: release` and a `gh release upload "$GITHUB_REF_NAME"` step.
+  arch:
+    needs: release
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - run: pacman -Syu --noconfirm --needed base-devel git github-cli sudo
+      - uses: actions/checkout@v4
+      - name: makepkg
+        run: |
+          useradd -m builder
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+          chown -R builder: .
+          su builder -c "packaging/arch/build.sh --tag $GITHUB_REF_NAME --syncdeps --noconfirm"
+      # The staged PKGBUILD, .SRCINFO and install scripts are the AUR
+      # submission for this tag, checksums pinned.
+      - run: |
+          cd packaging/arch/build
+          tar czf "formalshell-aur-$GITHUB_REF_NAME.tar.gz" PKGBUILD .SRCINFO *.install
+          gh release upload "$GITHUB_REF_NAME" *.pkg.tar.zst "formalshell-aur-$GITHUB_REF_NAME.tar.gz"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}

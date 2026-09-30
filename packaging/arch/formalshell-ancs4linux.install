@@ -1,0 +1,7 @@
+post_install() {
+  cat <<'MSG'
+==> For iPhone notifications, join the ancs4linux group and start the daemons:
+      usermod -aG ancs4linux <user>
+      systemctl enable --now ancs4linux-observer.service ancs4linux-advertising.service
+MSG
+}

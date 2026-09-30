@@ -9,3 +9,36 @@ jobs:
       - uses: DeterminateSystems/magic-nix-cache-action@v9
       - run: nix flake check -L
       - run: nix build -L .#formalshell .#formalshell-greeter
+  arch:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - run: pacman -Syu --noconfirm --needed base-devel git namcap sudo qt6-declarative
+      - uses: actions/checkout@v4
+      - name: makepkg
+        run: |
+          useradd -m builder
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+          chown -R builder: .
+          su builder -c 'packaging/arch/build.sh --syncdeps --noconfirm'
+      - run: namcap packaging/arch/build/PKGBUILD packaging/arch/build/*.pkg.tar.zst
+      - run: pacman -U --noconfirm packaging/arch/build/*.pkg.tar.zst
+      - name: installed tools run
+        run: |
+          formalshell-eds --help
+          ttfx --version
+          tensaku --version
+          localsend-cli --help
+          omarchy-iphone-bridge --help
+          omarchy-iphone-ams --help
+          ancs4linux-ctl --help
+          clipssh --help
+      # The installed tree has to lint exactly like the repo's: a difference
+      # is something the install step dropped or changed. Sorted, since
+      # qmllint's warning order within a file is not stable between runs.
+      - name: qmllint installed tree against repo tree
+        run: |
+          lint() { (cd "$1" && /usr/lib/qt6/bin/qmllint -I /usr/lib/qt6/qml --bare $(find . -name '*.qml' | sort)) 2>&1 || true; }
+          lint shell | sort > repo.log
+          lint /usr/share/formalshell | sort > installed.log
+          diff repo.log installed.log
