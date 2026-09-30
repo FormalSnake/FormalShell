@@ -1,0 +1,14 @@
+name: release
+on: { push: { tags: ["v*"] } }
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  # The Arch and Debian package jobs (M77 Tasks 4 and 5) go below, each with
+  # `needs: release` and a `gh release upload "$GITHUB_REF_NAME"` step.

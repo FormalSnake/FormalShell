@@ -12,9 +12,14 @@
       url = "github:quickshell-mirror/quickshell/43d4fa9e883cb03239b3d578c9c57070f4fbd281";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # Only the nixos-module-eval check uses it.
+    home-manager = {
+      url = "github:nix-community/home-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, quickshell }:
+  outputs = { self, nixpkgs, quickshell, home-manager }:
     let
       systems = [ "x86_64-linux" "aarch64-linux" ];
       # darwin gets no packages (quickshell is linux-only) but runs the pure
@@ -51,6 +56,40 @@
         python3 ${./.}/dev/check-primitives.py 2>&1 | tee $out.log
         touch $out
       '';
+      # Evaluates (never builds) the NixOS config README.md documents, with
+      # no explicit `package` anywhere, so a module default that stops
+      # resolving fails CI. The drvPath is embedded as a string without its
+      # context, which keeps the check from building the closure.
+      nixosModuleEval = system: pkgs:
+        let
+          os = nixpkgs.lib.nixosSystem {
+            inherit system;
+            modules = [
+              self.nixosModules.formalshell
+              self.nixosModules.formalshell-greeter
+              home-manager.nixosModules.home-manager
+              ({ ... }: {
+                services.formalshell.enable = true;
+                services.formalshell-greeter = {
+                  enable = true;
+                  sessionCommand = [ "Hyprland" ];
+                };
+                programs.hyprland.enable = true;
+                users.users.me = { isNormalUser = true; };
+                home-manager.users.me = {
+                  imports = [ self.homeModules.default ];
+                  programs.formalshell.enable = true;
+                  home.stateVersion = "25.05";
+                };
+                fileSystems."/" = { device = "none"; fsType = "tmpfs"; };
+                boot.loader.grub.enable = false;
+                system.stateVersion = "25.05";
+              })
+            ];
+          };
+        in
+        pkgs.writeText "formalshell-nixos-module-eval"
+          (builtins.unsafeDiscardStringContext os.config.system.build.toplevel.drvPath);
     in
     {
       packages = nixpkgs.lib.recursiveUpdate
@@ -108,6 +147,7 @@
         (forAllSystems (system: pkgs: {
         qml-tests = qmlTests pkgs;
         primitives = primitivesCheck pkgs;
+        nixos-module-eval = nixosModuleEval system pkgs;
 
         qmllint = pkgs.runCommand "formalshell-qmllint" {
           nativeBuildInputs = [ pkgs.qt6.qtdeclarative ];
