@@ -107,7 +107,7 @@ var ROUTE_ICONS = {
     "panels.calendar": "calendar",
     "panels.network": "wifi",
     "panels.bluetooth": "bluetooth",
-    "panels.airpods": "headphones",
+    "panels.earbuds": "headphones",
     "panels.dualsense": "gamepad-2",
     "panels.power": "battery",
     "panels.weather": "sun",

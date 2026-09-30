@@ -3,7 +3,7 @@ import Quickshell.Io
 import qs.Services
 
 // `qs ipc call iphone status|pair|invoke <id> <positive|negative>|dismiss
-// <id>|clear|markRead`, spec addendum (the `panel`/`bluetooth`/`airpods`
+// <id>|clear|markRead`, spec addendum (the `panel`/`bluetooth`/`earbuds`
 // tradition, CLAUDE.md hard rules): compositor keybinds and the smoke rig
 // both need a headless drive path onto IphoneService, the same reason every
 // other device panel carries one. `status` answers exactly what the panel

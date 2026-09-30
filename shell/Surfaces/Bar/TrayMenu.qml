@@ -205,7 +205,7 @@ Panel {
 
     // Panel.qml's shared keyboard-nav hook (M6 Task 7): first Up/Down only
     // reveals the cursor where `_rebuildRows()` already parked it (M26
-    // Task 8's reveal-not-move idiom, AirpodsPanel.qml's own consumer
+    // Task 8's reveal-not-move idiom, EarbudsPanel.qml's own consumer
     // pattern), Enter activates it, Escape is Panel's own default (close).
     Connections {
         target: root

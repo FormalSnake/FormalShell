@@ -188,7 +188,7 @@ programs.formalshell.settings.bar = {
 The default arrangement is exactly what you see above minus `custom:cpu`.
 Everything else is opt-in and never shows up until you name it: `chevron`,
 `github`, `usage`, `tailscale`, `visualizer`, `microphone`,
-`keyboardLayout`, `systemUpdate`, `airpods`, `dualsense`, `display`,
+`keyboardLayout`, `systemUpdate`, `earbuds`, `dualsense`, `display`,
 `monitor`.
 
 ### The band's paint
@@ -446,11 +446,12 @@ hour per IP, and a 403 lands in the unknown bucket rather than in `current`.
 Input types with no cheap probe (`path`, `tarball`, `indirect`, sourcehut)
 stay `?`.
 
-**AirPods** shows an earbuds glyph and the worse of the two buds as `NN%`.
-The case is left out of that number (a full case next to a dead bud would
-read backwards) but joins the tooltip's `L 97 / R 99 / CASE 80`. With no
-`librepods` daemon running the cell is hidden entirely, so a host with no
-AirPods pays nothing.
+**Earbuds** shows a headphones glyph and the worse of the two buds as
+`NN%` for the active device. The case is left out of that number (a full
+case next to a dead bud would read backwards) but joins the tooltip's
+`<NAME> / L 97 / R 99 / CASE 80`. Until a bud reports a level the cell is
+hidden entirely, so a host with no earbuds pays nothing.
+`bar.widgets.earbuds.showLabel` (default on) shows the percentage.
 
 **DualSense** shows a gamepad glyph and battery percent, polled every 30
 seconds, hidden with no controller present, warning-filled at 20% or less
@@ -1611,7 +1612,7 @@ exclusive-focus surface regardless of which output the cursor is over.
 | `appmenu` | the focused window's desktop entry | `activeWindow` |
 | `systemupdate` | `flake.lock` plus one probe per input | `systemUpdate` |
 | `display` | the compositor's own output contract | `display` |
-| `airpods` | the librepods daemon | `airpods` |
+| `earbuds` | the librepods daemon (AirPods) | `earbuds` |
 | `dualsense` | sysfs, read-only | `dualsense` |
 | `monitor` | `/proc`, `/sys/class/drm`, `nvidia-smi` | `monitor` |
 
@@ -1801,12 +1802,17 @@ mirroring primitive), `SINGLE DISPLAY`, and a dimmed `ON` cell on the last
 enabled output, since the compositor would happily leave you with nothing on
 screen and no surface left to undo it from.
 
-**AirPods** talks to the `librepods` daemon, an unrelated GPL-3.0 project
-you run yourself (see [`SWITCHOVER.md`](SWITCHOVER.md)). The service watches
-the daemon's own `status.json`, which it removes on quit, so the absent file
-is the daemon-down signal and no liveness probe is needed. States first:
-`NO DAEMON` with no file, `NO AIRPODS` for a running daemon that has never
-seen a battery packet. Past those: the device name and a state line, a
+**Earbuds** draws every vendor through one device shape: a backend per
+vendor turns its source's state into batteries and controls, and the panel
+renders those without knowing whose they are. With more than one device
+connected a `Device` choice heads the panel, and the most recently connected
+one is shown. AirPods come from the `librepods` daemon, an unrelated GPL-3.0
+project you run yourself (see [`SWITCHOVER.md`](SWITCHOVER.md)). The
+backend watches the daemon's own `status.json`, which it removes on quit,
+so the absent file is the daemon-down signal and no liveness probe is
+needed. States first: `No daemon` with no file, `No earbuds connected` for
+a running daemon that has never seen a battery packet. Past those: the
+device name and a state line, a
 `BATTERY` section with up to three rows (left, right, case, each with an
 `IN EAR` or `CHARGING` hint), a `LISTENING MODE` section listing only the
 modes the device actually has, and on Pro models `Conversation awareness`
@@ -1872,7 +1878,7 @@ carry no action ignores Enter.
 | `github` | Open the PR or issue and close the panel | none | Move the cursor | none |
 | `systemupdate` | Re-check the inputs | none | Move the cursor | Inputs / check |
 | `tailscale` | Toggle the connection, or copy the row's IP | none | Move the cursor | none |
-| `airpods` | The row's own action: set the noise mode, toggle awareness or one-bud, cycle ear detection | none | Adaptive noise level by 5 | none |
+| `earbuds` | The row's own action: pick the device, set the noise mode, toggle a switch, set ear detection | none | Move the ring in a group, or a level by its step (5 for AirPods adaptive noise) | none |
 | `dualsense` | none | none | Move the cursor | none |
 
 `audio` also takes `m` to mute the row under the cursor. `PLAYERS` only
@@ -1947,20 +1953,23 @@ that isn't `on` or `off`. `devices[].trusted` reports what was asked for
 whenever the toolkit and BlueZ disagree, so it is not proof a write landed;
 `bluetoothctl info <address>` is.
 
-AirPods:
+Earbuds:
 
 ```sh
-fs airpods status                 # the parsed daemon state, or {"available":false}
-fs airpods noise transparency     # off | anc | transparency | adaptive
-fs airpods ca on                  # conversation awareness
-fs airpods onebud off
-fs airpods ear both               # one | both | off
-fs airpods adaptive 40            # 0-100, only while noise mode is adaptive
+fs earbuds status                 # the active device as the panel draws it, or {"available":false}
+fs earbuds devices                # every connected device: key, backend, name, connected, active
+fs earbuds select airpods         # show this device
+fs earbuds set noise transparency # AirPods: off | anc | transparency | adaptive
+fs earbuds set ca on              # AirPods: conversation awareness
+fs earbuds set onebud off
+fs earbuds set ear both           # AirPods: one | both | off
+fs earbuds set adaptive 40        # AirPods: 0-100, only while noise mode is adaptive
 ```
 
-Every verb is checked against an allow-list before the socket opens, so an
-unknown mode or an unset `XDG_RUNTIME_DIR` comes back as
-`error: refused '<verb>'`. There is no `dualsense` target, because that
+`set` acts on the active device and only on a control it lists right now.
+The value is checked against that control and then against the backend's own
+allow-list before anything is sent, so an unknown value, a missing control
+or an unset `XDG_RUNTIME_DIR` comes back as `error: <reason>`. There is no `dualsense` target, because that
 panel is read-only.
 
 ### Dev gallery

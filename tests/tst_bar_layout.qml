@@ -142,14 +142,14 @@ TestCase {
         verify(names(d.regions.right).indexOf("systemUpdate") < 0);
     }
 
-    function test_airpods_is_an_optin_builtin_absent_from_defaults() {
-        var r = Layout.resolve({ layout: { right: ["airpods"] } });
-        compare(names(r.regions.right), "airpods");
+    function test_earbuds_is_an_optin_builtin_absent_from_defaults() {
+        var r = Layout.resolve({ layout: { right: ["earbuds"] } });
+        compare(names(r.regions.right), "earbuds");
         compare(r.warnings.length, 0);
         var d = Layout.resolve(undefined);
-        verify(names(d.regions.left).indexOf("airpods") < 0);
-        verify(names(d.regions.center).indexOf("airpods") < 0);
-        verify(names(d.regions.right).indexOf("airpods") < 0);
+        verify(names(d.regions.left).indexOf("earbuds") < 0);
+        verify(names(d.regions.center).indexOf("earbuds") < 0);
+        verify(names(d.regions.right).indexOf("earbuds") < 0);
     }
 
     function test_display_is_an_optin_builtin_absent_from_defaults() {

@@ -3,7 +3,7 @@ import Quickshell.Io
 import qs.Services
 
 // `qs ipc call localsend status|peers|scan|send <peer> <path>`, the
-// `panel`/`bluetooth`/`airpods` spec addendum tradition: compositor
+// `panel`/`bluetooth`/`earbuds` spec addendum tradition: compositor
 // keybinds and the smoke rig both need a headless drive path onto
 // LocalsendService. No `receive on|off`: `localsend.receive` is a
 // settings.json key the service only ever reads, never a runtime toggle

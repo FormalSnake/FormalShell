@@ -1,5 +1,4 @@
 singleton AirplayService AirplayService.qml
-singleton AirpodsService AirpodsService.qml
 singleton AnimatedCoverFrameSource AnimatedCoverFrameSource.qml
 singleton AppIconService AppIconService.qml
 singleton AppleMusicArtService AppleMusicArtService.qml
@@ -11,6 +10,7 @@ singleton ClipsshService ClipsshService.qml
 singleton ConnectivityService ConnectivityService.qml
 singleton ConsoleService ConsoleService.qml
 singleton DualsenseService DualsenseService.qml
+singleton EarbudsService EarbudsService.qml
 singleton GpuService GpuService.qml
 singleton HerdrService HerdrService.qml
 singleton IdleService IdleService.qml

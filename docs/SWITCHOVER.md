@@ -26,7 +26,7 @@ still doesn't work.
 | External monitor brightness | `hardware.i2c.enable = true` (or `modprobe i2c-dev`) and your user in the `i2c` group. Without both, `ddcutil detect` finds nothing and the panel shows backlight rows only |
 | Polkit prompts | your existing polkit agent dropped from the host config. Only one agent can register per session, and this one never fights for the name |
 | Menu share | `localsend` installed, plus inbound 53317/tcp and 53317/udp for peer discovery |
-| AirPods panel | the `omarchy-pods` fork of the `librepods` daemon running as `librepods --headless`. The stock librepods tray app is write-only and cannot feed this panel |
+| Earbuds panel, AirPods | the `omarchy-pods` fork of the `librepods` daemon running as `librepods --headless`. The stock librepods tray app is write-only and cannot feed this panel |
 | DualSense panel | `hid-playstation` bound, and your own udev LED rule if you want lightbar and player LEDs readable |
 | Tailscale toggle | `sudo tailscale set --operator=$USER`, once per host. Status polling needs no grant; only up and down do |
 | Calendar via online accounts | `services.gnome.evolution-data-server.enable` and `services.gnome.gnome-online-accounts.enable` |
@@ -64,7 +64,7 @@ Everything else, which is most of the newer surfaces: the greeter, the
 lock screen's real-PAM success and failure paths, the SNI tray, the
 indicators slot, settings-driven bar layout and custom modules, the bar
 chevron, the notification bell, card density and repeat collapse, the
-weather, github, usage, tailscale, AirPods and DualSense cells and panels,
+weather, github, usage, tailscale, earbuds and DualSense cells and panels,
 the opt-in microphone, keyboard-layout and system-update cells, EDS and
 RRULE calendar events, day selection, the menu's calculator, emoji, nix
 runner, keybinds, share and toggle routes, app names and icons,

@@ -43,8 +43,8 @@ import "../../Bluetooth/model.js" as BluetoothModel
 // Forget is offered on paired rows only, the same "known and not currently
 // connected" restriction NetworkPanel's own forget applies.
 //
-// AirPods noise control lives in AirpodsPanel (M29 Task 2), which owns the
-// daemon this panel used to talk to.
+// AirPods noise control lives in EarbudsPanel (M29 Task 2, M77), whose
+// AirPods backend owns the daemon this panel used to talk to.
 //
 // TRUST is a peer of those actions (same _runAction machinery, same failure
 // surface) with one behavior difference the toolkit forces.

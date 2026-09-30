@@ -18,7 +18,7 @@ TestCase {
     name: "MenuReachability"
 
     property var panelNames: [
-        "appmenu", "audio", "calendar", "network", "bluetooth", "airpods",
+        "appmenu", "audio", "calendar", "network", "bluetooth", "earbuds",
         "iphone", "dualsense", "power", "weather", "media", "github", "usage",
         "tailscale", "systemupdate", "display", "monitor", "radio"
     ]

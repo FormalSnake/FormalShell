@@ -17,13 +17,13 @@
 // opens no panel at all, and neither "custom:" modules nor "plugin:" entries
 // are keyed here since panelAt() only ever looks at builtins.
 var WIDGET_PANELS = {
-    airpods: "airpods",
     audio: "audio",
     battery: "power",
     bluetooth: "bluetooth",
     clock: "calendar",
     display: "display",
     dualsense: "dualsense",
+    earbuds: "earbuds",
     github: "github",
     iphone: "iphone",
     microphone: "audio",

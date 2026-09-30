@@ -13,7 +13,7 @@ import qs.Services
 // (SystemMonitorService.qml's own header), so this cell only exists to
 // spawn a collector for as long as "monitor" is actually placed in
 // bar.layout, same acquire/release-on-instantiation idiom
-// AirpodsWidget/DualsenseWidget already use for their own services.
+// EarbudsWidget/DualsenseWidget already use for their own services.
 //
 // Every number here can be null on the very first tick (cpuDelta/memory
 // both need a previous sample, sysinfo.js's own contract): that renders as

@@ -17,7 +17,7 @@ import "../Monitor/sysinfo.js" as Sysinfo
 // subscribe()/unsubscribe() ref-count who currently wants live data (the
 // bar cell while visible, the compact panel and the launcher's full view
 // while open, the same acquire()/release() shape DualsenseService and
-// AirpodsService use, named subscribe/unsubscribe here since one tick fans
+// EarbudsService use, named subscribe/unsubscribe here since one tick fans
 // out to more than one consumer at once, including GpuService). The poll
 // timer runs only while the count is above zero, so a shell with the
 // monitor cell off and every monitor surface closed spawns nothing at all.

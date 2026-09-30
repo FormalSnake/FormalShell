@@ -64,7 +64,7 @@ PanelWindow {
     property var calendarPanel: null
     property var networkPanel: null
     property var bluetoothPanel: null
-    property var airpodsPanel: null
+    property var earbudsPanel: null
     property var iphonePanel: null
     property var dualsensePanel: null
     property var powerPanel: null
@@ -567,9 +567,9 @@ PanelWindow {
         }
     }
     Component {
-        id: airpodsComponent
-        AirpodsWidget {
-            panel: bar.airpodsPanel
+        id: earbudsComponent
+        EarbudsWidget {
+            panel: bar.earbudsPanel
         }
     }
     Component {
@@ -714,7 +714,7 @@ PanelWindow {
         audio: audioComponent,
         network: networkComponent,
         bluetooth: bluetoothComponent,
-        airpods: airpodsComponent,
+        earbuds: earbudsComponent,
         iphone: iphoneComponent,
         dualsense: dualsenseComponent,
         weather: weatherComponent,

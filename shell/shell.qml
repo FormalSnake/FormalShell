@@ -118,7 +118,7 @@ ShellRoot {
                 calendarPanel: calendarPanelInstance
                 networkPanel: networkPanelInstance
                 bluetoothPanel: bluetoothPanelInstance
-                airpodsPanel: airpodsPanelInstance
+                earbudsPanel: earbudsPanelInstance
                 iphonePanel: iphonePanelInstance
                 dualsensePanel: dualsensePanelInstance
                 powerPanel: powerPanelInstance
@@ -250,7 +250,7 @@ ShellRoot {
     PanelSlot { id: calendarPanelInstance; CalendarPanel { menu: menuInstance } }
     PanelSlot { id: networkPanelInstance; NetworkPanel {} }
     PanelSlot { id: bluetoothPanelInstance; BluetoothPanel {} }
-    PanelSlot { id: airpodsPanelInstance; AirpodsPanel {} }
+    PanelSlot { id: earbudsPanelInstance; EarbudsPanel {} }
     PanelSlot { id: iphonePanelInstance; IphonePanel {} }
     PanelSlot { id: dualsensePanelInstance; DualsensePanel {} }
     PowerPanel { id: powerPanelInstance }
@@ -356,7 +356,7 @@ ShellRoot {
     // register/unregister, so this binding re-fires.
     PanelIpc {
         registry: {
-            var reg = { appmenu: appMenuPanelInstance, audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance, airpods: airpodsPanelInstance, iphone: iphonePanelInstance, dualsense: dualsensePanelInstance, power: powerPanelInstance, weather: weatherPanelInstance, media: mediaPanelInstance, github: githubPanelInstance, usage: usagePanelInstance, tailscale: tailscalePanelInstance, systemupdate: systemUpdatePanelInstance, display: displayPanelInstance, monitor: monitorPanelInstance, trayoverflow: trayOverflowInstance, radio: radioInstance };
+            var reg = { appmenu: appMenuPanelInstance, audio: audioPanelInstance, calendar: calendarPanelInstance, network: networkPanelInstance, bluetooth: bluetoothPanelInstance, earbuds: earbudsPanelInstance, iphone: iphonePanelInstance, dualsense: dualsensePanelInstance, power: powerPanelInstance, weather: weatherPanelInstance, media: mediaPanelInstance, github: githubPanelInstance, usage: usagePanelInstance, tailscale: tailscalePanelInstance, systemupdate: systemUpdatePanelInstance, display: displayPanelInstance, monitor: monitorPanelInstance, trayoverflow: trayOverflowInstance, radio: radioInstance };
             var surfaces = PluginService.surfaces;
             for (var key in surfaces)
                 reg[key] = surfaces[key];
@@ -370,7 +370,7 @@ ShellRoot {
     MirrorIpc { menu: menuInstance }
     NetworkIpc { panel: networkPanelInstance }
     BluetoothIpc {}
-    AirpodsIpc {}
+    EarbudsIpc {}
     IphoneIpc {}
     LocalsendIpc {}
     AirplayIpc {}

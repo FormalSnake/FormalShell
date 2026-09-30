@@ -182,7 +182,7 @@ Singleton {
     // --- dacp presence (`active`) -------------------------------------------
 
     // Same "watch a file that may not exist yet, poll until it does"
-    // idiom AirpodsService's status.json watch uses: the dacp path's parent
+    // idiom AirpodsBackend's status.json watch uses: the dacp path's parent
     // exists (mkdirProc above), but the file itself only appears for as
     // long as a client is connected, so FileNotFound is the ordinary idle
     // state here, not a startup race to wait out once.

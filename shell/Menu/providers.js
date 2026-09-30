@@ -1058,7 +1058,7 @@ var PANEL_NAMES = [
     { id: "calendar", label: "Calendar", icon: "\u{F00EE}" }, // md-calendar_blank
     { id: "network", label: "Network", icon: "\u{F05A9}" }, // md-wifi
     { id: "bluetooth", label: "Bluetooth", icon: "\u{F00AF}" }, // md-bluetooth
-    { id: "airpods", label: "AirPods", icon: "\u{F184F}" }, // md-earbuds
+    { id: "earbuds", label: "Earbuds", icon: "\u{F184F}" }, // md-earbuds
     { id: "iphone", label: "iPhone", icon: "\u{F011C}" }, // md-cellphone
     { id: "dualsense", label: "DualSense", icon: "\u{F0297}" }, // md-gamepad_variant
     { id: "power", label: "Power", icon: "\u{F0079}" }, // md-battery

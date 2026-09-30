@@ -191,21 +191,24 @@ shell/
                                    back, isKnownEffect()/rerollEffectName() own the 37 effect names, and
                                    isTimedEffect() names the two (matrix/thunderstorm) that are wall-clock
                                    gated and so never frame-stepped
-  Airpods/
-    model.js                     pure JS, .pragma library: parseStatus() (complete default shape on every
-                                  bad-input path), batteryRows()/modesFor()/earDetectionLabel()/lidLabel()/
-                                  noiseModeLabel()/stateLine(): the omarchy-pods librepods daemon's own
-                                  status.json wire shape, reimplemented independently (GPL, read-reference
-                                  only)
+  Earbuds/
+    model.js                     pure JS, .pragma library: the one normalised device shape every backend
+                                  produces (batteries, controls with a section), batteryRows()/worstLevel()/
+                                  sections()/coerce()/pickActive() for the panel, cell and IPC
+    airpods.js                   AirPods adapter: parseStatus() over the omarchy-pods librepods daemon's
+                                  status.json (reimplemented independently, GPL read-reference only),
+                                  normalise() into the shared shape, command() onto the socket allow-list
   Dualsense/
     model.js                     pure JS, .pragma library: parseSupply()/parseLightbar()/parsePlayerLeds()/
                                   stateLine() over hid-playstation's own sysfs text shapes, warn/critical
                                   thresholds mirroring the retired dualsense-bar script
   Services/
-    AirpodsService.qml          singleton: FileView on $XDG_STATE_HOME/librepods/status.json (bounded
-                                 rewatch, Config.qml's own retry shape), available = file present + parsed
-                                 ok; send(verb) opens a one-shot self-destroying Socket to
-                                 $XDG_RUNTIME_DIR/librepods.sock against a local wire allow-list
+    EarbudsService.qml          singleton: aggregates the backends in its `backends` array into devices/
+                                 active, select(key), set(control, value) coerced against the control;
+                                 acquire()/release() refcount fanned out to every backend
+    Earbuds/AirpodsBackend.qml  earbuds backend: FileView on $XDG_STATE_HOME/librepods/status.json (300ms
+                                 rewatch only while held), set() opens a one-shot self-destroying Socket
+                                 to $XDG_RUNTIME_DIR/librepods.sock with airpods.js's command()
     DualsenseService.qml        singleton: one sh -c glob probe (power_supply capacity/status, leds
                                  multi_intensity, five player-N brightness files) per call; present/battery/
                                  lightbar/playerLeds properties; a 30s Timer that only runs while
@@ -285,7 +288,7 @@ shell/
         KeyboardLayoutWidget.qml    opt-in: 2s per-output poll of `hyprctl devices -j`
                                      through Compositor/keyboard.js (exposes `shown`)
         SystemUpdateWidget.qml      opt-in: flake-inputs-behind glyph + count, full-bleed warning while behind
-        AirpodsWidget.qml            opt-in: earbuds glyph + worst-bud %, hidden with no daemon/no known level (exposes `shown`)
+        EarbudsWidget.qml            opt-in: headphones glyph + the active device's worst-bud %, hidden with no known level (exposes `shown`)
         DualsenseWidget.qml          opt-in: gamepad glyph + battery %, warning/urgent thresholds, hidden with no controller (exposes `shown`)
         CommandModule.qml           bar.modules "command" entry: polled Waybar-JSON cell, honest MODULE ERROR on failure
         QmlModule.qml                bar.modules "qml" entry: Loader-hosted user file, load-time isolation only
@@ -313,10 +316,9 @@ shell/
       AnimatedAlbumArt.qml         opt-in muted looping video, active only while open and MediaService.isPlaying
       SystemUpdatePanel.qml        flake.lock via FileView (free, no nix invocation) + one queued upstream
                                     probe per direct input; the poll lives here, the widget only enables it
-      AirpodsPanel.qml              honest NO DAEMON/NO AIRPODS gates, PanelHero, per-bud BATTERY tracks,
-                                     LISTENING MODE rows (device-filtered, selected state real), Pro-only
-                                     CA/one-bud toggles, EAR DETECTION cycling row; replaces the old
-                                     bluetooth-panel AIRPODS NOISE group
+      EarbudsPanel.qml              vendor-blind: No daemon / No earbuds connected gates, a Device choice
+                                     with more than one, PanelHero, BATTERY tracks, then each control
+                                     section (choice as ButtonGroup, toggle as Switch, range as Track)
       DualsensePanel.qml            read-only sysfs readout: NO CONTROLLER gate, PanelHero with the battery
                                      percent as its readout, LIGHTBAR swatch+hex and PLAYER LEDS dot rows,
                                      a dim READ ONLY title-band tag since the owner's host units own writes
@@ -365,7 +367,8 @@ tests/
   tst_reminders_model.qml        qmltestrunner tests for Reminders/model.js
   tst_plugin_manifest.qml        qmltestrunner tests for Plugins/manifest.js
   tst_systemupdate_model.qml     qmltestrunner tests for SystemUpdate/model.js
-  tst_airpods_model.qml          qmltestrunner tests for Airpods/model.js
+  tst_earbuds_model.qml          qmltestrunner tests for Earbuds/model.js
+  tst_earbuds_airpods.qml        qmltestrunner tests for Earbuds/airpods.js
   tst_dualsense_model.qml        qmltestrunner tests for Dualsense/model.js
   tst_menu_toggles.qml           qmltestrunner tests for Menu/toggles.js, incl. the allow-list drift guard
   tst_keybinds.qml               qmltestrunner tests for Compositor/keybinds.js

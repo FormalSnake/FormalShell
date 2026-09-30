@@ -47,7 +47,7 @@ all of them.
   chevron that tucks cells away into a second bar. Top, bottom, left or right.
 - Panels: audio, network, Bluetooth, calendar, weather, power, displays,
   system monitor, media with synced lyrics and 31 visualizer styles, iPhone
-  and AirPods, and more.
+  and earbuds, and more.
 - Notifications: toasts, a history centre, grouping and DND.
 - Alt+Tab switcher with window thumbnails.
 - Capture: screenshots with a region picker, screen recording, OCR and a

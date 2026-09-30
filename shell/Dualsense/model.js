@@ -7,7 +7,7 @@
 // takes the raw text a `cat` on the matching sysfs file would produce, or
 // an absent/unparsable one, and returns a complete default shape rather
 // than leaving a caller to guard against null, same discipline as
-// Airpods/model.js.
+// Earbuds/airpods.js.
 //
 // There is no daemon here: DualsenseService reads sysfs directly (a
 // power_supply node keyed by Bluetooth MAC, a `leds` node keyed by input
