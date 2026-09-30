@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Effects
 import qs.Core
+import "cast.js" as Cast
 
 // The one chrome renderer (M59 T4): it draws the box its role's entry in
 // `Theme.style` describes and knows nothing else. A primitive states which
@@ -68,12 +69,15 @@ Item {
     readonly property real _borderWidth: root.box.border ? root.box.border.width : 0
     readonly property color _borderColor: root.box.border ? root.box.border.color : "transparent"
 
+    // The casts this Qt can draw: none where BoxCast.qml does not load.
+    readonly property var _casts: Cast.component() ? root.box.casts : []
+
     // How far outside its own rect the widest cast reaches, which is the
     // room the cast layer and its mask need around the box.
     readonly property int _castPad: {
         var pad = 0;
-        for (var i = 0; i < root.box.casts.length; i++) {
-            var cast = root.box.casts[i];
+        for (var i = 0; i < root._casts.length; i++) {
+            var cast = root._casts[i];
             pad = Math.max(pad, Math.ceil(cast.blur + Math.max(0, cast.spread)
                 + Math.max(Math.abs(cast.x), Math.abs(cast.y))));
         }
@@ -103,7 +107,7 @@ Item {
         anchors.fill: parent
         anchors.margins: -root._castPad
         visible: false
-        layer.enabled: root.box.casts.length > 0
+        layer.enabled: root._casts.length > 0
 
         Rectangle {
             anchors.fill: parent
@@ -129,8 +133,8 @@ Item {
         anchors.fill: parent
         anchors.margins: -root._castPad
         z: -1
-        visible: root.box.casts.length > 0
-        layer.enabled: root.box.casts.length > 0
+        visible: root._casts.length > 0
+        layer.enabled: root._casts.length > 0
         layer.effect: MultiEffect {
             maskEnabled: true
             maskInverted: true
@@ -140,9 +144,9 @@ Item {
         }
 
         Repeater {
-            model: root.box.casts
+            model: root._casts
 
-            delegate: RectangularShadow {
+            delegate: Loader {
                 id: cast
                 required property var modelData
 
@@ -150,11 +154,14 @@ Item {
 
                 anchors.fill: parent
                 anchors.margins: root._castPad + cast._shrink
-                radius: Math.max(0, root._radius - cast._shrink)
-                blur: cast.modelData.blur
-                spread: Math.max(0, cast.modelData.spread)
-                offset: Qt.vector2d(cast.modelData.x, cast.modelData.y)
-                color: cast.modelData.color
+                sourceComponent: Cast.component()
+                onLoaded: {
+                    cast.item.radius = Qt.binding(() => Math.max(0, root._radius - cast._shrink));
+                    cast.item.blur = cast.modelData.blur;
+                    cast.item.spread = Math.max(0, cast.modelData.spread);
+                    cast.item.offset = Qt.vector2d(cast.modelData.x, cast.modelData.y);
+                    cast.item.color = cast.modelData.color;
+                }
             }
         }
     }

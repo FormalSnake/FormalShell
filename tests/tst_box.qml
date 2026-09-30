@@ -114,8 +114,8 @@ TestCase {
         var out = [];
         var layer = named(box, "casts");
         for (var i = 0; i < layer.children.length; i++) {
-            if (layer.children[i].blur !== undefined)
-                out.push(layer.children[i]);
+            if (layer.children[i].item)
+                out.push(layer.children[i].item);
         }
         return out;
     }
