@@ -3,11 +3,13 @@
 //! outline inside each glyph's box, and every glyph origin and baseline is
 //! snapped to a whole device pixel so the hinted stems land on the grid.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use parley::fontique::Blob;
 use parley::{
-    FontContext, FontWeight, GenericFamily, Layout, LayoutContext, PositionedLayoutItem,
+    FontContext, FontFamily, FontWeight, GenericFamily, Layout, LayoutContext, PositionedLayoutItem,
     StyleProperty,
 };
 use skrifa::instance::{LocationRef, NormalizedCoord, Size};
@@ -22,8 +24,18 @@ use vello_cpu::kurbo::BezPath;
 use crate::fontconfig::{self, HintStyle, Rendering};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Family {
+    Generic(GenericFamily),
+    /// A family registered by name, the icon font.
+    Named(&'static str),
+}
+
+/// The family Icon.qml's `lucide` set draws in.
+pub const ICONS: Family = Family::Named("lucide");
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TextStyle {
-    pub family: GenericFamily,
+    pub family: Family,
     pub size: f32,
     pub weight: f32,
 }
@@ -32,6 +44,7 @@ pub struct TextStyle {
 /// overshoot), so a text node's bounds cover everything it paints.
 pub const PAD: i32 = 2;
 
+#[derive(Clone)]
 pub struct PlacedGlyph {
     pub path: Arc<BezPath>,
     pub x: i32,
@@ -40,6 +53,7 @@ pub struct PlacedGlyph {
 
 /// A shaped single line, glyphs placed relative to the line's top-left with
 /// the baseline already on a whole pixel.
+#[derive(Clone)]
 pub struct ShapedText {
     source: String,
     style: TextStyle,
@@ -92,8 +106,19 @@ impl Text {
     pub fn new() -> Self {
         let rendering = fontconfig::rendering();
         eprintln!("text: fontconfig {rendering:?}");
+        let mut fcx = FontContext::new();
+        // The package wraps the binary with the lucide font's path, the way
+        // nix/package.nix puts it on XDG_DATA_DIRS for Qt.
+        match std::env::var("FS_RS_ICON_FONT").map(std::fs::read) {
+            Ok(Ok(data)) => {
+                let families = fcx.collection.register_fonts(Blob::new(Arc::new(data)), None);
+                eprintln!("text: icon font registered ({} families)", families.len());
+            }
+            Ok(Err(err)) => eprintln!("text: icon font unreadable: {err}"),
+            Err(_) => eprintln!("text: FS_RS_ICON_FONT unset, no icons"),
+        }
         Self {
-            fcx: FontContext::new(),
+            fcx,
             lcx: LayoutContext::new(),
             rendering,
             instance_ids: HashMap::new(),
@@ -104,7 +129,10 @@ impl Text {
 
     pub fn shape(&mut self, source: &str, style: TextStyle) -> ShapedText {
         let mut builder = self.lcx.ranged_builder(&mut self.fcx, source, 1.0, true);
-        builder.push_default(StyleProperty::from(style.family));
+        match style.family {
+            Family::Generic(g) => builder.push_default(StyleProperty::from(g)),
+            Family::Named(name) => builder.push_default(StyleProperty::from(FontFamily::Source(Cow::Borrowed(name)))),
+        }
         builder.push_default(StyleProperty::FontSize(style.size));
         builder.push_default(StyleProperty::FontWeight(FontWeight::new(style.weight)));
         let mut layout: Layout<()> = builder.build(source);

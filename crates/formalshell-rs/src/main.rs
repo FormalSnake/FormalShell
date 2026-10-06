@@ -1,13 +1,18 @@
 mod bar;
+mod ctl;
 mod fontconfig;
 mod hyprland;
+mod motion;
+mod panel;
 mod render;
 mod scene;
+mod shoulders;
+mod surface;
 mod text;
 mod theme;
 mod wayland;
 
-use std::io::Read;
+use std::io::{Read, Write};
 use std::time::Duration;
 
 use calloop::generic::Generic;
@@ -39,6 +44,11 @@ fn refresh_workspaces(app: &mut App) {
 }
 
 fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("ctl") {
+        std::process::exit(ctl::client(&args[1..]));
+    }
+
     let conn = Connection::connect_to_env().expect("no Wayland compositor to connect to");
     let (globals, queue) = registry_queue_init::<App>(&conn).expect("wl_registry");
     let qh = queue.handle();
@@ -84,6 +94,30 @@ fn main() {
                 .expect("hyprland event source");
         }
         Err(err) => eprintln!("hyprland: no event socket: {err}"),
+    }
+
+    match ctl::listen() {
+        Ok(listener) => {
+            handle
+                .insert_source(Generic::new(listener, Interest::READ, Mode::Level), |_, listener, app| {
+                    loop {
+                        match listener.accept() {
+                            Ok((mut stream, _)) => {
+                                let reply = match ctl::read_request(&mut stream) {
+                                    Ok(line) => app.command(&line),
+                                    Err(err) => format!("error: {err}\n"),
+                                };
+                                let _ = stream.write_all(reply.as_bytes());
+                            }
+                            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
+                            Err(e) => return Err(e),
+                        }
+                    }
+                    Ok(PostAction::Continue)
+                })
+                .expect("ctl source");
+        }
+        Err(err) => eprintln!("ctl: no control socket: {err}"),
     }
 
     let signal = event_loop.get_signal();

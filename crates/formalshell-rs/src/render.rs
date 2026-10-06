@@ -3,7 +3,8 @@
 //! rasterised; the rest of the canvas keeps what it last held.
 
 use vello_cpu::color::{AlphaColor, Srgb};
-use vello_cpu::kurbo::{Affine, Rect, RoundedRect, Shape};
+use vello_cpu::kurbo::{Affine, Cap, Join, Rect, RoundedRect, Shape, Stroke, Vec2};
+use vello_cpu::peniko::{BlendMode, Compose, Mix};
 use vello_cpu::{Pixmap, RenderContext, Resources};
 
 use crate::scene::{IRect, Paint, Scene};
@@ -32,6 +33,10 @@ impl Renderer {
         self.canvas.width()
     }
 
+    pub fn height(&self) -> u16 {
+        self.canvas.height()
+    }
+
     pub fn canvas(&self) -> &Pixmap {
         &self.canvas
     }
@@ -45,9 +50,15 @@ impl Renderer {
         self.ctx.reset_and_resize(w, h);
         let origin = Affine::translate((-rect.x as f64, -rect.y as f64));
         for node in scene.nodes().filter(|n| n.bounds.intersects(&rect)) {
+            if let Some(c) = node.clip {
+                self.ctx.set_transform(origin);
+                let r = Rect::new(c.x as f64, c.y as f64, c.right() as f64, c.bottom() as f64);
+                self.ctx.push_clip_layer(&r.to_path(0.1));
+            }
+            let at = origin * node.transform;
             match &node.paint {
                 Paint::Rect { fill, radius } => {
-                    self.ctx.set_transform(origin);
+                    self.ctx.set_transform(at);
                     self.ctx.set_paint(color(*fill));
                     let b = node.bounds;
                     let r = Rect::new(b.x as f64, b.y as f64, b.right() as f64, b.bottom() as f64);
@@ -60,11 +71,47 @@ impl Renderer {
                 Paint::Text { text, color: ink } => {
                     self.ctx.set_paint(color(*ink));
                     for glyph in &text.glyphs {
-                        let at = (node.bounds.x + glyph.x, node.bounds.y + glyph.y);
-                        self.ctx.set_transform(origin * Affine::translate((at.0 as f64, at.1 as f64)));
+                        let p = (node.bounds.x + glyph.x, node.bounds.y + glyph.y);
+                        self.ctx.set_transform(at * Affine::translate((p.0 as f64, p.1 as f64)));
                         self.ctx.fill_path(&glyph.path);
                     }
                 }
+                Paint::Shape { fill, strokes } => {
+                    self.ctx.set_transform(at);
+                    if let Some((path, ink)) = fill {
+                        self.ctx.set_paint(color(*ink));
+                        self.ctx.fill_path(path);
+                    }
+                    for (path, ink, width) in strokes {
+                        if ink.a == 0 {
+                            continue;
+                        }
+                        // ShapePath's own defaults.
+                        self.ctx.set_stroke(Stroke::new(*width).with_caps(Cap::Square).with_join(Join::Bevel));
+                        self.ctx.set_paint(color(*ink));
+                        self.ctx.stroke_path(path);
+                    }
+                }
+                Paint::Casts { rect: card, radius, layers, cutout } => {
+                    self.ctx.set_transform(at);
+                    self.ctx.push_layer(None, None, None, None, None);
+                    for cast in layers {
+                        let shrink = (-cast.spread).max(0.0);
+                        let grow = cast.spread.max(0.0);
+                        let r = card.inflate(grow - shrink, grow - shrink) + Vec2::new(cast.x, cast.y);
+                        self.ctx.set_paint(color(cast.color));
+                        // RectangularShadow's blur is CSS's blur radius, twice the deviation.
+                        self.ctx.fill_blurred_rounded_rect(&r, (radius - shrink).max(0.0) as f32, (cast.blur / 2.0) as f32, false);
+                    }
+                    self.ctx.push_layer(None, Some(BlendMode::new(Mix::Normal, Compose::DestOut)), None, None, None);
+                    self.ctx.set_paint(color(Rgba::hex(0)));
+                    self.ctx.fill_path(cutout);
+                    self.ctx.pop_layer();
+                    self.ctx.pop_layer();
+                }
+            }
+            if node.clip.is_some() {
+                self.ctx.pop_layer();
             }
         }
         self.ctx.flush();

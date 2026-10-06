@@ -2,6 +2,8 @@
 //! it covers. Every change marks the old and the new bounds dirty, and the
 //! renderer redraws only the dirty rects.
 
+use vello_cpu::kurbo::{Affine, BezPath, Rect};
+
 use crate::text::ShapedText;
 use crate::theme::Rgba;
 
@@ -51,15 +53,35 @@ impl IRect {
     }
 }
 
+/// One of a Box's casts (Components/Box.qml): CSS's offset, blur radius
+/// and spread, drawn analytically.
+#[derive(Clone, Copy, Debug)]
+pub struct Cast {
+    pub x: f64,
+    pub y: f64,
+    pub blur: f64,
+    pub spread: f64,
+    pub color: Rgba,
+}
+
 pub enum Paint {
     Rect { fill: Rgba, radius: f32 },
     Text { text: ShapedText, color: Rgba },
+    /// A filled outline and its strokes, in the node's own coordinates.
+    Shape { fill: Option<(BezPath, Rgba)>, strokes: Vec<(BezPath, Rgba, f64)> },
+    /// Casts under a rounded rect, cut out of the rect's own shape so a
+    /// translucent fill over them shows the desktop and not the shadow.
+    Casts { rect: Rect, radius: f64, layers: Vec<Cast>, cutout: BezPath },
 }
 
 pub struct Node {
     pub bounds: IRect,
     pub paint: Paint,
     pub visible: bool,
+    /// From the node's own coordinates to device pixels, after the bounds'
+    /// origin for text and before it for everything else.
+    pub transform: Affine,
+    pub clip: Option<IRect>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -83,7 +105,7 @@ impl Scene {
     }
 
     pub fn add(&mut self, bounds: IRect, paint: Paint) -> NodeId {
-        self.nodes.push(Node { bounds, paint, visible: true });
+        self.nodes.push(Node { bounds, paint, visible: true, transform: Affine::IDENTITY, clip: None });
         self.mark(bounds);
         NodeId(self.nodes.len() - 1)
     }
@@ -95,13 +117,30 @@ impl Scene {
     /// Replaces a node's bounds and paint, damaging both rects only when
     /// something actually changed.
     pub fn update(&mut self, id: NodeId, bounds: IRect, paint: Paint, visible: bool) {
+        let (transform, clip) = (self.nodes[id.0].transform, self.nodes[id.0].clip);
+        self.update_with(id, bounds, paint, visible, transform, clip);
+    }
+
+    pub fn update_with(
+        &mut self,
+        id: NodeId,
+        bounds: IRect,
+        paint: Paint,
+        visible: bool,
+        transform: Affine,
+        clip: Option<IRect>,
+    ) {
         let node = &self.nodes[id.0];
-        let same = node.visible == visible && node.bounds == bounds && paint_eq(&node.paint, &paint);
+        let same = node.visible == visible
+            && node.bounds == bounds
+            && node.transform == transform
+            && node.clip == clip
+            && paint_eq(&node.paint, &paint);
         if same {
             return;
         }
         let old = if node.visible { node.bounds } else { IRect::default() };
-        self.nodes[id.0] = Node { bounds, paint, visible };
+        self.nodes[id.0] = Node { bounds, paint, visible, transform, clip };
         self.mark(old);
         if visible {
             self.mark(bounds);
@@ -142,6 +181,13 @@ impl Scene {
         self.damage.push(merged);
     }
 
+    /// A rect's device bounds once transformed, padded for antialiasing.
+    pub fn cover(rect: Rect, transform: Affine, pad: f64) -> IRect {
+        let r = transform.transform_rect_bbox(rect).inflate(pad, pad);
+        let (x0, y0) = (r.x0.floor() as i32, r.y0.floor() as i32);
+        IRect::new(x0, y0, r.x1.ceil() as i32 - x0, r.y1.ceil() as i32 - y0)
+    }
+
     pub fn has_damage(&self) -> bool {
         !self.damage.is_empty()
     }
@@ -155,6 +201,8 @@ fn paint_eq(a: &Paint, b: &Paint) -> bool {
     match (a, b) {
         (Paint::Rect { fill: f1, radius: r1 }, Paint::Rect { fill: f2, radius: r2 }) => f1 == f2 && r1 == r2,
         (Paint::Text { text: t1, color: c1 }, Paint::Text { text: t2, color: c2 }) => c1 == c2 && t1.same_as(t2),
+        // Shapes and casts are rebuilt only by an animation tick, which has
+        // already moved them.
         _ => false,
     }
 }

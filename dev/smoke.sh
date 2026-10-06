@@ -166,9 +166,9 @@ case "$fs_impl" in
       echo "SMOKE_FAIL: FS_IMPL=rust runs the plain bar only, legs need the IPC server the rust shell does not have yet (asked for: ${active_legs[*]})" >&2
       exit 1
     fi
-    # Long enough to read ten seconds of rest off the commit log after the
-    # fixture window lands.
-    screenshot_delay=14
+    # Long enough for the drive below and ten seconds of rest after it.
+    screenshot_delay=52
+    session_timeout=75
     ;;
   *) echo "SMOKE_FAIL: FS_IMPL must be qml or rust, got '$fs_impl'" >&2; exit 1 ;;
 esac
@@ -626,6 +626,34 @@ for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
   if declare -F "leg_${leg_name}_timing" >/dev/null; then "leg_${leg_name}_timing"; fi
 done
 
+# The rust shell's animations over its control socket: the spinner on and
+# off, a panel and a scrim at full speed for the frame log, then the same
+# at a tenth of the speed for frames read mid-flight and at rest.
+if [ "$fs_impl" = rust ]; then
+  rs_drive="$shot_dir/rs-drive.sh"
+  write_script "$rs_drive" <<EOF
+#!/usr/bin/env bash
+ctl() { "$shell_bin" ctl "\$@" >> "$shot_dir/ctl.log" 2>&1; }
+shot() { "$grim_bin" "$shot_dir/rs-\$1.png" >> "$shot_dir/grim.log" 2>&1; }
+sleep 5
+ctl spinner on; sleep 3
+ctl spinner off; sleep 3
+ctl panel open; sleep 2
+ctl panel close; sleep 2
+ctl scrim on; sleep 2
+ctl scrim off; sleep 2
+ctl motion 10; ctl cast on
+ctl panel open; sleep 0.8; shot open-early
+sleep 0.8; shot open-mid
+ctl spinner on; sleep 7.4; shot rest
+ctl spinner off
+ctl scrim on; sleep 1.2; shot scrim-mid
+ctl scrim off; ctl panel close; sleep 7
+ctl motion 1
+EOF
+  hypr_exec_once "bash $rs_drive" >> "$cfg"
+fi
+
 shot_script="$shot_dir/shot.sh"
 write_script "$shot_script" <<EOF
 #!/usr/bin/env bash
@@ -724,7 +752,12 @@ fi
 # The rust shell logs every commit it makes, which is the evidence that a
 # strip at rest commits nothing.
 if [ "$fs_impl" = rust ]; then
-  grep -E '^(commit|exit|text:|hyprland:|event loop:) ' "$shell_log_path" 2>/dev/null || true
+  grep -E '^(commit|exit|ctl|text:|hyprland:|event loop:) ' "$shell_log_path" 2>/dev/null || true
+  for frame in "$shot_dir"/rs-*.png; do
+    [ -f "$frame" ] || continue
+    name=$(basename "$frame" .png | tr 'a-z-' 'A-Z_')
+    echo "SMOKE_${name} $frame"
+  done
 fi
 
 if [ -f "$shot_path" ]; then

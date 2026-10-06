@@ -22,6 +22,7 @@ impl Rgba {
 }
 
 pub struct Palette {
+    pub background: Rgba,
     pub card: Rgba,
     pub foreground: Rgba,
     pub muted_foreground: Rgba,
@@ -31,6 +32,7 @@ pub struct Palette {
 }
 
 pub const DARK: Palette = Palette {
+    background: Rgba::hex(0x09090b),
     card: Rgba::hex(0x18181b),
     foreground: Rgba::hex(0xfafafa),
     muted_foreground: Rgba::hex(0xa1a1aa),
@@ -46,6 +48,22 @@ pub const RADIUS_BASE: f32 = 10.0;
 pub const fn radius_md() -> f32 {
     RADIUS_BASE - 2.0
 }
+
+/// `radiusTokens(base).xl`, a card's corner and a joined card's fillet.
+pub const fn radius_xl() -> f32 {
+    RADIUS_BASE + 4.0
+}
+
+pub const SPACE_XXS: i32 = 2;
+pub const PANEL_PADDING: i32 = 12;
+pub const SCREEN_PADDING: i32 = 12;
+pub const POPUP_WIDTH_DEFAULT: i32 = 380;
+pub const FONT_CAPTION: f32 = 11.0;
+/// The `scrim` role: black at this alpha.
+pub const SCRIM_ALPHA: f32 = 0.5;
+
+/// pantheon.js `SHADOW_2` at its dark alphas: the cast under a card.
+pub const PANTHEON_SHADOW_2: [(f64, f64, f64, f32); 2] = [(3.0, 4.0, 0.0, 0.25), (3.0, 3.0, -3.0, 0.45)];
 
 pub const BAR_CELL_HEIGHT: i32 = 28;
 pub const BAR_MARGIN: i32 = 6;
