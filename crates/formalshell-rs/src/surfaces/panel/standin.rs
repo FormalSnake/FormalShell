@@ -24,10 +24,7 @@ fn header(id: &str) -> (&'static str, &'static str) {
         "appmenu" => ("App menu", "menu"),
         "calendar" => ("Calendar", "calendar"),
         "network" => ("Wi-Fi", "wifi"),
-        "bluetooth" => ("Bluetooth", "bluetooth"),
-        "earbuds" => ("Earbuds", "headphones"),
         "iphone" => ("iPhone", "smartphone"),
-        "dualsense" => ("DualSense", "gamepad-2"),
         "power" => ("Power", "zap"),
         "weather" => ("Weather", "cloud"),
         "media" => ("Media", "music"),
@@ -63,7 +60,7 @@ impl Panel for StandIn {
     fn width(&self, v: &View) -> f64 {
         let s = &v.theme.space;
         match self.id {
-            "calendar" | "earbuds" | "monitor" | "media" => s.popup_width_wide,
+            "calendar" | "monitor" | "media" => s.popup_width_wide,
             _ => s.popup_width_default,
         }
     }

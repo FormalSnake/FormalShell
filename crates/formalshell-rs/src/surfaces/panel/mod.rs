@@ -17,6 +17,9 @@
 //! printable key reaches [`Panel::key`].
 
 pub mod audio;
+pub mod bluetooth;
+pub mod dualsense;
+pub mod earbuds;
 pub mod gallery;
 pub mod host;
 pub mod standin;
@@ -127,6 +130,9 @@ pub fn build(name: &str) -> Option<Box<dyn Panel>> {
     let id = known(name)?;
     Some(match id {
         "audio" => Box::new(audio::Audio::default()),
+        "bluetooth" => Box::new(bluetooth::Bluetooth),
+        "dualsense" => Box::new(dualsense::Dualsense),
+        "earbuds" => Box::new(earbuds::Earbuds::default()),
         _ => Box::new(standin::StandIn::new(id)),
     })
 }

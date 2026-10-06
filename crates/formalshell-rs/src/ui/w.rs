@@ -113,7 +113,7 @@ pub fn slider(value: f64) -> El {
 /// ButtonGroup.qml: a choice among several when `exclusive`, a set of
 /// actions when not.
 pub fn group(options: Vec<Opt>, index: usize, exclusive: bool) -> El {
-    El::new(Kind::Group { options, index, exclusive, cursor_index: index })
+    El::new(Kind::Group { options, index, exclusive, cursor_index: index, wrap: false })
 }
 
 pub fn segmented(options: Vec<String>, index: usize) -> El {
@@ -181,6 +181,11 @@ pub struct Hero {
 /// `subtitle` title over a `bodySmall` meta, a `display` readout, a trailing
 /// control, and an optional rail under all of it.
 pub fn hero(s: &Space, h: Hero) -> El {
+    hero_sized(s, h, Type::Display)
+}
+
+/// A hero whose readout is the whole subject (PanelHero's `readoutSize`).
+pub fn hero_sized(s: &Space, h: Hero, readout: Type) -> El {
     let mut top = Vec::new();
     if !h.glyph.is_empty() {
         top.push(El::new(Kind::Icon { name: h.glyph.clone(), size: Type::Heading, ink: Ink::Fg }).width(super::Size::Px(s.xxl * 2.0)));
@@ -191,7 +196,7 @@ pub fn hero(s: &Space, h: Hero) -> El {
     }
     top.push(column(s.xxs, words).fill());
     if !h.readout.is_empty() {
-        top.push(text_el(h.readout, Type::Display, Weight::Normal, true, Ink::Fg));
+        top.push(text_el(h.readout, readout, Weight::Normal, true, Ink::Fg));
     }
     if let Some(t) = h.trailing {
         top.push(t);

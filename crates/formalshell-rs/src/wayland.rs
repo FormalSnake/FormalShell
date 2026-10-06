@@ -469,6 +469,9 @@ impl App {
         let overflow = self.overflow_open();
         self.bar.set_open(panel.as_deref(), overflow, now);
         devices::earbuds::panel(panel.as_deref() == Some("earbuds"));
+        devices::bluetooth::panel(panel.as_deref() == Some("bluetooth"));
+        devices::audio::panel(panel.as_deref() == Some("audio"));
+        devices::power::panel(panel.as_deref() == Some("dualsense"));
         if let Some(p) = &mut self.overflow {
             for s in &mut p.slots {
                 let open = panel.as_deref().is_some_and(|n| s.view.panel == Some(n));

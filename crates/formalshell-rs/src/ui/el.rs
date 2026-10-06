@@ -135,7 +135,8 @@ pub enum Kind {
     Button { variant: Variant, text: String, icon: String, enabled: bool, square: bool },
     Switch { checked: bool },
     Track { value: f64, notch: Option<f64>, interactive: bool },
-    Group { options: Vec<Opt>, index: usize, exclusive: bool, cursor_index: usize },
+    /// `wrap`: rows of equal buttons when every whole label cannot fit one.
+    Group { options: Vec<Opt>, index: usize, exclusive: bool, cursor_index: usize, wrap: bool },
     Segmented { options: Vec<String>, index: usize },
     Input { text: String, placeholder: String, focused: bool, error: Option<String> },
     Separator { vertical: bool, inset: f64, bleed: f64 },
@@ -288,6 +289,22 @@ impl El {
     pub fn enabled(mut self, on: bool) -> Self {
         if let Kind::Button { enabled, .. } = &mut self.kind {
             *enabled = on;
+        }
+        self
+    }
+
+    /// A group's keyboard ring, on an option other than the selected one.
+    pub fn ring(mut self, at: usize) -> Self {
+        if let Kind::Group { cursor_index, .. } = &mut self.kind {
+            *cursor_index = at;
+        }
+        self
+    }
+
+    /// A group breaks into rows rather than cut a label.
+    pub fn wrap(mut self) -> Self {
+        if let Kind::Group { wrap, .. } = &mut self.kind {
+            *wrap = true;
         }
         self
     }
