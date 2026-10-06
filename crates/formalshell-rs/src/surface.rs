@@ -85,6 +85,11 @@ impl Surface {
         if !self.configured || self.frame_pending {
             return;
         }
+        // A scene resized ahead of the compositor's configure (the bar
+        // moving edge) keeps its damage until the buffers match it.
+        if (self.renderer.width() as i32, self.renderer.height() as i32) != (scene.size.w, scene.size.h) {
+            return;
+        }
         // An animation whose frame changed nothing (a card still wholly
         // behind its line) still needs the next callback to carry on.
         let request = animating || (self.wait_map && !self.mapped);

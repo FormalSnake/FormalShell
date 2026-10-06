@@ -21,6 +21,7 @@ impl Rgba {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Palette {
     pub background: Rgba,
     pub card: Rgba,
@@ -66,6 +67,8 @@ pub const SCRIM_ALPHA: f32 = 0.5;
 pub const PANTHEON_SHADOW_2: [(f64, f64, f64, f32); 2] = [(3.0, 4.0, 0.0, 0.25), (3.0, 3.0, -3.0, 0.45)];
 
 pub const BAR_CELL_HEIGHT: i32 = 28;
+/// `barCellHeight`'s counterpart across a left or right strip.
+pub const BAR_CELL_WIDTH: i32 = 44;
 pub const BAR_MARGIN: i32 = 6;
 pub const SPACE_SM: i32 = 4;
 pub const SPACE_MD: i32 = 6;

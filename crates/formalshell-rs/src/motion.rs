@@ -4,24 +4,29 @@
 
 use std::time::{Duration, Instant};
 
-/// One cubic bezier through (0,0) and (1,1), Qt's `BezierSpline` with a
-/// single segment: the two control points.
+/// Qt's `BezierSpline` as `easing.bezierCurve` takes it: per segment the
+/// two control points and the end point, starting from (0,0) and ending on
+/// (1,1).
 #[derive(Clone, Copy, Debug)]
-pub struct Curve(pub [f64; 4]);
+pub struct Curve(pub &'static [f64]);
 
-pub const SPATIAL_FAST: Curve = Curve([0.42, 1.67, 0.21, 0.9]);
-pub const SPATIAL: Curve = Curve([0.38, 1.21, 0.22, 1.0]);
+pub const SPATIAL_FAST: Curve = Curve(&[0.42, 1.67, 0.21, 0.9, 1.0, 1.0]);
+pub const SPATIAL: Curve = Curve(&[0.38, 1.21, 0.22, 1.0, 1.0, 1.0]);
+/// M3's two-segment curve, the workspace pill's alone.
+pub const EMPHASIZED: Curve =
+    Curve(&[0.05, 0.0, 2.0 / 15.0, 0.06, 1.0 / 6.0, 0.4, 5.0 / 24.0, 0.82, 0.25, 1.0, 1.0, 1.0]);
 
 pub const SPATIAL_FAST_MS: f64 = 350.0;
 pub const SPATIAL_MS: f64 = 500.0;
+pub const EMPHASIZED_MS: f64 = 400.0;
 pub const PULSE_MS: f64 = 900.0;
 
 /// metamorphosis's `emerge`: `{ duration: "spatial", curve: "spatial" }`.
 pub const EMERGE: (f64, Curve) = (SPATIAL_MS, SPATIAL);
 
 impl Curve {
-    /// y at a given x. x(t) is monotonic for control x in [0, 1], so a
-    /// bisection lands t to f64 precision.
+    /// y at a given x. Each segment's x(t) is monotonic for control x
+    /// inside the segment, so a bisection lands t to f64 precision.
     pub fn ease(&self, x: f64) -> f64 {
         if x <= 0.0 {
             return 0.0;
@@ -29,17 +34,24 @@ impl Curve {
         if x >= 1.0 {
             return 1.0;
         }
-        let [x1, y1, x2, y2] = self.0;
-        let bez = |a: f64, b: f64, t: f64| {
+        let bez = |p0: f64, a: f64, b: f64, p3: f64, t: f64| {
             let u = 1.0 - t;
-            3.0 * u * u * t * a + 3.0 * u * t * t * b + t * t * t
+            u * u * u * p0 + 3.0 * u * u * t * a + 3.0 * u * t * t * b + t * t * t * p3
         };
-        let (mut lo, mut hi) = (0.0, 1.0);
-        for _ in 0..60 {
-            let mid = (lo + hi) / 2.0;
-            if bez(x1, x2, mid) < x { lo = mid } else { hi = mid }
+        let (mut x0, mut y0) = (0.0, 0.0);
+        for seg in self.0.chunks_exact(6) {
+            let [x1, y1, x2, y2, x3, y3] = [seg[0], seg[1], seg[2], seg[3], seg[4], seg[5]];
+            if x <= x3 {
+                let (mut lo, mut hi) = (0.0, 1.0);
+                for _ in 0..60 {
+                    let mid = (lo + hi) / 2.0;
+                    if bez(x0, x1, x2, x3, mid) < x { lo = mid } else { hi = mid }
+                }
+                return bez(y0, y1, y2, y3, (lo + hi) / 2.0);
+            }
+            (x0, y0) = (x3, y3);
         }
-        bez(y1, y2, (lo + hi) / 2.0)
+        1.0
     }
 }
 
@@ -185,5 +197,18 @@ mod tests {
         assert!(peak > 1.0 && peak < 1.1, "{peak}");
         assert_eq!(SPATIAL.ease(1.0), 1.0);
         assert_eq!(SPATIAL.ease(0.0), 0.0);
+    }
+
+    #[test]
+    fn emphasized_runs_through_its_knee() {
+        assert!((EMPHASIZED.ease(1.0 / 6.0) - 0.4).abs() < 1e-9);
+        assert!(EMPHASIZED.ease(0.05) < 0.05);
+        assert!((EMPHASIZED.ease(1.0 / 3.0) - 0.86).abs() < 0.03);
+        let mut last = 0.0;
+        for i in 1..=100 {
+            let y = EMPHASIZED.ease(i as f64 / 100.0);
+            assert!(y >= last, "not monotonic at {i}");
+            last = y;
+        }
     }
 }

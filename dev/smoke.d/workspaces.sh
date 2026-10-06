@@ -30,6 +30,7 @@
 # pinned in tests/tst_theme_tokens.qml.
 leg_workspaces_flag="--workspaces"
 leg_workspaces_order=195
+leg_workspaces_rust=1
 leg_workspaces_needs="foot convert"
 leg_workspaces_fixture_window=keep
 

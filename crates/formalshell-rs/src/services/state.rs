@@ -187,12 +187,27 @@ impl Data {
         map.insert("overnight".into(), self.overnight.clone());
         map.insert("lights".into(), self.lights.clone());
         map.insert("hdr".into(), self.hdr.clone());
+        let mut doc = Value::Object(map);
+        sort_keys(&mut doc);
         let mut out = Vec::new();
         let format = serde_json::ser::PrettyFormatter::with_indent(b"    ");
         let mut ser = serde_json::Serializer::with_formatter(&mut out, format);
-        serde::Serialize::serialize(&Value::Object(map), &mut ser).expect("a Value serializes");
+        serde::Serialize::serialize(&doc, &mut ser).expect("a Value serializes");
         out.push(b'\n');
         String::from_utf8(out).expect("serde_json writes UTF-8")
+    }
+}
+
+/// Every object's keys in order at every depth: serde_json keeps insertion
+/// order once any crate in the build asks for `preserve_order`.
+fn sort_keys(value: &mut Value) {
+    match value {
+        Value::Object(map) => {
+            map.sort_keys();
+            map.values_mut().for_each(sort_keys);
+        }
+        Value::Array(items) => items.iter_mut().for_each(sort_keys),
+        _ => {}
     }
 }
 

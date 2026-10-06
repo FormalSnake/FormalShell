@@ -379,6 +379,8 @@ dependencies = [
  "async-io",
  "calloop",
  "chrono",
+ "fs-chrome",
+ "fs-system",
  "futures-lite",
  "inotify",
  "parley",
