@@ -93,6 +93,11 @@ impl Surface {
         // An animation whose frame changed nothing (a card still wholly
         // behind its line) still needs the next callback to carry on.
         let request = animating || (self.wait_map && !self.mapped);
+        // A scene that starts out clear still owes the compositor one
+        // buffer before the surface can map.
+        if self.commits == 0 && !scene.has_damage() {
+            scene.touch(IRect::new(0, 0, 1, 1));
+        }
         if !scene.has_damage() {
             if request && self.commits > 0 {
                 let surface = self.layer.wl_surface();

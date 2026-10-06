@@ -9,6 +9,7 @@ mod store;
 mod surface;
 mod surfaces;
 mod text;
+mod ui;
 mod wayland;
 
 use std::time::{Instant, SystemTime};

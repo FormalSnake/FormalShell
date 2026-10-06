@@ -64,6 +64,12 @@ pub struct Cast {
     pub color: Rgba,
 }
 
+impl Cast {
+    fn same(&self, o: &Cast) -> bool {
+        (self.x, self.y, self.blur, self.spread) == (o.x, o.y, o.blur, o.spread) && self.color == o.color
+    }
+}
+
 pub enum Paint {
     Rect { fill: Rgba, radius: f32 },
     /// A rounded rect's fill under a border drawn inside its edge.
@@ -74,6 +80,9 @@ pub enum Paint {
     Glow { text: ShapedText, color: Rgba, x: f32, y: f32, blur: f32 },
     /// A filled outline and its strokes, in the node's own coordinates.
     Shape { fill: Option<(BezPath, Rgba)>, strokes: Vec<(BezPath, Rgba, f64)> },
+    /// A rounded rect filled top to bottom from one colour to another
+    /// (a Box's `face`).
+    Face { from: Rgba, to: Rgba, radius: f32 },
     /// Casts under a rounded rect, cut out of the rect's own shape so a
     /// translucent fill over them shows the desktop and not the shadow.
     Casts { rect: Rect, radius: f64, layers: Vec<Cast>, cutout: BezPath },
@@ -92,16 +101,27 @@ pub struct Node {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct NodeId(usize);
 
+/// Nodes live in a slab; `order` is paint order, so a node can be inserted
+/// beside another (a widget's wash between its fill and its text) without
+/// moving any id.
 pub struct Scene {
     pub size: IRect,
     nodes: Vec<Node>,
+    order: Vec<NodeId>,
+    free: Vec<NodeId>,
     damage: Vec<IRect>,
 }
 
 impl Scene {
     pub fn new(width: i32, height: i32) -> Self {
         let size = IRect::new(0, 0, width, height);
-        Self { size, nodes: Vec::new(), damage: vec![size] }
+        Self { size, nodes: Vec::new(), order: Vec::new(), free: Vec::new(), damage: vec![size] }
+    }
+
+    /// A scene whose buffers start out transparent and so owe the
+    /// compositor nothing until a node is drawn.
+    pub fn clear(width: i32, height: i32) -> Self {
+        Self { damage: Vec::new(), ..Self::new(width, height) }
     }
 
     pub fn resize(&mut self, width: i32, height: i32) {
@@ -110,13 +130,44 @@ impl Scene {
     }
 
     pub fn add(&mut self, bounds: IRect, paint: Paint) -> NodeId {
-        self.nodes.push(Node { bounds, paint, visible: true, transform: Affine::IDENTITY, clip: None });
+        self.add_after(None, bounds, paint)
+    }
+
+    /// A node painted right after `prev`, or on top of everything.
+    pub fn add_after(&mut self, prev: Option<NodeId>, bounds: IRect, paint: Paint) -> NodeId {
+        let node = Node { bounds, paint, visible: true, transform: Affine::IDENTITY, clip: None };
+        let id = match self.free.pop() {
+            Some(id) => {
+                self.nodes[id.0] = node;
+                id
+            }
+            None => {
+                self.nodes.push(node);
+                NodeId(self.nodes.len() - 1)
+            }
+        };
+        let at = prev.and_then(|p| self.order.iter().position(|o| *o == p)).map_or(self.order.len(), |i| i + 1);
+        self.order.insert(at, id);
         self.mark(bounds);
-        NodeId(self.nodes.len() - 1)
+        id
+    }
+
+    /// Drops a node for good; its id may be handed out again.
+    pub fn remove(&mut self, id: NodeId) {
+        self.set_visible(id, false);
+        if let Some(i) = self.order.iter().position(|o| *o == id) {
+            self.order.remove(i);
+            self.free.push(id);
+        }
     }
 
     pub fn nodes(&self) -> impl Iterator<Item = &Node> {
-        self.nodes.iter().filter(|n| n.visible)
+        self.order.iter().map(|id| &self.nodes[id.0]).filter(|n| n.visible)
+    }
+
+    /// Damage with no node behind it: the one rect a first commit carries.
+    pub fn touch(&mut self, rect: IRect) {
+        self.mark(rect);
     }
 
     /// Replaces a node's bounds and paint, damaging both rects only when
@@ -208,8 +259,14 @@ fn paint_eq(a: &Paint, b: &Paint) -> bool {
         (Paint::Glow { text: t1, color: c1, x: x1, y: y1, blur: b1 }, Paint::Glow { text: t2, color: c2, x: x2, y: y2, blur: b2 }) => {
             c1 == c2 && t1.same_as(t2) && x1 == x2 && y1 == y2 && b1 == b2
         }
-        // Shapes and casts are rebuilt only by an animation tick, which has
-        // already moved them.
+        (Paint::Shape { fill: f1, strokes: s1 }, Paint::Shape { fill: f2, strokes: s2 }) => f1 == f2 && s1 == s2,
+        (
+            Paint::Casts { rect: r1, radius: a1, layers: l1, cutout: c1 },
+            Paint::Casts { rect: r2, radius: a2, layers: l2, cutout: c2 },
+        ) => r1 == r2 && a1 == a2 && c1 == c2 && l1.len() == l2.len() && l1.iter().zip(l2).all(|(a, b)| a.same(b)),
+        (Paint::Face { from: f1, to: t1, radius: r1 }, Paint::Face { from: f2, to: t2, radius: r2 }) => {
+            f1 == f2 && t1 == t2 && r1 == r2
+        }
         _ => false,
     }
 }

@@ -1,0 +1,330 @@
+//! The element tree a surface describes its content with. Plain data,
+//! rebuilt whenever the surface redraws: a widget's identity across
+//! rebuilds is its key path, which is where its nodes and its running
+//! animations live (`ui::Ui`).
+
+use fs_theme::color::Rgba;
+
+
+/// How wide an element is in its parent.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Size {
+    /// Its own natural width.
+    Hug,
+    /// A share of what the parent has left.
+    Fill,
+    Px(f64),
+}
+
+/// Ink as a token, or as the enclosing `Cell`'s own (Cell.qml's
+/// `foreground` and `dimForeground`), so a row's label follows its state.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Ink {
+    Fg,
+    Dim,
+    Muted,
+    Primary,
+    Destructive,
+    Color(Rgba),
+}
+
+/// A role in the type scale; `mono` is for values, the rest are words.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Type {
+    Caption,
+    BodySmall,
+    Body,
+    Subtitle,
+    Title,
+    Heading,
+    Display,
+    DisplayLarge,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Weight {
+    Normal,
+    Medium,
+    Semibold,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Font {
+    pub size: Type,
+    pub weight: Weight,
+    pub mono: bool,
+}
+
+/// `button.<variant>`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Variant {
+    Default,
+    Outline,
+    Ghost,
+    Selected,
+    Destructive,
+}
+
+impl Variant {
+    pub fn role(self) -> &'static str {
+        match self {
+            Variant::Default => "button.default",
+            Variant::Outline => "button.outline",
+            Variant::Ghost => "button.ghost",
+            Variant::Selected => "button.selected",
+            Variant::Destructive => "button.destructive",
+        }
+    }
+}
+
+/// Cell.qml's states.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct CellState {
+    pub ghost: bool,
+    pub selected: bool,
+    pub active: bool,
+    pub destructive: bool,
+    pub warning: bool,
+    /// A badge inside a row: hugs its label rather than taking a row's height.
+    pub chip: bool,
+    /// Drawn hovered whatever the pointer does (the gallery's sample).
+    pub hovered: bool,
+    /// Drawn with the cursor whatever the keyboard does (the gallery's).
+    pub cursor: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Opt {
+    pub label: String,
+    pub icon: String,
+    pub enabled: bool,
+    pub active: bool,
+}
+
+impl Opt {
+    pub fn new(label: impl Into<String>) -> Self {
+        Self { label: label.into(), icon: String::new(), enabled: true, active: false }
+    }
+
+    pub fn icon(mut self, name: impl Into<String>) -> Self {
+        self.icon = name.into();
+        self
+    }
+}
+
+/// A series for a `Sparkline`: newest last, read against `ceiling`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Series {
+    pub values: Vec<f64>,
+    pub secondary: Vec<f64>,
+    pub ceiling: f64,
+    pub capacity: usize,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Kind {
+    Column { gap: f64, children: Vec<El> },
+    Row { gap: f64, children: Vec<El> },
+    /// Children laid `columns` to a line, each line `gap` apart.
+    Grid { columns: usize, gap: f64, children: Vec<El> },
+    /// Room and nothing else.
+    Space { along: f64 },
+    Text { text: String, font: Font, ink: Ink, elide: bool },
+    Icon { name: String, size: Type, ink: Ink },
+    Cell { state: CellState, interactive: bool, child: Box<El> },
+    Button { variant: Variant, text: String, icon: String, enabled: bool, square: bool },
+    Switch { checked: bool },
+    Track { value: f64, notch: Option<f64>, interactive: bool },
+    Group { options: Vec<Opt>, index: usize, exclusive: bool, cursor_index: usize },
+    Segmented { options: Vec<String>, index: usize },
+    Input { text: String, placeholder: String, focused: bool, error: Option<String> },
+    Separator { vertical: bool, inset: f64, bleed: f64 },
+    Keycap { key: String },
+    Swatch { color: Rgba, w: f64, h: f64, radius: f64, border: bool },
+    Sparkline(Series),
+    /// A shape budding off a line on `edge`, for the gallery.
+    Shoulders { edge: fs_chrome::types::Edge, span: f64, depth: f64, run: f64 },
+    Marquee { text: String, ink: Ink, max: f64 },
+}
+
+/// One element: what it is, how wide it sits, and how it is addressed.
+#[derive(Clone, Debug, PartialEq)]
+pub struct El {
+    pub kind: Kind,
+    pub width: Size,
+    /// Insets: start, top, end, bottom.
+    pub pad: [f64; 4],
+    /// Identity across rebuilds; the index in the parent otherwise.
+    pub key: Option<String>,
+    /// A keyboard cursor stop, addressed by `key`.
+    pub stop: bool,
+    /// What a click fires, addressed to the surface by this id.
+    pub on: Option<String>,
+    pub tip: Option<String>,
+    /// Centres a child across a column, rather than starting it at the edge.
+    pub centred: bool,
+    /// A row's children start at its top rather than its middle.
+    pub top: bool,
+}
+
+impl El {
+    pub fn new(kind: Kind) -> Self {
+        let width = match &kind {
+            Kind::Column { .. } | Kind::Separator { vertical: false, .. } | Kind::Track { .. } | Kind::Group { .. } => Size::Fill,
+            Kind::Cell { state, .. } if !state.chip => Size::Fill,
+            Kind::Input { .. } => Size::Fill,
+            _ => Size::Hug,
+        };
+        Self { kind, width, pad: [0.0; 4], key: None, stop: false, on: None, tip: None, centred: false, top: false }
+    }
+
+    pub fn key(mut self, key: impl Into<String>) -> Self {
+        self.key = Some(key.into());
+        self
+    }
+
+    /// A cursor stop: the keyboard can land here, and Enter activates it.
+    pub fn stop(mut self, key: impl Into<String>) -> Self {
+        self.key = Some(key.into());
+        self.stop = true;
+        self
+    }
+
+    pub fn on(mut self, action: impl Into<String>) -> Self {
+        self.on = Some(action.into());
+        self
+    }
+
+    pub fn tip(mut self, text: impl Into<String>) -> Self {
+        let text = text.into();
+        self.tip = (!text.is_empty()).then_some(text);
+        self
+    }
+
+    pub fn width(mut self, width: Size) -> Self {
+        self.width = width;
+        self
+    }
+
+    pub fn fill(self) -> Self {
+        self.width(Size::Fill)
+    }
+
+    pub fn hug(self) -> Self {
+        self.width(Size::Hug)
+    }
+
+    pub fn pad(mut self, start: f64, top: f64, end: f64, bottom: f64) -> Self {
+        self.pad = [start, top, end, bottom];
+        self
+    }
+
+    pub fn pad_start(mut self, start: f64) -> Self {
+        self.pad[0] = start;
+        self
+    }
+
+    pub fn pad_top(mut self, top: f64) -> Self {
+        self.pad[1] = top;
+        self
+    }
+
+    pub fn top(mut self) -> Self {
+        self.top = true;
+        self
+    }
+
+    pub fn centred(mut self) -> Self {
+        self.centred = true;
+        self
+    }
+
+    pub fn elide(mut self) -> Self {
+        if let Kind::Text { elide, .. } = &mut self.kind {
+            *elide = true;
+            self.width = Size::Fill;
+        }
+        self
+    }
+
+    pub fn ink(mut self, to: Ink) -> Self {
+        match &mut self.kind {
+            Kind::Text { ink, .. } | Kind::Icon { ink, .. } | Kind::Marquee { ink, .. } => *ink = to,
+            _ => {}
+        }
+        self
+    }
+
+    pub fn mono(mut self) -> Self {
+        if let Kind::Text { font, .. } = &mut self.kind {
+            font.mono = true;
+        }
+        self
+    }
+
+    pub fn weight(mut self, w: Weight) -> Self {
+        if let Kind::Text { font, .. } = &mut self.kind {
+            font.weight = w;
+        }
+        self
+    }
+
+    pub fn size(mut self, t: Type) -> Self {
+        match &mut self.kind {
+            Kind::Text { font, .. } => font.size = t,
+            Kind::Icon { size, .. } => *size = t,
+            _ => {}
+        }
+        self
+    }
+
+    pub fn variant(mut self, v: Variant) -> Self {
+        if let Kind::Button { variant, .. } = &mut self.kind {
+            *variant = v;
+        }
+        self
+    }
+
+    pub fn enabled(mut self, on: bool) -> Self {
+        if let Kind::Button { enabled, .. } = &mut self.kind {
+            *enabled = on;
+        }
+        self
+    }
+
+    pub fn notch(mut self, at: f64) -> Self {
+        if let Kind::Track { notch, .. } = &mut self.kind {
+            *notch = Some(at);
+        }
+        self
+    }
+
+    pub fn cell_state(mut self, f: impl FnOnce(&mut CellState)) -> Self {
+        if let Kind::Cell { state, .. } = &mut self.kind {
+            f(state);
+            if state.chip {
+                self.width = Size::Hug;
+            }
+        }
+        self
+    }
+
+    pub fn ghost(self) -> Self {
+        self.cell_state(|s| s.ghost = true)
+    }
+
+    pub fn selected(self, on: bool) -> Self {
+        self.cell_state(|s| s.selected = on)
+    }
+
+    pub fn active(self, on: bool) -> Self {
+        self.cell_state(|s| s.active = on)
+    }
+
+    pub fn interactive(mut self) -> Self {
+        if let Kind::Cell { interactive, .. } = &mut self.kind {
+            *interactive = true;
+        }
+        self
+    }
+}

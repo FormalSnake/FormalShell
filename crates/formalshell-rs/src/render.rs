@@ -84,6 +84,15 @@ impl Renderer {
                         self.ctx.stroke_path(&rr(r.inflate(-half, -half), *radius as f64 - half));
                     }
                 }
+                Paint::Face { from, to, radius } => {
+                    self.ctx.set_transform(at);
+                    let b = node.bounds;
+                    let r = Rect::new(b.x as f64, b.y as f64, b.right() as f64, b.bottom() as f64);
+                    let gradient = vello_cpu::peniko::Gradient::new_linear((r.x0, r.y0), (r.x0, r.y1))
+                        .with_stops([color(*from), color(*to)]);
+                    self.ctx.set_paint(gradient);
+                    self.ctx.fill_path(&RoundedRect::from_rect(r, (*radius as f64).max(0.0)).to_path(0.1));
+                }
                 Paint::Glow { text, color: ink, x, y, blur } => {
                     // A box of taps over the blur's reach, each carrying its
                     // share of the alpha: cheap, and close enough at the 2px
