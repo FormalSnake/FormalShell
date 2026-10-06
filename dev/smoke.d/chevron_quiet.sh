@@ -127,7 +127,7 @@ leg_chevron_quiet_drive() {
 #!/usr/bin/env bash
 mkdir -p "$chevron_quiet_burst_dir"
 sleep 5
-"$qs_bin" ipc -p "$shell_path" call debug dump > "$chevron_quiet_dump_path" 2>&1
+$ipc call debug dump > "$chevron_quiet_dump_path" 2>&1
 "$grim_bin" -g "$chevron_quiet_band_region" "$chevron_quiet_shut_path" > /dev/null 2>&1
 sleep 1
 burst() {
@@ -148,22 +148,22 @@ done
 sleep 0.15
 for cycle in \$(seq 1 $chevron_quiet_cycles); do
   call_start=\$(date +%s%3N)
-  "$qs_bin" ipc -p "$shell_path" call bar chevron expand >> "$chevron_quiet_reply_path" 2>&1
+  $ipc call bar chevron expand >> "$chevron_quiet_reply_path" 2>&1
   printf '%s\t%s\n' "\$call_start" "\$(date +%s%3N)" >> "$chevron_quiet_call_path"
   sleep 0.$chevron_quiet_open_hold_ms
-  "$qs_bin" ipc -p "$shell_path" call bar chevron collapse >> "$chevron_quiet_reply_path" 2>&1
+  $ipc call bar chevron collapse >> "$chevron_quiet_reply_path" 2>&1
   sleep $chevron_quiet_shut_hold
 done
 wait "\${burst_pids[@]}"
 # One more open, on its own, for the settled half of the claim: three frames
 # back to back once the entrance is over, then the card the run settles on.
-"$qs_bin" ipc -p "$shell_path" call bar chevron expand >> "$chevron_quiet_reply_path" 2>&1
+$ipc call bar chevron expand >> "$chevron_quiet_reply_path" 2>&1
 sleep 0.9
 "$grim_bin" -g "$chevron_quiet_band_region" "${chevron_quiet_tail_paths[0]}" > /dev/null 2>&1
 "$grim_bin" -g "$chevron_quiet_band_region" "${chevron_quiet_tail_paths[1]}" > /dev/null 2>&1
 "$grim_bin" -g "$chevron_quiet_band_region" "${chevron_quiet_tail_paths[2]}" > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call bar chevron status > "$chevron_quiet_status_path" 2>&1
+$ipc call bar chevron status > "$chevron_quiet_status_path" 2>&1
 "$grim_bin" -g "$chevron_quiet_band_region" "$chevron_quiet_settled_path" > /dev/null 2>&1
 "$grim_bin" "$chevron_quiet_open_path" > /dev/null 2>&1
 sleep 0.5

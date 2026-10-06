@@ -154,9 +154,9 @@ EOS
   # Real binds in this session's real hyprland.lua, the shipped example's
   # three plus the probes, so what is exercised is hyprland's own bind table
   # rather than anything this rig invented.
-  echo "hl.bind(\"ALT + Tab\", hl.dsp.exec_cmd([==[$qs_bin ipc -p $shell_path call switcher next]==]), { repeating = true })"
-  echo "hl.bind(\"ALT + SHIFT + Tab\", hl.dsp.exec_cmd([==[$qs_bin ipc -p $shell_path call switcher prev]==]), { repeating = true })"
-  echo "hl.bind(\"ALT + Alt_L\", hl.dsp.exec_cmd([==[$qs_bin ipc -p $shell_path call switcher commit]==]), { release = true, transparent = true })"
+  echo "hl.bind(\"ALT + Tab\", hl.dsp.exec_cmd([==[$ipc call switcher next]==]), { repeating = true })"
+  echo "hl.bind(\"ALT + SHIFT + Tab\", hl.dsp.exec_cmd([==[$ipc call switcher prev]==]), { repeating = true })"
+  echo "hl.bind(\"ALT + Alt_L\", hl.dsp.exec_cmd([==[$ipc call switcher commit]==]), { release = true, transparent = true })"
   echo "hl.bind(\"ALT + Alt_L\", hl.dsp.exec_cmd([==[bash $probe plain]==]), { release = true })"
   echo "hl.bind(\"Alt_L\", hl.dsp.exec_cmd([==[bash $probe nomods]==]), { release = true, transparent = true })"
   # An ordinary key, as the floor under every claim below: a release bind on
@@ -197,12 +197,12 @@ sleep 1
 "$wtype_bin" -M alt -P Alt_L -s 800 -k Tab -s 1500 -k Tab -s 2200 -p Alt_L -m alt \
   > /dev/null 2>&1 &
 sleep 3.4
-"$qs_bin" ipc -p "$shell_path" call switcher state > "$switcher_keys_held_json" 2>&1
+$ipc call switcher state > "$switcher_keys_held_json" 2>&1
 "$hyprctl_bin" -j layers > "$switcher_keys_layers_held" 2>&1
 "$grim_bin" "$switcher_keys_held_png" > /dev/null 2>&1
 wait
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call switcher state > "$switcher_keys_closed_json" 2>&1
+$ipc call switcher state > "$switcher_keys_closed_json" 2>&1
 "$hyprctl_bin" -j layers > "$switcher_keys_layers_closed" 2>&1
 "$hyprctl_bin" -j activewindow > "$switcher_keys_active_json" 2>&1
 ls -1 "$switcher_keys_probe_dir" > "$switcher_keys_after_path" 2>&1
@@ -210,7 +210,7 @@ ls -1 "$switcher_keys_probe_dir" > "$switcher_keys_after_path" 2>&1
 
 # Three fast taps, no sleep inside any of them: one wtype process per tap
 # presses the Alt key, taps Tab once and releases Alt straight back out.
-"$qs_bin" ipc -p "$shell_path" call switcher state > "$switcher_keys_fast_pre_state_json" 2>&1
+$ipc call switcher state > "$switcher_keys_fast_pre_state_json" 2>&1
 "$hyprctl_bin" -j activewindow > "$switcher_keys_fast_before_json" 2>&1
 # Every layer map while the taps run, polled as fast as hyprctl answers.
 ( while [ ! -e "$switcher_keys_fast_done" ]; do
@@ -228,7 +228,7 @@ sleep 1
 "$hyprctl_bin" -j activewindow > "$switcher_keys_fast_3_json" 2>&1
 touch "$switcher_keys_fast_done"
 wait \$poller
-"$qs_bin" ipc -p "$shell_path" call switcher state > "$switcher_keys_fast_state_json" 2>&1
+$ipc call switcher state > "$switcher_keys_fast_state_json" 2>&1
 
 # Six more windows on this workspace, nine in all, every one of them on
 # screen under the rig's dwindle layout.
@@ -244,10 +244,10 @@ sleep 3
 "$wtype_bin" -M alt -P Alt_L -P Tab -s 1000 -p Tab -s 1500 -M shift -k Tab -m shift -s 1500 -p Alt_L -m alt \
   > /dev/null 2>&1 &
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call switcher state > "$switcher_keys_repeat_json" 2>&1
+$ipc call switcher state > "$switcher_keys_repeat_json" 2>&1
 "$grim_bin" "$switcher_keys_many_png" > /dev/null 2>&1
 sleep 1.4
-"$qs_bin" ipc -p "$shell_path" call switcher state > "$switcher_keys_back_json" 2>&1
+$ipc call switcher state > "$switcher_keys_back_json" 2>&1
 wait
 sleep 2
 "$hyprctl_bin" -j activewindow > "$switcher_keys_back_active_json" 2>&1
@@ -261,7 +261,7 @@ sleep 2
 sleep 3
 "$wtype_bin" -M alt -P Alt_L -k Tab -s 3000 -p Alt_L -m alt > /dev/null 2>&1 &
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call switcher state > "$switcher_keys_scroll_json" 2>&1
+$ipc call switcher state > "$switcher_keys_scroll_json" 2>&1
 "$hyprctl_bin" -j clients > "$switcher_keys_scroll_clients_json" 2>&1
 "$hyprctl_bin" -j monitors > "$switcher_keys_scroll_monitors_json" 2>&1
 "$grim_bin" "$switcher_keys_scroll_png" > /dev/null 2>&1

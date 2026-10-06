@@ -73,23 +73,23 @@ sleep 5
 printf '%s' 'ocr smoke sentinel' | "$wl_copy_bin"
 "$grim_bin" "$ocr_fixture_png" > /dev/null 2>&1
 
-"$qs_bin" ipc -p "$shell_path" call capture text > /dev/null 2>&1
+$ipc call capture text > /dev/null 2>&1
 sleep 2
 pgrep -f -- 'slurp -d' > "$ocr_text_slurp_path" 2>&1 || true
-"$qs_bin" ipc -p "$shell_path" call capture status > "$ocr_text_status_path" 2>&1
+$ipc call capture status > "$ocr_text_status_path" 2>&1
 "$grim_bin" "$ocr_text_overlay_png" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call capture cancel > /dev/null 2>&1
+$ipc call capture cancel > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call capture status > "$ocr_text_cancel_path" 2>&1
+$ipc call capture status > "$ocr_text_cancel_path" 2>&1
 
-"$qs_bin" ipc -p "$shell_path" call capture color > /dev/null 2>&1
+$ipc call capture color > /dev/null 2>&1
 sleep 2
 pgrep -f -- 'slurp -p' > "$ocr_color_slurp_path" 2>&1 || true
-"$qs_bin" ipc -p "$shell_path" call capture status > "$ocr_color_status_path" 2>&1
+$ipc call capture status > "$ocr_color_status_path" 2>&1
 "$grim_bin" "$ocr_color_overlay_png" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call capture cancel > /dev/null 2>&1
+$ipc call capture cancel > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call capture status > "$ocr_color_cancel_path" 2>&1
+$ipc call capture status > "$ocr_color_cancel_path" 2>&1
 pgrep -x slurp > "$ocr_slurp_after_path" 2>&1 || true
 "$wl_paste_bin" --no-newline > "$ocr_clipboard_path" 2>&1 || true
 
@@ -98,17 +98,17 @@ pgrep -x slurp > "$ocr_slurp_after_path" 2>&1 || true
 # mid-string and tesseract returns fragments. Extra chrome in frame costs
 # nothing, the assertion only needs a real word to come back.
 geom="0,0 \$("$hyprctl_bin" -j monitors | "$jq_bin" -r '.[0] | "\(.width)x\(.height)"')"
-"$qs_bin" ipc -p "$shell_path" call capture textAt "\$geom" > /dev/null 2>&1
+$ipc call capture textAt "\$geom" > /dev/null 2>&1
 for _ in \$(seq 1 30); do
-  "$qs_bin" ipc -p "$shell_path" call capture status > "$ocr_textat_status_path" 2>&1
+  $ipc call capture status > "$ocr_textat_status_path" 2>&1
   grep -qF '"capturing":false' "$ocr_textat_status_path" && break
   sleep 0.5
 done
 "$wl_paste_bin" --no-newline > "$ocr_textat_clipboard_path" 2>&1 || true
 
-"$qs_bin" ipc -p "$shell_path" call capture colorAt '0,0 1x1' > /dev/null 2>&1
+$ipc call capture colorAt '0,0 1x1' > /dev/null 2>&1
 for _ in \$(seq 1 30); do
-  "$qs_bin" ipc -p "$shell_path" call capture status > "$ocr_colorat_status_path" 2>&1
+  $ipc call capture status > "$ocr_colorat_status_path" 2>&1
   grep -qF '"capturing":false' "$ocr_colorat_status_path" && break
   sleep 0.5
 done

@@ -91,19 +91,19 @@ leg_airplay_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 4
-"$qs_bin" ipc -p "$shell_path" call airplay status > "$airplay_status_connected_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call media status > "$airplay_media_connected_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call panel open media > /dev/null 2>&1
+$ipc call airplay status > "$airplay_status_connected_path" 2>&1
+$ipc call media status > "$airplay_media_connected_path" 2>&1
+$ipc call panel open media > /dev/null 2>&1
 sleep 1
 "$grim_bin" "$airplay_active_png" > /dev/null 2>&1
 "$grim_bin" "$airplay_panel_png" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call panel close > /dev/null 2>&1
+$ipc call panel close > /dev/null 2>&1
 
 sleep 2
 : > "$airplay_disconnect_trigger_path"
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call airplay status > "$airplay_status_disconnected_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call media status > "$airplay_media_disconnected_path" 2>&1
+$ipc call airplay status > "$airplay_status_disconnected_path" 2>&1
+$ipc call media status > "$airplay_media_disconnected_path" 2>&1
 "$grim_bin" "$airplay_gone_png" > /dev/null 2>&1
 EOF
   hypr_exec_once "bash $script"

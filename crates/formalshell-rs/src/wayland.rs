@@ -44,9 +44,11 @@ pub struct App {
     panel: Option<(Panel, Surface)>,
     scrim: Option<(Scrim, PixelSurface)>,
     /// `debug motionScale`: every duration multiplied by this.
-    motion_scale: f64,
+    pub motion_scale: f64,
     /// pantheon's cast under the panel card.
-    cast: bool,
+    pub cast: bool,
+    /// `debug join`'s x and width on the top line, held under any panel's.
+    debug_join: Option<(i32, i32)>,
     pub exit: bool,
     started: Instant,
 }
@@ -90,6 +92,7 @@ impl App {
             scrim: None,
             motion_scale: 1.0,
             cast: false,
+            debug_join: None,
             exit: false,
             started,
         }
@@ -112,38 +115,33 @@ impl App {
     }
 
     fn log(&self, what: &str) {
-        eprintln!("ctl t={}ms {what}", self.started.elapsed().as_millis());
+        eprintln!("ipc t={}ms {what}", self.started.elapsed().as_millis());
     }
 
-    /// The spike's control verbs, until Task 4's targets replace them.
-    pub fn command(&mut self, words: &[String]) -> String {
-        let now = Instant::now();
-        let line = words.join(" ");
-        self.log(&line);
-        let words: Vec<&str> = words.iter().map(String::as_str).collect();
-        match words.as_slice() {
-            ["spinner", state @ ("on" | "off")] => self.bar.set_spinner(now, *state == "on"),
-            ["panel", "open"] => self.set_panel(now, true),
-            ["panel", "close"] => self.set_panel(now, false),
-            ["panel", "toggle"] => {
-                let open = self.panel.as_ref().is_some_and(|(p, _)| p.is_open());
-                self.set_panel(now, !open);
-            }
-            ["scrim", state @ ("on" | "off")] => self.set_scrim(now, *state == "on"),
-            ["cast", state @ ("on" | "off")] => self.cast = *state == "on",
-            ["motion", scale] => match scale.parse::<f64>() {
-                Ok(s) if s > 0.0 => self.motion_scale = s,
-                _ => return format!("error: bad motion scale '{scale}'\n"),
-            },
-            _ => return format!("error: unknown command '{line}'\n"),
-        }
-        "ok\n".into()
+    pub fn panel_open(&self) -> bool {
+        self.panel.as_ref().is_some_and(|(p, _)| p.is_open())
     }
 
-    fn set_panel(&mut self, now: Instant, open: bool) {
+    pub fn debug_join(&self) -> Option<(i32, i32)> {
+        self.debug_join
+    }
+
+    pub fn set_debug_join(&mut self, join: Option<(i32, i32)>) {
+        self.debug_join = join;
+        self.sync_join();
+    }
+
+    /// A panel's own join wins over `debug join`'s while the panel is up.
+    fn sync_join(&mut self) {
+        let panel = self.panel.as_ref().and_then(|(p, _)| p.join);
+        let debug = self.debug_join.map(|(x, width)| (x as f64, width as f64, theme::radius_xl() as f64));
+        self.bar.set_join(panel.or(debug));
+    }
+
+    pub fn set_panel(&mut self, now: Instant, open: bool) {
         if let Some((panel, _)) = &mut self.panel {
             panel.set_open(now, open);
-            self.bar.set_join(panel.join);
+            self.sync_join();
             return;
         }
         if !open {
@@ -158,7 +156,7 @@ impl App {
         self.panel = Some((panel, surface));
     }
 
-    fn set_scrim(&mut self, now: Instant, open: bool) {
+    pub fn set_scrim(&mut self, now: Instant, open: bool) {
         if let Some((scrim, _)) = &mut self.scrim {
             scrim.set_open(now, open);
             return;
@@ -179,8 +177,9 @@ impl App {
                     surfaces::changed(self, topic);
                 }
             }
-            Msg::Call(call, reply) => {
-                let _ = reply.try_send(ipc::dispatch(self, &call));
+            Msg::Call(request, reply) => {
+                self.log(&format!("{request:?}"));
+                let _ = reply.try_send(ipc::dispatch(self, &request));
             }
         }
     }
@@ -189,7 +188,7 @@ impl App {
         let now = Instant::now();
         if self.panel.as_ref().is_some_and(|(p, s)| s.mapped && p.finished(now)) {
             self.panel = None;
-            self.bar.set_join(None);
+            self.sync_join();
             self.log("panel unmapped");
         }
         if self.scrim.as_ref().is_some_and(|(p, s)| s.mapped && p.finished(now)) {
@@ -260,8 +259,7 @@ impl CompositorHandler for App {
                     s.mapped = true;
                     panel.mapped(now);
                 }
-                let join = panel.join;
-                self.bar.set_join(join);
+                self.sync_join();
             }
             Some(Owner::Scrim) => {
                 let Some((scrim, s)) = &mut self.scrim else { return };
@@ -281,7 +279,10 @@ impl LayerShellHandler for App {
     fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, layer: &LayerSurface) {
         match self.owner(layer.wl_surface()) {
             Some(Owner::Bar) => self.exit = true,
-            Some(Owner::Panel) => self.panel = None,
+            Some(Owner::Panel) => {
+                self.panel = None;
+                self.sync_join();
+            }
             Some(Owner::Scrim) => self.scrim = None,
             None => {}
         }

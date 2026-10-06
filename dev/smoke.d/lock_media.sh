@@ -69,30 +69,30 @@ leg_lock_media_drive() {
 sleep $t0
 "$mpv_bin" --no-video --really-quiet --loop-file=inf "$lock_media_track" &
 echo \$! > "$lock_media_pid"
-"$qs_bin" ipc -p "$shell_path" call wallpaper set "$lock_media_bright_wp" > /dev/null 2>&1
+$ipc call wallpaper set "$lock_media_bright_wp" > /dev/null 2>&1
 sleep 6
-"$qs_bin" ipc -p "$shell_path" call media status > "$lock_media_before_json" 2>&1
-"$qs_bin" ipc -p "$shell_path" call lock lock > /dev/null 2>&1
+$ipc call media status > "$lock_media_before_json" 2>&1
+$ipc call lock lock > /dev/null 2>&1
 sleep 5
-"$qs_bin" ipc -p "$shell_path" call lock status > "$lock_media_bright_json" 2>&1
+$ipc call lock status > "$lock_media_bright_json" 2>&1
 "$grim_bin" "$lock_media_bright_png" > /dev/null 2>&1
 "$wtype_bin" -k Tab
 sleep 0.5
 "$wtype_bin" -k Right
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call lock status > "$lock_media_cursor_json" 2>&1
+$ipc call lock status > "$lock_media_cursor_json" 2>&1
 "$grim_bin" "$lock_media_cursor_png" > /dev/null 2>&1
 "$wtype_bin" -k Return
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call media status > "$lock_media_paused_json" 2>&1
-"$qs_bin" ipc -p "$shell_path" call wallpaper set "$lock_media_dark_wp" > /dev/null 2>&1
+$ipc call media status > "$lock_media_paused_json" 2>&1
+$ipc call wallpaper set "$lock_media_dark_wp" > /dev/null 2>&1
 sleep 7
-"$qs_bin" ipc -p "$shell_path" call lock status > "$lock_media_dark_json" 2>&1
+$ipc call lock status > "$lock_media_dark_json" 2>&1
 "$grim_bin" "$lock_media_dark_png" > /dev/null 2>&1
 "$wtype_bin" "formalshell-test"
 "$wtype_bin" -k Return
 sleep 4
-"$qs_bin" ipc -p "$shell_path" call lock isLocked > "$lock_media_unlocked_txt" 2>&1
+$ipc call lock isLocked > "$lock_media_unlocked_txt" 2>&1
 EOF
   write_script "$kill_script" <<EOF
 #!/usr/bin/env bash

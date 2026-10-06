@@ -56,11 +56,11 @@ sleep 3
 "$hyprctl_bin" -j layers > "$fullscreen_on_layers" 2>&1
 "$hyprctl_bin" -j clients > "$fullscreen_on_clients" 2>&1
 "$grim_bin" "$fullscreen_on_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu summon "" > /dev/null 2>&1
+$ipc call menu summon "" > /dev/null 2>&1
 sleep 2
 "$hyprctl_bin" -j layers > "$fullscreen_menu_layers" 2>&1
 "$grim_bin" "$fullscreen_menu_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
+$ipc call menu close > /dev/null 2>&1
 sleep 1
 "$hyprctl_bin" dispatch "hl.dsp.window.fullscreen({ mode = 'fullscreen', action = 'unset' })" > /dev/null 2>&1
 sleep 3

@@ -47,7 +47,7 @@ leg_frame_drive() {
 sleep 5
 "$hyprctl_bin" -j layers > "$frame_layers_path" 2>&1
 "$hyprctl_bin" -j monitors > "$frame_monitors_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call debug dump > "$frame_dump_path" 2>&1
+$ipc call debug dump > "$frame_dump_path" 2>&1
 EOS
   hypr_exec_once "bash $script"
 }

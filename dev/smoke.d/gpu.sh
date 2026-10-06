@@ -141,15 +141,15 @@ leg_gpu_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 6
-"$qs_bin" ipc -p "$shell_path" call monitor gpu > "$gpu_cards_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu summon gpu > "$gpu_route_reply_path" 2>&1
+$ipc call monitor gpu > "$gpu_cards_path" 2>&1
+$ipc call menu summon gpu > "$gpu_route_reply_path" 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call menu status > "$gpu_menu_status_path" 2>&1
+$ipc call menu status > "$gpu_menu_status_path" 2>&1
 "$grim_bin" "$gpu_route_png" > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call monitor launch formalshell-gpu-probe card0 > "$gpu_launch_reply_path" 2>&1
+$ipc call monitor launch formalshell-gpu-probe card0 > "$gpu_launch_reply_path" 2>&1
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call menu summon monitor > /dev/null 2>&1
+$ipc call menu summon monitor > /dev/null 2>&1
 sleep 3
 "$grim_bin" "$gpu_monitor_png" > /dev/null 2>&1
 EOF

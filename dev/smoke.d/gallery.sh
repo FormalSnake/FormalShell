@@ -33,8 +33,8 @@ leg_gallery_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep $t0
-"$qs_bin" ipc -p "$shell_path" call gallery open > "$gallery_log_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call gallery status >> "$gallery_log_path" 2>&1
+$ipc call gallery open > "$gallery_log_path" 2>&1
+$ipc call gallery status >> "$gallery_log_path" 2>&1
 EOF
   hypr_exec_once "bash $script"
 }

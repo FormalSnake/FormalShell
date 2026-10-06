@@ -31,16 +31,16 @@ leg_reminder_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 4
-"$qs_bin" ipc -p "$shell_path" call notifications setDnd true > "$reminder_dnd_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call reminder set 12s "SMOKE REMINDER FIXTURE" > "$reminder_set_reply_path" 2>&1
+$ipc call notifications setDnd true > "$reminder_dnd_path" 2>&1
+$ipc call reminder set 12s "SMOKE REMINDER FIXTURE" > "$reminder_set_reply_path" 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call reminder status > "$reminder_status1_path" 2>&1
+$ipc call reminder status > "$reminder_status1_path" 2>&1
 cat "$iso_home/.local/state/formalshell/state.json" > "$reminder_state1_path" 2>&1
 "$grim_bin" "$reminder_pending_png" > /dev/null 2>&1
 # Past the deadline with room for the service's own 1s tick.
 sleep 13
-"$qs_bin" ipc -p "$shell_path" call reminder status > "$reminder_status2_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call notifications status > "$reminder_notifications_path" 2>&1
+$ipc call reminder status > "$reminder_status2_path" 2>&1
+$ipc call notifications status > "$reminder_notifications_path" 2>&1
 cat "$iso_home/.local/state/formalshell/state.json" > "$reminder_state2_path" 2>&1
 "$grim_bin" "$reminder_fired_png" > /dev/null 2>&1
 EOF

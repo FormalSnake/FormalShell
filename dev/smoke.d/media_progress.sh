@@ -89,8 +89,8 @@ JSON
 # One sample: the position binding as IPC reports it, and the frame.
 progress_sample() {
   local name="\$1"
-  "$qs_bin" ipc -p "$shell_path" call media status > "$shot_dir/progress-\$name.json" 2>&1
-  "$qs_bin" ipc -p "$shell_path" call media lyrics > "$shot_dir/progress-\$name-lyrics.json" 2>&1
+  $ipc call media status > "$shot_dir/progress-\$name.json" 2>&1
+  $ipc call media lyrics > "$shot_dir/progress-\$name-lyrics.json" 2>&1
   "$grim_bin" "$shot_dir/progress-\$name.png" > /dev/null 2>&1
 }
 
@@ -129,7 +129,7 @@ sleep 7
 # The bare desktop, for the pixel diff that finds the panel's own rect.
 "$grim_bin" "$shot_dir/progress-bare.png" > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call panel open media > /dev/null 2>&1
+$ipc call panel open media > /dev/null 2>&1
 
 # Plain playback, the panel untouched from here on.
 sleep 2;  progress_sample play-1
@@ -139,9 +139,9 @@ sleep 5;  progress_sample play-4
 sleep 5;  progress_sample play-5
 
 # Pause and resume.
-"$qs_bin" ipc -p "$shell_path" call media playPause > /dev/null 2>&1
+$ipc call media playPause > /dev/null 2>&1
 sleep 3;  progress_sample paused-1
-"$qs_bin" ipc -p "$shell_path" call media playPause > /dev/null 2>&1
+$ipc call media playPause > /dev/null 2>&1
 sleep 3;  progress_sample resume-1
 sleep 5;  progress_sample resume-2
 sleep 5;  progress_sample resume-3
@@ -162,10 +162,10 @@ sleep 5;  progress_sample track-3
 "$mpv_bin" --no-video --really-quiet "$media_progress_track_c" &
 echo \$! > "$media_progress_pid2_path"
 sleep 4
-"$qs_bin" ipc -p "$shell_path" call media players > "$shot_dir/progress-players.json" 2>&1
-active=\$("$qs_bin" ipc -p "$shell_path" call media status 2>&1 | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+$ipc call media players > "$shot_dir/progress-players.json" 2>&1
+active=\$($ipc call media status 2>&1 | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
 other=\$(grep -o '"id":"[^"]*"' "$shot_dir/progress-players.json" | cut -d'"' -f4 | grep -v "^\$active\$" | head -1)
-"$qs_bin" ipc -p "$shell_path" call media select "\$other" > /dev/null 2>&1
+$ipc call media select "\$other" > /dev/null 2>&1
 sleep 3;  progress_sample switch-1
 sleep 5;  progress_sample switch-2
 sleep 5;  progress_sample switch-3

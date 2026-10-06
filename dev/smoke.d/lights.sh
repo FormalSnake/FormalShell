@@ -83,7 +83,7 @@ leg_lights_drive() {
   local script="$shot_dir/lights-drive.sh"
   write_script "$script" <<EOF
 #!/usr/bin/env bash
-ipc() { "$qs_bin" ipc -p "$shell_path" call lights "\$@"; }
+ipc() { $ipc call lights "\$@"; }
 st() { ipc status > "$shot_dir/lights-status-\$1.json" 2>&1; }
 # Past the probe and the palette's own settle timer.
 sleep 5
@@ -95,10 +95,10 @@ st 2
 ipc color '#FF0000' > /dev/null 2>&1
 sleep 1.5
 st 3
-"$qs_bin" ipc -p "$shell_path" call menu summon lights.effect > /dev/null 2>&1
+$ipc call menu summon lights.effect > /dev/null 2>&1
 sleep 1.5
 "$grim_bin" "$lights_menu_png" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
+$ipc call menu close > /dev/null 2>&1
 ipc toggle > /dev/null 2>&1
 sleep 1.5
 st 4

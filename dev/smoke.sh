@@ -156,10 +156,9 @@ for leg_name in "${legs[@]}"; do
   if leg_on "$leg_name"; then active_legs+=("$leg_name"); fi
 done
 
-# FS_IMPL=rust runs crates/formalshell-rs in place of the QML shell. It has
-# no IPC server yet, and every leg drives the shell over IPC, so only a leg
-# declaring leg_<n>_rust=1 (one that drives the spike's control socket
-# itself) runs under it.
+# FS_IMPL=rust runs crates/formalshell-rs in place of the QML shell, driven
+# over formalshell-ipc. It serves the `debug` target alone so far, so only a
+# leg declaring leg_<n>_rust=1 runs under it.
 fs_impl="${FS_IMPL:-qml}"
 case "$fs_impl" in
   qml) ;;
@@ -167,7 +166,7 @@ case "$fs_impl" in
     for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
       rust_var="leg_${leg_name}_rust"
       if [ "${!rust_var:-0}" != 1 ]; then
-        echo "SMOKE_FAIL: FS_IMPL=rust runs the plain bar only, --${leg_name//_/-} needs the IPC server the rust shell does not have yet" >&2
+        echo "SMOKE_FAIL: FS_IMPL=rust serves only the debug target, --${leg_name//_/-} needs targets the rust shell does not have yet" >&2
         exit 1
       fi
     done
@@ -376,6 +375,18 @@ done
 
 # shellcheck disable=SC2034  # every leg drive script reads it
 shell_path=$(readlink -f result/share/formalshell)
+
+# The one way a leg reaches the shell: `$ipc call <target> <fn> [args...]`,
+# shell-quoted so it pastes into a generated script as it stands.
+# `$ipc_wrapper` is the same command as a user's binds run it, the
+# package's own `formalshell-ipc`.
+if [ "$fs_impl" = rust ]; then
+  printf -v ipc '%q' "$PWD/result-rs/bin/formalshell-ipc"
+  ipc_wrapper=$ipc
+else
+  printf -v ipc '%q ipc -p %q' "$qs_bin" "$shell_path"
+  printf -v ipc_wrapper '%q' "$(readlink -f result)/bin/formalshell-ipc"
+fi
 
 # A dead Wayland socket file outlives its compositor (nothing left to unlink
 # it), so a value read back out of the systemd user environment has to be
@@ -654,30 +665,44 @@ for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
   if declare -F "leg_${leg_name}_timing" >/dev/null; then "leg_${leg_name}_timing"; fi
 done
 
-# The rust shell's animations over its control socket: the spinner on and
-# off, a panel and a scrim at full speed for the frame log, then the same
-# at a tenth of the speed for frames read mid-flight and at rest.
+# The rust shell over IPC: `debug`'s replies to a fixed set of calls into
+# rs-ipc.txt for the assertions below, then the spinner on and off, a panel
+# and a scrim at full speed for the frame log, and the same at a tenth of
+# the speed for frames read mid-flight and at rest.
+rs_ipc_path="$shot_dir/rs-ipc.txt"
 if [ "$fs_impl" = rust ] && [ ${#active_legs[@]} -eq 0 ]; then
   rs_drive="$shot_dir/rs-drive.sh"
   write_script "$rs_drive" <<EOF
 #!/usr/bin/env bash
-ctl() { "$shell_bin" ctl "\$@" >> "$shot_dir/ctl.log" 2>&1; }
+call() { $ipc call "\$@" >> "$shot_dir/rs-calls.log" 2>&1; }
+reply() { echo "> \$*"; $ipc call "\$@" 2>&1; echo "exit \$?"; }
 shot() { "$grim_bin" "$shot_dir/rs-\$1.png" >> "$shot_dir/grim.log" 2>&1; }
 sleep 5
-ctl spinner on; sleep 3
-ctl spinner off; sleep 3
-ctl panel open; sleep 2
-ctl panel close; sleep 2
-ctl scrim on; sleep 2
-ctl scrim off; sleep 2
-ctl motion 10; ctl cast on
-ctl panel open; sleep 0.8; shot open-early
+{
+  reply debug dump
+  reply debug join top 100 200
+  reply debug dump
+  reply debug joinClear
+  reply debug join top 10
+  reply debug motionScale 0
+  reply debug query x
+  reply debug nope
+  reply nope dump
+} > "$rs_ipc_path"
+call debug r0Spinner true; sleep 3
+call debug r0Spinner false; sleep 3
+call debug r0Panel open; sleep 2
+call debug r0Panel close; sleep 2
+call debug r0Scrim true; sleep 2
+call debug r0Scrim false; sleep 2
+call debug motionScale 1000; call debug r0Cast true
+call debug r0Panel open; sleep 0.8; shot open-early
 sleep 0.8; shot open-mid
-ctl spinner on; sleep 7.4; shot rest
-ctl spinner off
-ctl scrim on; sleep 1.2; shot scrim-mid
-ctl scrim off; ctl panel close; sleep 7
-ctl motion 1
+call debug r0Spinner true; sleep 7.4; shot rest
+call debug r0Spinner false
+call debug r0Scrim true; sleep 1.2; shot scrim-mid
+call debug r0Scrim false; call debug r0Panel close; sleep 7
+call debug motionScale 100
 EOF
   hypr_exec_once "bash $rs_drive" >> "$cfg"
 fi
@@ -780,7 +805,41 @@ fi
 # The rust shell logs every commit it makes, which is the evidence that a
 # strip at rest commits nothing.
 if [ "$fs_impl" = rust ]; then
-  grep -E '^(start|commit|exit|ctl|text:|hyprland:|event loop:) ' "$shell_log_path" 2>/dev/null || true
+  grep -E '^(start|commit|exit|ipc|text:|hyprland:|event loop:) ' "$shell_log_path" 2>/dev/null || true
+  if [ ${#active_legs[@]} -eq 0 ]; then
+    theme='"theme":{"radius":10,"radiusXl":14,"borderWidth":1,"barPosition":"top","edgeInset":40}'
+    diff -u - "$rs_ipc_path" <<EOF || fail "debug's replies over formalshell-ipc differ (diff above)"
+> debug dump
+{"join":null,$theme}
+exit 0
+> debug join top 100 200
+ok
+exit 0
+> debug dump
+{"join":{"edge":"top","x":100,"width":200,"reach":14},$theme}
+exit 0
+> debug joinClear
+ok
+exit 0
+> debug join top 10
+Too few arguments provided (3 required but 2 were provided.)
+Function definition: function join(edge: string, x: int, width: int): string
+exit 0
+> debug motionScale 0
+error: percent must be 1..5000
+exit 0
+> debug query x
+[]
+exit 0
+> debug nope
+Function not found.
+exit 0
+> nope dump
+Target not found.
+exit 0
+EOF
+    echo "SMOKE_RS_IPC $rs_ipc_path"
+  fi
   for frame in "$shot_dir"/rs-*.png; do
     [ -f "$frame" ] || continue
     name=$(basename "$frame" .png | tr 'a-z-' 'A-Z_')

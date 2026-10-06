@@ -65,17 +65,17 @@ leg_record_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 4
-"$qs_bin" ipc -p "$shell_path" call record start screen desktop > "$record_start_reply_path" 2>&1
+$ipc call record start screen desktop > "$record_start_reply_path" 2>&1
 # Long enough that the container holds real frames rather than a header: the
 # GIF transcode below has to have something to read.
 sleep 4
-"$qs_bin" ipc -p "$shell_path" call record status > "$record_status1_path" 2>&1
+$ipc call record status > "$record_status1_path" 2>&1
 "$grim_bin" "$record_active_path" > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call record stop > "$record_stop_reply_path" 2>&1
+$ipc call record stop > "$record_stop_reply_path" 2>&1
 SECONDS=0
 while [ "\$SECONDS" -lt 15 ]; do
-  "$qs_bin" ipc -p "$shell_path" call record status > "$record_status2_path" 2>&1
+  $ipc call record status > "$record_status2_path" 2>&1
   grep -qF '"active":false' "$record_status2_path" && break
   sleep 1
 done
@@ -85,17 +85,17 @@ done
 # on the settled file.
 SECONDS=0
 while [ "\$SECONDS" -lt 20 ]; do
-  "$qs_bin" ipc -p "$shell_path" call record status > "$record_finalize_status_path" 2>&1
+  $ipc call record status > "$record_finalize_status_path" 2>&1
   grep -qF '"finalizing":false' "$record_finalize_status_path" && break
   sleep 1
 done
 rec_file=\$(head -n1 "$record_start_reply_path" | tr -d '\r')
 "$ffprobe_bin" -v error -show_entries format=duration:stream=codec_type \\
   -of default=noprint_wrappers=1 "\$rec_file" > "$record_ffprobe_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call record gif "\$rec_file" > "$record_gif_reply_path" 2>&1
+$ipc call record gif "\$rec_file" > "$record_gif_reply_path" 2>&1
 SECONDS=0
 while [ "\$SECONDS" -lt 40 ]; do
-  "$qs_bin" ipc -p "$shell_path" call record status > "$record_status3_path" 2>&1
+  $ipc call record status > "$record_status3_path" 2>&1
   if grep -qF '"transcoding":false' "$record_status3_path" && grep -qF '"lastGifPath":"/' "$record_status3_path"; then
     break
   fi

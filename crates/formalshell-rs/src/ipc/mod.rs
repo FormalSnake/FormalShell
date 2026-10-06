@@ -1,27 +1,42 @@
-//! IPC. The transport runs on the service thread and hands each call to
-//! the UI thread as a [`Msg::Call`]; [`dispatch`] answers it there, where
-//! the store and the surfaces live.
+//! IPC. The socket is served on the service thread, which reads each
+//! request off its client and hands it to the UI thread as a
+//! [`Msg::Call`]; [`dispatch`] answers it there, where the store and the
+//! surfaces live. A slow or silent client only ever stalls its own task.
 //!
-//! Until Task 4 lands the `formalshell-ipc` contract, the transport is R0's
-//! `ctl` socket and the only verbs are the spike's (`App::command`). Task 4
-//! replaces [`serve`] and [`ctl`] and registers each target in [`dispatch`].
+//! Each target is one module returning a [`registry::Target`], listed in
+//! [`registry`]; `formalshell-ipc` (`src/bin/formalshell-ipc.rs`) is the
+//! client.
 
-pub mod ctl;
+#[cfg(test)]
+mod cli;
+mod debug;
+#[cfg(test)]
+mod golden;
+pub mod registry;
+pub mod wire;
 
-use std::os::unix::net::UnixListener;
+use std::os::unix::net::{UnixListener, UnixStream};
+use std::sync::OnceLock;
 
 use async_io::Async;
 use futures_lite::{AsyncReadExt, AsyncWriteExt};
 
+pub use wire::Request;
+
 use crate::runtime::{Ctx, Msg};
 use crate::wayland::App;
+use registry::Registry;
 
-pub struct Call {
-    pub words: Vec<String>,
+/// The most of one request the server reads.
+const MAX_REQUEST: u64 = 1 << 20;
+
+fn registry() ->&'static Registry<App> {
+    static REGISTRY: OnceLock<Registry<App>> = OnceLock::new();
+    REGISTRY.get_or_init(|| Registry { targets: vec![debug::target()] })
 }
 
-pub fn dispatch(app: &mut App, call: &Call) -> String {
-    app.command(&call.words)
+pub fn dispatch(app: &mut App, request: &Request) -> String {
+    registry().answer(app, request)
 }
 
 pub fn start(ctx: &Ctx) {
@@ -29,38 +44,43 @@ pub fn start(ctx: &Ctx) {
 }
 
 async fn serve(ctx: Ctx) {
-    let path = ctl::socket_path();
+    let path = wire::socket_path();
     if let Some(dir) = path.parent() {
         let _ = std::fs::create_dir_all(dir);
+    }
+    // A socket that still answers belongs to another running shell; one
+    // that refuses is a dead shell's leftover.
+    if UnixStream::connect(&path).is_ok() {
+        eprintln!("ipc: another shell already answers on {}", path.display());
+        return;
     }
     let _ = std::fs::remove_file(&path);
     let listener = match Async::<UnixListener>::bind(&path) {
         Ok(listener) => listener,
         Err(err) => {
-            eprintln!("ctl: no control socket: {err}");
+            eprintln!("ipc: cannot listen on {}: {err}", path.display());
             return;
         }
     };
     loop {
         match listener.accept().await {
             Ok((stream, _)) => ctx.spawn(answer(ctx.clone(), stream)),
-            Err(err) => eprintln!("ctl: accept: {err}"),
+            Err(err) => eprintln!("ipc: accept: {err}"),
         }
     }
 }
 
-/// The client writes its line and shuts its half down, so the read ends
-/// at EOF; a client that never does only stalls its own task.
-async fn answer(ctx: Ctx, mut stream: Async<std::os::unix::net::UnixStream>) {
-    let mut line = String::new();
-    let reply = match stream.read_to_string(&mut line).await {
-        Ok(_) => {
-            let (tx, rx) = async_channel::bounded(1);
-            let words = line.split_whitespace().map(str::to_owned).collect();
-            ctx.publisher().send(Msg::Call(Call { words }, tx));
-            rx.recv().await.unwrap_or_else(|_| "error: shell is exiting\n".into())
-        }
-        Err(err) => format!("error: {err}\n"),
-    };
-    let _ = stream.write_all(reply.as_bytes()).await;
+/// The client writes its request and shuts its half down, so the read
+/// ends at EOF.
+async fn answer(ctx: Ctx, mut stream: Async<UnixStream>) {
+    let mut bytes = Vec::new();
+    if (&mut stream).take(MAX_REQUEST).read_to_end(&mut bytes).await.is_err() {
+        return;
+    }
+    let Ok(request) = serde_json::from_slice::<Request>(&bytes) else { return };
+    let (tx, rx) = async_channel::bounded(1);
+    ctx.publisher().send(Msg::Call(request, tx));
+    if let Ok(reply) = rx.recv().await {
+        let _ = stream.write_all(reply.as_bytes()).await;
+    }
 }

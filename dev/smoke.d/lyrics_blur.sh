@@ -153,7 +153,7 @@ echo \$! > "$lyrics_blur_pid_path"
 
 SECONDS=0
 while [ "\$SECONDS" -lt 10 ]; do
-  "$qs_bin" ipc -p "$shell_path" call media status > "$lyrics_blur_status_path" 2>&1
+  $ipc call media status > "$lyrics_blur_status_path" 2>&1
   grep -qF "\"title\":\"$lyrics_blur_track_title\"" "$lyrics_blur_status_path" && break
   sleep 1
 done
@@ -165,19 +165,19 @@ done
 # this clears it before the bare reference is taken.
 sleep 3
 "$grim_bin" "$lyrics_blur_bare_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call panel open media > /dev/null 2>&1
+$ipc call panel open media > /dev/null 2>&1
 SECONDS=0
 while [ "\$SECONDS" -lt 15 ]; do
-  "$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_blur_status_on_path" 2>&1
+  $ipc call media lyrics > "$lyrics_blur_status_on_path" 2>&1
   grep -qF '"state":"synced"' "$lyrics_blur_status_on_path" && break
   sleep 1
 done
 
 # Frozen here (still on the first line, well before the second one at 8s),
 # so every frame below shares one position and one lit set.
-"$qs_bin" ipc -p "$shell_path" call media playPause > /dev/null 2>&1
+$ipc call media playPause > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_blur_status_on_path" 2>&1
+$ipc call media lyrics > "$lyrics_blur_status_on_path" 2>&1
 "$grim_bin" "$lyrics_blur_on_png_path" > /dev/null 2>&1
 
 # home-manager's own activation shape: the real file off to one side, a
@@ -192,7 +192,7 @@ ln -sfn "$lyrics_blur_gen2_path" "$settings_path"
 
 SECONDS=0
 while [ "\$SECONDS" -lt 15 ]; do
-  "$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_blur_status_off_path" 2>&1
+  $ipc call media lyrics > "$lyrics_blur_status_off_path" 2>&1
   grep -qF '"blur":false' "$lyrics_blur_status_off_path" && break
   sleep 1
 done

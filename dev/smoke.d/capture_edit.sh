@@ -66,9 +66,9 @@ EOF
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call screenshot full "" > "$capture_edit_reply_path" 2>&1
+$ipc call screenshot full "" > "$capture_edit_reply_path" 2>&1
 for _ in \$(seq 1 20); do
-  "$qs_bin" ipc -p "$shell_path" call screenshot status > "$capture_edit_status_path" 2>&1
+  $ipc call screenshot status > "$capture_edit_status_path" 2>&1
   if grep -q '"capturing":false' "$capture_edit_status_path"; then
     break
   fi
@@ -80,7 +80,7 @@ done
 # decode, landing a blank slot even though the layout had reserved its width.
 sleep 3
 "$grim_bin" "$capture_edit_toast_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call screenshot edit "" > "$capture_edit_edit_reply_path" 2>&1
+$ipc call screenshot edit "" > "$capture_edit_edit_reply_path" 2>&1
 sleep 1
 EOF
   hypr_exec_once "bash $fixture_script"

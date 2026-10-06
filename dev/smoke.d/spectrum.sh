@@ -58,16 +58,16 @@ mpv_pid=\$!
 echo "\$mpv_pid" > "$spectrum_pid_path"
 SECONDS=0
 while [ "\$SECONDS" -lt 8 ]; do
-  "$qs_bin" ipc -p "$shell_path" call media status > "$spectrum_status_path" 2>&1
+  $ipc call media status > "$spectrum_status_path" 2>&1
   grep -qF "\"title\":\"$spectrum_track_title\"" "$spectrum_status_path" && break
   sleep 1
 done
 pgrep -f -- "cava -p" > "$spectrum_pgrep_before_path" 2>&1 || true
-"$qs_bin" ipc -p "$shell_path" call panel open media > /dev/null 2>&1
+$ipc call panel open media > /dev/null 2>&1
 sleep 2
 pgrep -f -- "cava -p" > "$spectrum_pgrep_open_path" 2>&1 || true
 "$grim_bin" "$spectrum_open_png_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call panel close > /dev/null 2>&1
+$ipc call panel close > /dev/null 2>&1
 sleep 2
 pgrep -f -- "cava -p" > "$spectrum_pgrep_closed_path" 2>&1 || true
 kill "\$mpv_pid" 2>/dev/null || true

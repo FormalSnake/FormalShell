@@ -214,7 +214,7 @@ leg_spaces_drive() {
   local script="$shot_dir/spaces-drive.sh"
   write_script "$script" <<EOF
 #!/usr/bin/env bash
-call() { "$qs_bin" ipc -p "$shell_path" call "\$@"; }
+call() { $ipc call "\$@"; }
 centre() { "$jq_bin" -r ".slots[\$1].rect | \"\\(.x + (.width / 2) | floor) \\(.y + (.height / 2) | floor)\"" "\$2"; }
 card_centre() { "$jq_bin" -r ".preview.rect | \"\\(.x + (.width / 2) | floor) \\(.y + (.height / 2) | floor)\"" "\$1"; }
 park() {

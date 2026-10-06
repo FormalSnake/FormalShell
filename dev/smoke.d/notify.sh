@@ -82,12 +82,12 @@ sleep 1
 "$notify_send_bin" -u critical 'Crit' 'Now'
 sleep 2
 "$hyprctl_bin" -j layers > "$notify_layers_collapsed_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call notifications expand on > "$toasts_expand_status_path" 2>&1
+$ipc call notifications expand on > "$toasts_expand_status_path" 2>&1
 sleep 2
 "$grim_bin" "$toasts_expanded_path" > /dev/null 2>&1
 "$hyprctl_bin" -j layers > "$notify_layers_expanded_path" 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call notifications expand off > /dev/null 2>&1
+$ipc call notifications expand off > /dev/null 2>&1
 EOF
   hypr_exec_once "bash $script"
 }

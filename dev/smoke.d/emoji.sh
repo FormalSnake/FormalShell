@@ -54,19 +54,19 @@ leg_emoji_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep $t0
-"$qs_bin" ipc -p "$shell_path" call debug query ':e sob' > "$emoji_keyword_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call debug query ':e cry' > "$emoji_before_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu summon emoji > /dev/null 2>&1
+$ipc call debug query ':e sob' > "$emoji_keyword_path" 2>&1
+$ipc call debug query ':e cry' > "$emoji_before_path" 2>&1
+$ipc call menu summon emoji > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call menu filter ':e cry' > /dev/null 2>&1
+$ipc call menu filter ':e cry' > /dev/null 2>&1
 sleep 2
 "$grim_bin" "$emoji_png" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu status > "$emoji_status_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu activate 1 > /dev/null 2>&1
+$ipc call menu status > "$emoji_status_path" 2>&1
+$ipc call menu activate 1 > /dev/null 2>&1
 sleep 3
 "$wl_paste_bin" -n > "$emoji_clipboard_path" 2>&1
 cat "$iso_home/.local/state/formalshell/state.json" > "$emoji_state_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call debug query ':e cry' > "$emoji_after_path" 2>&1
+$ipc call debug query ':e cry' > "$emoji_after_path" 2>&1
 EOF
   hypr_exec_once "bash $script"
 }

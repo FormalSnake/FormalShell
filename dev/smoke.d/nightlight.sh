@@ -48,14 +48,14 @@ leg_nightlight_drive() {
 sleep $t0
 SECONDS=0
 while [ "\$SECONDS" -lt 12 ]; do
-  "$qs_bin" ipc -p "$shell_path" call nightlight status > "$nightlight_status0_path" 2>&1
+  $ipc call nightlight status > "$nightlight_status0_path" 2>&1
   grep -qF '"active":true' "$nightlight_status0_path" && break
   sleep 1
 done
-"$qs_bin" ipc -p "$shell_path" call nightlight enable > /dev/null 2>&1
+$ipc call nightlight enable > /dev/null 2>&1
 SECONDS=0
 while [ "\$SECONDS" -lt 8 ]; do
-  "$qs_bin" ipc -p "$shell_path" call nightlight status > "$nightlight_status1_path" 2>&1
+  $ipc call nightlight status > "$nightlight_status1_path" 2>&1
   grep -qF '"active":true' "$nightlight_status1_path" && break
   # A populated lastError is a settled answer too, so the poll stops there
   # rather than spinning out its whole budget on a session that already said
@@ -64,9 +64,9 @@ while [ "\$SECONDS" -lt 8 ]; do
   sleep 1
 done
 "$grim_bin" "$nightlight_active_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call nightlight disable > /dev/null 2>&1
+$ipc call nightlight disable > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call nightlight status > "$nightlight_status2_path" 2>&1
+$ipc call nightlight status > "$nightlight_status2_path" 2>&1
 EOF
   hypr_exec_once "bash $script"
 }

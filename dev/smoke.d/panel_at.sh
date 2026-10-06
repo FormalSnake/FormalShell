@@ -42,9 +42,9 @@ leg_panel_at_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call panel toggleAt $n > "$panel_at_toggle_path" 2>&1
+$ipc call panel toggleAt $n > "$panel_at_toggle_path" 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call panel state > "$panel_at_state_path" 2>&1
+$ipc call panel state > "$panel_at_state_path" 2>&1
 "$grim_bin" "$panel_at_shot_path" > /dev/null 2>&1
 EOF
   hypr_exec_once "bash $script"

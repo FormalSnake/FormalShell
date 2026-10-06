@@ -24,15 +24,15 @@ leg_overnight_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call overnight enable > /dev/null 2>&1
+$ipc call overnight enable > /dev/null 2>&1
 # The LED listing and the asusctl probe are Processes; both have to land in
 # the record before it is read.
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call overnight status > "$overnight_status1_path" 2>&1
+$ipc call overnight status > "$overnight_status1_path" 2>&1
 "$grim_bin" "$overnight_active_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call overnight disable > /dev/null 2>&1
+$ipc call overnight disable > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call overnight status > "$overnight_status2_path" 2>&1
+$ipc call overnight status > "$overnight_status2_path" 2>&1
 cp "$iso_home/.local/state/formalshell/state.json" "$overnight_state_path" 2>/dev/null
 EOF
   hypr_exec_once "bash $script"

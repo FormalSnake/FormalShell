@@ -75,7 +75,7 @@ leg_polkit_drive() {
 log() { echo "\$(date +%s.%N) \$1" >> "$polkit_debug_path"; }
 log start
 sleep $t0
-"$qs_bin" ipc -p "$shell_path" call debug motionScale 1000 >> "$polkit_debug_path" 2>&1
+$ipc call debug motionScale 1000 >> "$polkit_debug_path" 2>&1
 "$pkexec_bin" "$polkit_true_bin" 2> "$polkit_stderr_path" &
 polkit_pid=\$!
 log "pkexec launched pid=\$polkit_pid"
@@ -84,7 +84,7 @@ for i in \$(seq 1 $polkit_open_frames); do
   "$grim_bin" "$shot_dir/polkit-open-\$i.png" > /dev/null 2>&1
 done
 log open-sampled
-"$qs_bin" ipc -p "$shell_path" call debug motionScale 100 >> "$polkit_debug_path" 2>&1
+$ipc call debug motionScale 100 >> "$polkit_debug_path" 2>&1
 sleep 2
 "$grim_bin" "$polkit_active_path" > /dev/null 2>&1
 log active-screenshot

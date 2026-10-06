@@ -73,27 +73,27 @@ sleep 1
 "$python3_bin" "$stub" --id tray-fixture-5 --title "Tray Fixture 5" --color 8e44ad --activate-file "$tray_activate_path" & echo \$! >> "$tray_pids_path"
 "$python3_bin" "$stub" --id tray-fixture-6 --title "Tray Fixture 6" --color 16a085 --activate-file "$tray_activate_path" & echo \$! >> "$tray_pids_path"
 sleep 6
-"$qs_bin" ipc -p "$shell_path" call tray status > "$tray_status_path" 2>&1
+$ipc call tray status > "$tray_status_path" 2>&1
 sleep 1
 "$grim_bin" "$tray_strip_path" > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call tray activate tray-fixture-2 > "$tray_activate_reply_path" 2>&1
+$ipc call tray activate tray-fixture-2 > "$tray_activate_reply_path" 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call tray menu tray-fixture-2 > "$tray_menu_reply_path" 2>&1
+$ipc call tray menu tray-fixture-2 > "$tray_menu_reply_path" 2>&1
 sleep 3
 "$grim_bin" "$tray_menu_path" > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call tray menucursor 1 > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call tray menucursor 1 > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call tray menuactivate > "$tray_menuactivate_reply_path" 2>&1
+$ipc call tray menucursor 1 > /dev/null 2>&1
+$ipc call tray menucursor 1 > /dev/null 2>&1
+$ipc call tray menuactivate > "$tray_menuactivate_reply_path" 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call debug query "Tray Fixture 2" > "$tray_query_root_path" 2>&1
+$ipc call debug query "Tray Fixture 2" > "$tray_query_root_path" 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call menu summon tray > /dev/null 2>&1
+$ipc call menu summon tray > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call debug query "Tray Fixture 2" > "$tray_query_route_path" 2>&1
+$ipc call debug query "Tray Fixture 2" > "$tray_query_route_path" 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
+$ipc call menu close > /dev/null 2>&1
 EOF
 
   # The stubs sit in GLib.MainLoop().run() forever, so they are killed by PID

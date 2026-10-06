@@ -155,7 +155,7 @@ leg_earbuds_drive() {
   local state_dir="$iso_home/.local/state/librepods"
   write_script "$script" <<EOF
 #!/usr/bin/env bash
-ipc() { "$qs_bin" ipc -p "$shell_path" call "\$@"; }
+ipc() { $ipc call "\$@"; }
 nothing_list() { printf '%s\n' "\$1" > "$earbuds_nothing_list"; }
 scq_paired() { cp "\$1" "$earbuds_scq_paired"; }
 none='[]'

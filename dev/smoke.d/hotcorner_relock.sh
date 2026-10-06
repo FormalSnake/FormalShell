@@ -66,7 +66,7 @@ leg_hotcorner_relock_drive() {
   local script="$shot_dir/hotcorner-relock-drive.sh"
   write_script "$script" <<EOF
 #!/usr/bin/env bash
-ipc() { "$qs_bin" ipc -p "$shell_path" call lock isLocked > "\$1" 2>&1; }
+ipc() { $ipc call lock isLocked > "\$1" 2>&1; }
 corner() {
   "$wlrctl_bin" pointer move -4000 -4000 >> "$hotcorner_relock_moves_path" 2>&1
   sleep 1

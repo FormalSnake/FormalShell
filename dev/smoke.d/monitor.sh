@@ -46,21 +46,21 @@ leg_monitor_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 6
-"$qs_bin" ipc -p "$shell_path" call monitor status > "$monitor_status_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call monitor gpu > "$monitor_gpu_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call debug dump > "$monitor_dump_path" 2>&1
+$ipc call monitor status > "$monitor_status_path" 2>&1
+$ipc call monitor gpu > "$monitor_gpu_path" 2>&1
+$ipc call debug dump > "$monitor_dump_path" 2>&1
 "$grim_bin" "$monitor_bar_png" > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call panel open monitor > "$monitor_panel_reply_path" 2>&1
+$ipc call panel open monitor > "$monitor_panel_reply_path" 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call panel state > "$monitor_panel_state_path" 2>&1
+$ipc call panel state > "$monitor_panel_state_path" 2>&1
 "$grim_bin" "$monitor_panel_png" > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call panel close > /dev/null 2>&1
+$ipc call panel close > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call menu summon monitor > "$monitor_menu_reply_path" 2>&1
+$ipc call menu summon monitor > "$monitor_menu_reply_path" 2>&1
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call menu status > "$monitor_menu_status_path" 2>&1
+$ipc call menu status > "$monitor_menu_status_path" 2>&1
 "$grim_bin" "$monitor_view_png" > /dev/null 2>&1
 touch "$monitor_done_path"
 EOF

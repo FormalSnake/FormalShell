@@ -61,14 +61,14 @@ leg_share_drive() {
 #!/usr/bin/env bash
 $menu_wait
 sleep $t0
-"$qs_bin" ipc -p "$shell_path" call localsend status > "$share_status_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu summon share > /dev/null 2>&1
+$ipc call localsend status > "$share_status_path" 2>&1
+$ipc call menu summon share > /dev/null 2>&1
 sleep 1
 "$grim_bin" "$share_menu_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call localsend scan > "$share_scan_reply_path" 2>&1
+$ipc call menu close > /dev/null 2>&1
+$ipc call localsend scan > "$share_scan_reply_path" 2>&1
 sleep 5
-"$qs_bin" ipc -p "$shell_path" call localsend peers > "$share_peers_path" 2>&1
+$ipc call localsend peers > "$share_peers_path" 2>&1
 EOF
   hypr_exec_once "bash $script"
 }

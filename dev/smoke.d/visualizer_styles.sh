@@ -61,12 +61,12 @@ echo "\$mpv_pid" > "$visualizer_styles_pid_path"
 
 SECONDS=0
 while [ "\$SECONDS" -lt 8 ]; do
-  "$qs_bin" ipc -p "$shell_path" call media status > "$visualizer_styles_status_path" 2>&1
+  $ipc call media status > "$visualizer_styles_status_path" 2>&1
   grep -qF "\"title\":\"$visualizer_styles_track_title\"" "$visualizer_styles_status_path" && break
   sleep 1
 done
 
-"$qs_bin" ipc -p "$shell_path" call panel open media > /dev/null 2>&1
+$ipc call panel open media > /dev/null 2>&1
 sleep 2
 
 # Three frames of the running spectrum, close enough together that the
@@ -120,13 +120,13 @@ if [ -n "\${wa:-}" ] && [ -n "\${wb:-}" ]; then
   fi
 fi
 
-"$qs_bin" ipc -p "$shell_path" call visualizer styles > "$visualizer_styles_ids_path" 2>&1
+$ipc call visualizer styles > "$visualizer_styles_ids_path" 2>&1
 
 rect=\$(cat "$visualizer_styles_rect_path" 2>/dev/null)
 prev=""
 while IFS= read -r id; do
   [ -z "\$id" ] && continue
-  "$qs_bin" ipc -p "$shell_path" call visualizer style "\$id" > /dev/null 2>&1
+  $ipc call visualizer style "\$id" > /dev/null 2>&1
   # sand starts from an empty bed and needs a few seconds to pile up.
   case "\$id" in
     sand) sleep 4 ;;
@@ -144,9 +144,9 @@ done < "$visualizer_styles_ids_path"
 
 # The AGC settling claim (Task 1, f4e5885): a loud track, player volume
 # forced to 100, must not peg every band near the ceiling.
-"$qs_bin" ipc -p "$shell_path" call media volume 100 > /dev/null 2>&1
+$ipc call media volume 100 > /dev/null 2>&1
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call visualizer status > "$visualizer_styles_loud_status_path" 2>&1
+$ipc call visualizer status > "$visualizer_styles_loud_status_path" 2>&1
 
 kill "\$mpv_pid" 2>/dev/null || true
 wait "\$mpv_pid" 2>/dev/null || true

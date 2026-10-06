@@ -73,18 +73,18 @@ leg_center_drive() {
 sleep 2
 "$notify_send_bin" -u normal 'Second' 'World'
 sleep 15
-"$qs_bin" ipc -p "$shell_path" call notifications status > "$center_status_before_path" 2>&1
+$ipc call notifications status > "$center_status_before_path" 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call notifications showHistory > /dev/null 2>&1
+$ipc call notifications showHistory > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call notifications status > "$center_status_open_path" 2>&1
+$ipc call notifications status > "$center_status_open_path" 2>&1
 "$grim_bin" "$center_path" > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call notifications dismissOne > "$center_dismiss_one_path" 2>&1
+$ipc call notifications dismissOne > "$center_dismiss_one_path" 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call notifications showHistory > /dev/null 2>&1
+$ipc call notifications showHistory > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call notifications status > "$center_status_closed_path" 2>&1
+$ipc call notifications status > "$center_status_closed_path" 2>&1
 sleep 1
 # Distinct summaries: identical ones would collapse into a single counted
 # row (Model.groupEntries) and the list would be no longer than before. In
@@ -95,9 +95,9 @@ for i in \$(seq 1 30); do
 done
 wait
 sleep 13
-"$qs_bin" ipc -p "$shell_path" call notifications showHistory > /dev/null 2>&1
+$ipc call notifications showHistory > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call notifications status > "$center_status_long_path" 2>&1
+$ipc call notifications status > "$center_status_long_path" 2>&1
 "$grim_bin" "$center_long_path" > /dev/null 2>&1
 # wlrctl, a real zwlr_virtual_pointer_v1 client, for the same reason the
 # tooltip leg uses it: the compositor's own warp dispatcher moves the cursor
@@ -118,21 +118,21 @@ sleep 1
 echo "scroll exit \$?" >> "$center_scroll_path"
 sleep 2
 "$grim_bin" "$center_scrolled_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call notifications showHistory > /dev/null 2>&1
+$ipc call notifications showHistory > /dev/null 2>&1
 sleep 2
 # And the same open again at a tenth speed, over the band alone: the card
 # coming out of the line on the output's trailing edge.
-"$qs_bin" ipc -p "$shell_path" call debug motionScale 1000 > /dev/null 2>&1
+$ipc call debug motionScale 1000 > /dev/null 2>&1
 "$grim_bin" -g "$center_region" "$center_emerge_desktop_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call notifications showHistory > /dev/null 2>&1
+$ipc call notifications showHistory > /dev/null 2>&1
 for i in \$(seq 1 $center_frames); do
   sleep 0.3
   "$grim_bin" -g "$center_region" "$shot_dir/center-emerge-\$i.png" > /dev/null 2>&1
 done
 sleep 5
 "$grim_bin" -g "$center_region" "$center_emerge_rest_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call debug motionScale 100 > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call notifications showHistory > /dev/null 2>&1
+$ipc call debug motionScale 100 > /dev/null 2>&1
+$ipc call notifications showHistory > /dev/null 2>&1
 EOF
   hypr_exec_once "bash $script"
 }

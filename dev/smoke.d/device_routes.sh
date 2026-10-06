@@ -70,7 +70,7 @@ done
 EOF
   write_script "$script" <<EOF
 #!/usr/bin/env bash
-ipc() { "$qs_bin" ipc -p "$shell_path" call "\$@"; }
+ipc() { $ipc call "\$@"; }
 # menu status into \$1, then the index of row id \$2 in its ids, retried
 # until the row is there.
 row_index() {

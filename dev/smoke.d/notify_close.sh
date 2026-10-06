@@ -57,7 +57,7 @@ leg_notify_close_drive() {
   local body_h=$((1080 - notify_close_body_top))
   write_script "$script" <<EOF
 #!/usr/bin/env bash
-call() { "$qs_bin" ipc -p "$shell_path" call "\$@"; }
+call() { $ipc call "\$@"; }
 sleep 4
 "$grim_bin" "$notify_close_bare_path" > /dev/null 2>&1
 "$notify_send_bin" -u critical 'Command failed' 'exit status 1'

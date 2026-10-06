@@ -35,19 +35,19 @@ leg_console_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 5
-"$qs_bin" ipc -p "$shell_path" call console toggle > /dev/null 2>&1
+$ipc call console toggle > /dev/null 2>&1
 sleep 4
-"$qs_bin" ipc -p "$shell_path" call console status > "$console_status_open_path" 2>&1
+$ipc call console status > "$console_status_open_path" 2>&1
 "$grim_bin" "$console_open_path" > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call console toggle > /dev/null 2>&1
+$ipc call console toggle > /dev/null 2>&1
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call console status > "$console_status_parked_path" 2>&1
+$ipc call console status > "$console_status_parked_path" 2>&1
 "$grim_bin" "$console_parked_path" > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call console toggle > /dev/null 2>&1
+$ipc call console toggle > /dev/null 2>&1
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call console status > "$console_status_return_path" 2>&1
+$ipc call console status > "$console_status_return_path" 2>&1
 "$grim_bin" "$console_return_path" > /dev/null 2>&1
 EOF
   hypr_exec_once "bash $script"

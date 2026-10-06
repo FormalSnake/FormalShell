@@ -21,7 +21,7 @@ leg_dump_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 4
-"$shell_path/../../bin/formalshell-ipc" call debug dump > "$dump_path" 2>&1
+$ipc_wrapper call debug dump > "$dump_path" 2>&1
 EOF
   hypr_exec_once "bash $script"
 }

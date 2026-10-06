@@ -48,23 +48,23 @@ leg_toggles_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep $t0
-"$qs_bin" ipc -p "$shell_path" call menu summon toggles > /dev/null 2>&1
+$ipc call menu summon toggles > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call menu status > "$toggles_menu_status1_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call nightlight status > "$toggles_nl_status1_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call debug query nightlight > "$toggles_nl_query1_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call notifications status > "$toggles_dnd_status1_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call debug query dnd > "$toggles_dnd_query1_path" 2>&1
+$ipc call menu status > "$toggles_menu_status1_path" 2>&1
+$ipc call nightlight status > "$toggles_nl_status1_path" 2>&1
+$ipc call debug query nightlight > "$toggles_nl_query1_path" 2>&1
+$ipc call notifications status > "$toggles_dnd_status1_path" 2>&1
+$ipc call debug query dnd > "$toggles_dnd_query1_path" 2>&1
 "$grim_bin" "$toggles_hub_png" > /dev/null 2>&1
 
-"$qs_bin" ipc -p "$shell_path" call nightlight toggle > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call notifications toggleDnd > /dev/null 2>&1
+$ipc call nightlight toggle > /dev/null 2>&1
+$ipc call notifications toggleDnd > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call nightlight status > "$toggles_nl_status2_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call debug query nightlight > "$toggles_nl_query2_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call notifications status > "$toggles_dnd_status2_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call debug query dnd > "$toggles_dnd_query2_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu status > "$toggles_menu_status2_path" 2>&1
+$ipc call nightlight status > "$toggles_nl_status2_path" 2>&1
+$ipc call debug query nightlight > "$toggles_nl_query2_path" 2>&1
+$ipc call notifications status > "$toggles_dnd_status2_path" 2>&1
+$ipc call debug query dnd > "$toggles_dnd_query2_path" 2>&1
+$ipc call menu status > "$toggles_menu_status2_path" 2>&1
 "$grim_bin" "$toggles_toggled_png" > /dev/null 2>&1
 EOF
   hypr_exec_once "bash $script"

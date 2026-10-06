@@ -90,7 +90,7 @@ sleep 2
 "$mpv_bin" --no-video --really-quiet --loop-file=inf "$bar_title_track_path" &
 echo \$! > "$bar_title_pid_path"
 for _ in \$(seq 1 16); do
-  "$qs_bin" ipc -p "$shell_path" call media status > "$bar_title_status_path" 2>&1
+  $ipc call media status > "$bar_title_status_path" 2>&1
   grep -qF "\"title\":\"$bar_title_track\"" "$bar_title_status_path" && break
   sleep 0.5
 done
@@ -99,12 +99,12 @@ done
 # beat after is the label refit (Theme.motion.spatial past the last change)
 # and the cells' own width glide settling behind it.
 for _ in \$(seq 1 40); do
-  "$qs_bin" ipc -p "$shell_path" call bar room > "$bar_title_poll_path" 2>&1
+  $ipc call bar room > "$bar_title_poll_path" 2>&1
   "$jq_bin" -e '.[0].activeWindow.natural > 1000' "$bar_title_poll_path" > /dev/null 2>&1 && break
   sleep 0.5
 done
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call bar room > "$bar_title_json_path" 2>&1
+$ipc call bar room > "$bar_title_json_path" 2>&1
 "$grim_bin" "$bar_title_png_path" > /dev/null 2>&1
 sleep 1
 "$grim_bin" "$bar_title_later_png_path" > /dev/null 2>&1
@@ -113,23 +113,23 @@ sleep 1
 mkdir -p "$bar_title_samples_dir"
 "$hyprctl_bin" dispatch "hl.dsp.exec_cmd([==[$foot_bin --app-id=formalshell-bar-short --title=short sh -c 'sleep 300']==])"
 for i in \$(seq 1 12); do
-  "$qs_bin" ipc -p "$shell_path" call bar room > "$bar_title_samples_dir/to-short-\$i.json" 2>&1
+  $ipc call bar room > "$bar_title_samples_dir/to-short-\$i.json" 2>&1
 done
 "$hyprctl_bin" dispatch "hl.dsp.focus({ window = 'class:formalshell-bar-title' })" > /dev/null 2>&1
 for i in \$(seq 1 12); do
-  "$qs_bin" ipc -p "$shell_path" call bar room > "$bar_title_samples_dir/to-long-\$i.json" 2>&1
+  $ipc call bar room > "$bar_title_samples_dir/to-long-\$i.json" 2>&1
 done
 # The title cell alone on the strip, the file rewritten in place.
 sleep 2
 "$jq_bin" '.bar.layout = {"left": ["activeWindow"], "center": [], "right": []}' "$settings_path" > "$settings_path.tmp"
 cat "$settings_path.tmp" > "$settings_path"
 for _ in \$(seq 1 20); do
-  "$qs_bin" ipc -p "$shell_path" call bar room > "$bar_title_alone_path" 2>&1
+  $ipc call bar room > "$bar_title_alone_path" 2>&1
   "$jq_bin" -e '.[0].cells | length == 1' "$bar_title_alone_path" > /dev/null 2>&1 && break
   sleep 0.5
 done
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call bar room > "$bar_title_alone_path" 2>&1
+$ipc call bar room > "$bar_title_alone_path" 2>&1
 "$grim_bin" "$bar_title_alone_png_path" > /dev/null 2>&1
 EOF
 
