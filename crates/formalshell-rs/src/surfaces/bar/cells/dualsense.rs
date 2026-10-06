@@ -1,0 +1,51 @@
+//! DualsenseWidget.qml: a gamepad icon and the controller's battery, gone
+//! from the strip with no controller. Warn and critical colour the border
+//! and the ink, as the laptop battery's cell does.
+
+use fs_system::dualsense::{Supply, state_line};
+
+use crate::store::Topic;
+use crate::surfaces::bar::cell::{Action, Button, Cell, Env, Look, Part, Tone, View};
+
+#[derive(Default)]
+pub struct Dualsense {
+    supply: Option<Supply>,
+    show_label: bool,
+}
+
+impl Cell for Dualsense {
+    fn reads(&self) -> &'static [Topic] {
+        &[Topic::Devices, Topic::Config]
+    }
+
+    fn read(&mut self, env: &Env) -> bool {
+        let supply = env.store.devices.power.dualsense.clone();
+        let show_label = env.store.config.bool("bar.widgets.dualsense.showLabel").unwrap_or(true);
+        let changed = supply != self.supply || show_label != self.show_label;
+        (self.supply, self.show_label) = (supply, show_label);
+        changed
+    }
+
+    fn view(&self, look: &Look) -> View {
+        let Some(s) = &self.supply else { return View::hidden() };
+        let head = format!("DUALSENSE {}%", s.percent);
+        let line = state_line(Some(s));
+        let tooltip = if line.is_empty() { head } else { format!("{head} / {line}") };
+        let mut parts = vec![Part::Icon { name: "gamepad-2".into(), dim: false, dot: false }];
+        if self.show_label {
+            parts.push(Part::Label { text: format!("{}%", s.percent), weight: None });
+        }
+        let tone = if s.critical {
+            Tone::Destructive
+        } else if s.warn {
+            Tone::Warning
+        } else {
+            Tone::Rest
+        };
+        View::new(parts, look.xs).panel("dualsense").tooltip(tooltip).tone(tone)
+    }
+
+    fn click(&mut self, _: Button, _: (f64, f64), _: &Env) -> Action {
+        Action::Panel("dualsense")
+    }
+}

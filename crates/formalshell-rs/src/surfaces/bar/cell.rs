@@ -40,8 +40,8 @@ pub enum Action {
     /// Open or close the chevron's second bar for its region.
     Overflow(Region),
     Workspace(String),
-    Volume(f64),
-    ToggleMute,
+    /// A write to a device service (a volume step, a mute, a radio).
+    Device(crate::services::devices::Op),
 }
 
 /// What a cell reads when it re-reads.
@@ -72,6 +72,8 @@ pub enum Part {
     Glyph { text: String, family: &'static str },
     /// CellLabel.qml: mono, body, medium unless `weight` says otherwise.
     Label { text: String, weight: Option<f32> },
+    /// CellLabel.qml with `meta`: the same label in the dim ink.
+    Meta { text: String },
     /// A sans name elided at `max`, hidden on a vertical bar.
     Name { text: String, max: f64, dim: bool },
     /// MarqueeText.qml: free text drawn at the budget the bar hands this
@@ -493,6 +495,10 @@ impl Kit {
                 let w = if band { WEIGHTS.semibold } else { weight.unwrap_or(WEIGHTS.medium as f32) as f64 };
                 self.shape(text, look.label(w as f32))
             }
+            Part::Meta { text } => {
+                let w = if band { WEIGHTS.semibold } else { WEIGHTS.medium };
+                self.shape(text, look.label(w as f32))
+            }
             Part::Name { text, .. } => self.shape(text, look.sans(WEIGHTS.medium as f32)),
             Part::Free { text, .. } => {
                 let w = if band { WEIGHTS.semibold } else { WEIGHTS.normal };
@@ -516,7 +522,7 @@ impl Kit {
                 Part::Icon { .. } | Part::Glyph { .. } => {
                     if vertical { (icon_h, look.body as f64) } else { (look.body as f64, icon_h) }
                 }
-                Part::Label { .. } => {
+                Part::Label { .. } | Part::Meta { .. } => {
                     if vertical && w > look.content_across() + 0.5 {
                         (0.0, 0.0)
                     } else if vertical {
@@ -626,8 +632,8 @@ impl Kit {
                         p.rect(dot_r, ink.of(look.primary), d as f32 / 2.0);
                     }
                 }
-                Part::Label { .. } => {
-                    let color = ink.of(ink.fg);
+                Part::Label { .. } | Part::Meta { .. } => {
+                    let color = ink.of(if matches!(part, Part::Meta { .. }) { ink.dim } else { ink.fg });
                     let (x, y) = if vertical {
                         ((across_mid - shaped.width / 2), at.round() as i32)
                     } else {

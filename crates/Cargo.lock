@@ -593,11 +593,15 @@ dependencies = [
  "async-process",
  "calloop",
  "chrono",
+ "fs-audio",
  "fs-bluez",
  "fs-chrome",
+ "fs-devices",
  "fs-mpris",
+ "fs-network",
  "fs-system",
  "fs-theme",
+ "fs-upower",
  "futures-lite",
  "image",
  "inotify",
@@ -720,6 +724,15 @@ version = "0.1.1"
 dependencies = [
  "async-io",
  "futures-util",
+ "zbus",
+]
+
+[[package]]
+name = "fs-network"
+version = "0.1.1"
+dependencies = [
+ "async-io",
+ "futures-lite",
  "zbus",
 ]
 

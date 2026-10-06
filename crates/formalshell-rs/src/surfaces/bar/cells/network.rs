@@ -1,6 +1,7 @@
-//! NetworkWidget.qml: wired, Wi-Fi or offline, as one icon.
+//! NetworkWidget.qml: wired, Wi-Fi or offline, as one icon; right click
+//! flips the Wi-Fi radio.
 
-use crate::services::devices;
+use crate::services::devices::{self, Op};
 use crate::store::Topic;
 use crate::surfaces::bar::cell::{Action, Button, Cell, Env, Look, View};
 
@@ -31,11 +32,13 @@ impl Cell for Network {
             "wifi-off"
         };
         let head = if s.wired {
-            "NETWORK / WIRED"
+            "NETWORK / WIRED".to_owned()
+        } else if let Some((ssid, strength)) = &s.ssid {
+            format!("WI-FI / {ssid} {strength}%")
         } else if s.wifi {
-            "WI-FI / CONNECTED"
+            "WI-FI / CONNECTED".to_owned()
         } else {
-            "NETWORK / OFFLINE"
+            "NETWORK / OFFLINE".to_owned()
         };
         let tooltip = format!("{head} / RIGHT {}", if s.wifi_enabled { "WI-FI OFF" } else { "WI-FI ON" });
         View::icon(icon, look).panel("network").tooltip(tooltip)
@@ -43,7 +46,7 @@ impl Cell for Network {
 
     fn click(&mut self, button: Button, _: (f64, f64), _: &Env) -> Action {
         match button {
-            Button::Right => Action::None,
+            Button::Right => Action::Device(Op::ToggleWifi),
             _ => Action::Panel("network"),
         }
     }

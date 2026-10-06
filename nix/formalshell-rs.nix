@@ -1,4 +1,5 @@
-{ lib, rustPlatform, pkg-config, makeWrapper, fontconfig, lucide-font, nerd-fonts, matugen, wireplumber }:
+{ lib, stdenvNoCC, rustPlatform, pkg-config, makeWrapper, fontconfig, pipewire, lucide-font, nerd-fonts, matugen, brightnessctl
+, openscq30, nothingctl, earbuds }:
 
 rustPlatform.buildRustPackage {
   pname = "formalshell-rs";
@@ -28,8 +29,8 @@ rustPlatform.buildRustPackage {
   cargoBuildFlags = [ "--package" "formalshell-rs" ];
   cargoTestFlags = [ "--package" "formalshell-rs" ];
 
-  nativeBuildInputs = [ pkg-config makeWrapper ];
-  buildInputs = [ fontconfig ];
+  nativeBuildInputs = [ pkg-config makeWrapper rustPlatform.bindgenHook ];
+  buildInputs = [ fontconfig pipewire ];
 
   # The icon fonts by path, registered with parley at startup: the same
   # lucide and font-logos builds nix/package.nix hands Qt through
@@ -41,7 +42,8 @@ rustPlatform.buildRustPackage {
       --set-default FS_RS_ICON_FONT ${lucide-font}/share/fonts/truetype/lucide.ttf \
       --set-default FS_RS_FONT_DIRS ${nerd-fonts.symbols-only}/share/fonts \
       --set-default FS_TEMPLATE_DIR $out/share/formalshell-rs/templates \
-      --prefix PATH : ${lib.makeBinPath [ matugen wireplumber ]}
+      --prefix PATH : ${lib.makeBinPath [ matugen brightnessctl ]} \
+      --suffix PATH : ${lib.makeBinPath (lib.optionals (lib.meta.availableOn stdenvNoCC.hostPlatform earbuds) [ earbuds openscq30 ] ++ lib.optional (lib.meta.availableOn stdenvNoCC.hostPlatform nothingctl) nothingctl)}
   '';
 
   meta = {

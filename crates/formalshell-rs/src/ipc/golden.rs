@@ -94,6 +94,26 @@ fn stub() -> Registry<()> {
             },
             Target { name: "media", functions: vec![f("status", &[], Type::String, |_, _| s("{}"))] },
             Target {
+                name: "overnight",
+                functions: vec![
+                    f("toggle", &[], Type::String, |_, _| s("ok")),
+                    f("enable", &[], Type::String, |_, _| s("ok")),
+                    f("disable", &[], Type::String, |_, _| s("ok")),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
+                name: "earbuds",
+                functions: vec![
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                    f("devices", &[], Type::String, |_, _| s("[]")),
+                    f("select", &[("key", Type::String)], Type::String, |_, a| s(format!("select {}", a[0].str()))),
+                    f("set", &[("control", Type::String), ("value", Type::String)], Type::String, |_, a| {
+                        s(format!("set {} {}", a[0].str(), a[1].str()))
+                    }),
+                ],
+            },
+            Target {
                 name: "probe",
                 functions: vec![
                     f("s", &[STR], Type::String, |_, a| s(format!("[{}]", a[0].str()))),
@@ -184,6 +204,8 @@ fn signatures_match_qml() {
         super::bar::target(),
         super::panel::target(),
         super::media::target(),
+        super::overnight::target(),
+        super::earbuds::target(),
     ] {
         let defs: Vec<String> = real.functions.iter().map(|f| f.definition()).collect();
         let qml = stub.targets.iter().find(|t| t.name == real.name).expect("a stub target");
