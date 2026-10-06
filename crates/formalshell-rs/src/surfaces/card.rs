@@ -46,8 +46,8 @@ struct Look {
 }
 
 impl Look {
-    fn new(theme: &Theme, cast: bool) -> Self {
-        let card = theme.box_style("card", None);
+    fn new(theme: &Theme, cast: bool, role: &str) -> Self {
+        let card = theme.box_style(role, None);
         let border = card.border.clone().unwrap_or(fs_theme::style::Line { color: Rgba::TRANSPARENT, width: 0.0 });
         let popover = theme.habit("emerge").and_then(|v| v.as_str()) == Some("popover");
         let casts = if popover {
@@ -57,7 +57,7 @@ impl Look {
                 getter(json!({ "theme": { "preset": "pantheon" } })),
                 &fs_theme::palette::fallback(&theme.colors.mode),
             );
-            pantheon.box_style("card", None).casts
+            pantheon.box_style(role, None).casts
         } else {
             Vec::new()
         };
@@ -83,6 +83,11 @@ pub struct Card {
     /// The resting rect, `u` along and `v` away from the output's edge.
     rest: Rect,
     line_at: f64,
+    /// Where the card was asked to centre along the line, the line's length
+    /// and the padding it keeps off either end, for a resize to clamp again.
+    anchor: f64,
+    length: i32,
+    pad: f64,
     open: bool,
     mapped: bool,
     progress: Animated,
@@ -106,7 +111,7 @@ impl Card {
     /// line at `line_at`; `length` is the output's length along the edge.
     #[allow(clippy::too_many_arguments)]
     pub fn new(theme: &Theme, edge: Edge, length: i32, line_at: f64, anchor: f64, size: (f64, f64), scale: f64, cast: bool) -> Self {
-        let look = Look::new(theme, cast);
+        let look = Look::new(theme, cast, "card");
         let (w, h) = size;
         let pad = theme.space.screen_padding;
         let u = (anchor - w / 2.0).clamp(pad, (length as f64 - w - pad).max(pad)).round();
@@ -127,6 +132,9 @@ impl Card {
             edge,
             rest,
             line_at,
+            anchor,
+            length,
+            pad,
             open: true,
             mapped: false,
             progress: Animated::new(0.0, EMERGE.1),
@@ -141,6 +149,26 @@ impl Card {
             join: None,
             content: (IRect::default(), 0.0),
         }
+    }
+
+    /// How far past the output's edge the card's far side rests, which is
+    /// where a card hanging off this one has its line.
+    pub fn far_edge(&self) -> f64 {
+        self.rest.y1
+    }
+
+    /// The card as a menu: the `menu` role's fill, border and radius.
+    pub fn menu(&mut self, theme: &Theme, cast: bool) {
+        self.look = Look::new(theme, cast, "menu");
+    }
+
+    /// The same card at a new size inside the surface it was made for, kept
+    /// on its anchor. The surface must already be deep enough.
+    pub fn resize(&mut self, now: Instant, size: (f64, f64)) {
+        let (w, h) = size;
+        let u = (self.anchor - w / 2.0).clamp(self.pad, (self.length as f64 - w - self.pad).max(self.pad)).round();
+        self.rest = Rect::new(u, self.rest.y0, u + w, self.rest.y0 + h);
+        self.tick(now);
     }
 
     /// The surface's extent away from its edge.

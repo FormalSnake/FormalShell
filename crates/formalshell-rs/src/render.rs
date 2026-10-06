@@ -115,6 +115,17 @@ impl Renderer {
                         self.ctx.fill_path(&glyph.path);
                     }
                 }
+                Paint::Image { image, alpha } => {
+                    let b = node.bounds;
+                    self.ctx.set_transform(at * Affine::translate((b.x as f64, b.y as f64)));
+                    let sampler = vello_cpu::peniko::ImageSampler::default().with_alpha(*alpha);
+                    self.ctx.set_paint(vello_cpu::Image {
+                        image: vello_cpu::ImageSource::Pixmap(image.pixmap.clone()),
+                        sampler,
+                    });
+                    let (w, h) = (image.pixmap.width() as f64, image.pixmap.height() as f64);
+                    self.ctx.fill_rect(&Rect::new(0.0, 0.0, w, h));
+                }
                 Paint::Shape { fill, strokes } => {
                     self.ctx.set_transform(at);
                     if let Some((path, ink)) = fill {

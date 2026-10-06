@@ -44,10 +44,16 @@ pub struct Slot {
 
 impl Slot {
     pub fn new(entry: &Entry, region_entries: &[Entry]) -> Self {
+        Self::of(entry.name(), entry.region, cells::build(entry, region_entries))
+    }
+
+    /// A slot around a cell built by its owner, for a surface that holds
+    /// one cell no `bar.layout` entry names.
+    pub fn of(name: String, region: Region, cell: Box<dyn Cell>) -> Self {
         Self {
-            name: entry.name(),
-            region: entry.region,
-            cell: cells::build(entry, region_entries),
+            name,
+            region,
+            cell,
             view: View::hidden(),
             measured: Measured::default(),
             natural: 0.0,
@@ -203,6 +209,7 @@ impl Slot {
         let rect = self.rect;
         let fade = self.fade.value(now).clamp(0.0, 1.0) as f32 * alpha;
         let scroll = self.scroll(kit, visible, now);
+        let own_hover = self.cell.custom().is_some_and(|c| c.own_hover());
         let mut p = Painter::new(scene, &mut self.nodes, Some(self.clip.intersect(&rect)));
         if rect.is_empty() || fade <= 0.0 {
             p.finish();
@@ -211,7 +218,7 @@ impl Slot {
         let frame = Frame {
             rect,
             edge,
-            hovered: hovered && self.view.interactive,
+            hovered: hovered && self.view.interactive && !own_hover,
             open: (self.mark.value(now), self.mark_fade.value(now).clamp(0.0, 1.0)),
             alpha: fade,
             band,
