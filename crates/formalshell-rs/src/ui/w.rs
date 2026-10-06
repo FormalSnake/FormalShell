@@ -181,13 +181,18 @@ pub struct Hero {
 /// `subtitle` title over a `bodySmall` meta, a `display` readout, a trailing
 /// control, and an optional rail under all of it.
 pub fn hero(s: &Space, h: Hero) -> El {
+    hero_with(s, h, false)
+}
+
+/// `metaMono`: a meta line that is a value (a mode, an address).
+pub fn hero_with(s: &Space, h: Hero, meta_mono: bool) -> El {
     let mut top = Vec::new();
     if !h.glyph.is_empty() {
         top.push(El::new(Kind::Icon { name: h.glyph.clone(), size: Type::Heading, ink: Ink::Fg }).width(super::Size::Px(s.xxl * 2.0)));
     }
     let mut words = vec![text_el(h.title, Type::Subtitle, Weight::Normal, false, Ink::Fg).elide()];
     if !h.meta.is_empty() {
-        words.push(text_el(h.meta, Type::BodySmall, Weight::Normal, false, Ink::Dim).elide());
+        words.push(text_el(h.meta, Type::BodySmall, Weight::Normal, meta_mono, Ink::Dim).elide());
     }
     top.push(column(s.xxs, words).fill());
     if !h.readout.is_empty() {

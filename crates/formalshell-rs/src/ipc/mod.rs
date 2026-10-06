@@ -13,6 +13,7 @@ mod caffeinate;
 #[cfg(test)]
 mod cli;
 mod debug;
+mod display;
 mod earbuds;
 mod gallery;
 #[cfg(test)]
@@ -61,6 +62,8 @@ fn registry() ->&'static Registry<App> {
             tray::target(),
             overnight::target(),
             earbuds::target(),
+            display::target(),
+            display::hdr(),
             workspaces::target(),
             monitor::target(),
             plugins::target(),

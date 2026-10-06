@@ -188,6 +188,33 @@ fn stub() -> Registry<()> {
                 ],
             },
             Target {
+                name: "display",
+                functions: vec![
+                    f("scale", &[("output", Type::String), ("scale", Type::Real)], Type::String, |_, a| {
+                        s(format!("scale {} {}", a[0].str(), js_number(a[1].real())))
+                    }),
+                    f("mirror", &[("output", Type::String), ("source", Type::String)], Type::String, |_, a| {
+                        s(format!("mirror {} {}", a[0].str(), a[1].str()))
+                    }),
+                    f("enable", &[("output", Type::String), ("enabled", Type::Bool)], Type::String, |_, a| {
+                        s(format!("enable {} {}", a[0].str(), a[1].bool()))
+                    }),
+                ],
+            },
+            Target {
+                name: "hdr",
+                functions: vec![
+                    f("toggle", &[], Type::String, |_, _| s("ok")),
+                    f("enable", &[], Type::String, |_, _| s("ok")),
+                    f("disable", &[], Type::String, |_, _| s("ok")),
+                    f("setOutput", &[("output", Type::String), ("enabled", Type::Bool)], Type::String, |_, a| {
+                        s(format!("setOutput {} {}", a[0].str(), a[1].bool()))
+                    }),
+                    f("rule", &[("output", Type::String)], Type::String, |_, a| s(format!("rule {}", a[0].str()))),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
                 name: "probe",
                 functions: vec![
                     f("s", &[STR], Type::String, |_, a| s(format!("[{}]", a[0].str()))),
@@ -305,6 +332,8 @@ fn signatures_match_qml() {
         super::plugins::target(),
         super::caffeinate::target(),
         super::gallery::target(),
+        super::display::target(),
+        super::display::hdr(),
     ] {
         let defs: Vec<String> = real.functions.iter().map(|f| f.definition()).collect();
         let qml = stub.targets.iter().find(|t| t.name == real.name).expect("a stub target");
