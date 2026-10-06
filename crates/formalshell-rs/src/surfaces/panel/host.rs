@@ -131,6 +131,7 @@ impl Host {
         card.scene.set_visible(rule, false);
         let mut module = module;
         module.opened();
+        let start = module.cursor_start();
         Self {
             module,
             card,
@@ -144,7 +145,7 @@ impl Host {
             handed: false,
             morph: None,
             morph_armed: false,
-            cursor: Cursor::default(),
+            cursor: Cursor { key: start, ..Cursor::default() },
             halo: std::array::from_fn(|_| Animated::new(0.0, SPATIAL)),
             halo_shown: false,
             scroll: Animated::new(0.0, Clock::SpatialFast.curve()),
@@ -540,7 +541,19 @@ impl Host {
                 _ => self.module.key(stop.as_deref(), &t, &mut fx),
             },
         }
+        self.take_module_cursor();
         if fx.close { Out::Close } else { Out::None }
+    }
+
+    /// The stop a panel moved the cursor to by itself.
+    fn take_module_cursor(&mut self) {
+        if let Some(k) = self.module.take_cursor() {
+            if let Some(i) = self.body.stop_index(&k) {
+                self.cursor.index = i;
+            }
+            self.cursor.travels = self.cursor.active;
+            self.cursor.key = Some(k);
+        }
     }
 
     fn hit_at(&self, x: f64, y: f64) -> Option<(bool, ui::Hit)> {
@@ -637,6 +650,7 @@ impl Host {
         }
         let mut fx = Self::effect(store, runtime);
         self.module.event(&e, &mut fx);
+        self.take_module_cursor();
         if fx.close { Out::Close } else { Out::None }
     }
 

@@ -1,30 +1,40 @@
 // Portions from omarchy-iphone (MIT, Copyright (c) 2026 kbbahaPro)
 
-//! The iPhone the bar cell shows (IphoneService.qml's bridge half): one
-//! long-lived `omarchy-iphone-bridge listen` child turning ancs4linux's
-//! signals into JSONL, restarted on a doubling backoff. No bridge on PATH is
+//! The iPhone (IphoneService.qml's bridge half): one long-lived
+//! `omarchy-iphone-bridge listen` child turning ancs4linux's signals into
+//! JSONL, restarted on a doubling backoff, and the verbs the panel drives it
+//! with: invoke, dismiss, clear, pair. No bridge on PATH is
 //! `installed: false` and the cell never appears; a bridge whose daemon does
 //! not own its bus name is not `observer`. Neither fakes a phone. The
-//! notification mirror, pairing and Apple Media Service halves belong to
-//! the notification and media milestones.
+//! notification mirror belongs to the notification milestone and the Apple
+//! Media Service half to [`ams`](crate::services::ams).
+//!
+//! The service owns the phone's own history (`recent`), newest first, and
+//! publishes the whole state as one snapshot.
 
 use std::collections::HashSet;
-use std::time::Duration;
+use std::sync::OnceLock;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use async_io::Timer;
-use fs_devices::iphone::{self, Event, Verdict};
+use fs_devices::iphone::{self, Arrival, Event, Notification, Verdict};
 use futures_lite::io::BufReader;
-use futures_lite::{AsyncBufReadExt, StreamExt};
+use futures_lite::{AsyncBufReadExt, FutureExt, StreamExt};
 
 use super::settings;
 use crate::runtime::Ctx;
 use crate::services::proc::MISSING;
+use crate::services::ams;
 use crate::store;
 
 const BRIDGE: &str = "omarchy-iphone-bridge";
 const HISTORY_LIMIT: usize = 200;
 const BASE_BACKOFF: Duration = Duration::from_secs(2);
 const MAX_BACKOFF: Duration = Duration::from_secs(60);
+/// BlueZ's DiscoverableTimeout default, after which the classic side is
+/// hidden anyway.
+const PAIR_WINDOW: Duration = Duration::from_secs(180);
+const FOCUS_TICK: Duration = Duration::from_secs(15);
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct State {
@@ -35,12 +45,71 @@ pub struct State {
     /// 0..1, only while connected and the bridge has read one.
     pub battery: Option<f64>,
     pub unread: u32,
+    /// BlueZ holds a bond for the phone at `bond_address` whether or not it
+    /// is connected.
+    pub bonded: bool,
+    pub bond_address: String,
+    /// Newest first, the bridge's own record per notification, including
+    /// ones the Focus verdict kept out of the centre.
+    pub recent: Vec<Notification>,
+    /// The connection the newest notification belongs to.
+    pub session: i64,
+    pub pairing_code: String,
+    pub advertising: bool,
+    pub last_error: String,
+    pub in_focus: bool,
+}
+
+/// What the panel and IPC ask of the service.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Cmd {
+    Invoke { id: i64, positive: bool },
+    Dismiss(i64),
+    Clear,
+    MarkRead,
+    Pair,
+}
+
+static COMMANDS: OnceLock<(async_channel::Sender<Cmd>, async_channel::Receiver<Cmd>)> = OnceLock::new();
+
+fn commands() -> &'static (async_channel::Sender<Cmd>, async_channel::Receiver<Cmd>) {
+    COMMANDS.get_or_init(async_channel::unbounded)
+}
+
+/// Queues a command for the service; it runs while a cell or the panel
+/// holds the iPhone source.
+pub fn command(cmd: Cmd) {
+    let _ = commands().0.try_send(cmd);
+}
+
+/// Whether `invoke` on `id` would be queued: the entry is known, the bridge
+/// is there and the connection it arrived on is still the live one.
+pub fn actionable(state: &State, id: i64) -> bool {
+    state.installed && iphone::is_actionable(state.recent.iter().find(|e| e.id == id), state.session)
 }
 
 #[derive(Default)]
 struct Session {
     state: State,
     known: HashSet<i64>,
+    arrivals: Vec<Arrival>,
+    /// The phone was seen unpaired since pairing began, so a bond that was
+    /// already there is not mistaken for the phone accepting.
+    saw_unpaired: bool,
+    advertising_hci: String,
+    /// Counts `advertising` lines, so a timer armed by an earlier one does
+    /// not end a later pairing.
+    pair_generation: u64,
+    finish_pairing: bool,
+    restart_timer: bool,
+}
+
+fn now_ms() -> f64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0.0, |d| d.as_millis() as f64)
+}
+
+fn focus_window() -> f64 {
+    settings().f64("iphone.notifications.focusWindow").filter(|n| *n > 0.0).unwrap_or(iphone::DEFAULT_FOCUS_WINDOW)
 }
 
 impl Session {
@@ -51,43 +120,149 @@ impl Session {
             Event::Status(s) => {
                 self.state.observer = s.observer;
                 self.state.connected = s.connected;
+                self.state.bonded = s.paired;
+                self.state.bond_address = s.address;
                 self.state.device_name = s.device_name;
                 self.state.battery = (s.connected && s.battery >= 0.0).then_some(s.battery / 100.0);
+                if s.observer {
+                    self.state.last_error.clear();
+                }
+                if self.state.advertising {
+                    if !s.paired {
+                        self.saw_unpaired = true;
+                    } else if self.saw_unpaired {
+                        self.finish_pairing = true;
+                    }
+                }
             }
-            Event::History(items) => self.known = items.iter().map(|n| n.id).collect(),
+            Event::History(items) => {
+                self.known = items.iter().map(|n| n.id).collect();
+                let block = block_list();
+                let mut kept: Vec<Notification> = items.into_iter().filter(|n| !iphone::is_blocked(n, &block)).collect();
+                kept.sort_by(|a, b| b.ts.total_cmp(&a.ts));
+                kept.truncate(HISTORY_LIMIT);
+                self.state.recent = kept;
+            }
             Event::Notification(entry) => {
                 let cfg = settings();
-                let block: Vec<String> = cfg
-                    .get("iphone.notifications.block")
-                    .and_then(|b| b.as_array())
-                    .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_owned)).collect())
-                    .unwrap_or_default();
-                if !iphone::is_blocked(&entry, &block) && self.known.insert(entry.id) {
-                    let mode = cfg.str("iphone.notifications.focus").unwrap_or("respect");
-                    if iphone::focus_verdict(Some(&entry), mode) != Verdict::Drop {
-                        self.state.unread += 1;
+                let block = block_list();
+                if !iphone::is_blocked(&entry, &block) {
+                    if self.state.session != entry.session && entry.session != 0 {
+                        self.state.session = entry.session;
                     }
+                    let fresh = self.known.insert(entry.id);
+                    if fresh {
+                        let mode = cfg.str("iphone.notifications.focus").unwrap_or("respect");
+                        if iphone::focus_verdict(Some(&entry), mode) != Verdict::Drop {
+                            self.state.unread += 1;
+                        }
+                        if !entry.preexisting {
+                            self.arrivals.push(Arrival { at: now_ms(), silent: entry.silent });
+                        }
+                    }
+                    self.state.recent = iphone::upsert(&self.state.recent, entry, HISTORY_LIMIT);
                 }
             }
             Event::Dismiss { id } => {
                 self.known.remove(&id);
+                self.state.recent = iphone::remove_by_id(&self.state.recent, id);
             }
-            _ => {}
+            Event::PairingCode { code } => self.state.pairing_code = code,
+            Event::Advertising { hci, .. } => {
+                self.advertising_hci = hci;
+                self.state.advertising = true;
+                if !self.state.bonded {
+                    self.saw_unpaired = true;
+                }
+                self.pair_generation += 1;
+                self.restart_timer = true;
+            }
+            Event::Forgot { address } => {
+                if self.state.bond_address == address {
+                    self.state.bonded = false;
+                    self.state.bond_address.clear();
+                }
+            }
+            Event::Error { message } => self.state.last_error = message,
         }
         self.state != before
     }
+
+    /// The Focus reading, aged: a silent arrival leaving the window ends it
+    /// with no event to say so.
+    fn age(&mut self) {
+        let horizon = now_ms() - focus_window() * 1000.0;
+        self.arrivals.retain(|a| a.at >= horizon);
+        self.state.in_focus = iphone::in_focus(&self.arrivals, now_ms(), focus_window());
+    }
+}
+
+fn block_list() -> Vec<String> {
+    settings()
+        .get("iphone.notifications.block")
+        .and_then(|b| b.as_array())
+        .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_owned)).collect())
+        .unwrap_or_default()
 }
 
 fn on_path(name: &str) -> bool {
     super::monitor::on_path(name)
 }
 
-async fn listen(ctx: &Ctx, session: &mut Session) -> i32 {
+fn hostname() -> String {
+    std::fs::read_to_string("/proc/sys/kernel/hostname").map(|h| h.trim().to_owned()).ok().filter(|h| !h.is_empty()).unwrap_or_else(|| "FormalShell".into())
+}
+
+/// What the children the service starts tell the loop.
+enum Msg {
+    Line(String),
+    /// A bridge action exited non-zero.
+    ActionFailed,
+    /// stderr text from the listening bridge.
+    Stderr(String),
+    /// The pairing window `generation` ran out.
+    PairTimeout(u64),
+}
+
+enum Ev {
+    Line(Option<String>),
+    Cmd(Cmd),
+    Msg(Msg),
+    Tick,
+}
+
+fn spawn_bridge(args: &[&str]) -> std::io::Result<async_process::Child> {
+    async_process::Command::new(BRIDGE)
+        .args(args)
+        .stdin(async_process::Stdio::null())
+        .stdout(async_process::Stdio::piped())
+        .stderr(async_process::Stdio::piped())
+        .kill_on_drop(false)
+        .spawn()
+}
+
+/// One bridge run to its exit, its lines handed to the loop.
+async fn run_child(args: Vec<String>, inbox: async_channel::Sender<Msg>, report_failure: bool) {
+    let argv: Vec<&str> = args.iter().map(String::as_str).collect();
+    let Ok(mut child) = spawn_bridge(&argv) else { return };
+    let mut lines = child.stdout.take().map(|o| BufReader::new(o).lines());
+    if let Some(lines) = lines.as_mut() {
+        while let Some(Ok(line)) = lines.next().await {
+            let _ = inbox.send(Msg::Line(line)).await;
+        }
+    }
+    let ok = child.status().await.is_ok_and(|s| s.success());
+    if !ok && report_failure {
+        let _ = inbox.send(Msg::ActionFailed).await;
+    }
+}
+
+async fn listen(ctx: &Ctx, session: &mut Session, inbox: &(async_channel::Sender<Msg>, async_channel::Receiver<Msg>), actions: &async_channel::Sender<Vec<String>>) -> i32 {
     let child = async_process::Command::new(BRIDGE)
         .args(["listen", "--limit", &HISTORY_LIMIT.to_string()])
         .stdin(async_process::Stdio::null())
         .stdout(async_process::Stdio::piped())
-        .stderr(async_process::Stdio::null())
+        .stderr(async_process::Stdio::piped())
         .kill_on_drop(true)
         .spawn();
     let mut child = match child {
@@ -97,21 +272,195 @@ async fn listen(ctx: &Ctx, session: &mut Session) -> i32 {
     };
     let Some(stdout) = child.stdout.take() else { return -1 };
     let mut lines = BufReader::new(stdout).lines();
-    while let Some(Ok(line)) = lines.next().await {
-        if let Some(event) = iphone::parse_event(&line) {
-            session.state.installed = true;
-            session.event(event);
+    let mut errs = child.stderr.take().map(|e| BufReader::new(e).lines());
+    let cmds = &commands().1;
+    session.age();
+    let mut next_age: Option<Instant> = (!session.arrivals.is_empty()).then(|| Instant::now() + FOCUS_TICK);
+    loop {
+        let ev = async { Ev::Line(lines.next().await.and_then(Result::ok)) }
+            .or(async { cmds.recv().await.map_or(Ev::Tick, Ev::Cmd) })
+            .or(async { inbox.1.recv().await.map_or(Ev::Tick, Ev::Msg) })
+            .or(async {
+                match errs.as_mut() {
+                    Some(e) => match e.next().await {
+                        Some(Ok(line)) => Ev::Msg(Msg::Stderr(line)),
+                        _ => std::future::pending().await,
+                    },
+                    None => std::future::pending().await,
+                }
+            })
+            .or(async {
+                match next_age {
+                    Some(at) => {
+                        Timer::at(at).await;
+                        Ev::Tick
+                    }
+                    None => std::future::pending().await,
+                }
+            })
+            .await;
+        let mut changed = false;
+        match ev {
+            Ev::Line(None) => break,
+            Ev::Line(Some(line)) => changed |= line_in(session, &line),
+            Ev::Msg(Msg::Line(line)) => changed |= line_in(session, &line),
+            Ev::Msg(Msg::Stderr(text)) => {
+                let text = text.trim();
+                if !text.is_empty() {
+                    session.state.last_error = text.to_owned();
+                    changed = true;
+                }
+            }
+            Ev::Msg(Msg::ActionFailed) => {
+                if session.state.last_error.is_empty() {
+                    session.state.last_error = "The phone did not take that action".into();
+                    changed = true;
+                }
+            }
+            Ev::Msg(Msg::PairTimeout(generation)) => {
+                if generation == session.pair_generation && session.state.advertising {
+                    session.finish_pairing = true;
+                }
+            }
+            Ev::Cmd(cmd) => changed |= handle(ctx, session, cmd, inbox, actions),
+            Ev::Tick => {}
+        }
+        if session.restart_timer {
+            session.restart_timer = false;
+            let (generation, tx) = (session.pair_generation, inbox.0.clone());
+            ctx.spawn(async move {
+                Timer::after(PAIR_WINDOW).await;
+                let _ = tx.send(Msg::PairTimeout(generation)).await;
+            });
+        }
+        if session.finish_pairing {
+            session.finish_pairing = false;
+            end_pairing(ctx, session);
+            changed = true;
+        }
+        let in_focus = session.state.in_focus;
+        session.age();
+        changed |= in_focus != session.state.in_focus;
+        next_age = (!session.arrivals.is_empty()).then(|| Instant::now() + FOCUS_TICK);
+        if changed {
             publish(ctx, &session.state);
         }
     }
     child.status().await.ok().and_then(|s| s.code()).unwrap_or(-1)
 }
 
+fn line_in(session: &mut Session, line: &str) -> bool {
+    let Some(event) = iphone::parse_event(line) else { return false };
+    session.state.installed = true;
+    session.event(event)
+}
+
+/// One panel or IPC verb. True when the state moved.
+fn handle(ctx: &Ctx, session: &mut Session, cmd: Cmd, inbox: &(async_channel::Sender<Msg>, async_channel::Receiver<Msg>), actions: &async_channel::Sender<Vec<String>>) -> bool {
+    let invoke = |session: &mut Session, entry: &Notification, positive: bool| {
+        if !session.state.installed {
+            return false;
+        }
+        if !iphone::is_actionable(Some(entry), session.state.session) {
+            session.state.last_error = "The phone reconnected since this arrived, so it can no longer be acted on".into();
+            return true;
+        }
+        let argv = [BRIDGE, "invoke", "--handle", &entry.device_handle, "--id", &entry.id.to_string(), "--kind", if positive { "positive" } else { "negative" }];
+        let _ = actions.try_send(argv.iter().map(|s| (*s).to_owned()).collect());
+        false
+    };
+    match cmd {
+        Cmd::Invoke { id, positive } => {
+            let Some(entry) = session.state.recent.iter().find(|e| e.id == id).cloned() else { return false };
+            invoke(session, &entry, positive)
+        }
+        Cmd::Dismiss(id) => {
+            let Some(entry) = session.state.recent.iter().find(|e| e.id == id).cloned() else { return false };
+            session.state.recent = iphone::remove_by_id(&session.state.recent, id);
+            session.known.remove(&id);
+            if !entry.negative_action.is_empty() {
+                invoke(session, &entry, false);
+            }
+            true
+        }
+        Cmd::Clear => {
+            for entry in session.state.recent.clone() {
+                if !entry.negative_action.is_empty() {
+                    invoke(session, &entry, false);
+                }
+            }
+            session.known.clear();
+            session.state.recent.clear();
+            session.state.unread = 0;
+            if session.state.installed {
+                ctx.spawn(run_child(vec![BRIDGE.into(), "clear".into()], inbox.0.clone(), false));
+            }
+            true
+        }
+        Cmd::MarkRead => std::mem::take(&mut session.state.unread) != 0,
+        Cmd::Pair => {
+            if !session.state.installed || session.state.advertising {
+                return false;
+            }
+            session.state.last_error.clear();
+            session.state.pairing_code.clear();
+            session.saw_unpaired = !session.state.bonded;
+            let mut argv = vec![BRIDGE.to_owned(), "pair".into(), "--name".into(), hostname()];
+            let status = iphone::Status {
+                paired: session.state.bonded,
+                connected: session.state.connected,
+                address: session.state.bond_address.clone(),
+                ..iphone::Status::default()
+            };
+            if iphone::forget_before_pair(Some(&status)) {
+                argv.extend(["--forget".to_owned(), session.state.bond_address.clone()]);
+            }
+            ctx.spawn(run_child(argv, inbox.0.clone(), false));
+            true
+        }
+    }
+}
+
+/// ancs4linux renames the whole adapter to the pairing name and keeps it
+/// discoverable until DisableAdvertising, so the session is ended here, and
+/// the phone trusted or BlueZ asks the agent to authorize every profile on
+/// reconnect with no agent left to accept.
+fn end_pairing(ctx: &Ctx, session: &mut Session) {
+    if !session.advertising_hci.is_empty() {
+        let hci = std::mem::take(&mut session.advertising_hci);
+        ctx.spawn(async move {
+            let _ = async_process::Command::new("busctl")
+                .args(["call", "--system", "ancs4linux.Advertising", "/", "ancs4linux.Advertising", "DisableAdvertising", "s", &hci])
+                .stdout(async_process::Stdio::null())
+                .stderr(async_process::Stdio::null())
+                .status()
+                .await;
+        });
+    }
+    if session.state.advertising && session.state.bonded && !session.state.bond_address.is_empty() {
+        crate::services::devices::bluetooth::trust(ctx, &session.state.bond_address);
+    }
+    session.state.advertising = false;
+    session.state.pairing_code.clear();
+    session.saw_unpaired = false;
+}
+
 fn publish(ctx: &Ctx, state: &State) {
+    ams::set_connected(state.connected);
     ctx.publish(store::Diff::Info(super::Diff::Iphone(state.clone())));
 }
 
 pub async fn run(ctx: Ctx) {
+    let inbox = async_channel::unbounded::<Msg>();
+    let (action_tx, action_rx) = async_channel::unbounded::<Vec<String>>();
+    // Bridge actions go one at a time: re-running a child still running
+    // would send the first and drop the rest.
+    let worker_inbox = inbox.0.clone();
+    ctx.spawn(async move {
+        while let Ok(argv) = action_rx.recv().await {
+            run_child(argv, worker_inbox.clone(), true).await;
+        }
+    });
     let mut session = Session::default();
     let mut backoff = BASE_BACKOFF;
     session.state.installed = on_path(BRIDGE);
@@ -121,8 +470,13 @@ pub async fn run(ctx: Ctx) {
             Timer::after(MAX_BACKOFF).await;
             continue;
         }
-        let code = listen(&ctx, &mut session).await;
-        session.state = State { installed: code != MISSING, unread: session.state.unread, ..State::default() };
+        let code = listen(&ctx, &mut session, &inbox, &action_tx).await;
+        session.state = State {
+            installed: code != MISSING,
+            unread: session.state.unread,
+            recent: std::mem::take(&mut session.state.recent),
+            ..State::default()
+        };
         publish(&ctx, &session.state);
         Timer::after(backoff).await;
         backoff = (backoff * 2).min(MAX_BACKOFF);
@@ -149,11 +503,34 @@ mod tests {
     }
 
     #[test]
-    fn a_notification_counts_once() {
+    fn a_notification_counts_once_and_lands_in_recent() {
         let mut s = Session::default();
         let n = iphone::parse_event(r#"{"type":"notification","id":7,"title":"t"}"#).unwrap();
         s.event(n.clone());
         s.event(n);
         assert_eq!(s.state.unread, 1);
+        assert_eq!(s.state.recent.len(), 1);
+        s.event(iphone::parse_event(r#"{"type":"dismiss","id":7}"#).unwrap());
+        assert!(s.state.recent.is_empty());
+    }
+
+    #[test]
+    fn pairing_ends_when_a_bond_appears_after_the_phone_was_seen_unpaired() {
+        let mut s = Session::default();
+        s.event(iphone::parse_event(r#"{"type":"status","observer":true,"paired":true,"address":"AA"}"#).unwrap());
+        s.event(iphone::parse_event(r#"{"type":"advertising","hci":"hci0","name":"x"}"#).unwrap());
+        s.event(iphone::parse_event(r#"{"type":"status","observer":true,"paired":true,"address":"AA"}"#).unwrap());
+        assert!(!s.finish_pairing, "a bond that was already there is not the phone accepting");
+        s.event(iphone::parse_event(r#"{"type":"status","observer":true,"paired":false,"address":""}"#).unwrap());
+        s.event(iphone::parse_event(r#"{"type":"status","observer":true,"paired":true,"address":"AA"}"#).unwrap());
+        assert!(s.finish_pairing);
+    }
+
+    #[test]
+    fn a_forgotten_bond_clears() {
+        let mut s = Session::default();
+        s.event(iphone::parse_event(r#"{"type":"status","observer":true,"paired":true,"address":"aa"}"#).unwrap());
+        s.event(iphone::parse_event(r#"{"type":"forgot","address":"aa"}"#).unwrap());
+        assert!(!s.state.bonded && s.state.bond_address.is_empty());
     }
 }

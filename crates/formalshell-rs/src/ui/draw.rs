@@ -68,6 +68,31 @@ fn elided(cx: &mut Cx, s: &str, font: &Font, max: f64) -> ShapedText {
     shape(cx, &t, font)
 }
 
+/// `text` broken on spaces to lines no wider than `max`, newlines kept, the
+/// last line that fits `lines` ending in an ellipsis when words are left.
+fn wrapped(cx: &mut Cx, text: &str, font: &Font, max: f64, lines: usize) -> Vec<ShapedText> {
+    let mut out: Vec<String> = Vec::new();
+    for para in text.split('\n') {
+        let mut line = String::new();
+        for word in para.split_whitespace() {
+            let next = if line.is_empty() { word.to_owned() } else { format!("{line} {word}") };
+            if line.is_empty() || shape(cx, &next, font).width as f64 <= max {
+                line = next;
+            } else {
+                out.push(std::mem::replace(&mut line, word.to_owned()));
+            }
+        }
+        out.push(line);
+    }
+    let cut = out.len() > lines;
+    out.truncate(lines.max(1));
+    let last = out.len() - 1;
+    out.iter()
+        .enumerate()
+        .map(|(i, l)| if i == last && cut { elided(cx, &format!("{l}\u{2026}"), font, max) } else { elided(cx, l, font, max) })
+        .collect()
+}
+
 fn resolve(cx: &Cx, ink: Ink) -> Rgba {
     match ink {
         Ink::Fg => cx.ink.0,
@@ -173,9 +198,17 @@ pub fn measure(cx: &mut Cx, el: &El, avail: f64) -> (f64, f64) {
         Kind::Space { along } => (*along, *along),
         Kind::Text { text, font, elide, .. } => {
             let t = shape(cx, text, font);
-            let w = t.width as f64;
+            let mut w = t.width as f64;
+            if let Some(g) = &el.gauge {
+                w = w.max(shape(cx, g, font).width as f64);
+            }
             (if *elide { w.min(inner) } else { w }, t.line_height() as f64)
         }
+        Kind::Para { text, font, lines, .. } => {
+            let ls = wrapped(cx, text, font, inner, *lines);
+            (inner, ls.iter().map(|l| l.line_height() as f64).sum())
+        }
+        Kind::Picture { size, .. } => (*size, *size),
         Kind::Icon { name, size, .. } => {
             let t = icon(cx, name, *size);
             (px(cx, *size) as f64, t.line_height() as f64)
@@ -390,8 +423,36 @@ pub fn paint(cx: &mut Cx, el: &El, rect: Rect, path: &str) {
             let color = cx.color(&format!("{path}.ink"), color);
             let color = cx.a(color);
             let y = (inner.y0 + (inner.height() - t.line_height() as f64) / 2.0).round() as i32;
+            let x = if el.mid { inner.x0 + (inner.width() - t.width as f64) / 2.0 } else { inner.x0 };
             let mut p = cx.painter(path);
-            p.text(&t, (inner.x0.round() as i32, y), color, &[]);
+            p.text(&t, (x.round() as i32, y), color, &[]);
+            let last = p.last();
+            p.finish();
+            cx.done(last);
+        }
+        Kind::Para { text, font, ink, lines } => {
+            let ls = wrapped(cx, text, font, inner.width(), *lines);
+            let color = resolve(cx, *ink);
+            let color = cx.color(&format!("{path}.ink"), color);
+            let color = cx.a(color);
+            let mut y = inner.y0.round() as i32;
+            let mut p = cx.painter(path);
+            for l in &ls {
+                p.text(l, (inner.x0.round() as i32, y), color, &[]);
+                y += l.line_height();
+            }
+            let last = p.last();
+            p.finish();
+            cx.done(last);
+        }
+        Kind::Picture { pic, .. } => {
+            let alpha = cx.alpha;
+            let r = irect(inner);
+            let mut p = cx.painter(path);
+            if let Some(image) = &pic.0 {
+                let (w, h) = (image.pixmap.width() as i32, image.pixmap.height() as i32);
+                p.image(image, (r.x + (r.w - w) / 2, r.y + (r.h - h) / 2), alpha);
+            }
             let last = p.last();
             p.finish();
             cx.done(last);
@@ -527,7 +588,7 @@ fn cell(cx: &mut Cx, el: &El, r: Rect, state: CellState, interactive: bool, chil
     let b = t.with_cursor(b, ring, !cx.halo_owned() || state.cursor);
     let _ = on;
     let ri = irect(r);
-    let radius = t.box_radius(&b, ri.h as f64);
+    let radius = if state.small { t.radii.sm } else { t.box_radius(&b, ri.h as f64) };
     let fill = cx.color(&format!("{path}.fill"), b.fill);
     let border = b.border.clone().map(|l| Line { color: cx.color(&format!("{path}.border"), l.color), width: l.width });
     let b = BoxStyle { fill, border, ..b };

@@ -450,6 +450,14 @@ impl App {
         self.outputs.outputs().next().and_then(|o| self.outputs.info(&o)).and_then(|i| i.name).unwrap_or_default()
     }
 
+    /// An IPC verb for the open panel `name`; `None` when it is not up or
+    /// answers none.
+    pub fn panel_call(&mut self, name: &str, verb: &str, arg: &str) -> Option<String> {
+        let reply = self.panel.as_mut().filter(|p| p.is_open() && p.id() == name)?.module.call(verb, arg);
+        self.panel_dirty = true;
+        reply
+    }
+
     /// The open panel by its `panel` name; the gallery is no panel's.
     pub fn panel_open(&self) -> Option<&str> {
         let tray = self.overflow.as_ref().filter(|p| p.name == "trayoverflow" && p.card.is_open());
@@ -702,6 +710,7 @@ impl App {
         let mut surface = Surface::new("panel", layer, &self.shm, self.started);
         surface.wait_map = true;
         let mut host = Host::new(module, place, &self.store.theme.theme, surface, self.motion_scale, self.cast);
+        host.module.start(&mut panel::Effect { store: &self.store, runtime: self.runtime.as_ref(), close: false });
         match self.panel.take() {
             Some(mut old) if old.is_open() => {
                 host.take_over(old.card.live(), now);

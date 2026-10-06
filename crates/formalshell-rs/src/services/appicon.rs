@@ -26,17 +26,37 @@ pub struct Query {
     pub pid: i64,
 }
 
+/// One of a desktop entry's own `[Desktop Action]` groups.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Action {
+    pub name: String,
+    pub command: Vec<String>,
+}
+
+/// The desktop entry a window resolved to, for what asks more of it than
+/// an icon (the app menu's name and actions).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Entry {
+    pub id: String,
+    pub name: String,
+    pub command: Vec<String>,
+    pub terminal: bool,
+    pub actions: Vec<Action>,
+}
+
 /// One window's answer. `source` is empty when no entry or no theme icon
 /// answered, which is the cell's cue for the generic window mark.
 #[derive(Clone, Debug, Default)]
 pub struct Icon {
     pub source: String,
     pub image: Option<Bitmap>,
+    pub entry: Option<Entry>,
 }
 
 impl PartialEq for Icon {
     fn eq(&self, other: &Self) -> bool {
         self.source == other.source
+            && self.entry == other.entry
             && match (&self.image, &other.image) {
                 (Some(a), Some(b)) => a.same_as(b),
                 (None, None) => true,
@@ -78,15 +98,21 @@ pub async fn run(ctx: Ctx) {
     let (tx, rx) = async_channel::unbounded();
     let _ = PROBE.set(tx);
     let inner = Arc::new(Mutex::new(Inner::default()));
-    while let Ok((mut size, mut queries)) = rx.recv().await {
-        // Only the newest ask matters when several queue up.
-        while let Ok(next) = rx.try_recv() {
-            (size, queries) = next;
+    while let Ok(first) = rx.recv().await {
+        // Only the newest ask at each size matters when several queue up.
+        let mut asks: Vec<(u32, Vec<Query>)> = vec![first];
+        while let Ok((size, queries)) = rx.try_recv() {
+            match asks.iter_mut().find(|(s, _)| *s == size) {
+                Some(slot) => slot.1 = queries,
+                None => asks.push((size, queries)),
+            }
         }
-        let inner = inner.clone();
-        let done = ctx.pool().run(move || inner.lock().unwrap().resolve(size, &queries)).await;
-        if let Some(icons) = done {
-            ctx.publish(store::Diff::AppIcon(Diff(icons)));
+        for (size, queries) in asks {
+            let inner = inner.clone();
+            let done = ctx.pool().run(move || inner.lock().unwrap().resolve(size, &queries)).await;
+            if let Some(icons) = done {
+                ctx.publish(store::Diff::AppIcon(Diff(icons)));
+            }
         }
     }
 }
@@ -94,6 +120,7 @@ pub async fn run(ctx: Ctx) {
 #[derive(Default)]
 struct Inner {
     entries: Vec<DesktopEntry>,
+    extras: HashMap<String, Extras>,
     stamp: Vec<Option<SystemTime>>,
     scanned: bool,
     procs: HashMap<String, Vec<ProcInfo>>,
@@ -116,7 +143,7 @@ impl Inner {
         if self.scanned && stamp == self.stamp {
             return;
         }
-        self.entries = scan_entries(&dirs);
+        (self.entries, self.extras) = scan_entries(&dirs);
         self.stamp = stamp;
         self.scanned = true;
     }
@@ -143,10 +170,18 @@ impl Inner {
         let win = window_of(q);
         let procs = self.procs.get(&q.pid.to_string()).map(Vec::as_slice);
         let Some(entry) = appicon::entry_for(Some(&win), &self.entries, procs) else { return Icon::default() };
-        let Some(path) = icons::lookup(&entry.icon, "") else { return Icon::default() };
+        let extras = self.extras.get(&entry.id).cloned().unwrap_or_default();
+        let info = Entry {
+            id: entry.id.clone(),
+            name: entry.name.clone(),
+            command: entry.command.clone(),
+            terminal: extras.terminal,
+            actions: extras.actions,
+        };
+        let Some(path) = icons::lookup(&entry.icon, "") else { return Icon { entry: Some(info), ..Icon::default() } };
         let source = path.to_string_lossy().into_owned();
         let image = self.fitted.entry((path, size)).or_insert_with_key(|(p, s)| icons::load(p)?.bitmap(*s)).clone();
-        Icon { source, image }
+        Icon { source, image, entry: Some(info) }
     }
 }
 
@@ -162,9 +197,10 @@ fn applications_dirs() -> Vec<PathBuf> {
 
 /// Every launchable entry, a higher-priority directory shadowing a lower one's
 /// entry of the same id.
-fn scan_entries(dirs: &[PathBuf]) -> Vec<DesktopEntry> {
+fn scan_entries(dirs: &[PathBuf]) -> (Vec<DesktopEntry>, HashMap<String, Extras>) {
     let mut seen: HashSet<String> = HashSet::new();
     let mut out = Vec::new();
+    let mut extras = HashMap::new();
     for dir in dirs {
         let mut files = Vec::new();
         collect(dir, dir, &mut files);
@@ -173,12 +209,20 @@ fn scan_entries(dirs: &[PathBuf]) -> Vec<DesktopEntry> {
             if !seen.insert(id.clone()) {
                 continue;
             }
-            if let Some(entry) = parse_entry(&id, &path) {
+            if let Some((entry, more)) = parse_entry(&id, &path) {
+                extras.insert(entry.id.clone(), more);
                 out.push(entry);
             }
         }
     }
-    out
+    (out, extras)
+}
+
+/// What an entry carries past the fields `DesktopEntry` holds.
+#[derive(Clone, Debug, Default)]
+struct Extras {
+    terminal: bool,
+    actions: Vec<Action>,
 }
 
 fn collect(root: &Path, dir: &Path, out: &mut Vec<(String, PathBuf)>) {
@@ -194,17 +238,27 @@ fn collect(root: &Path, dir: &Path, out: &mut Vec<(String, PathBuf)>) {
     }
 }
 
-fn parse_entry(id: &str, path: &Path) -> Option<DesktopEntry> {
+fn parse_entry(id: &str, path: &Path) -> Option<(DesktopEntry, Extras)> {
     let text = std::fs::read_to_string(path).ok()?;
-    let mut in_entry = false;
+    let mut section = String::new();
     let mut fields: HashMap<&str, &str> = HashMap::new();
+    let mut groups: Vec<(String, HashMap<&str, &str>)> = Vec::new();
     for line in text.lines() {
         let line = line.trim();
         if line.starts_with('[') {
-            in_entry = line == "[Desktop Entry]";
-        } else if in_entry && !line.starts_with('#') {
-            if let Some((k, v)) = line.split_once('=') {
+            section = line.to_owned();
+            if let Some(name) = line.strip_prefix("[Desktop Action ").and_then(|n| n.strip_suffix(']')) {
+                groups.push((name.to_owned(), HashMap::new()));
+            }
+        } else if !line.starts_with('#')
+            && let Some((k, v)) = line.split_once('=')
+        {
+            if section == "[Desktop Entry]" {
                 fields.entry(k.trim()).or_insert_with(|| v.trim());
+            } else if section.starts_with("[Desktop Action ")
+                && let Some((_, g)) = groups.last_mut()
+            {
+                g.entry(k.trim()).or_insert_with(|| v.trim());
             }
         }
     }
@@ -213,13 +267,22 @@ fn parse_entry(id: &str, path: &Path) -> Option<DesktopEntry> {
         return None;
     }
     let text = |k: &str| fields.get(k).copied().unwrap_or_default().to_owned();
-    Some(DesktopEntry {
+    let declared: Vec<&str> = fields.get("Actions").copied().unwrap_or_default().split(';').filter(|a| !a.is_empty()).collect();
+    let actions = declared
+        .iter()
+        .filter_map(|name| {
+            let g = &groups.iter().find(|(n, _)| n == name)?.1;
+            Some(Action { name: g.get("Name")?.to_string(), command: split_exec(g.get("Exec").copied().unwrap_or_default()) })
+        })
+        .collect();
+    let entry = DesktopEntry {
         id: id.to_owned(),
         name: text("Name"),
         startup_class: text("StartupWMClass"),
         icon: text("Icon"),
         command: split_exec(fields.get("Exec").copied().unwrap_or_default()),
-    })
+    };
+    Some((entry, Extras { terminal: flag("Terminal"), actions }))
 }
 
 /// An `Exec` line as an argv: quotes and backslashes honoured, field codes

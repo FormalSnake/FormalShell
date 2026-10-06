@@ -71,3 +71,16 @@ pub fn toggle_power(ctx: &Ctx) {
         }
     });
 }
+
+/// Trusts the device at `address`: BlueZ otherwise asks an agent to
+/// authorize every profile on each reconnect (the iPhone service, once a
+/// pairing lands).
+pub fn trust(ctx: &Ctx, address: &str) {
+    let Some(bluez) = BLUEZ.with_borrow(|b| b.clone()) else { return };
+    let address = address.to_owned();
+    ctx.spawn(async move {
+        if let Err(err) = bluez.set_trusted(&address, true).await {
+            eprintln!("bluetooth: {err}");
+        }
+    });
+}

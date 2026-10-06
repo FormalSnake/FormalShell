@@ -6,7 +6,7 @@ use fs_chrome::types::Edge;
 use fs_theme::color::Rgba;
 use fs_theme::tokens::Space;
 
-use super::el::{CellState, El, Font, Ink, Kind, Opt, Series, Type, Variant, Weight};
+use super::el::{CellState, El, Font, Ink, Kind, Opt, Pic, Series, Type, Variant, Weight};
 
 pub fn column(gap: f64, children: Vec<El>) -> El {
     El::new(Kind::Column { gap, children })
@@ -45,6 +45,16 @@ pub fn value(s: impl Into<String>) -> El {
 
 pub fn caption(s: impl Into<String>) -> El {
     text_el(s, Type::Caption, Weight::Normal, false, Ink::Muted)
+}
+
+/// Body words that wrap to `lines` lines and then end in an ellipsis.
+pub fn para(s: impl Into<String>, size: Type, weight: Weight, ink: Ink, lines: usize) -> El {
+    El::new(Kind::Para { text: s.into(), font: Font { size, weight, mono: false }, ink, lines })
+}
+
+/// A bitmap (an app's icon) in a `size` square.
+pub fn picture(image: Option<crate::scene::Bitmap>, size: f64) -> El {
+    El::new(Kind::Picture { pic: Pic(image), size })
 }
 
 pub fn icon(name: impl Into<String>) -> El {
@@ -153,6 +163,30 @@ pub fn swatch(color: Rgba, w: f64, h: f64, radius: f64) -> El {
     El::new(Kind::Swatch { color, w, h, radius, border: true })
 }
 
+/// An indicator dot: a filled circle with no border.
+pub fn dot(color: Rgba, d: f64) -> El {
+    El::new(Kind::Swatch { color, w: d, h: d, radius: d / 2.0, border: false })
+}
+
+/// MenuTrigger.qml: a chip carrying an icon, what is picked and a chevron,
+/// `selected` while its menu is open. The label elides at the width its
+/// parent has left.
+pub fn trigger(s: &Space, glyph: &str, label: &str, open: bool) -> El {
+    let mut parts = Vec::new();
+    if !glyph.is_empty() {
+        parts.push(icon(glyph).size(Type::BodySmall));
+    }
+    parts.push(text_el(label, Type::BodySmall, Weight::Medium, false, Ink::Fg).elide().hug());
+    parts.push(icon(if open { "chevron-up" } else { "chevron-down" }).size(Type::Caption).ink(Ink::Dim));
+    cell(row(s.xs, parts))
+        .cell_state(|c| {
+            c.chip = true;
+            c.small = true;
+            c.selected = open;
+        })
+        .interactive()
+}
+
 pub fn sparkline(values: Vec<f64>, secondary: Vec<f64>, ceiling: f64, capacity: usize) -> El {
     El::new(Kind::Sparkline(Series { values, secondary, ceiling, capacity })).fill()
 }
@@ -181,17 +215,25 @@ pub struct Hero {
 /// `subtitle` title over a `bodySmall` meta, a `display` readout, a trailing
 /// control, and an optional rail under all of it.
 pub fn hero(s: &Space, h: Hero) -> El {
+    hero_with(s, h, false, Type::Display, None)
+}
+
+/// `hero` with `metaMono`, `readoutSize` and a `leading` element standing in
+/// for the glyph (a weather range, a pairing code, an app's picture).
+pub fn hero_with(s: &Space, h: Hero, meta_mono: bool, readout_size: Type, leading: Option<El>) -> El {
     let mut top = Vec::new();
-    if !h.glyph.is_empty() {
+    if let Some(l) = leading {
+        top.push(l.width(super::Size::Px(s.xxl * 2.0)));
+    } else if !h.glyph.is_empty() {
         top.push(El::new(Kind::Icon { name: h.glyph.clone(), size: Type::Heading, ink: Ink::Fg }).width(super::Size::Px(s.xxl * 2.0)));
     }
     let mut words = vec![text_el(h.title, Type::Subtitle, Weight::Normal, false, Ink::Fg).elide()];
     if !h.meta.is_empty() {
-        words.push(text_el(h.meta, Type::BodySmall, Weight::Normal, false, Ink::Dim).elide());
+        words.push(text_el(h.meta, Type::BodySmall, Weight::Normal, meta_mono, Ink::Dim).elide());
     }
     top.push(column(s.xxs, words).fill());
     if !h.readout.is_empty() {
-        top.push(text_el(h.readout, Type::Display, Weight::Normal, true, Ink::Fg));
+        top.push(text_el(h.readout, readout_size, Weight::Normal, true, Ink::Fg));
     }
     if let Some(t) = h.trailing {
         top.push(t);

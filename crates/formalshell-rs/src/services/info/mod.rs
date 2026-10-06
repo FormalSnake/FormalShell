@@ -7,6 +7,7 @@
 //! thread hands them settings.json through [`configure`], and each poll
 //! reads the keys it owns again whenever that changes.
 
+pub mod calendar;
 pub mod github;
 pub mod iphone;
 pub mod monitor;
@@ -33,6 +34,7 @@ pub struct State {
     pub tailscale: tailscale::State,
     pub monitor: monitor::State,
     pub iphone: iphone::State,
+    pub calendar: calendar::State,
 }
 
 pub enum Diff {
@@ -43,6 +45,7 @@ pub enum Diff {
     Tailscale(tailscale::State),
     Monitor(Box<monitor::State>),
     Iphone(iphone::State),
+    Calendar(calendar::State),
 }
 
 impl State {
@@ -60,6 +63,7 @@ impl State {
             Diff::Tailscale(v) => set(&mut self.tailscale, v),
             Diff::Monitor(v) => set(&mut self.monitor, *v),
             Diff::Iphone(v) => set(&mut self.iphone, v),
+            Diff::Calendar(v) => set(&mut self.calendar, v),
         }
     }
 }
