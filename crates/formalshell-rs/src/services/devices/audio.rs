@@ -3,8 +3,12 @@
 //! graph lives on the service thread; writes go back as commands.
 
 use std::cell::RefCell;
+use std::sync::LazyLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-use fs_audio::{Command, Graph};
+use async_channel::{Receiver, Sender};
+use fs_audio::{Command, Graph, Node};
+use futures_lite::FutureExt;
 
 use crate::runtime::Ctx;
 use crate::store;
@@ -19,6 +23,28 @@ pub struct Audio {
     /// A default source with an audio interface exists.
     pub source: bool,
     pub source_muted: bool,
+    /// The graph AudioPanel.qml lists, read only while it is open.
+    pub lists: Option<Lists>,
+}
+
+/// One device or stream row.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Row {
+    pub id: u32,
+    pub name: String,
+    pub label: String,
+    pub volume: f64,
+    pub muted: bool,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Lists {
+    pub outputs: Vec<Row>,
+    pub inputs: Vec<Row>,
+    pub streams: Vec<Row>,
+    pub sink: Option<u32>,
+    /// The default source, with its volume.
+    pub source: Option<Row>,
 }
 
 struct Client {
@@ -28,6 +54,27 @@ struct Client {
 
 thread_local! {
     static CLIENT: RefCell<Option<Client>> = const { RefCell::new(None) };
+}
+
+fn row(n: &Node, label: &str) -> Option<Row> {
+    let a = n.audio.as_ref()?;
+    Some(Row { id: n.id, name: n.name.clone(), label: label.to_owned(), volume: a.volume() as f64, muted: a.muted })
+}
+
+fn device_label(n: &Node) -> &str {
+    if n.description.is_empty() { &n.name } else { &n.description }
+}
+
+fn lists(graph: &Graph) -> Lists {
+    let devices = || graph.nodes.values().filter(|n| n.is_device());
+    Lists {
+        outputs: devices().filter(|n| n.is_sink()).filter_map(|n| row(n, device_label(n))).collect(),
+        inputs: devices().filter(|n| !n.is_sink()).filter_map(|n| row(n, device_label(n))).collect(),
+        // AudioModel.isPlaybackStream: a stream feeding a sink.
+        streams: graph.nodes.values().filter(|n| n.is_stream() && n.is_sink()).filter_map(|n| row(n, n.label())).collect(),
+        sink: graph.default_sink().map(|n| n.id),
+        source: graph.default_source().and_then(|n| row(n, device_label(n))),
+    }
 }
 
 fn snapshot(graph: &Graph) -> Audio {
@@ -43,7 +90,27 @@ fn snapshot(graph: &Graph) -> Audio {
             .unwrap_or_default(),
         source: source.is_some(),
         source_muted: source.is_some_and(|a| a.muted),
+        lists: PANEL.load(Ordering::Relaxed).then(|| lists(graph)),
     }
+}
+
+static PANEL: AtomicBool = AtomicBool::new(false);
+static POKE: LazyLock<(Sender<()>, Receiver<()>)> = LazyLock::new(async_channel::unbounded);
+
+/// The panel open or closed: its lists are published only while it is.
+pub fn panel(open: bool) {
+    if PANEL.swap(open, Ordering::Relaxed) != open {
+        let _ = POKE.0.try_send(());
+    }
+}
+
+/// A write from the panel, on the service thread.
+pub fn command(c: Command) {
+    CLIENT.with_borrow(|client| {
+        if let Some(client) = client {
+            client.handle.send(c);
+        }
+    });
 }
 
 fn publish(ctx: &Ctx, audio: Audio) {
@@ -59,10 +126,14 @@ pub async fn run(ctx: Ctx) {
         }
     };
     CLIENT.with_borrow_mut(|c| *c = Some(Client { handle, graph: Graph::default() }));
-    while let Ok(event) = events.recv().await {
+    loop {
+        let event = async { events.recv().await.ok().map(Some) }.or(async { POKE.1.recv().await.ok().map(|_| None) }).await;
+        let Some(event) = event else { return };
         let audio = CLIENT.with_borrow_mut(|c| {
             let c = c.as_mut()?;
-            c.graph.apply(event);
+            if let Some(event) = event {
+                c.graph.apply(event);
+            }
             // One publish per burst: the initial sync is hundreds of events.
             while let Ok(more) = events.try_recv() {
                 c.graph.apply(more);

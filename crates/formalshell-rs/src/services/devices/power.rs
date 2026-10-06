@@ -5,6 +5,14 @@
 //! DualsenseService.qml's 30 second sysfs poll.
 
 use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Duration;
+
+use async_channel::{Receiver, Sender};
+use async_io::Timer;
+use futures_lite::FutureExt;
 
 use fs_system::dualsense::{self, Supply};
 use fs_system::power::model::DeviceState;
@@ -122,5 +130,66 @@ pub async fn run(ctx: Ctx) {
             Change::OnBattery(on) => seen.on_battery = on,
         }
         publish(seen.power());
+    }
+}
+
+/// The DualSense's lightbar colour and lit player LEDs, which sysfs alone
+/// holds and nothing signals. Read while the DualSense panel is open, on
+/// open and then every 30 seconds (DualsenseService.qml's probe).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Lights {
+    pub lightbar: Option<String>,
+    /// None while no lightbar node exists to find the LEDs beside.
+    pub player_leds: Option<usize>,
+}
+
+const LIGHTS_POLL: Duration = Duration::from_secs(30);
+
+static PANEL: AtomicBool = AtomicBool::new(false);
+static POKE: LazyLock<(Sender<()>, Receiver<()>)> = LazyLock::new(async_channel::unbounded);
+
+/// The DualSense panel open or closed.
+pub fn panel(open: bool) {
+    if PANEL.swap(open, Ordering::Relaxed) != open {
+        let _ = POKE.0.try_send(());
+    }
+}
+
+fn first_dir(dir: &str, matches: impl Fn(&str) -> bool) -> Option<PathBuf> {
+    let mut names: Vec<String> = std::fs::read_dir(dir)
+        .ok()?
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| matches(n))
+        .collect();
+    names.sort();
+    names.first().map(|n| Path::new(dir).join(n))
+}
+
+fn read_lights() -> Lights {
+    let Some(led) = first_dir("/sys/class/leds", |n| n.starts_with("input") && n.ends_with(":rgb:indicator")) else {
+        return Lights::default();
+    };
+    let rgb = std::fs::read_to_string(led.join("multi_intensity")).ok();
+    let base = led.to_string_lossy().trim_end_matches(":rgb:indicator").to_owned();
+    let pips: Vec<Option<String>> = (1..=5).map(|i| std::fs::read_to_string(format!("{base}:white:player-{i}/brightness")).ok()).collect();
+    let pips: Vec<Option<&str>> = pips.iter().map(|p| p.as_deref()).collect();
+    Lights { lightbar: dualsense::parse_lightbar(rgb.as_deref()), player_leds: Some(dualsense::parse_player_leds(Some(&pips))) }
+}
+
+pub async fn lights(ctx: Ctx) {
+    loop {
+        if PANEL.load(Ordering::Relaxed) {
+            let lights = ctx.pool().run(read_lights).await.unwrap_or_default();
+            ctx.publish(store::Diff::Devices(super::Diff::Lights(lights)));
+            async { POKE.1.recv().await.ok() }
+                .or(async {
+                    Timer::after(LIGHTS_POLL).await;
+                    Some(())
+                })
+                .await;
+        } else if POKE.1.recv().await.is_err() {
+            return;
+        }
     }
 }
