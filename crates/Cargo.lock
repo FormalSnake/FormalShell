@@ -415,6 +415,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs-media"
+version = "0.1.1"
+dependencies = [
+ "fastrand",
+ "percent-encoding",
+ "regex",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "fs-screensaver"
 version = "0.1.0"
 
