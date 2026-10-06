@@ -5,6 +5,7 @@
 //! callback or an input event belongs to.
 
 mod caffeinate;
+mod toasts;
 
 use std::time::Instant;
 
@@ -126,6 +127,7 @@ enum Owner {
     Menu,
     Outgoing,
     Tooltip,
+    Toasts,
     Preview,
     Scrim,
     Zone(usize),
@@ -157,6 +159,8 @@ pub struct App {
     keyboard: Option<wl_keyboard::WlKeyboard>,
     tips: tooltip::Group,
     tip_card: Option<tooltip::Card>,
+    toasts: Option<surfaces::toasts::Toasts>,
+    toasts_dirty: bool,
     /// `debug join`'s card, hung in the gap it opens.
     preview: Option<(Surface, crate::scene::Scene, Vec<NodeId>)>,
     /// The tray item menu, over whatever popout it hangs off.
@@ -219,6 +223,8 @@ impl App {
             keyboard: None,
             tips: tooltip::Group::default(),
             tip_card: None,
+            toasts: None,
+            toasts_dirty: false,
             preview: None,
             scrim: None,
             pointer: None,
@@ -1027,6 +1033,7 @@ impl App {
 
     pub fn present(&mut self) {
         let now = Instant::now();
+        self.tick_notifications();
         if self.panel.as_ref().is_some_and(|p| p.finished(now)) {
             self.panel = None;
             self.sync_join();
@@ -1081,6 +1088,7 @@ impl App {
         }
         self.panel_dirty = false;
         self.present_tooltip(now);
+        self.present_toasts(now);
         if let Some((surface, scene, _)) = &mut self.preview {
             surface.present(scene, false, &qh);
         }
@@ -1135,7 +1143,8 @@ impl App {
     /// nothing asks for frames while it waits.
     fn arm_wake(&mut self, now: Instant) {
         let hosts = [&self.panel, &self.outgoing];
-        let at = [self.bar.wake(now), self.tips.wake()]
+        let notifications = self.store.notifications.wake().map(|at| crate::services::notifications::instant_at(at, now));
+        let at = [self.bar.wake(now), self.tips.wake(), notifications]
             .into_iter()
             .chain(hosts.iter().filter_map(|h| h.as_ref()).flat_map(|h| [h.prime_until, h.wake.filter(|w| *w > now)]))
             .flatten()
@@ -1172,6 +1181,9 @@ impl App {
         }
         if self.tip_card.as_ref().is_some_and(|c| c.surface.layer.wl_surface() == surface) {
             return Some(Owner::Tooltip);
+        }
+        if self.toasts.as_ref().is_some_and(|t| t.surface.layer.wl_surface() == surface) {
+            return Some(Owner::Toasts);
         }
         if self.preview.as_ref().is_some_and(|(s, _, _)| s.layer.wl_surface() == surface) {
             return Some(Owner::Preview);
@@ -1237,6 +1249,7 @@ impl App {
                 m.hover(hit);
             }
         }
+        self.hover_toasts((owner == Some(Owner::Toasts)).then_some(at));
         if let Some(h) = &mut self.panel {
             let point = (owner == Some(Owner::Panel)).then_some(at);
             if h.pointer(point, &self.store, self.runtime.as_ref()) {
@@ -1297,6 +1310,13 @@ impl App {
                     self.hover(None, (x, y));
                 }
                 PointerEventKind::Press { .. } => {
+                    if owner == Some(Owner::Toasts) {
+                        if let Some(t) = &mut self.toasts {
+                            t.press(x, y);
+                        }
+                        self.pressed = Some((Owner::Toasts, 0));
+                        continue;
+                    }
                     if owner == Some(Owner::Panel) {
                         if let Some(h) = &mut self.panel {
                             h.press(x, y, &self.store, self.runtime.as_ref());
@@ -1315,6 +1335,10 @@ impl App {
                 }
                 PointerEventKind::Release { button, .. } => {
                     let Some((o, i)) = self.pressed.take() else { continue };
+                    if o == Owner::Toasts {
+                        self.release_toasts(x, y);
+                        continue;
+                    }
                     if o == Owner::Panel {
                         let out = self.panel.as_mut().map_or(Out::None, |h| h.release(x, y, &self.store, self.runtime.as_ref()));
                         if out == Out::Close {
@@ -1504,6 +1528,15 @@ impl CompositorHandler for App {
                     c.mapped(theme, now);
                 }
             }
+            Some(Owner::Toasts) => {
+                let Some(t) = &mut self.toasts else { return };
+                let s = &mut t.surface;
+                (s.frame_pending, s.callbacks) = (false, s.callbacks + 1);
+                if !s.mapped {
+                    s.mapped = true;
+                    self.toasts_dirty = true;
+                }
+            }
             Some(Owner::Scrim) => {
                 let Some((scrim, s)) = &mut self.scrim else { return };
                 (s.frame_pending, s.mapped, s.callbacks) = (false, true, s.callbacks + 1);
@@ -1539,6 +1572,7 @@ impl LayerShellHandler for App {
                 self.sync_join();
             }
             Some(Owner::Tooltip) => self.tip_card = None,
+            Some(Owner::Toasts) => self.toasts = None,
             Some(Owner::Preview) => self.preview = None,
             Some(Owner::Overflow) => {
                 self.overflow = None;
@@ -1582,6 +1616,11 @@ impl LayerShellHandler for App {
                 let Some(c) = &mut self.tip_card else { return };
                 let size = c.scene.size;
                 c.surface.configure(size.w, size.h);
+            }
+            Some(Owner::Toasts) => {
+                let Some(t) = &mut self.toasts else { return };
+                let size = t.scene.size;
+                t.surface.configure(size.w, size.h);
             }
             Some(Owner::Preview) => {
                 let Some((s, scene, _)) = &mut self.preview else { return };

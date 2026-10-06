@@ -25,6 +25,7 @@
 # shell's own motion.
 leg_notify_flag="--notify"
 leg_notify_order=30
+leg_notify_rust=1
 leg_notify_needs="notify-send convert jq"
 
 toasts_expanded_path="$shot_dir/toasts-expanded.png"

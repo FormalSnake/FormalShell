@@ -144,6 +144,28 @@ ShellRoot {
         function status(): string { return JSON.stringify({ isOpen: false }) }
     }
     IpcHandler {
+        target: "notifications"
+        function status(): string { return "{}" }
+        function dndState(): string { return "off" }
+        function toggleDnd(): string { return "on" }
+        function setDnd(on: bool): string { return on ? "on" : "off" }
+        function showHistory(): string { return "ok" }
+        function clear(): string { return "ok" }
+        function clearPending(): string { return "ok" }
+        function markAllSeen(): string { return "ok" }
+        function dismissAll(): string { return "ok" }
+        function dismissOne(): string { return "none" }
+        function invokeLast(): string { return "ok" }
+        function expand(state: string): string { return "expand " + state }
+    }
+    IpcHandler {
+        target: "reminder"
+        function set(duration: string, message: string): string { return "set " + duration + " " + message }
+        function show(): string { return "ok" }
+        function clear(): string { return "ok: cleared 0" }
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
         target: "probe"
         function s(a: string): string { return "[" + a + "]" }
         function ss(a: string, b: string): string { return "[" + a + "][" + b + "]" }
@@ -408,6 +430,20 @@ rec call gallery status x
 rec call gallery toggle
 rec call gallery close
 rec show gallery
+rec call notifications status
+rec call notifications setDnd true
+rec call notifications setDnd 1
+rec call notifications setDnd
+rec call notifications dismissOne
+rec call notifications expand on
+rec call notifications expand
+rec call notifications nope
+rec show notifications
+rec call reminder set 12s 'SMOKE REMINDER FIXTURE'
+rec call reminder set 25m
+rec call reminder set 25m ''
+rec call reminder clear
+rec show reminder
 
 kill "$qs_pid"
 wait "$qs_pid" 2>/dev/null || true

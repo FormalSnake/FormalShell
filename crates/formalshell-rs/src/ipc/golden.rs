@@ -188,6 +188,34 @@ fn stub() -> Registry<()> {
                 ],
             },
             Target {
+                name: "notifications",
+                functions: vec![
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                    f("dndState", &[], Type::String, |_, _| s("off")),
+                    f("toggleDnd", &[], Type::String, |_, _| s("on")),
+                    f("setDnd", &[("on", Type::Bool)], Type::String, |_, a| s(if a[0].bool() { "on" } else { "off" })),
+                    f("showHistory", &[], Type::String, |_, _| s("ok")),
+                    f("clear", &[], Type::String, |_, _| s("ok")),
+                    f("clearPending", &[], Type::String, |_, _| s("ok")),
+                    f("markAllSeen", &[], Type::String, |_, _| s("ok")),
+                    f("dismissAll", &[], Type::String, |_, _| s("ok")),
+                    f("dismissOne", &[], Type::String, |_, _| s("none")),
+                    f("invokeLast", &[], Type::String, |_, _| s("ok")),
+                    f("expand", &[("state", Type::String)], Type::String, |_, a| s(format!("expand {}", a[0].str()))),
+                ],
+            },
+            Target {
+                name: "reminder",
+                functions: vec![
+                    f("set", &[("duration", Type::String), ("message", Type::String)], Type::String, |_, a| {
+                        s(format!("set {} {}", a[0].str(), a[1].str()))
+                    }),
+                    f("show", &[], Type::String, |_, _| s("ok")),
+                    f("clear", &[], Type::String, |_, _| s("ok: cleared 0")),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
                 name: "probe",
                 functions: vec![
                     f("s", &[STR], Type::String, |_, a| s(format!("[{}]", a[0].str()))),

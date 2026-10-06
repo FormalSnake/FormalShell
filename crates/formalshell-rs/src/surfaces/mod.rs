@@ -6,6 +6,7 @@ pub mod card;
 pub mod panel;
 pub mod shoulders;
 pub mod tray_menu;
+pub mod toasts;
 pub mod tooltip;
 
 use crate::services::theme;
@@ -30,6 +31,10 @@ pub fn changed(app: &mut App, topic: Topic) {
         Topic::Theme => app.set_bar_theme(),
         Topic::Tray => {
             app.tray_changed();
+            app.refresh_bar(Some(topic));
+        }
+        Topic::Notifications => {
+            app.toasts_changed();
             app.refresh_bar(Some(topic));
         }
         _ => app.refresh_bar(Some(topic)),
