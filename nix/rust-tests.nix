@@ -1,27 +1,18 @@
-{ lib, stdenv, rustPlatform, cargo, rustc }:
+{ lib, rustCommon }:
 
 # The pure crates' tests, which nix/formalshell-rs.nix leaves out: some read
 # files under shell/ and tests/ relative to the repo root, so the source keeps
 # the repo layout and cargo runs from crates/. Service crates (fs-mpris,
 # fs-tray, ...) need a bus or a VM and carry checks of their own.
-stdenv.mkDerivation {
-  name = "formalshell-rs-tests";
-
+rustCommon.craneLib.cargoTest (rustCommon.checkArgs // {
+  pname = "formalshell-rs-tests";
   src = lib.fileset.toSource {
     root = ../.;
     fileset = lib.fileset.unions [ ../crates ../shell ../tests/fixtures ];
   };
-  sourceRoot = "source/crates";
-
-  cargoDeps = rustPlatform.importCargoLock { lockFile = ../crates/Cargo.lock; };
-
-  nativeBuildInputs = [ rustPlatform.cargoSetupHook cargo rustc ];
-
-  buildPhase = ''
-    runHook preBuild
-    cargo test --offline -p fs-js -p fs-chrome -p fs-info -p fs-system -p fs-devices -p fs-media -p fs-menu -p fs-screensaver -p fs-theme
-    runHook postBuild
+  postUnpack = ''
+    cd $sourceRoot/crates
+    sourceRoot="."
   '';
-
-  installPhase = "touch $out";
-}
+  cargoExtraArgs = "--locked -p fs-js -p fs-chrome -p fs-info -p fs-system -p fs-devices -p fs-media -p fs-menu -p fs-screensaver -p fs-theme";
+})
