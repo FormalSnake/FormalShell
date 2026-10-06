@@ -5,7 +5,7 @@
 use vello_cpu::kurbo::{Affine, BezPath, Rect};
 
 use crate::text::ShapedText;
-use crate::theme::Rgba;
+use fs_theme::color::Rgba;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct IRect {

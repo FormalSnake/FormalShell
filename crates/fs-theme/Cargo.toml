@@ -1,0 +1,10 @@
+[package]
+name = "fs-theme"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+chrono = "0.4"
+regex = "1"
+serde_json = { version = "1", features = ["float_roundtrip", "preserve_order"] }

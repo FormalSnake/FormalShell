@@ -504,8 +504,10 @@ dependencies = [
  "async-channel",
  "async-executor",
  "async-io",
+ "async-process",
  "calloop",
  "chrono",
+ "fs-theme",
  "futures-lite",
  "inotify",
  "parley",
@@ -607,6 +609,15 @@ dependencies = [
  "fs-js",
  "regex",
  "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fs-theme"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "regex",
  "serde_json",
 ]
 

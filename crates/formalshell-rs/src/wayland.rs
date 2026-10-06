@@ -24,7 +24,6 @@ use crate::runtime::Msg;
 use crate::store::Store;
 use crate::surface::{PixelSurface, Pixels, Surface};
 use crate::surfaces;
-use crate::theme;
 
 /// The panel's one line of content, standing in for a real panel body.
 const PANEL_LABEL: &str = "Calendar";
@@ -68,11 +67,13 @@ impl App {
         let pixels = Pixels::bind(globals, qh)
             .expect("wp_viewporter, wp_single_pixel_buffer_manager_v1 and wp_alpha_modifier_v1 are required");
 
+        let store = Store::default();
+        let bar = Bar::new(1, &store.theme.theme);
         let surface = compositor.create_surface(qh);
         let layer = layer_shell.create_layer_surface(qh, surface, Layer::Top, Some("formalshell:bar"), None);
         layer.set_anchor(Anchor::TOP | Anchor::LEFT | Anchor::RIGHT);
-        layer.set_size(0, theme::BAR_THICKNESS as u32);
-        layer.set_exclusive_zone(theme::BAR_THICKNESS);
+        layer.set_size(0, bar.thickness() as u32);
+        layer.set_exclusive_zone(bar.thickness());
         layer.set_keyboard_interactivity(KeyboardInteractivity::None);
         layer.commit();
         let bar_surface = Surface::new("bar", layer, &shm, started);
@@ -85,8 +86,8 @@ impl App {
             shm,
             pixels,
             qh: qh.clone(),
-            store: Store::default(),
-            bar: Bar::new(1),
+            store,
+            bar,
             bar_surface,
             panel: None,
             scrim: None,
@@ -148,8 +149,19 @@ impl App {
             return;
         }
         let width = self.bar.scene.size.w;
-        let panel =
-            Panel::new(width, self.bar.clock_cell(), PANEL_HEIGHT, self.motion_scale, self.cast, self.bar.text_mut(), PANEL_LABEL);
+        let (thickness, cell) = (self.bar.thickness(), self.bar.clock_cell());
+        let theme = &self.store.theme.theme;
+        let panel = Panel::new(
+            theme,
+            width,
+            thickness,
+            cell,
+            PANEL_HEIGHT,
+            self.motion_scale,
+            self.cast,
+            self.bar.text_mut(),
+            PANEL_LABEL,
+        );
         let layer = self.overlay("formalshell:panel", Anchor::TOP | Anchor::LEFT | Anchor::RIGHT, panel.surface_height() as u32);
         let mut surface = Surface::new("panel", layer, &self.shm, self.started);
         surface.wait_map = true;
@@ -164,7 +176,7 @@ impl App {
         if !open {
             return;
         }
-        let scrim = Scrim::new(self.motion_scale);
+        let scrim = Scrim::new(&self.store.theme.theme, self.motion_scale);
         let layer = self.overlay("formalshell:scrim", Anchor::all(), 0);
         let surface = PixelSurface::new("scrim", layer, &self.pixels, &self.qh, self.started);
         self.scrim = Some((scrim, surface));

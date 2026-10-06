@@ -1,28 +1,87 @@
-//! The strip under `bar.kind: strip` (BarStrip.qml): a `card` fill at the
-//! surface alpha with one `border` hairline along the edge facing the
-//! desktop, the workspace cells in the left region and the clock centred.
+//! The strip under `bar.kind: strip` (BarStrip.qml): the `bar` role's fill
+//! with its one hairline along the edge facing the desktop, the workspace
+//! cells in the left region and the clock centred.
 
 use std::time::Instant;
 
+use fs_theme::color::Rgba;
+use fs_theme::style::{Line, Radius};
+use fs_theme::theme::Theme;
 use parley::GenericFamily;
 use vello_cpu::kurbo::Affine;
 
-use crate::services::hyprland::Slot;
 use crate::motion::PULSE_MS;
 use crate::scene::{IRect, NodeId, Paint, Scene};
+use crate::services::hyprland::Slot;
 use crate::text::{self, Family, ShapedText, Text, TextStyle};
-use crate::theme::{self, DARK};
 
-/// CellLabel.qml off the band: `monospace`, `body`, `Theme.weight.medium`.
-const LABEL: TextStyle =
-    TextStyle { family: Family::Generic(GenericFamily::Monospace), size: theme::FONT_BODY, weight: theme::WEIGHT_MEDIUM };
-const CELL_Y: i32 = theme::BAR_MARGIN;
-
-/// Workspaces.qml's `_badgeSize`: the caption size, the glyph as wide as
-/// the disc under it.
-const BADGE: i32 = theme::FONT_CAPTION as i32;
-const BADGE_GLYPH: TextStyle = TextStyle { family: text::ICONS, size: theme::FONT_CAPTION, weight: 400.0 };
 const LOADER_CIRCLE: &str = "\u{E10A}";
+
+/// What the strip takes off the theme: the `bar` role's fill and edge, the
+/// `cell` role's active fill for the focused pill, the ink, and the metrics.
+#[derive(Clone)]
+struct Look {
+    fill: Rgba,
+    edge: Rgba,
+    edge_width: i32,
+    pill: Rgba,
+    pill_radius: f32,
+    foreground: Rgba,
+    muted: Rgba,
+    on_pill: Rgba,
+    background: Rgba,
+    thickness: i32,
+    cell_y: i32,
+    cell_height: i32,
+    xxs: i32,
+    sm: i32,
+    md: i32,
+    pad_x: i32,
+    /// CellLabel.qml off the band: `monospace`, `body`, `Theme.weight.medium`.
+    label: TextStyle,
+    /// Workspaces.qml's `_badgeSize`: the caption size, the glyph as wide
+    /// as the disc under it.
+    badge: i32,
+    badge_glyph: TextStyle,
+}
+
+impl Look {
+    fn new(theme: &Theme) -> Self {
+        let bar = theme.box_style("bar", None);
+        let active = theme.box_style("cell", Some("active"));
+        let edge = bar.edge.unwrap_or(Line { color: Rgba::TRANSPARENT, width: 0.0 });
+        let space = &theme.space;
+        let caption = theme.font_size.caption as f32;
+        Self {
+            fill: bar.fill,
+            edge: edge.color,
+            edge_width: edge.width as i32,
+            pill: active.fill,
+            pill_radius: match active.radius {
+                Radius::Px(px) => px as f32,
+                Radius::Pill => theme.pill_radius(space.bar_cell_height) as f32,
+            },
+            foreground: theme.colors.get("foreground"),
+            muted: theme.colors.get("mutedForeground"),
+            on_pill: theme.colors.get("primaryForeground"),
+            background: theme.colors.get("background"),
+            thickness: (space.bar_cell_height + space.bar_margin * 2.0) as i32,
+            cell_y: space.bar_margin as i32,
+            cell_height: space.bar_cell_height as i32,
+            xxs: space.xxs as i32,
+            sm: space.sm as i32,
+            md: space.md as i32,
+            pad_x: space.control_padding_x as i32,
+            label: TextStyle {
+                family: Family::Generic(GenericFamily::Monospace),
+                size: theme.font_size.body as f32,
+                weight: fs_theme::tokens::WEIGHTS.medium as f32,
+            },
+            badge: caption as i32,
+            badge_glyph: TextStyle { family: text::ICONS, size: caption, weight: 400.0 },
+        }
+    }
+}
 
 /// The herdr "working" badge: a `loader-circle` turning once per pulse,
 /// linear, as `RotationAnimator` runs it.
@@ -35,6 +94,7 @@ struct Spinner {
 
 pub struct Bar {
     pub scene: Scene,
+    look: Look,
     text: Text,
     fill: NodeId,
     edge: NodeId,
@@ -48,25 +108,28 @@ pub struct Bar {
     labels: Vec<NodeId>,
     clock: NodeId,
     now: String,
+    slots: Vec<Slot>,
 }
 
 impl Bar {
-    pub fn new(width: i32) -> Self {
-        let height = theme::BAR_THICKNESS;
-        let mut scene = Scene::new(width, height);
-        let fill = scene.add(IRect::default(), rect(DARK.card.with_alpha(theme::SURFACE_OPACITY), 0.0));
-        let edge = scene.add(IRect::default(), rect(DARK.border, 0.0));
-        let edge_end = scene.add(IRect::default(), rect(DARK.border, 0.0));
-        let pill = scene.add(IRect::default(), rect(DARK.primary, theme::radius_md()));
+    pub fn new(width: i32, theme: &Theme) -> Self {
+        let look = Look::new(theme);
+        let mut scene = Scene::new(width, look.thickness);
+        let fill = scene.add(IRect::default(), rect(look.fill, 0.0));
+        let edge = scene.add(IRect::default(), rect(look.edge, 0.0));
+        let edge_end = scene.add(IRect::default(), rect(look.edge, 0.0));
+        let pill = scene.add(IRect::default(), rect(look.pill, look.pill_radius));
         let mut text = Text::new();
-        let clock = scene.add(IRect::default(), Paint::Text { text: text.shape("", LABEL), color: DARK.foreground });
-        let disc = scene.add(IRect::default(), rect(DARK.background, BADGE as f32 / 2.0));
-        let glyph = scene.add(IRect::default(), Paint::Text { text: text.shape("", BADGE_GLYPH), color: DARK.foreground });
+        let clock = scene.add(IRect::default(), Paint::Text { text: text.shape("", look.label), color: look.foreground });
+        let disc = scene.add(IRect::default(), rect(look.background, look.badge as f32 / 2.0));
+        let glyph =
+            scene.add(IRect::default(), Paint::Text { text: text.shape("", look.badge_glyph), color: look.foreground });
         scene.set_visible(disc, false);
         scene.set_visible(glyph, false);
         let spinner = Spinner { disc, glyph, shaped: None, since: None };
         let mut bar = Self {
             scene,
+            look,
             text,
             fill,
             edge,
@@ -79,13 +142,32 @@ impl Bar {
             labels: Vec::new(),
             clock,
             now: String::new(),
+            slots: Vec::new(),
         };
         bar.layout_strip();
         bar
     }
 
+    /// The strip's height on its edge, which is also its exclusive zone.
+    pub fn thickness(&self) -> i32 {
+        self.look.thickness
+    }
+
+    /// Repaints every node off a new theme. The thickness is the layer
+    /// surface's size, so it holds until the surface is remade.
+    pub fn set_theme(&mut self, theme: &Theme) {
+        let thickness = self.look.thickness;
+        self.look = Look { thickness, ..Look::new(theme) };
+        self.spinner.shaped = None;
+        self.layout_strip();
+        let now = std::mem::take(&mut self.now);
+        self.set_clock(&now);
+        let slots = std::mem::take(&mut self.slots);
+        self.set_workspaces(&slots);
+    }
+
     pub fn resize(&mut self, width: i32) {
-        self.scene.resize(width, theme::BAR_THICKNESS);
+        self.scene.resize(width, self.look.thickness);
         self.layout_strip();
         let now = std::mem::take(&mut self.now);
         self.set_clock(&now);
@@ -93,19 +175,18 @@ impl Bar {
 
     fn layout_strip(&mut self) {
         let IRect { w, h, .. } = self.scene.size;
-        let fill = DARK.card.with_alpha(theme::SURFACE_OPACITY);
-        self.scene.update(self.fill, IRect::new(0, 0, w, h), rect(fill, 0.0), true);
+        self.scene.update(self.fill, IRect::new(0, 0, w, h), rect(self.look.fill, 0.0), true);
         self.layout_line();
     }
 
     /// BarStrip.qml's two hairline segments either side of the gap.
     fn layout_line(&mut self) {
         let IRect { w, h, .. } = self.scene.size;
-        let line = theme::EDGE_WIDTH;
+        let (line, color) = (self.look.edge_width, self.look.edge);
         let (start, end) = self.gap.unwrap_or((0, 0));
         let (start, end) = (start.clamp(0, w), end.clamp(start.clamp(0, w), w));
-        self.scene.update(self.edge, IRect::new(0, h - line, start, line), rect(DARK.border, 0.0), start > 0);
-        self.scene.update(self.edge_end, IRect::new(end, h - line, w - end, line), rect(DARK.border, 0.0), end < w);
+        self.scene.update(self.edge, IRect::new(0, h - line, start, line), rect(color, 0.0), start > 0 && line > 0);
+        self.scene.update(self.edge_end, IRect::new(end, h - line, w - end, line), rect(color, 0.0), end < w && line > 0);
     }
 
     /// The join a card publishes (Joint.qml's `join`): its x and width along
@@ -147,13 +228,14 @@ impl Bar {
             self.scene.set_visible(glyph, false);
             return;
         };
-        let badge = IRect::new(cell.right() - theme::SPACE_XXS - BADGE, cell.y + theme::SPACE_XXS, BADGE, BADGE);
-        self.scene.update(disc, badge, rect(DARK.background, BADGE as f32 / 2.0), true);
+        let size = self.look.badge;
+        let badge = IRect::new(cell.right() - self.look.xxs - size, cell.y + self.look.xxs, size, size);
+        self.scene.update(disc, badge, rect(self.look.background, size as f32 / 2.0), true);
 
         let shaped = match &self.spinner.shaped {
             Some(s) => s.clone(),
             None => {
-                let s = self.text.shape(LOADER_CIRCLE, BADGE_GLYPH);
+                let s = self.text.shape(LOADER_CIRCLE, self.look.badge_glyph);
                 self.spinner.shaped = Some(s.clone());
                 s
             }
@@ -161,8 +243,8 @@ impl Bar {
         // The glyph's line box centred on the disc, as Icon.qml centres its
         // text, turned about the disc's centre.
         let (bw, bh) = shaped.box_size();
-        let at = (badge.x + (BADGE - bw) / 2, badge.y + (BADGE - bh) / 2);
-        let centre = (badge.x as f64 + BADGE as f64 / 2.0, badge.y as f64 + BADGE as f64 / 2.0);
+        let at = (badge.x + (size - bw) / 2, badge.y + (size - bh) / 2);
+        let centre = (badge.x as f64 + size as f64 / 2.0, badge.y as f64 + size as f64 / 2.0);
         let elapsed = now.saturating_duration_since(since.unwrap_or(now)).as_secs_f64() * 1000.0;
         let turn = (elapsed / PULSE_MS).fract() * std::f64::consts::TAU;
         let spin = Affine::translate(centre) * Affine::rotate(turn) * Affine::translate((-centre.0, -centre.1));
@@ -170,16 +252,19 @@ impl Bar {
         // node's bounds sit where the line box goes and the damage is the
         // badge alone.
         let shift = Affine::translate(((at.0 - badge.x) as f64, (at.1 - badge.y) as f64));
-        self.scene.update_with(glyph, badge, Paint::Text { text: shaped, color: DARK.foreground }, true, spin * shift, None);
+        let color = self.look.foreground;
+        self.scene.update_with(glyph, badge, Paint::Text { text: shaped, color }, true, spin * shift, None);
     }
 
     pub fn set_workspaces(&mut self, slots: &[Slot]) {
+        self.slots = slots.to_vec();
+        let look = self.look.clone();
         while self.labels.len() < slots.len() {
-            let empty = self.text.shape("", LABEL);
-            let id = self.scene.add(IRect::default(), Paint::Text { text: empty, color: DARK.muted_foreground });
+            let empty = self.text.shape("", look.label);
+            let id = self.scene.add(IRect::default(), Paint::Text { text: empty, color: look.muted });
             self.labels.push(id);
         }
-        let mut x = theme::SPACE_MD;
+        let mut x = look.md;
         let mut pill = None;
         self.cells.clear();
         for (at, id) in self.labels.clone().into_iter().enumerate() {
@@ -187,20 +272,20 @@ impl Bar {
                 self.scene.set_visible(id, false);
                 continue;
             };
-            let shaped = self.text.shape(&slot.idx.to_string(), LABEL);
-            let cell_w = shaped.width + theme::CONTROL_PADDING_X * 2;
-            let ink = if slot.focused { DARK.primary_foreground } else { DARK.muted_foreground };
-            let bounds = text_bounds(&shaped, x + theme::CONTROL_PADDING_X);
+            let shaped = self.text.shape(&slot.idx.to_string(), look.label);
+            let cell_w = shaped.width + look.pad_x * 2;
+            let ink = if slot.focused { look.on_pill } else { look.muted };
+            let bounds = text_bounds(&look, &shaped, x + look.pad_x);
             self.scene.update(id, bounds, Paint::Text { text: shaped, color: ink }, true);
-            let cell = IRect::new(x, CELL_Y, cell_w, theme::BAR_CELL_HEIGHT);
+            let cell = IRect::new(x, look.cell_y, cell_w, look.cell_height);
             self.cells.push(cell);
             if slot.focused {
                 pill = Some(cell);
             }
-            x += cell_w + theme::SPACE_SM;
+            x += cell_w + look.sm;
         }
         match pill {
-            Some(b) => self.scene.update(self.pill, b, rect(DARK.primary, theme::radius_md()), true),
+            Some(b) => self.scene.update(self.pill, b, rect(look.pill, look.pill_radius), true),
             None => self.scene.set_visible(self.pill, false),
         }
         if self.spinner.since.is_some() {
@@ -210,22 +295,23 @@ impl Bar {
 
     pub fn set_clock(&mut self, now: &str) {
         self.now = now.to_owned();
-        let shaped = self.text.shape(now, LABEL);
-        let cell_w = shaped.width + theme::CONTROL_PADDING_X * 2;
+        let look = self.look.clone();
+        let shaped = self.text.shape(now, look.label);
+        let cell_w = shaped.width + look.pad_x * 2;
         let cell_x = (self.scene.size.w - cell_w) / 2;
-        self.clock_cell = IRect::new(cell_x, CELL_Y, cell_w, theme::BAR_CELL_HEIGHT);
-        let bounds = text_bounds(&shaped, cell_x + theme::CONTROL_PADDING_X);
-        self.scene.update(self.clock, bounds, Paint::Text { text: shaped, color: DARK.foreground }, true);
+        self.clock_cell = IRect::new(cell_x, look.cell_y, cell_w, look.cell_height);
+        let bounds = text_bounds(&look, &shaped, cell_x + look.pad_x);
+        self.scene.update(self.clock, bounds, Paint::Text { text: shaped, color: look.foreground }, true);
     }
 }
 
-fn rect(fill: theme::Rgba, radius: f32) -> Paint {
+fn rect(fill: Rgba, radius: f32) -> Paint {
     Paint::Rect { fill, radius }
 }
 
 /// A label centred across the cell row, its line box on a whole pixel.
-fn text_bounds(shaped: &ShapedText, x: i32) -> IRect {
+fn text_bounds(look: &Look, shaped: &ShapedText, x: i32) -> IRect {
     let (w, h) = shaped.box_size();
-    let top = CELL_Y + (theme::BAR_CELL_HEIGHT - shaped.line_height()) / 2;
+    let top = look.cell_y + (look.cell_height - shaped.line_height()) / 2;
     IRect::new(x - crate::text::PAD, top - crate::text::PAD, w, h)
 }

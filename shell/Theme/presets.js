@@ -1,7 +1,5 @@
 .pragma library
-.import "themes/metamorphosis.js" as Metamorphosis
-.import "themes/retro.js" as Retro
-.import "themes/pantheon.js" as Pantheon
+.import "themes.js" as Themes
 
 // theme.preset (M49 D1): a table of chrome defaults, not a mode. Every knob
 // a preset sets is a settings key the user can still write, and an explicit
@@ -17,21 +15,21 @@
 // on a 6px corner.
 //
 // Since M59 a preset also names one chrome table, `shell/Theme/themes/`'s
-// own file per theme: the scalars above are what the user can still
+// JSON per theme: the scalars above are what the user can still
 // override key by key, the table is not overridable at all.
 
 var NAMES = ["metamorphosis", "retro", "pantheon"];
 
 var _TABLE = {
     metamorphosis: { radius: 10, icons: "lucide", fonts: "pair", surfaceOpacity: 0.85, blur: true, dither: false,
-        style: Metamorphosis.STYLE },
+        style: Themes.METAMORPHOSIS },
     retro: { radius: 0, icons: "nerd", fonts: "mono", surfaceOpacity: 1, blur: false, dither: true,
-        style: Retro.STYLE },
+        style: Themes.RETRO },
     // Opaque, unlike the other two: elementary's popovers and dialogs are
     // `bg_color(2)` with nothing behind them, and its one translucent
     // surface is the panel, which carries its own alpha in the table (M62).
     pantheon: { radius: 6, icons: "lucide", fonts: "pair", surfaceOpacity: 1, blur: true, dither: false,
-        style: Pantheon.STYLE }
+        style: Themes.PANTHEON }
 };
 
 // Anything that is not one of NAMES resolves to metamorphosis, the same

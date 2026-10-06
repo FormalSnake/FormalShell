@@ -77,9 +77,12 @@ while the card over it stays above and keeps its blur (owner, 2026-09-17:
 "make the overlay just darken instead of blur").
 
 **Themes**: the chrome every primitive draws comes out of one table,
-`shell/Theme/themes/<name>.js`, one file per theme (`metamorphosis` is the
-look above; `retro` re-exports it, since retro differs from it only by the
-scalars `theme.preset` already resolves). A table is keyed by role, and
+`shell/Theme/themes/<name>.json`, one file per theme, read by the QML shell
+(`Theme/themes.js`) and the Rust one (`crates/fs-theme`) alike
+(`metamorphosis` is the look above; `retro` has no file and resolves to it,
+since retro differs from it only by the scalars `theme.preset` already
+resolves). JSON carries no comments, so each table's reasoning sits in its
+own `notes` key, which nothing resolves. A table is keyed by role, and
 each role is one box: `fill` (a `Theme.color` role or a literal), `fillAlpha`
 (a number or `"surface"`), `radius` (a step off the ladder or a literal),
 `border` (`{ color, alpha, width }` or none), `face` (the one top-to-bottom
@@ -98,7 +101,7 @@ and never names a theme; a theme never reaches into a primitive.
 `Theme.box(role, state)` is the only way chrome reaches one, drawn by
 `Components/Box.qml`.
 
-**Pantheon** (`shell/Theme/themes/pantheon.js`): elementary OS 8's material
+**Pantheon** (`shell/Theme/themes/pantheon.json`): elementary OS 8's material
 as the same kind of table, transcribed from its own GPL stylesheet rather
 than ported, each block naming the file its numbers came from
 (`_exported.scss` for the tokens, `_index.scss` for the mixins,

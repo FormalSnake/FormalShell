@@ -2,7 +2,7 @@ pragma Singleton
 import QtQuick
 import "../../../../shell/Theme/palette.js" as Palette
 import "../../../../shell/Theme/style.js" as Style
-import "../../../../shell/Theme/themes/metamorphosis.js" as Metamorphosis
+import "../../../../shell/Theme/themes.js" as Themes
 import "../../../../shell/Theme/tokens.js" as Tokens
 
 // Test-only stand-in for shell/Core/Theme.qml, which is a Quickshell
@@ -77,7 +77,7 @@ QtObject {
     // stub cannot import. Not readonly: tst_drawer.qml swaps in another theme's
     // table per test to drive the habits, the same way tst_presence.qml
     // reassigns `motionEnabled` below.
-    property var style: Metamorphosis.STYLE
+    property var style: Themes.METAMORPHOSIS
     readonly property var habit: root.style.habits
 
     readonly property int borderWidth: 1

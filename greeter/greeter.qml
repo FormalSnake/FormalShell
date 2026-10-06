@@ -1,4 +1,7 @@
 //@ pragma ShellId formalshell-greeter
+// The chrome tables are JSON that Theme/themes.js reads with a local XHR,
+// which Qt refuses without this.
+//@ pragma Env QML_XHR_ALLOW_FILE_READ = 1
 import Quickshell
 import QtQuick
 import Quickshell.Wayland
