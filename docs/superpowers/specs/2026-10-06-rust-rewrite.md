@@ -139,6 +139,19 @@ Milestones, each a plan under `docs/superpowers/plans/`:
   shell never speaks the Nothing protocol itself, only allow-listed verbs
   through `nothingctl`, and the soundcore and samsung polls run only
   while acquired with a matching BlueZ device connected.
+- Headset connect card (owner, 2026-10-06, new in the Rust shell, after
+  macOS's AirPods popup): when a Bluetooth audio device (BlueZ class
+  audio, or one an earbuds backend claims) goes from disconnected to
+  connected, a card buds off the bar's line in the shell's joined-shape
+  motion, carrying the device's icon, its name, "Connected", and one
+  battery ring per part the backend reports (left, right, case for
+  earbuds; BlueZ Battery1 otherwise; no ring when nothing reports a
+  level, never an invented one). It never fires for devices already
+  connected at startup or on a reconnect inside a few seconds, holds about
+  four seconds, dismisses on pointer leave or Escape, opens the earbuds or
+  Bluetooth panel on click, and stays down under fullscreen and DND.
+  Built with the frontend skills the user's CLAUDE.md lists, in the
+  shell's own chrome, not a copy of Apple's.
 - R8: capture, record, OCR, screensaver, switcher and Spaces thumbnails,
   everything left in `shell/`.
 - R9: cutover. Nix package and modules, PKGBUILD and Debian control point
