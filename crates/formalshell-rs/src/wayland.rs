@@ -1414,7 +1414,10 @@ impl App {
     /// One key on the keyboard: the open panel's, as KeyCatcher.qml binds
     /// them.
     fn key_event(&mut self, event: KeyEvent) {
+        let editing = self.panel.as_ref().is_some_and(|h| h.editing());
         let key = match event.keysym {
+            Keysym::space if editing => Key::Text(" ".into()),
+            Keysym::BackSpace => Key::Back,
             Keysym::Escape => Key::Escape,
             Keysym::Tab => Key::Tab(1),
             Keysym::ISO_Left_Tab => Key::Tab(-1),

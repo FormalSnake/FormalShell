@@ -145,6 +145,9 @@ pub enum Kind {
     /// A shape budding off a line on `edge`, for the gallery.
     Shoulders { edge: fs_chrome::types::Edge, span: f64, depth: f64, run: f64 },
     Marquee { text: String, ink: Ink, max: f64 },
+    /// A square of modules, one string of `1`s and `0`s per row (a QR
+    /// code), centred at the largest whole module that fits.
+    Matrix { rows: Vec<String> },
 }
 
 /// One element: what it is, how wide it sits, and how it is addressed.
@@ -172,7 +175,7 @@ impl El {
         let width = match &kind {
             Kind::Column { .. } | Kind::Separator { vertical: false, .. } | Kind::Track { .. } | Kind::Group { .. } => Size::Fill,
             Kind::Cell { state, .. } if !state.chip => Size::Fill,
-            Kind::Input { .. } => Size::Fill,
+            Kind::Input { .. } | Kind::Matrix { .. } => Size::Fill,
             _ => Size::Hug,
         };
         Self { kind, width, pad: [0.0; 4], key: None, stop: false, on: None, tip: None, centred: false, top: false }

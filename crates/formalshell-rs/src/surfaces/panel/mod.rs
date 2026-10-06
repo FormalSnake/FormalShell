@@ -19,6 +19,7 @@
 pub mod audio;
 pub mod gallery;
 pub mod host;
+pub mod network;
 pub mod standin;
 
 use fs_theme::theme::Theme;
@@ -35,6 +36,16 @@ pub struct View<'a> {
     pub output: (f64, f64),
     /// The stop holding the keyboard cursor.
     pub cursor: Option<&'a str>,
+}
+
+/// A key reaching an inline text field (Panel.qml's `inlineEditorFocused`).
+#[derive(Clone, Debug, PartialEq)]
+pub enum Edit {
+    Insert(String),
+    Back,
+    Tab,
+    Submit,
+    Cancel,
 }
 
 /// What a panel may do from an input.
@@ -75,6 +86,13 @@ pub trait Panel {
     fn body(&self, v: &View) -> El;
     /// A fresh open: where the cursor starts, what resets.
     fn opened(&mut self) {}
+    /// Closed, or handed over to another panel.
+    fn closed(&mut self) {}
+    /// A text field holds the keyboard: every key goes to [`Panel::edit`].
+    fn editing(&self) -> bool {
+        false
+    }
+    fn edit(&mut self, _e: Edit, _fx: &mut Effect) {}
     /// An element's `on` action fired.
     fn event(&mut self, _ev: &Event, _fx: &mut Effect) {}
     /// Enter or Space on a stop.
@@ -127,6 +145,7 @@ pub fn build(name: &str) -> Option<Box<dyn Panel>> {
     let id = known(name)?;
     Some(match id {
         "audio" => Box::new(audio::Audio::default()),
+        "network" => Box::new(network::Network::default()),
         _ => Box::new(standin::StandIn::new(id)),
     })
 }

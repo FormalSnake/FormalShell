@@ -1,5 +1,5 @@
 { lib, stdenvNoCC, rustPlatform, pkg-config, makeWrapper, fontconfig, libxkbcommon, pipewire, lucide-font, nerd-fonts, matugen, brightnessctl
-, wireplumber, cava, mpv, curl, util-linux, uxplay, iphone-bridge, openscq30, nothingctl, earbuds, git }:
+, wireplumber, cava, mpv, curl, util-linux, uxplay, iphone-bridge, openscq30, nothingctl, earbuds, git, qrencode, networkmanager }:
 
 rustPlatform.buildRustPackage {
   pname = "formalshell-rs";
@@ -42,8 +42,8 @@ rustPlatform.buildRustPackage {
       --set-default FS_RS_ICON_FONT ${lucide-font}/share/fonts/truetype/lucide.ttf \
       --set-default FS_RS_FONT_DIRS ${nerd-fonts.symbols-only}/share/fonts \
       --set-default FS_TEMPLATE_DIR $out/share/formalshell-rs/templates \
-      --prefix PATH : ${lib.makeBinPath [ matugen brightnessctl wireplumber cava mpv curl util-linux git ]} \
-      --suffix PATH : ${lib.makeBinPath ([ uxplay iphone-bridge ] ++ lib.optionals (lib.meta.availableOn stdenvNoCC.hostPlatform earbuds) [ earbuds openscq30 ] ++ lib.optional (lib.meta.availableOn stdenvNoCC.hostPlatform nothingctl) nothingctl)}
+      --prefix PATH : ${lib.makeBinPath [ matugen brightnessctl wireplumber cava mpv curl util-linux git qrencode ]} \
+      --suffix PATH : ${lib.makeBinPath ([ uxplay iphone-bridge networkmanager ] ++ lib.optionals (lib.meta.availableOn stdenvNoCC.hostPlatform earbuds) [ earbuds openscq30 ] ++ lib.optional (lib.meta.availableOn stdenvNoCC.hostPlatform nothingctl) nothingctl)}
   '';
 
   meta = {

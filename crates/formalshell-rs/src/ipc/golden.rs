@@ -162,6 +162,25 @@ fn stub() -> Registry<()> {
                 functions: vec![f("status", &[], Type::String, |_, _| s("{}")), f("gpu", &[], Type::String, |_, _| s("{}"))],
             },
             Target {
+                name: "network",
+                functions: vec![
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                    f("connect", &[("ssid", Type::String), ("psk", Type::String)], Type::String, |_, a| {
+                        s(format!("connect {} {}", a[0].str(), a[1].str()))
+                    }),
+                    f(
+                        "connectEap",
+                        &[("ssid", Type::String), ("identity", Type::String), ("password", Type::String)],
+                        Type::String,
+                        |_, a| s(format!("connectEap {} {} {}", a[0].str(), a[1].str(), a[2].str())),
+                    ),
+                    f("forget", &[("ssid", Type::String)], Type::String, |_, a| s(format!("forget {}", a[0].str()))),
+                    f("wifi", &[("enabled", Type::Bool)], Type::String, |_, a| s(format!("wifi {}", a[0].bool()))),
+                    f("speedtest", &[], Type::String, |_, _| s("ok")),
+                    f("speedstatus", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
                 name: "plugins",
                 functions: vec![
                     f("list", &[], Type::String, |_, _| s("[]")),
@@ -302,6 +321,7 @@ fn signatures_match_qml() {
         super::airplay::target(),
         super::visualizer::target(),
         super::monitor::target(),
+        super::network::target(),
         super::plugins::target(),
         super::caffeinate::target(),
         super::gallery::target(),

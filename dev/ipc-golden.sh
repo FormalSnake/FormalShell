@@ -119,6 +119,16 @@ ShellRoot {
         function status(): string { return "{}" }
     }
     IpcHandler {
+        target: "network"
+        function status(): string { return "{}" }
+        function connect(ssid: string, psk: string): string { return "connect " + ssid + " " + psk }
+        function connectEap(ssid: string, identity: string, password: string): string { return "connectEap " + ssid + " " + identity + " " + password }
+        function forget(ssid: string): string { return "forget " + ssid }
+        function wifi(enabled: bool): string { return "wifi " + enabled }
+        function speedtest(): string { return "ok" }
+        function speedstatus(): string { return "{}" }
+    }
+    IpcHandler {
         target: "monitor"
         function status(): string { return "{}" }
         function gpu(): string { return "{}" }
@@ -385,6 +395,19 @@ rec show earbuds set
 rec call workspaces status
 rec call workspaces status x
 rec show workspaces
+rec call network status
+rec call network connect FORMALTEST
+rec call network connect FORMALTEST psk
+rec call network connect 'a b' ''
+rec call network connectEap FORMALTEST-EAP id pw
+rec call network forget FORMALTEST
+rec call network wifi true
+rec call network wifi 0
+rec call network wifi maybe
+rec call network speedtest
+rec call network speedstatus x
+rec show network
+rec show network connectEap
 rec call monitor status
 rec call monitor status x
 rec call monitor gpu

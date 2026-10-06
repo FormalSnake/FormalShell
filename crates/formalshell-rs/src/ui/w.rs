@@ -165,6 +165,10 @@ pub fn marquee(text: impl Into<String>, max: f64) -> El {
     El::new(Kind::Marquee { text: text.into(), ink: Ink::Fg, max })
 }
 
+pub fn matrix(rows: Vec<String>) -> El {
+    El::new(Kind::Matrix { rows })
+}
+
 /// PanelHero.qml's parts.
 pub struct Hero {
     pub glyph: String,

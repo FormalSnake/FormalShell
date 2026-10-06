@@ -20,6 +20,7 @@ mod golden;
 mod media;
 mod overnight;
 mod monitor;
+mod network;
 mod panel;
 mod plugins;
 mod radio;
@@ -63,6 +64,7 @@ fn registry() ->&'static Registry<App> {
             earbuds::target(),
             workspaces::target(),
             monitor::target(),
+            network::target(),
             plugins::target(),
             caffeinate::target(),
             gallery::target(),

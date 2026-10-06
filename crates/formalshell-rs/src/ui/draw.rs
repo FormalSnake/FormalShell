@@ -231,12 +231,16 @@ pub fn measure(cx: &mut Cx, el: &El, avail: f64) -> (f64, f64) {
         }
         Kind::Swatch { w, h, .. } => (*w, *h),
         Kind::Sparkline(_) => (inner, s.control_height),
+        Kind::Matrix { rows } => {
+            let side = matrix_module(inner, rows.len()) * rows.len() as f64;
+            (inner, side)
+        }
         Kind::Shoulders { edge, span, depth, run } => {
             if edge.is_vertical() { (*depth, span + run * 2.0) } else { (span + run * 2.0, *depth) }
         }
     };
     let w = match el.kind {
-        Kind::Grid { .. } | Kind::Track { .. } | Kind::Input { .. } | Kind::Sparkline(_) => avail,
+        Kind::Grid { .. } | Kind::Track { .. } | Kind::Input { .. } | Kind::Sparkline(_) | Kind::Matrix { .. } => avail,
         _ => width_of(el, avail, nw + ps + pe),
     };
     (w, nh + pt + pb)
@@ -473,6 +477,7 @@ pub fn paint(cx: &mut Cx, el: &El, rect: Rect, path: &str) {
             cx.done(last);
         }
         Kind::Sparkline(series) => sparkline(cx, inner, series, path),
+        Kind::Matrix { rows } => matrix(cx, inner, rows, path),
         Kind::Shoulders { edge, span, depth, run } => shoulders(cx, inner, *edge, *span, *depth, *run, path),
     }
     if let Some(on) = &el.on
@@ -926,6 +931,51 @@ fn points(values: &[f64], w: f64, h: f64, ceiling: f64, capacity: usize) -> Vec<
             (x, y)
         })
         .collect()
+}
+
+/// The largest whole module `n` of which fit across `width`.
+fn matrix_module(width: f64, n: usize) -> f64 {
+    if n == 0 { 0.0 } else { (width / n as f64).floor().max(1.0) }
+}
+
+/// NetworkPanel.qml's QR canvas: the quiet zone in whichever of
+/// foreground and background is lighter, the modules in the darker, one
+/// rect per run of set modules along a row.
+fn matrix(cx: &mut Cx, r: Rect, rows: &[String], path: &str) {
+    let n = rows.len();
+    let m = matrix_module(r.width(), n);
+    if m <= 0.0 {
+        return;
+    }
+    let side = m * n as f64;
+    let x0 = (r.x0 + ((r.width() - side) / 2.0).floor()).round();
+    let y0 = r.y0.round();
+    let (fg, bg) = (cx.theme.colors.get("foreground"), cx.theme.colors.get("background"));
+    let light = |c: Rgba| c.r.max(c.g).max(c.b) + c.r.min(c.g).min(c.b);
+    let (module, quiet) = if light(fg) < light(bg) { (fg, bg) } else { (bg, fg) };
+    let (module, quiet) = (cx.a(module), cx.a(quiet));
+    let mut p = cx.painter(path);
+    p.rect(irect(Rect::new(x0, y0, x0 + side, y0 + side)), quiet, 0.0);
+    for (y, row) in rows.iter().enumerate() {
+        let bits = row.as_bytes();
+        let mut x = 0;
+        while x < bits.len() {
+            if bits[x] != b'1' {
+                x += 1;
+                continue;
+            }
+            let start = x;
+            while x < bits.len() && bits[x] == b'1' {
+                x += 1;
+            }
+            let rx = x0 + start as f64 * m;
+            let ry = y0 + y as f64 * m;
+            p.rect(irect(Rect::new(rx, ry, rx + (x - start) as f64 * m, ry + m)), module, 0.0);
+        }
+    }
+    let last = p.last();
+    p.finish();
+    cx.done(last);
 }
 
 fn sparkline(cx: &mut Cx, r: Rect, series: &super::el::Series, path: &str) {
