@@ -1,0 +1,94 @@
+//! Battery.qml: the laptop battery's state icon and percentage, gone from
+//! the strip without one. Critical and low while discharging put their
+//! colour on the border and the ink; right click flips the percentage.
+
+use fs_system::power::model::{self, DeviceState, battery_icon, charge_state_label, charge_threshold_active, format_duration};
+
+use crate::services::devices::{Op, power};
+use crate::store::Topic;
+use crate::surfaces::bar::cell::{Action, Button, Cell, Env, Look, Part, Tone, View};
+
+#[derive(Default, PartialEq)]
+struct Read {
+    battery: Option<power::Battery>,
+    on_battery: bool,
+    warn: f64,
+    critical: f64,
+    show_label: bool,
+}
+
+#[derive(Default)]
+pub struct Battery {
+    r: Read,
+}
+
+impl Cell for Battery {
+    fn reads(&self) -> &'static [Topic] {
+        &[Topic::Devices, Topic::Config, Topic::State]
+    }
+
+    fn read(&mut self, env: &Env) -> bool {
+        let c = &env.store.config;
+        let p = &env.store.devices.power;
+        // state.json's override wins; null there falls back to settings.
+        let show_label = env
+            .store
+            .state
+            .data
+            .battery_show_percent
+            .as_bool()
+            .unwrap_or_else(|| c.bool("bar.widgets.battery.showLabel").unwrap_or(true));
+        let r = Read {
+            battery: p.battery.clone(),
+            on_battery: p.on_battery,
+            warn: c.f64("battery.warnPercent").unwrap_or(model::DEFAULT_WARN_PCT),
+            critical: c.f64("battery.criticalPercent").unwrap_or(model::DEFAULT_CRITICAL_PCT),
+            show_label,
+        };
+        let changed = r != self.r;
+        self.r = r;
+        changed
+    }
+
+    fn view(&self, look: &Look) -> View {
+        let r = &self.r;
+        let Some(b) = &r.battery else { return View::hidden() };
+        let pct = b.percent;
+        let discharging = b.state == DeviceState::Discharging;
+        let charging = b.state == DeviceState::Charging;
+        let critical = discharging && pct <= r.critical;
+        let low = discharging && !critical && pct <= r.warn;
+        let threshold = charge_threshold_active(pct, b.state, b.rate, b.time_to_full, r.on_battery);
+        let icon = battery_icon(pct, r.on_battery, threshold, Some(r.warn));
+        let head = format!("BATTERY {pct}%");
+        let body = if threshold {
+            format!("{head} / THRESHOLD")
+        } else if charging && b.time_to_full > 0.0 {
+            format!("{head} / FULL IN {}", format_duration(b.time_to_full))
+        } else if discharging && b.time_to_empty > 0.0 {
+            format!("{head} / {} LEFT", format_duration(b.time_to_empty))
+        } else {
+            format!("{head} / {}", charge_state_label(pct, b.state, r.on_battery, threshold))
+        };
+        let tooltip = format!("{body} / RIGHT {}", if r.show_label { "HIDE %" } else { "SHOW %" });
+        let mut parts = vec![Part::Icon { name: icon.into(), dim: false, dot: false }];
+        if r.show_label {
+            parts.push(Part::Label { text: format!("{pct}%"), weight: None });
+        }
+        let tone = if critical {
+            Tone::Destructive
+        } else if low {
+            Tone::Warning
+        } else {
+            Tone::Rest
+        };
+        View::new(parts, look.xs).panel("power").tooltip(tooltip).tone(tone)
+    }
+
+    fn click(&mut self, button: Button, _: (f64, f64), _: &Env) -> Action {
+        match button {
+            Button::Right => Action::Device(Op::BatteryPercent(!self.r.show_label)),
+            _ => Action::Panel("power"),
+        }
+    }
+}

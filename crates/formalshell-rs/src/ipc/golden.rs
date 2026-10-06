@@ -104,6 +104,26 @@ fn stub() -> Registry<()> {
                 ],
             },
             Target {
+                name: "overnight",
+                functions: vec![
+                    f("toggle", &[], Type::String, |_, _| s("ok")),
+                    f("enable", &[], Type::String, |_, _| s("ok")),
+                    f("disable", &[], Type::String, |_, _| s("ok")),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
+                name: "earbuds",
+                functions: vec![
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                    f("devices", &[], Type::String, |_, _| s("[]")),
+                    f("select", &[("key", Type::String)], Type::String, |_, a| s(format!("select {}", a[0].str()))),
+                    f("set", &[("control", Type::String), ("value", Type::String)], Type::String, |_, a| {
+                        s(format!("set {} {}", a[0].str(), a[1].str()))
+                    }),
+                ],
+            },
+            Target {
                 name: "probe",
                 functions: vec![
                     f("s", &[STR], Type::String, |_, a| s(format!("[{}]", a[0].str()))),
@@ -152,11 +172,24 @@ fn no_instance(text: &str) -> bool {
     text.starts_with("No running instances for \"") && text.ends_with("\"\n")
 }
 
-/// qs lists targets and functions out of a hash; the set is what holds.
-fn sorted(text: &str) -> Vec<&str> {
-    let mut lines: Vec<&str> = text.lines().collect();
-    lines.sort();
-    lines
+/// qs lists targets and functions out of a hash, so only the set holds.
+/// Each recording saw the targets of its own branch, so every target block
+/// it lists must appear in ours with the same functions; ours may list more.
+fn blocks(text: &str) -> std::collections::BTreeMap<&str, Vec<&str>> {
+    let mut out = std::collections::BTreeMap::new();
+    let mut current: Option<&str> = None;
+    for line in text.lines() {
+        if let Some(name) = line.strip_prefix("target ") {
+            current = Some(name);
+            out.entry(name).or_insert_with(Vec::new);
+        } else if let Some(name) = current {
+            out.get_mut(name).expect("opened above").push(line);
+        }
+    }
+    for functions in out.values_mut() {
+        functions.sort();
+    }
+    out
 }
 
 #[test]
@@ -175,7 +208,10 @@ fn matches_qs_ipc() {
         if !case.live {
             assert!(no_instance(&stdout) && no_instance(&case.stdout), "stdout of {what}: {stdout:?}");
         } else if listing {
-            assert_eq!(sorted(&stdout), sorted(&case.stdout), "stdout of {what}");
+            let ours = blocks(&stdout);
+            for (name, functions) in blocks(&case.stdout) {
+                assert_eq!(ours.get(name), Some(&functions), "target {name} in stdout of {what}");
+            }
         } else {
             assert_eq!(stdout, case.stdout, "stdout of {what}");
         }
@@ -195,6 +231,8 @@ fn signatures_match_qml() {
         super::panel::target(),
         super::media::target(),
         super::tray::target(),
+        super::overnight::target(),
+        super::earbuds::target(),
     ] {
         let defs: Vec<String> = real.functions.iter().map(|f| f.definition()).collect();
         let qml = stub.targets.iter().find(|t| t.name == real.name).expect("a stub target");

@@ -1,6 +1,7 @@
-//! BluetoothWidget.qml: the default adapter's state as one icon.
+//! BluetoothWidget.qml: the default adapter's state as one icon; right
+//! click flips its radio.
 
-use crate::services::devices;
+use crate::services::devices::{self, Op};
 use crate::store::Topic;
 use crate::surfaces::bar::cell::{Action, Button, Cell, Env, Look, View};
 
@@ -46,6 +47,7 @@ impl Cell for Bluetooth {
 
     fn click(&mut self, button: Button, _: (f64, f64), _: &Env) -> Action {
         match button {
+            Button::Right if self.state.powered.is_some() => Action::Device(Op::ToggleBluetooth),
             Button::Right => Action::None,
             _ => Action::Panel("bluetooth"),
         }

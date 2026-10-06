@@ -25,6 +25,11 @@ vm-test:
 vm-lint:
     ./dev/vm.sh sync
     ./dev/vm.sh run 'git add -A && nix flake check -L'
+# dev/ipc-golden.sh's recording, synced and run under one lock (dev/vm-lock.sh
+# just vm-ipc-golden > crates/formalshell-rs/tests/ipc-golden.jsonl).
+vm-ipc-golden:
+    @./dev/vm.sh sync >&2
+    @./dev/vm.sh run bash dev/ipc-golden.sh
 vm-smoke *FLAGS:
     ./dev/vm.sh smoke {{FLAGS}}
 # nix/testvm.nix's services.greetd needs a rebuilt VM (`vm-down && vm-up`)

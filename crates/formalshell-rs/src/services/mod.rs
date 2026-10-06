@@ -10,6 +10,7 @@ pub mod devices;
 pub mod hyprland;
 pub mod icons;
 pub mod media;
+pub mod overnight;
 pub mod state;
 mod watch;
 pub mod theme;

@@ -2,14 +2,15 @@
 # Records how `qs ipc` answers, as the goldens formalshell-ipc is held to
 # (crates/formalshell-rs/tests/ipc-golden.jsonl). Runs inside the VM:
 #
-#   dev/vm-lock.sh dev/vm.sh run bash dev/ipc-golden.sh > crates/formalshell-rs/tests/ipc-golden.jsonl
+#   dev/vm-lock.sh just vm-ipc-golden > crates/formalshell-rs/tests/ipc-golden.jsonl
 #
 # The shell is a stub of IpcHandlers on Qt's offscreen platform, so no
 # compositor is involved: what is recorded is qs's own argument parsing,
 # type conversion, error strings, output framing and exit codes. `debug`,
 # `theme` and `wallpaper` carry DebugIpc.qml's, ThemeIpc.qml's and
-# WallpaperIpc.qml's exact signatures, `bar`, `panel` and `media` BarIpc.qml's,
-# PanelIpc.qml's and MediaIpc.qml's `status`; `probe` covers every type qs
+# WallpaperIpc.qml's exact signatures, `bar`, `panel`, `media`, `overnight` and
+# `earbuds` BarIpc.qml's, PanelIpc.qml's, MediaIpc.qml's `status`,
+# OvernightIpc.qml's and EarbudsIpc.qml's; `probe` covers every type qs
 # converts and the function names that collide with qs's subcommands.
 set -euo pipefail
 
@@ -70,6 +71,18 @@ ShellRoot {
         function menu(id: string): string { return "menu " + id }
         function menucursor(delta: string): string { return "menucursor " + delta }
         function menuactivate(): string { return "ok" }
+        target: "overnight"
+        function toggle(): string { return "ok" }
+        function enable(): string { return "ok" }
+        function disable(): string { return "ok" }
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "earbuds"
+        function status(): string { return "{}" }
+        function devices(): string { return "[]" }
+        function select(key: string): string { return "select " + key }
+        function set(control: string, value: string): string { return "set " + control + " " + value }
     }
     IpcHandler {
         target: "probe"
@@ -273,6 +286,19 @@ rec show panel
 rec call media status
 rec call media status x
 rec show media
+rec call overnight toggle
+rec call overnight status x
+rec show overnight
+rec call earbuds status
+rec call earbuds select
+rec call earbuds select 'nothing:AA:BB:CC:DD:EE:FF'
+rec call earbuds set anc
+rec call earbuds set anc transparency
+rec call earbuds set eq-bass -2
+rec call earbuds set eq-bass -- -2
+rec call earbuds set '[noise,anc]'
+rec show earbuds
+rec show earbuds set
 
 kill "$qs_pid"
 wait "$qs_pid" 2>/dev/null || true

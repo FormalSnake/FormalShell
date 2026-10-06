@@ -18,6 +18,10 @@ fs-system = { path = "../fs-system" }
 fs-mpris = { path = "../fs-mpris" }
 fs-bluez = { path = "../fs-bluez" }
 fs-tray = { path = "../fs-tray" }
+fs-audio = { path = "../fs-audio", features = ["pipewire"] }
+fs-devices = { path = "../fs-devices" }
+fs-network = { path = "../fs-network" }
+fs-upower = { path = "../fs-upower" }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 zbus = "5"
 parley = "0.11"

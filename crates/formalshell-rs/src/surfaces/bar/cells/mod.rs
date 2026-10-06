@@ -8,12 +8,17 @@
 mod absent;
 mod active_window;
 mod audio;
+mod battery;
 mod bell;
 mod bluetooth;
 mod chevron;
 mod clock;
+mod display;
+mod dualsense;
+mod earbuds;
 mod command;
 mod launcher;
+mod mic;
 mod network;
 mod now_playing;
 pub mod tray;
@@ -36,6 +41,11 @@ pub fn build(entry: &Entry, region_entries: &[Entry]) -> Box<dyn Cell> {
             Builtin::Network => Box::new(network::Network::default()),
             Builtin::Bluetooth => Box::new(bluetooth::Bluetooth::default()),
             Builtin::Tray => Box::new(tray::Tray::strip()),
+            Builtin::Battery => Box::new(battery::Battery::default()),
+            Builtin::Microphone => Box::new(mic::Mic::default()),
+            Builtin::Earbuds => Box::new(earbuds::Earbuds::new()),
+            Builtin::Display => Box::new(display::Display::default()),
+            Builtin::Dualsense => Box::new(dualsense::Dualsense::default()),
             Builtin::Weather => Box::new(weather::Weather),
             Builtin::Bell => Box::new(bell::Bell::default()),
             Builtin::Chevron => Box::new(chevron::Chevron::new(entry.region, region_entries)),

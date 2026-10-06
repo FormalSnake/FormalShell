@@ -467,6 +467,7 @@ impl App {
         let panel = self.panel_open().map(str::to_owned);
         let overflow = self.overflow_open();
         self.bar.set_open(panel.as_deref(), overflow, now);
+        devices::earbuds::panel(panel.as_deref() == Some("earbuds"));
         if let Some(p) = &mut self.overflow {
             for s in &mut p.slots {
                 let open = panel.as_deref().is_some_and(|n| s.view.panel == Some(n));
@@ -889,14 +890,9 @@ impl App {
                 self.set_overflow(region, open);
             }
             Action::Workspace(id) => hyprland::focus_workspace(&id),
-            Action::Volume(v) => {
+            Action::Device(op) => {
                 if let Some(rt) = &self.runtime {
-                    rt.service(move |ctx| devices::set_volume(ctx, v));
-                }
-            }
-            Action::ToggleMute => {
-                if let Some(rt) = &self.runtime {
-                    rt.service(devices::toggle_mute);
+                    rt.service(move |ctx| devices::run(ctx, op));
                 }
             }
             Action::Tray { id, click: TrayClick::Menu, offset } => {

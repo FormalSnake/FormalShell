@@ -519,6 +519,90 @@ pub fn bluetooth_devices(values: &[bluetooth::Device], override_json: Option<&st
         .collect()
 }
 
+/// A number as `JSON.stringify` prints it: whole values without a fraction,
+/// NaN and the infinities as null.
+fn js_number(n: f64) -> Json {
+    if !n.is_finite() {
+        Json::Null
+    } else if n == n.trunc() && n.abs() < 9_007_199_254_740_992.0 {
+        Json::from(n as i64)
+    } else {
+        Json::from(n)
+    }
+}
+
+fn value_json(v: &Value) -> Json {
+    match v {
+        Value::Null | Value::Other => Json::Null,
+        Value::Bool(b) => Json::Bool(*b),
+        Value::Num(n) => js_number(*n),
+        Value::Str(s) => Json::String(s.clone()),
+    }
+}
+
+impl ControlKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ControlKind::Choice => "choice",
+            ControlKind::Toggle => "toggle",
+            ControlKind::Range => "range",
+        }
+    }
+}
+
+/// The device as `JSON.stringify` prints model.js's object, key for key.
+pub fn to_json(dev: &Device) -> Json {
+    let batteries: Vec<Json> = dev
+        .batteries
+        .iter()
+        .map(|b| {
+            serde_json::json!({
+                "id": b.id.as_str(),
+                "label": b.label,
+                "level": js_number(b.level),
+                "charging": b.charging,
+                "inEar": b.in_ear,
+            })
+        })
+        .collect();
+    let controls: Vec<Json> = dev
+        .controls
+        .iter()
+        .map(|c| {
+            let options = c.options.as_ref().map(|list| {
+                list.iter()
+                    .map(|o| serde_json::json!({"value": value_json(&o.value), "label": o.label, "icon": o.icon}))
+                    .collect::<Vec<Json>>()
+            });
+            serde_json::json!({
+                "key": c.key,
+                "kind": c.kind.as_str(),
+                "label": c.label,
+                "hint": c.hint,
+                "section": c.section,
+                "value": value_json(&c.value),
+                "enabled": c.enabled,
+                "options": options,
+                "min": js_number(c.min),
+                "max": js_number(c.max),
+                "step": js_number(c.step),
+                "unit": c.unit.as_str(),
+            })
+        })
+        .collect();
+    serde_json::json!({
+        "key": dev.key,
+        "backend": dev.backend,
+        "address": dev.address,
+        "name": dev.name,
+        "kind": dev.kind.as_str(),
+        "connected": dev.connected,
+        "batteries": batteries,
+        "controls": controls,
+        "stateLine": dev.state_line,
+    })
+}
+
 /// `^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$`, the only shape any adapter lets
 /// reach a child process's argv.
 pub fn valid_address(address: &str) -> bool {
@@ -548,6 +632,16 @@ mod tests {
 
     fn opt(value: &str) -> ControlOption {
         ControlOption::new(value, "", "")
+    }
+
+    #[test]
+    fn to_json_prints_as_json_stringify() {
+        let mut d = buds("k", true, vec![bat(BatteryId::Left, 40.0)]);
+        d.controls.push(range("adaptive", "Level", "s", 40.0, 0.0, 100.0, 1.0, Unit::Percent));
+        assert_eq!(
+            to_json(&d).to_string(),
+            r#"{"key":"k","backend":"test","address":"","name":"k","kind":"earbuds","connected":true,"batteries":[{"id":"left","label":"","level":40,"charging":false,"inEar":null}],"controls":[{"key":"adaptive","kind":"range","label":"Level","hint":"","section":"s","value":40,"enabled":true,"options":null,"min":0,"max":100,"step":1,"unit":"percent"}],"stateLine":""}"#
+        );
     }
 
     #[test]

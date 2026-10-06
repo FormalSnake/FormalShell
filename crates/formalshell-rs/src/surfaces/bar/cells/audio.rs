@@ -1,24 +1,27 @@
-//! AudioWidget.qml: the default sink's volume, muted or not; the wheel
-//! steps it by 5%.
+//! AudioWidget.qml: the default sink's volume, muted or not, with the
+//! percentage opt-in (`bar.widgets.audio.showLabel`). Right click mutes,
+//! the wheel steps it by 5%.
 
-use crate::services::devices;
+use crate::services::devices::{self, Op};
 use crate::store::Topic;
-use crate::surfaces::bar::cell::{Action, Button, Cell, Env, Look, View};
+use crate::surfaces::bar::cell::{Action, Button, Cell, Env, Look, Part, View};
 
 #[derive(Default)]
 pub struct Audio {
     state: devices::Audio,
+    show_label: bool,
 }
 
 impl Cell for Audio {
     fn reads(&self) -> &'static [Topic] {
-        &[Topic::Devices]
+        &[Topic::Devices, Topic::Config]
     }
 
     fn read(&mut self, env: &Env) -> bool {
         let state = env.store.devices.audio.clone();
-        let changed = state != self.state;
-        self.state = state;
+        let show_label = env.store.config.bool("bar.widgets.audio.showLabel").unwrap_or(false);
+        let changed = state != self.state || show_label != self.show_label;
+        (self.state, self.show_label) = (state, show_label);
         changed
     }
 
@@ -26,20 +29,22 @@ impl Cell for Audio {
         let s = &self.state;
         let percent = (s.volume.unwrap_or(0.0) * 100.0).round();
         let head = if s.muted { "OUTPUT MUTED" } else { "OUTPUT VOLUME" };
-        View::icon(if s.muted { "volume-x" } else { "volume-2" }, look)
-            .panel("audio")
-            .tooltip(format!("{head} / {percent}% / RIGHT MUTE"))
+        let mut parts = vec![Part::Icon { name: if s.muted { "volume-x" } else { "volume-2" }.into(), dim: false, dot: false }];
+        if self.show_label {
+            parts.push(Part::Label { text: format!("{percent}%"), weight: None });
+        }
+        View::new(parts, look.xs).panel("audio").tooltip(format!("{head} / {percent}% / RIGHT MUTE"))
     }
 
     fn click(&mut self, button: Button, _: (f64, f64), _: &Env) -> Action {
         match button {
-            Button::Right => Action::ToggleMute,
+            Button::Right => Action::Device(Op::ToggleMute),
             _ => Action::Panel("audio"),
         }
     }
 
     fn wheel(&mut self, up: bool, _: &Env) -> Action {
-        let v = self.state.volume.unwrap_or(0.0);
-        Action::Volume(v + if up { 0.05 } else { -0.05 })
+        let Some(v) = self.state.volume else { return Action::None };
+        Action::Device(Op::Volume(v + if up { 0.05 } else { -0.05 }))
     }
 }
