@@ -271,7 +271,6 @@ pub fn set(fields: Vec<Field>) {
 /// Mode goes first so a retheme the wallpaper change triggers already reads the
 /// final mode. `mode` is the picker's Dark/Light set, ignored when it is
 /// neither.
-#[allow(dead_code)]
 pub fn set_wallpaper(path: &str, mode: Option<&str>) {
     let mut fields = Vec::new();
     if let Some(mode @ ("dark" | "light")) = mode {

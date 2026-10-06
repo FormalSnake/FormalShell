@@ -7,7 +7,6 @@ use serde_json::json;
 
 use super::registry::{Function, Target, Type, Value};
 use crate::scene::IRect;
-use crate::theme;
 use crate::wayland::App;
 
 fn text(s: impl Into<String>) -> Value {
@@ -48,10 +47,11 @@ fn dump(app: &mut App, _: &[Value]) -> Value {
     let h = &app.store.hyprland;
     let c = &h.compositor;
     let edge = app.bar.edge();
-    let thickness = crate::surfaces::bar::thickness(edge);
+    let thickness = app.bar.thickness();
     let inset = |e: Edge| if e == edge { thickness } else { 0 };
     let rect = |r: IRect| json!({"x": r.x, "y": r.y, "width": r.w, "height": r.h});
-    let reach = theme::radius_xl() as i32;
+    let theme = &app.store.theme.theme;
+    let reach = number(theme.radii.xl);
     let screen = app.bar_output_name();
     let join = match app.debug_join() {
         Some((x, width)) => json!({"edge": edge.as_str(), "x": x, "width": width, "reach": reach, "screen": screen}),
@@ -71,9 +71,9 @@ fn dump(app: &mut App, _: &[Value]) -> Value {
         "bar": [{"screen": screen, "edge": edge.as_str(), "line": [rect(first), rect(second)], "paint": null}],
         "join": join,
         "theme": {
-            "radius": theme::RADIUS_BASE as i32,
+            "radius": number(theme.radius),
             "radiusXl": reach,
-            "borderWidth": theme::EDGE_WIDTH,
+            "borderWidth": number(theme.border_width),
             "barPosition": edge.as_str(),
             "edgeInset": {
                 "top": inset(Edge::Top),
@@ -84,6 +84,11 @@ fn dump(app: &mut App, _: &[Value]) -> Value {
         },
     });
     text(dump.to_string())
+}
+
+/// A number as JSON.stringify prints it: no `.0` on a whole one.
+fn number(n: f64) -> serde_json::Value {
+    if n.fract() == 0.0 && n.abs() < 1e15 { json!(n as i64) } else { json!(n) }
 }
 
 fn join(app: &mut App, args: &[Value]) -> Value {

@@ -8,8 +8,10 @@ publish = false
 async-channel = "2.5"
 async-executor = "1.14"
 async-io = "2.6"
+async-process = "2"
 calloop = "0.14"
 chrono = "0.4"
+fs-theme = { version = "0.1.0", path = "../fs-theme" }
 futures-lite = "2.6"
 fs-chrome = { path = "../fs-chrome" }
 fs-system = { path = "../fs-system" }

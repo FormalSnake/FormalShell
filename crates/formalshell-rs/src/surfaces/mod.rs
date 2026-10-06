@@ -10,27 +10,53 @@ use fs_chrome::bar::workspaces::{self, SlotOpts};
 
 use crate::services::hyprland::{Window, Workspace};
 use crate::store::Topic;
-use crate::theme;
+use crate::services::theme;
 use crate::wayland::App;
+
+/// `workspaces.persistent`'s default: slots 1..n show even when empty.
+const PERSISTENT_WORKSPACES: i64 = 5;
 
 pub fn changed(app: &mut App, topic: Topic) {
     match topic {
         Topic::Clock => app.bar.set_clock(&app.store.clock.text),
         Topic::Config => {
-            let config = &app.store.config;
-            let edge = layout::position(config.str("bar.position"));
-            app.bar.motion_enabled = config.bool("motion.enabled").unwrap_or(true);
+            let settings = app.store.config.settings().clone();
+            if app.store.theme.apply(theme::Diff::Settings(settings)) {
+                changed(app, Topic::Theme);
+            }
+            let edge = layout::position(app.store.config.str("bar.position"));
             app.set_bar_edge(edge);
             bar_workspaces(app);
+            theme_inputs(app);
         }
-        Topic::State => {}
+        Topic::State => theme_inputs(app),
         Topic::Hyprland => bar_workspaces(app),
+        Topic::Theme => app.set_bar_theme(),
     }
+}
+
+/// What the theme engine reacts to, once both files have been read.
+fn theme_inputs(app: &App) {
+    let (config, state) = (&app.store.config, &app.store.state);
+    if !config.loaded || !state.loaded {
+        return;
+    }
+    let location = match (config.f64("location.latitude"), config.f64("location.longitude")) {
+        (Some(lat), Some(lon)) => Some((lat, lon)),
+        _ => None,
+    };
+    theme::send_inputs(theme::Inputs {
+        settings: config.settings().clone(),
+        wallpaper: state.data.wallpaper.clone(),
+        mode: state.data.mode.clone(),
+        mode_override: theme::parse_override(&state.data.mode_override),
+        location,
+    });
 }
 
 /// Workspaces.qml's model: the backend's rows through `Bar/workspaces.js`.
 fn bar_workspaces(app: &mut App) {
-    let persistent = app.store.config.f64("workspaces.persistent").map_or(theme::PERSISTENT_WORKSPACES, |n| n as i64);
+    let persistent = app.store.config.f64("workspaces.persistent").map_or(PERSISTENT_WORKSPACES, |n| n as i64);
     let c = &app.store.hyprland.compositor;
     let rows: Vec<workspaces::Workspace> = c.workspaces.iter().map(workspace).collect();
     let windows: Vec<workspaces::Window> = c.windows.iter().map(window).collect();

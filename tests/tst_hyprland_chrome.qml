@@ -2,8 +2,7 @@ import QtQuick
 import QtTest
 import "../shell/Theme/chrome.js" as Chrome
 import "../shell/Theme/style.js" as Style
-import "../shell/Theme/themes/metamorphosis.js" as Metamorphosis
-import "../shell/Theme/themes/pantheon.js" as Pantheon
+import "../shell/Theme/themes.js" as Themes
 
 TestCase {
     name: "HyprlandChrome"
@@ -45,7 +44,7 @@ TestCase {
     // literal are load-bearing: anything else comes back nil and the config
     // silently reads no chrome at all.
     function test_the_shipped_table_renders_the_shipped_chrome() {
-        var out = Chrome.hyprlandChrome(chromeFor(Metamorphosis.STYLE, 10, true));
+        var out = Chrome.hyprlandChrome(chromeFor(Themes.METAMORPHOSIS, 10, true));
         var lines = out.trim().split("\n");
         compare(lines[0].slice(0, 2), "--");
         compare(lines[1].slice(0, 2), "--");
@@ -62,7 +61,7 @@ TestCase {
     // Retro is metamorphosis' chrome on square corners and no blur, which is
     // the same window role: only the two scalars move.
     function test_retro_squares_the_corners_and_keeps_the_window_chrome() {
-        compare(body(Chrome.hyprlandChrome(chromeFor(Metamorphosis.STYLE, 0, false))), expected({
+        compare(body(Chrome.hyprlandChrome(chromeFor(Themes.METAMORPHOSIS, 0, false))), expected({
             rounding: 0, blur: "false", gapsIn: 4, gapsOut: 8, borderSize: 1,
             borderColor: '"primary"', shadow: "false", shadowRange: 4, shadowPower: 3,
             shadowOffset: "{ 0, 0 }", shadowColor: '"rgba(000000ed)"',
@@ -77,7 +76,7 @@ TestCase {
     // and 0.25 is 0x40. A colour arrives as an rgba literal or as the name of
     // a role in formalshell-colors.lua.
     function test_the_pantheon_table_renders_elementarys_window() {
-        compare(body(Chrome.hyprlandChrome(chromeFor(Pantheon.STYLE, 6, true))), expected({
+        compare(body(Chrome.hyprlandChrome(chromeFor(Themes.PANTHEON, 6, true))), expected({
             rounding: 6, blur: "true", gapsIn: 4, gapsOut: 6, borderSize: 1,
             borderColor: '"border"', shadow: "true", shadowRange: 24, shadowPower: 3,
             shadowOffset: "{ 0, 6 }", shadowColor: '"rgba(00000059)"',
@@ -88,7 +87,7 @@ TestCase {
     function test_rounding_is_a_non_negative_int() {
         // Hyprland's rounding is an int and rejects a negative one, and
         // theme.radius is user-set, so both have to land inside that range.
-        var t = Metamorphosis.STYLE;
+        var t = Themes.METAMORPHOSIS;
         compare(Chrome.hyprlandChrome(chromeFor(t, 10.6, false)).indexOf("rounding = 11,") >= 0, true);
         compare(Chrome.hyprlandChrome(chromeFor(t, -4, false)).indexOf("rounding = 0,") >= 0, true);
         compare(Chrome.hyprlandChrome(chromeFor(t, "square", false)).indexOf("rounding = 0,") >= 0, true);
@@ -97,7 +96,7 @@ TestCase {
     function test_blur_is_a_real_bool() {
         // Anything but the boolean true renders false: a stray string on a
         // bool option is rejected.
-        var t = Metamorphosis.STYLE;
+        var t = Themes.METAMORPHOSIS;
         compare(Chrome.hyprlandChrome(chromeFor(t, 0, "yes")).indexOf("blur = false,") >= 0, true);
         compare(Chrome.hyprlandChrome(chromeFor(t, 0, undefined)).indexOf("blur = false,") >= 0, true);
     }
@@ -163,11 +162,11 @@ TestCase {
     // nothing left to leave room for: 4 and 8 under shadcn, 4 and 6 under
     // pantheon.
     function test_each_table_publishes_its_own_gaps() {
-        var shadcn = Chrome.hyprlandChrome(chromeFor(Metamorphosis.STYLE, 10, true));
+        var shadcn = Chrome.hyprlandChrome(chromeFor(Themes.METAMORPHOSIS, 10, true));
         compare(shadcn.indexOf("gapsIn = 4,\n") >= 0, true);
         compare(shadcn.indexOf("gapsOut = 8,\n") >= 0, true);
 
-        var pantheon = Chrome.hyprlandChrome(chromeFor(Pantheon.STYLE, 6, true));
+        var pantheon = Chrome.hyprlandChrome(chromeFor(Themes.PANTHEON, 6, true));
         compare(pantheon.indexOf("gapsOut = 6,\n") >= 0, true);
     }
 

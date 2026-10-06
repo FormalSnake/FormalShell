@@ -26,12 +26,10 @@ use crate::runtime::Msg;
 use crate::store::Store;
 use crate::surface::{PixelSurface, Pixels, Surface};
 use crate::surfaces;
-use crate::theme;
 
 /// Anchors the bar's layer on `edge`, across the whole of it, reserving
 /// its own thickness.
-fn place_bar(layer: &LayerSurface, edge: Edge) {
-    let t = surfaces::bar::thickness(edge);
+fn place_bar(layer: &LayerSurface, edge: Edge, t: i32) {
     let (anchor, w, h) = match edge {
         Edge::Top => (Anchor::TOP | Anchor::LEFT | Anchor::RIGHT, 0, t),
         Edge::Bottom => (Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT, 0, t),
@@ -86,10 +84,12 @@ impl App {
         let pixels = Pixels::bind(globals, qh)
             .expect("wp_viewporter, wp_single_pixel_buffer_manager_v1 and wp_alpha_modifier_v1 are required");
 
+        let store = Store::default();
+        let bar = Bar::new(Edge::Top, &store.theme.theme);
         let surface = compositor.create_surface(qh);
         let layer = layer_shell.create_layer_surface(qh, surface, Layer::Top, Some("formalshell:bar"), None);
         layer.set_keyboard_interactivity(KeyboardInteractivity::None);
-        place_bar(&layer, Edge::Top);
+        place_bar(&layer, Edge::Top, bar.thickness());
         let bar_surface = Surface::new("bar", layer, &shm, started);
 
         Self {
@@ -100,8 +100,8 @@ impl App {
             shm,
             pixels,
             qh: qh.clone(),
-            store: Store::default(),
-            bar: Bar::new(Edge::Top),
+            store,
+            bar,
             bar_surface,
             panel: None,
             scrim: None,
@@ -140,8 +140,18 @@ impl App {
             return;
         }
         self.bar.set_edge(edge);
-        place_bar(&self.bar_surface.layer, edge);
+        place_bar(&self.bar_surface.layer, edge, self.bar.thickness());
         self.sync_join();
+    }
+
+    /// The bar repainted off the store's theme, re-placed when its
+    /// thickness moved with it.
+    pub fn set_bar_theme(&mut self) {
+        let before = self.bar.thickness();
+        self.bar.set_theme(&self.store.theme.theme);
+        if self.bar.thickness() != before {
+            place_bar(&self.bar_surface.layer, self.bar.edge(), self.bar.thickness());
+        }
     }
 
     /// The output the bar's workspace slots belong to: the first one the
@@ -166,7 +176,7 @@ impl App {
     /// A panel's own join wins over `debug join`'s while the panel is up.
     fn sync_join(&mut self) {
         let panel = self.panel.as_ref().and_then(|(p, _)| p.join);
-        let debug = self.debug_join.map(|(x, width)| (x as f64, width as f64, theme::radius_xl() as f64));
+        let debug = self.debug_join.map(|(x, width)| (x as f64, width as f64, self.store.theme.theme.radii.xl));
         self.bar.set_join(panel.or(debug));
     }
 
@@ -180,8 +190,19 @@ impl App {
             return;
         }
         let width = self.bar.scene.size.w;
-        let panel =
-            Panel::new(width, self.bar.clock_cell(), PANEL_HEIGHT, self.motion_scale, self.cast, self.bar.text_mut(), PANEL_LABEL);
+        let (thickness, cell) = (self.bar.thickness(), self.bar.clock_cell());
+        let theme = &self.store.theme.theme;
+        let panel = Panel::new(
+            theme,
+            width,
+            thickness,
+            cell,
+            PANEL_HEIGHT,
+            self.motion_scale,
+            self.cast,
+            self.bar.text_mut(),
+            PANEL_LABEL,
+        );
         let layer = self.overlay("formalshell:panel", Anchor::TOP | Anchor::LEFT | Anchor::RIGHT, panel.surface_height() as u32);
         let mut surface = Surface::new("panel", layer, &self.shm, self.started);
         surface.wait_map = true;
@@ -196,7 +217,7 @@ impl App {
         if !open {
             return;
         }
-        let scrim = Scrim::new(self.motion_scale);
+        let scrim = Scrim::new(&self.store.theme.theme, self.motion_scale);
         let layer = self.overlay("formalshell:scrim", Anchor::all(), 0);
         let surface = PixelSurface::new("scrim", layer, &self.pixels, &self.qh, self.started);
         self.scrim = Some((scrim, surface));

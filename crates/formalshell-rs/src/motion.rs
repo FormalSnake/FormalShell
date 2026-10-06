@@ -18,7 +18,6 @@ pub const EMPHASIZED: Curve =
 
 pub const SPATIAL_FAST_MS: f64 = 350.0;
 pub const SPATIAL_MS: f64 = 500.0;
-pub const EMPHASIZED_MS: f64 = 400.0;
 pub const PULSE_MS: f64 = 900.0;
 
 /// metamorphosis's `emerge`: `{ duration: "spatial", curve: "spatial" }`.

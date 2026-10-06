@@ -7,6 +7,7 @@ pub mod config;
 pub mod hyprland;
 pub mod state;
 mod watch;
+pub mod theme;
 
 use crate::runtime::Ctx;
 
@@ -15,4 +16,6 @@ pub fn start(ctx: &Ctx) {
     ctx.spawn(config::run(ctx.clone()));
     ctx.spawn(state::run(ctx.clone()));
     ctx.spawn(hyprland::run(ctx.clone()));
+    ctx.spawn(theme::watch(ctx.clone()));
+    theme::start(ctx);
 }

@@ -13,6 +13,7 @@ mod debug;
 #[cfg(test)]
 mod golden;
 pub mod registry;
+mod theme;
 pub mod wire;
 
 use std::os::unix::net::{UnixListener, UnixStream};
@@ -32,7 +33,7 @@ const MAX_REQUEST: u64 = 1 << 20;
 
 fn registry() ->&'static Registry<App> {
     static REGISTRY: OnceLock<Registry<App>> = OnceLock::new();
-    REGISTRY.get_or_init(|| Registry { targets: vec![debug::target()] })
+    REGISTRY.get_or_init(|| Registry { targets: vec![debug::target(), theme::target(), theme::wallpaper()] })
 }
 
 pub fn dispatch(app: &mut App, request: &Request) -> String {

@@ -23,7 +23,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 repo_root="$(pwd)"
 
-work_dir="dev/.linux-builder"
+# Every worktree shares the main checkout's builder: one VM owns the ssh
+# port, so a per-worktree pid file would boot a second VM onto it.
+main_root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+work_dir="$main_root/dev/.linux-builder"
 keys_dir="$work_dir/keys"
 log_file="$work_dir/vm.log"
 pid_file="$work_dir/vm.pid"
@@ -42,7 +45,7 @@ ssh_client_conf="Host linux-builder
 ssh_opts=(-p "$ssh_port" -i "$priv_key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -o BatchMode=yes)
 
 is_running() {
-  [ -f "$pid_file" ] && kill -0 "$(cat "$pid_file")" 2>/dev/null
+  { [ -f "$pid_file" ] && kill -0 "$(cat "$pid_file")" 2>/dev/null; } || nc -z -w2 127.0.0.1 "$ssh_port" 2>/dev/null
 }
 
 wait_for_ssh() {
@@ -62,16 +65,21 @@ cmd_start() {
     return 0
   fi
   mkdir -p "$keys_dir"
+  if ! mkdir "$work_dir/start.lock" 2>/dev/null; then
+    echo "linux-builder is being started by another caller; waiting for ssh"
+    wait_for_ssh 36 && return 0
+    exit 1
+  fi
+  trap 'rmdir "$work_dir/start.lock"' EXIT
 
   local builder
-  git -C "$repo_root" add -A >/dev/null 2>&1 || true  # flakes only see tracked files
   builder=$(nix build --no-link --print-out-paths "$repo_root#linux-builder")
   echo "built $builder"
 
   (
     cd "$work_dir"
     set -m
-    KEYS="$repo_root/$keys_dir" nohup "$builder/bin/create-builder" >vm.log 2>&1 &
+    KEYS="$keys_dir" nohup "$builder/bin/create-builder" >vm.log 2>&1 &
     echo $! >vm.pid
   )
   echo "booting linux-builder VM (pid $(cat "$pid_file")), log: $log_file"

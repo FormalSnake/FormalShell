@@ -1,0 +1,14 @@
+[package]
+name = "fs-tray"
+version = "0.1.1"
+edition = "2024"
+publish = false
+
+[dependencies]
+zbus = { version = "5", default-features = false, features = ["async-io"] }
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+async-io = "2"

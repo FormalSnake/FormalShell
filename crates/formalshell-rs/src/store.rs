@@ -2,7 +2,7 @@
 //! diff applies to it; the UI thread is the only writer, through
 //! [`Store::apply`].
 
-use crate::services::{clock, config, hyprland, state};
+use crate::services::{clock, config, hyprland, state, theme};
 
 #[derive(Default)]
 pub struct Store {
@@ -10,6 +10,7 @@ pub struct Store {
     pub config: config::State,
     pub hyprland: hyprland::State,
     pub state: state::State,
+    pub theme: theme::State,
 }
 
 /// One service's change, tagged with the slice it applies to.
@@ -18,6 +19,7 @@ pub enum Diff {
     Config(config::Diff),
     Hyprland(hyprland::Diff),
     State(state::Diff),
+    Theme(theme::Diff),
 }
 
 /// The slice a diff changed, for the surfaces that read it.
@@ -27,6 +29,7 @@ pub enum Topic {
     Config,
     Hyprland,
     State,
+    Theme,
 }
 
 impl Store {
@@ -37,6 +40,7 @@ impl Store {
             Diff::Config(d) => self.config.apply(d).then_some(Topic::Config),
             Diff::State(d) => self.state.apply(d).then_some(Topic::State),
             Diff::Hyprland(d) => self.hyprland.apply(d).then_some(Topic::Hyprland),
+            Diff::Theme(d) => self.theme.apply(d).then_some(Topic::Theme),
         }
     }
 }
