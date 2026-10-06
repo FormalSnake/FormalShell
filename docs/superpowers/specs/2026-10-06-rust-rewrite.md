@@ -20,6 +20,8 @@ the whole strip, and runs no clock at all when nothing moves.
 
 ## Budgets (acceptance, measured on e1504g in a nested session)
 
+These are ceilings. Lower is better, and cheap headroom is taken.
+
 - Idle, nothing moving: 0.0% CPU over 60 s, no frame callbacks requested.
 - One herdr spinner running: under 2% of one core.
 - Panel open/close, launcher open, workspace switch: no frame over 16 ms.
@@ -42,6 +44,11 @@ Versions as of 2026-10-06; check crates.io before bumping.
   `vello_common` scene); the bar and panels stay on CPU.
 - Text: `parley` (fontique reads fontconfig, so `sans-serif`/`monospace`
   and the Lucide and Nerd icon fonts resolve exactly as they do now).
+  Text must be at least as crisp as GNOME's. QML text is soft on e1504g
+  because Qt Quick's default distance-field rendering ignores fontconfig
+  hinting. We honour fontconfig's hinting and antialias settings (hint at
+  the real pixel size, slight = vertical only) and snap baselines to whole
+  device pixels.
 - Layout: `taffy` for flex rows and columns; joined shapes, springs and the
   deform clock are our own code, ported from the QML math.
 - Async and D-Bus: one `calloop` loop owns the UI; services run on a
@@ -84,8 +91,8 @@ panels share one joined shape and the notification bus name has one owner.
   command; every leg runs unchanged against either.
 - `dev/parity.sh` compares Rust frames against QML frames from the same
   commit. Text is rasterised by a different engine, so glyph edges differ:
-  the gate is no difference outside glyph bounding boxes plus a small AE
-  fuzz inside them. Geometry, colour and motion timing are exact.
+  the gate is no difference outside glyph bounding boxes. Inside them the
+  Rust text is held to crispness, not to the QML pixels. Geometry, colour and motion timing are exact.
 - A milestone is done when its legs pass on `FS_IMPL=rust`, its parity
   frames pass, and its budget holds on e1504g.
 
