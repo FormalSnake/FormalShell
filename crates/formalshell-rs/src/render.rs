@@ -4,8 +4,8 @@
 
 use vello_cpu::color::{AlphaColor, Srgb};
 use vello_cpu::kurbo::{Affine, Cap, Join, Rect, RoundedRect, Shape, Stroke, Vec2};
-use vello_cpu::peniko::{BlendMode, Compose, Fill, Mix};
-use vello_cpu::{Pixmap, RenderContext, Resources};
+use vello_cpu::peniko::{BlendMode, Compose, Fill, ImageSampler, Mix};
+use vello_cpu::{Image, ImageSource, Pixmap, RenderContext, Resources};
 
 use crate::scene::{IRect, Paint, Scene};
 use fs_theme::color::Rgba;
@@ -132,6 +132,18 @@ impl Renderer {
                         self.ctx.set_stroke(Stroke::new(*width).with_caps(Cap::Square).with_join(Join::Bevel));
                         self.ctx.set_paint(color(*ink));
                         self.ctx.stroke_path(path);
+                    }
+                }
+                Paint::Image { pixmap, alpha } => {
+                    let b = node.bounds;
+                    self.ctx.set_transform(at * Affine::translate((b.x as f64, b.y as f64)));
+                    if *alpha < 1.0 {
+                        self.ctx.push_layer(None, None, Some(*alpha), None, None);
+                    }
+                    self.ctx.set_paint(Image { image: ImageSource::Pixmap(pixmap.clone()), sampler: ImageSampler::default() });
+                    self.ctx.fill_rect(&Rect::new(0.0, 0.0, pixmap.width() as f64, pixmap.height() as f64));
+                    if *alpha < 1.0 {
+                        self.ctx.pop_layer();
                     }
                 }
                 Paint::Casts { rect: card, radius, layers, cutout } => {

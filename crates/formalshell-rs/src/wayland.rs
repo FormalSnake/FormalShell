@@ -645,6 +645,8 @@ impl App {
                 self.set_overflow(region, open);
             }
             Action::Workspace(id) => hyprland::focus_workspace(&id),
+            Action::WorkspaceAt(idx) => hyprland::focus_workspace_at(idx),
+            Action::Window(id) => hyprland::focus_window(&id),
             Action::Volume(v) => {
                 if let Some(rt) = &self.runtime {
                     rt.service(move |ctx| devices::set_volume(ctx, v));
@@ -749,6 +751,9 @@ impl App {
             for s in &mut self.bar.slots {
                 s.dirty = true;
             }
+            self.bar_dirty = true;
+        }
+        if self.bar.pointer(bar_hover, at, &self.store, Instant::now()) {
             self.bar_dirty = true;
         }
         for (o, p) in [(Owner::Overflow, &mut self.overflow), (Owner::Panel, &mut self.panel)] {

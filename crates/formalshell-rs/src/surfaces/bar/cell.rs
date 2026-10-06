@@ -40,6 +40,9 @@ pub enum Action {
     /// Open or close the chevron's second bar for its region.
     Overflow(Region),
     Workspace(String),
+    /// A persistent placeholder has no id: the workspace by ordinal.
+    WorkspaceAt(i64),
+    Window(String),
     Volume(f64),
     ToggleMute,
 }
@@ -157,16 +160,30 @@ pub trait Cell {
     fn custom(&mut self) -> Option<&mut dyn Custom> {
         None
     }
+    /// What `workspaces status` reads off the cell that carries it.
+    fn status(&self) -> Option<serde_json::Value> {
+        None
+    }
 }
 
 /// A self-drawn cell: it measures and paints its own content inside the
 /// kit's cell box, and says while it animates.
 pub trait Custom {
-    fn measure(&mut self, kit: &mut Kit, vertical: bool) -> f64;
+    fn measure(&mut self, kit: &mut Kit, vertical: bool, band: bool) -> f64;
     fn draw(&mut self, kit: &mut Kit, p: &mut Painter, rect: IRect, ink: &Ink, now: Instant);
     fn animating(&self, now: Instant) -> bool;
     /// `debug r0Spinner`: the herdr badge on the first chip.
     fn spinner(&mut self, _on: bool, _now: Instant) {}
+    /// The cell washes its own parts under the pointer, so the slot's box
+    /// does not wash as a whole.
+    fn own_hover(&self) -> bool {
+        false
+    }
+    /// The pointer over the cell, in its own coordinates, or gone. Answers
+    /// whether to redraw and whether the pointer changed what it measures.
+    fn pointer(&mut self, _at: Option<(f64, f64)>) -> (bool, bool) {
+        (false, false)
+    }
 }
 
 /// What the theme hands every cell: tokens, inks and the `cell` role's
@@ -207,6 +224,7 @@ pub struct Look {
     pub mark_radius: f32,
     pub border_width: f64,
     pub effects: f64,
+    pub effects_slow: f64,
     pub spatial: f64,
     pub spatial_fast: f64,
     pub emphasized: f64,
@@ -266,6 +284,7 @@ impl Look {
             mark_radius: theme.box_radius(&mark, theme.border_width * 2.0) as f32,
             border_width: theme.border_width,
             effects: motion.effects,
+            effects_slow: motion.effects_slow,
             spatial: motion.spatial,
             spatial_fast: motion.spatial_fast,
             emphasized: motion.emphasized,
@@ -360,6 +379,14 @@ impl<'a> Painter<'a> {
     pub fn framed(&mut self, r: IRect, fill: Rgba, radius: f32, border: Rgba, width: f32) {
         if (fill.a > 0.0 || (border.a > 0.0 && width > 0.0)) && !r.is_empty() {
             self.put(r, Paint::Framed { fill, radius, border, width }, Affine::IDENTITY, self.clip);
+        }
+    }
+
+    /// Pixels drawn with their top-left on `at`.
+    pub fn image(&mut self, pixmap: &std::sync::Arc<vello_cpu::Pixmap>, at: (i32, i32), alpha: f32) {
+        if alpha > 0.0 {
+            let bounds = IRect::new(at.0, at.1, pixmap.width() as i32, pixmap.height() as i32);
+            self.put(bounds, Paint::Image { pixmap: pixmap.clone(), alpha }, Affine::IDENTITY, self.clip);
         }
     }
 

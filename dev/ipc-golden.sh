@@ -8,8 +8,9 @@
 # compositor is involved: what is recorded is qs's own argument parsing,
 # type conversion, error strings, output framing and exit codes. `debug`,
 # `theme` and `wallpaper` carry DebugIpc.qml's, ThemeIpc.qml's and
-# WallpaperIpc.qml's exact signatures, `bar`, `panel` and `media` BarIpc.qml's,
-# PanelIpc.qml's and MediaIpc.qml's `status`; `probe` covers every type qs
+# WallpaperIpc.qml's exact signatures, `bar`, `panel`, `media` and `workspaces`
+# BarIpc.qml's, PanelIpc.qml's, MediaIpc.qml's and WorkspacesIpc.qml's `status`
+# (peek and close wait for the preview); `probe` covers every type qs
 # converts and the function names that collide with qs's subcommands.
 set -euo pipefail
 
@@ -61,6 +62,10 @@ ShellRoot {
     }
     IpcHandler {
         target: "media"
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "workspaces"
         function status(): string { return "{}" }
     }
     IpcHandler {
@@ -253,6 +258,9 @@ rec show panel
 rec call media status
 rec call media status x
 rec show media
+rec call workspaces status
+rec call workspaces status x
+rec show workspaces
 
 kill "$qs_pid"
 wait "$qs_pid" 2>/dev/null || true

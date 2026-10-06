@@ -75,7 +75,7 @@ impl Slot {
         let vertical = env.edge.is_vertical();
         self.view = self.cell.view(&kit.look);
         let natural = match self.cell.custom() {
-            Some(c) if self.view.shown => c.measure(kit, vertical) + 0.0,
+            Some(c) if self.view.shown => c.measure(kit, vertical, band),
             _ => {
                 self.measured = kit.measure(&self.view, vertical, self.budget, band);
                 if let Some(free) = &self.measured.free {
@@ -208,10 +208,11 @@ impl Slot {
             p.finish();
             return;
         }
+        let own_hover = self.cell.custom().is_some_and(|c| c.own_hover());
         let frame = Frame {
             rect,
             edge,
-            hovered: hovered && self.view.interactive,
+            hovered: hovered && self.view.interactive && !own_hover,
             open: (self.mark.value(now), self.mark_fade.value(now).clamp(0.0, 1.0)),
             alpha: fade,
             band,

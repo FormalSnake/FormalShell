@@ -2,6 +2,9 @@
 //! it covers. Every change marks the old and the new bounds dirty, and the
 //! renderer redraws only the dirty rects.
 
+use std::sync::Arc;
+
+use vello_cpu::Pixmap;
 use vello_cpu::kurbo::{Affine, BezPath, Rect};
 
 use crate::text::ShapedText;
@@ -74,6 +77,8 @@ pub enum Paint {
     Glow { text: ShapedText, color: Rgba, x: f32, y: f32, blur: f32 },
     /// A filled outline and its strokes, in the node's own coordinates.
     Shape { fill: Option<(BezPath, Rgba)>, strokes: Vec<(BezPath, Rgba, f64)> },
+    /// Premultiplied pixels drawn 1:1 at the node's origin, faded by `alpha`.
+    Image { pixmap: Arc<Pixmap>, alpha: f32 },
     /// Casts under a rounded rect, cut out of the rect's own shape so a
     /// translucent fill over them shows the desktop and not the shadow.
     Casts { rect: Rect, radius: f64, layers: Vec<Cast>, cutout: BezPath },
@@ -208,6 +213,7 @@ fn paint_eq(a: &Paint, b: &Paint) -> bool {
         (Paint::Glow { text: t1, color: c1, x: x1, y: y1, blur: b1 }, Paint::Glow { text: t2, color: c2, x: x2, y: y2, blur: b2 }) => {
             c1 == c2 && t1.same_as(t2) && x1 == x2 && y1 == y2 && b1 == b2
         }
+        (Paint::Image { pixmap: p1, alpha: a1 }, Paint::Image { pixmap: p2, alpha: a2 }) => Arc::ptr_eq(p1, p2) && a1 == a2,
         // Shapes and casts are rebuilt only by an animation tick, which has
         // already moved them.
         _ => false,
