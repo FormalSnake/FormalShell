@@ -157,6 +157,7 @@
         fs-auth = pkgs.callPackage ./nix/fs-auth-test.nix { };
         fs-audio = pkgs.callPackage ./nix/fs-audio.nix { };
         fs-upower = pkgs.callPackage ./nix/fs-upower.nix { };
+        fs-network = pkgs.callPackage ./nix/fs-network.nix { };
         nixos-module-eval = nixosModuleEval system pkgs;
         fs-mpris = pkgs.callPackage ./nix/fs-mpris.nix { };
 
