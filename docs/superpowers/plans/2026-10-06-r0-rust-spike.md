@@ -42,9 +42,12 @@ Facts this plan rests on (checked 2026-10-06):
 
 ## Task 4: measure on e1504g
 
-- In a nested session on e1504g: CPU over 60 s idle, over 60 s with the
+- In a nested session on e1504g, in power saver: CPU over 60 s idle, over 60 s with the
   spinner, per-frame times through ten panel opens and ten scrim fades,
   RSS after 10 minutes, cold start to first commit.
 - The same five numbers for the QML shell under the same nesting.
+- QML baseline for the launcher stall: time from `menu toggle` to the
+  launcher's first frame, and the longest gap between bar frames while a
+  herdr spinner runs across that open. R4 is held to beating both.
 - Write the table into this file. If a budget fails, say which and stop
   before R1.
