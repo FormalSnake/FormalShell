@@ -1,0 +1,18 @@
+[package]
+name = "fs-bluez"
+version = "0.1.1"
+edition = "2024"
+publish = false
+
+# bluer is out: it depends on tokio unconditionally and every future it
+# returns is a tokio one, while the shell's service thread is a single-threaded
+# async-executor. zbus on async-io runs there.
+[dependencies]
+fs-devices = { path = "../fs-devices" }
+async-channel = "2.5"
+futures-lite = "2.6"
+zbus = { version = "5", default-features = false, features = ["async-io"] }
+
+[dev-dependencies]
+async-executor = "1.14"
+async-io = "2.6"
