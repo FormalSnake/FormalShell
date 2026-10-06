@@ -2,18 +2,20 @@
 //! diff applies to it; the UI thread is the only writer, through
 //! [`Store::apply`].
 
-use crate::services::{clock, hyprland};
+use crate::services::{clock, hyprland, theme};
 
 #[derive(Default)]
 pub struct Store {
     pub clock: clock::State,
     pub hyprland: hyprland::State,
+    pub theme: theme::State,
 }
 
 /// One service's change, tagged with the slice it applies to.
 pub enum Diff {
     Clock(clock::Diff),
     Hyprland(hyprland::Diff),
+    Theme(theme::Diff),
 }
 
 /// The slice a diff changed, for the surfaces that read it.
@@ -21,6 +23,7 @@ pub enum Diff {
 pub enum Topic {
     Clock,
     Hyprland,
+    Theme,
 }
 
 impl Store {
@@ -29,6 +32,7 @@ impl Store {
         match diff {
             Diff::Clock(d) => self.clock.apply(d).then_some(Topic::Clock),
             Diff::Hyprland(d) => self.hyprland.apply(d).then_some(Topic::Hyprland),
+            Diff::Theme(d) => self.theme.apply(d).then_some(Topic::Theme),
         }
     }
 }

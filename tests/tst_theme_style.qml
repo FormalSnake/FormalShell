@@ -4,9 +4,7 @@ import "../shell/Theme/palette.js" as Palette
 import "../shell/Theme/presets.js" as Presets
 import "../shell/Theme/style.js" as Style
 import "../shell/Theme/tokens.js" as Tokens
-import "../shell/Theme/themes/metamorphosis.js" as Metamorphosis
-import "../shell/Theme/themes/retro.js" as Retro
-import "../shell/Theme/themes/pantheon.js" as Pantheon
+import "../shell/Theme/themes.js" as Themes
 
 // M59 T1 to T3: the chrome tables and the resolver behind `Theme.style`.
 // Two halves, and the first is the one that keeps a theme honest: every
@@ -20,9 +18,9 @@ TestCase {
     name: "ThemeStyle"
 
     readonly property var tables: ({
-        metamorphosis: Metamorphosis.STYLE,
-        retro: Retro.STYLE,
-        pantheon: Pantheon.STYLE
+        metamorphosis: Themes.METAMORPHOSIS,
+        retro: Themes.RETRO,
+        pantheon: Themes.PANTHEON
     })
 
     // A palette whose every role answers with its own name, so a resolved
@@ -84,8 +82,8 @@ TestCase {
         }
         // The strip habit asks for none of them, and metamorphosis carries
         // none: a table cannot pick up another theme's chrome by accident.
-        verify(!Style.hasState(Metamorphosis.STYLE, "bar", "translucentDark"));
-        verify(!Style.hasState(Metamorphosis.STYLE, "cell", "ghostOpen"));
+        verify(!Style.hasState(Themes.METAMORPHOSIS, "bar", "translucentDark"));
+        verify(!Style.hasState(Themes.METAMORPHOSIS, "cell", "ghostOpen"));
     }
 
     function test_every_colour_a_table_names_is_a_palette_role_or_a_literal() {
@@ -148,9 +146,9 @@ TestCase {
         }
         // metamorphosis and retro declare none, so pantheon's own are the
         // whole set and an empty walk would pass vacuously.
-        compare(seen, Style.inkShadowLayers(Pantheon.STYLE).length);
+        compare(seen, Style.inkShadowLayers(Themes.PANTHEON).length);
         verify(seen > 0);
-        compare(Style.inkShadowLayers(Metamorphosis.STYLE).length, 0);
+        compare(Style.inkShadowLayers(Themes.METAMORPHOSIS).length, 0);
     }
 
     function test_every_radius_is_a_step_or_a_number() {
@@ -217,8 +215,8 @@ TestCase {
     // pantheon never fills it, the strip habit keeps wingpanel's rule as a
     // value nothing reads.
     function test_the_paint_policy_is_the_tables() {
-        compare(Pantheon.STYLE.habits.paint, "transparent");
-        compare(Metamorphosis.STYLE.habits.paint, "auto");
+        compare(Themes.PANTHEON.habits.paint, "transparent");
+        compare(Themes.METAMORPHOSIS.habits.paint, "auto");
     }
 
     function test_every_table_declares_the_habits_and_the_washes() {
@@ -247,7 +245,7 @@ TestCase {
     // shell is made of, so a table edit that moved one of them has to say
     // so here.
     function test_metamorphosis_is_the_shipped_chrome() {
-        var style = Metamorphosis.STYLE;
+        var style = Themes.METAMORPHOSIS;
         var card = Style.resolve(style, "card", null, ctx("dark"));
         compare(card.fill, "role:card@0.85");
         compare(card.radius, 14);
@@ -277,7 +275,7 @@ TestCase {
     // T6: the cursor is one ring layer plus a border, not a rectangle each
     // primitive draws for itself.
     function test_the_cursor_is_a_ring_layer_at_the_shipped_numbers() {
-        var cursor = Style.resolve(Metamorphosis.STYLE, "cursor", null, ctx("dark"));
+        var cursor = Style.resolve(Themes.METAMORPHOSIS, "cursor", null, ctx("dark"));
         compare(cursor.border.color, "role:ring");
         compare(cursor.border.width, 1);
         compare(cursor.rings.length, 1);
@@ -289,7 +287,7 @@ TestCase {
     // T5: the three marks a control paints that are not boxes of their own
     // shape, so the table still decides what colour each of them is.
     function test_the_marks_a_control_paints_come_off_the_table() {
-        var style = Metamorphosis.STYLE;
+        var style = Themes.METAMORPHOSIS;
         var mark = Style.resolve(style, "cell.mark", null, ctx("dark"));
         compare(mark.fill, "role:primary");
         compare(mark.radius, 6);
@@ -301,7 +299,7 @@ TestCase {
     // a second answer from its border, because a list draws one halo for
     // every row under it while each of those rows still swaps its border.
     function test_the_cursor_composes_over_a_box() {
-        var style = Metamorphosis.STYLE;
+        var style = Themes.METAMORPHOSIS;
         var ghost = Style.resolve(style, "button.ghost", "rest", ctx("dark"));
         var cursor = Style.resolve(style, "cursor", null, ctx("dark"));
 
@@ -323,7 +321,7 @@ TestCase {
     }
 
     function test_the_scrim_is_black_at_a_half() {
-        var scrim = Style.resolve(Metamorphosis.STYLE, "scrim", null, ctx("dark"));
+        var scrim = Style.resolve(Themes.METAMORPHOSIS, "scrim", null, ctx("dark"));
         compare(scrim.fill, Style.LITERAL_COLORS.black + "@0.5");
         compare(scrim.radius, 0);
     }
@@ -331,7 +329,7 @@ TestCase {
     // The bar's line is one edge rather than a border: three of its four
     // sides are the screen's own edges.
     function test_the_bar_carries_one_edge_and_no_border() {
-        var bar = Style.resolve(Metamorphosis.STYLE, "bar", null, ctx("dark"));
+        var bar = Style.resolve(Themes.METAMORPHOSIS, "bar", null, ctx("dark"));
         compare(bar.fill, "role:card@0.85");
         compare(bar.border, null);
         compare(bar.edge.color, "role:border");
@@ -341,15 +339,15 @@ TestCase {
     // Retro differs by scalars presets.js owns, so it is the same table
     // and not a copy of it that could drift.
     function test_retro_is_the_metamorphosis_table() {
-        compare(Retro.STYLE, Metamorphosis.STYLE);
+        compare(Themes.RETRO, Themes.METAMORPHOSIS);
     }
 
     function test_a_preset_hands_back_its_own_table() {
         function get(path, fallback) { return fallback; }
-        compare(Presets.resolve("metamorphosis", get).style, Metamorphosis.STYLE);
-        compare(Presets.resolve("retro", get).style, Retro.STYLE);
-        compare(Presets.resolve("pantheon", get).style, Pantheon.STYLE);
-        compare(Presets.defaults("metamorphosis").style, Metamorphosis.STYLE);
+        compare(Presets.resolve("metamorphosis", get).style, Themes.METAMORPHOSIS);
+        compare(Presets.resolve("retro", get).style, Themes.RETRO);
+        compare(Presets.resolve("pantheon", get).style, Themes.PANTHEON);
+        compare(Presets.defaults("metamorphosis").style, Themes.METAMORPHOSIS);
     }
 
     // --- Pantheon (M60 T1) ------------------------------------------------
@@ -360,7 +358,7 @@ TestCase {
     // A raised control: the face gradient over the fill, the lit top line
     // inside it, the control rim and outset-shadow(2) under it.
     function test_the_pantheon_button_is_raised() {
-        var button = Style.resolve(Pantheon.STYLE, "button.outline", "rest", ctx("light"));
+        var button = Style.resolve(Themes.PANTHEON, "button.outline", "rest", ctx("light"));
         compare(button.fill, "role:secondary");
         compare(button.radius, 3);
         compare(button.face.from, "#ffffff@0.2");
@@ -375,7 +373,7 @@ TestCase {
 
         // Pressed, it sinks: no gradient, no lift, one dark line along the
         // top edge instead.
-        var press = Style.resolve(Pantheon.STYLE, "button.outline", "press", ctx("light"));
+        var press = Style.resolve(Themes.PANTHEON, "button.outline", "press", ctx("light"));
         compare(press.face, null);
         compare(press.casts.length, 0);
         compare(press.hairlines.length, 1);
@@ -387,7 +385,7 @@ TestCase {
     // since a Shoulders shape and a Drawer frame draw one and not the
     // other), and shadow(2)'s two casts under it.
     function test_the_pantheon_card_carries_every_layer_kind() {
-        var card = Style.resolve(Pantheon.STYLE, "card", null, ctx("dark"));
+        var card = Style.resolve(Themes.PANTHEON, "card", null, ctx("dark"));
         compare(card.fill, "role:card@0.85");
         compare(card.radius, 9);
         compare(card.border.color, "#000000@0.75");
@@ -400,21 +398,21 @@ TestCase {
         compare(card.casts[0].color, "#000000@0.25");
         compare(card.casts[1].spread, -3);
         compare(card.casts[1].color, "#000000@0.45");
-        compare(Style.resolve(Pantheon.STYLE, "card", "opaque", ctx("dark")).fill, "role:card");
+        compare(Style.resolve(Themes.PANTHEON, "card", "opaque", ctx("dark")).fill, "role:card");
     }
 
     // GTK's alpha() multiplies and the dark highlight base is white at 0.2,
     // so every dark highlight alpha here is that product: a line elementary
     // writes as alpha(highlight, 0.3) is white at 0.06, not at 0.3.
     function test_the_pantheon_highlight_is_the_product_in_dark() {
-        var light = Style.resolve(Pantheon.STYLE, "card", null, ctx("light"));
-        var dark = Style.resolve(Pantheon.STYLE, "card", null, ctx("dark"));
+        var light = Style.resolve(Themes.PANTHEON, "card", null, ctx("light"));
+        var dark = Style.resolve(Themes.PANTHEON, "card", null, ctx("dark"));
         compare(light.hairlines[0].color, "#ffffff@0.3");
         compare(dark.hairlines[0].color, "#ffffff@0.06");
         compare(light.hairlines[1].color, "#ffffff@0.2");
         compare(dark.hairlines[1].color, "#ffffff@0.04");
         compare(dark.hairlines[2].color, "#ffffff@0.014");
-        compare(Style.resolve(Pantheon.STYLE, "button.outline", "rest", ctx("dark")).face.from,
+        compare(Style.resolve(Themes.PANTHEON, "button.outline", "rest", ctx("dark")).face.from,
             "#ffffff@0.04");
     }
 
@@ -422,7 +420,7 @@ TestCase {
     // 0.3, where shadcn's is 3px at 0.5; `Theme.ringWidth` follows the
     // spread, so the room a clipping list reserves follows the table.
     function test_the_pantheon_cursor_is_a_two_pixel_halo() {
-        var cursor = Style.resolve(Pantheon.STYLE, "cursor", null, ctx("dark"));
+        var cursor = Style.resolve(Themes.PANTHEON, "cursor", null, ctx("dark"));
         compare(cursor.border.color, "role:ring");
         compare(cursor.rings.length, 1);
         compare(cursor.rings[0].spread, 2);
@@ -430,7 +428,7 @@ TestCase {
 
         // The field hangs the same halo on its focus state, over the sunken
         // line it keeps at rest.
-        var focus = Style.resolve(Pantheon.STYLE, "input", "focus", ctx("dark"));
+        var focus = Style.resolve(Themes.PANTHEON, "input", "focus", ctx("dark"));
         compare(focus.rings.length, 1);
         compare(focus.rings[0].spread, 2);
         compare(focus.hairlines.length, 1);
@@ -440,27 +438,27 @@ TestCase {
     // since its namespace carries no blur (M62), and a row inside the centre
     // drops every one of them.
     function test_the_pantheon_bubble_flattens_inside_the_centre() {
-        var bubble = Style.resolve(Pantheon.STYLE, "notification", "rest", ctx("dark"));
+        var bubble = Style.resolve(Themes.PANTHEON, "notification", "rest", ctx("dark"));
         compare(bubble.fill, "role:card");
         compare(bubble.radius, 9);
         compare(bubble.casts.length, 2);
         compare(bubble.casts[1].blur, 9);
         compare(bubble.border.color, "#000000@0.75");
-        compare(Style.resolve(Pantheon.STYLE, "notification", "critical", ctx("dark")).border.color,
+        compare(Style.resolve(Themes.PANTHEON, "notification", "critical", ctx("dark")).border.color,
             "role:destructive");
 
-        var flat = Style.resolve(Pantheon.STYLE, "notification", "flat", ctx("dark"));
+        var flat = Style.resolve(Themes.PANTHEON, "notification", "flat", ctx("dark"));
         compare(flat.fill, Style.LITERAL_COLORS.transparent);
         compare(flat.border, null);
         compare(flat.casts.length, 0);
         compare(flat.hairlines.length, 0);
-        compare(Style.resolve(Pantheon.STYLE, "notification", "flatCritical", ctx("dark")).border.color,
+        compare(Style.resolve(Themes.PANTHEON, "notification", "flatCritical", ctx("dark")).border.color,
             "role:destructive");
     }
 
     // Gala dims a modal group at 125 of 255, a touch under shadcn's half.
     function test_the_pantheon_scrim_is_gala_s_dim() {
-        var scrim = Style.resolve(Pantheon.STYLE, "scrim", null, ctx("dark"));
+        var scrim = Style.resolve(Themes.PANTHEON, "scrim", null, ctx("dark"));
         compare(scrim.fill, Style.LITERAL_COLORS.black + "@" + (125 / 255));
     }
 
@@ -470,7 +468,7 @@ TestCase {
     // wingpanel hangs under its translucent-dark panel is deliberately not
     // in the table: the bar's window is the band's own thickness.
     function test_the_pantheon_band_has_a_paint_per_reading() {
-        var style = Pantheon.STYLE;
+        var style = Themes.PANTHEON;
         var white = Style.LITERAL_COLORS.white;
         var black = Style.LITERAL_COLORS.black;
 
@@ -532,7 +530,7 @@ TestCase {
     // border and nothing else, so what wingpanel puts along the panel box's
     // inside edge lands on the border and its cast is dropped.
     function test_the_pantheon_ring_takes_the_bands_paint() {
-        var style = Pantheon.STYLE;
+        var style = Themes.PANTHEON;
         var white = Style.LITERAL_COLORS.white;
         var black = Style.LITERAL_COLORS.black;
         var clear = Style.LITERAL_COLORS.transparent;
@@ -567,12 +565,12 @@ TestCase {
     // toplevel line whatever string it is handed: the frame role gained a
     // `rest` with M62 and nothing about the shipped frame moved.
     function test_the_metamorphosis_ring_ignores_a_paint() {
-        var rest = Style.resolve(Metamorphosis.STYLE, "frame", null, ctx("dark"));
+        var rest = Style.resolve(Themes.METAMORPHOSIS, "frame", null, ctx("dark"));
         compare(rest.fill, "role:card@0.85");
         compare(rest.border.color, "role:border");
         compare(rest.border.width, 1);
         compare(rest.radius, 0);
-        compare(Style.resolve(Metamorphosis.STYLE, "frame", "translucentDark", ctx("dark")).fill,
+        compare(Style.resolve(Themes.METAMORPHOSIS, "frame", "translucentDark", ctx("dark")).fill,
             "role:card@0.85");
     }
 
@@ -580,11 +578,11 @@ TestCase {
     // (`cell.mark`, which nothing under this habit reaches), and the fill is
     // the highlight at 0.6: white in light, the GTK product in dark.
     function test_the_pantheon_open_indicator_fills_its_cell() {
-        var open = Style.resolve(Pantheon.STYLE, "cell", "ghostOpen", ctx("light"));
+        var open = Style.resolve(Themes.PANTHEON, "cell", "ghostOpen", ctx("light"));
         compare(open.fill, Style.LITERAL_COLORS.white + "@0.6");
         compare(open.border, null);
         compare(open.radius, 3);
-        compare(Style.resolve(Pantheon.STYLE, "cell", "ghostOpen", ctx("dark")).fill,
+        compare(Style.resolve(Themes.PANTHEON, "cell", "ghostOpen", ctx("dark")).fill,
             Style.LITERAL_COLORS.white + "@0.12");
     }
 
@@ -595,7 +593,7 @@ TestCase {
     // through GTK's `alpha()`, so unlike every highlight in this material it
     // carries 0.3 in dark too.
     function test_the_pantheon_switcher_is_galas_card() {
-        var card = Style.resolve(Pantheon.STYLE, "switcher", null, ctx("dark"));
+        var card = Style.resolve(Themes.PANTHEON, "switcher", null, ctx("dark"));
         compare(card.fill, "role:background@0.6");
         compare(card.radius, 9);
         compare(card.border.color, "#000000@0.75");
@@ -603,20 +601,20 @@ TestCase {
         compare(card.insetRings.length, 1);
         compare(card.insetRings[0].spread, 1.5);
         compare(card.insetRings[0].color, "#ffffff@0.3");
-        compare(Style.resolve(Pantheon.STYLE, "switcher", null, ctx("light")).insetRings[0].color,
+        compare(Style.resolve(Themes.PANTHEON, "switcher", null, ctx("light")).insetRings[0].color,
             "#ffffff@0.3");
 
         // The selected cell is a fill rather than the cursor's ring, which
         // is what Gala marks the window you are about to focus with.
-        var selected = Style.resolve(Pantheon.STYLE, "cell", "selected", ctx("dark"));
+        var selected = Style.resolve(Themes.PANTHEON, "cell", "selected", ctx("dark"));
         compare(selected.fill, "role:accent");
         compare(selected.radius, 3);
     }
 
     // Metamorphosis draws the switcher in its plain card.
     function test_the_metamorphosis_switcher_is_the_plain_card() {
-        var card = Style.resolve(Metamorphosis.STYLE, "switcher", null, ctx("dark"));
-        var plain = Style.resolve(Metamorphosis.STYLE, "card", "rest", ctx("dark"));
+        var card = Style.resolve(Themes.METAMORPHOSIS, "switcher", null, ctx("dark"));
+        var plain = Style.resolve(Themes.METAMORPHOSIS, "card", "rest", ctx("dark"));
         compare(card.fill, plain.fill);
         compare(card.radius, plain.radius);
         compare(card.border.color, plain.border.color);
@@ -627,21 +625,21 @@ TestCase {
     // theme, and no table can turn it off.
     function test_no_table_carries_the_switcher() {
         compare(Style.HABITS.switcher, undefined);
-        compare(Metamorphosis.STYLE.habits.switcher, undefined);
-        compare(Pantheon.STYLE.habits.switcher, undefined);
+        compare(Themes.METAMORPHOSIS.habits.switcher, undefined);
+        compare(Themes.PANTHEON.habits.switcher, undefined);
     }
 
     // The app grid is `menu.appGrid` in settings.json, on under every theme
     // (M72 T2), and no table can turn it off.
     function test_no_table_carries_the_launcher() {
         compare(Style.HABITS.launcher, undefined);
-        compare(Metamorphosis.STYLE.habits.launcher, undefined);
-        compare(Pantheon.STYLE.habits.launcher, undefined);
+        compare(Themes.METAMORPHOSIS.habits.launcher, undefined);
+        compare(Themes.PANTHEON.habits.launcher, undefined);
     }
 
     // The habits Part 2 names, which the surfaces read from M60 T2 on.
     function test_pantheon_declares_pantheon_habits() {
-        var habits = Pantheon.STYLE.habits;
+        var habits = Themes.PANTHEON.habits;
         compare(habits.bar, "wingpanel");
         compare(habits.emerge, "popover");
         compare(habits.notification, "bubble");
@@ -651,14 +649,14 @@ TestCase {
     // table that wears no ring, `frame.thickness` reserves nothing, so the
     // gaps a user sets are the whole margin round a window.
     function test_only_the_framed_look_wears_a_ring() {
-        compare(Metamorphosis.STYLE.habits.frame, true);
-        compare(Pantheon.STYLE.habits.frame, false);
+        compare(Themes.METAMORPHOSIS.habits.frame, true);
+        compare(Themes.PANTHEON.habits.frame, false);
     }
 
     // --- The resolver ----------------------------------------------------
 
     function test_a_state_absent_from_a_role_reads_as_its_base() {
-        var style = Metamorphosis.STYLE;
+        var style = Themes.METAMORPHOSIS;
         var rest = Style.resolve(style, "cell", "rest", ctx("dark"));
         var unknown = Style.resolve(style, "cell", "nonsense", ctx("dark"));
         compare(unknown.fill, rest.fill);
@@ -670,7 +668,7 @@ TestCase {
     // is what makes `hover` a wash over the resting box rather than a box
     // of its own.
     function test_a_partial_state_merges_over_its_base() {
-        var style = Metamorphosis.STYLE;
+        var style = Themes.METAMORPHOSIS;
         var hover = Style.resolve(style, "cell", "hover", ctx("dark"));
         compare(hover.fill, "role:card@0.85");
         compare(hover.radius, 8);
@@ -692,7 +690,7 @@ TestCase {
     // always the far end from the surface it sits on, and white needs the
     // larger alpha to move the same distance.
     function test_an_alpha_pair_resolves_per_mode() {
-        var wash = Metamorphosis.STYLE.wash;
+        var wash = Themes.METAMORPHOSIS.wash;
         var dark = Style.alphaFor(wash.hover.alpha, ctx("dark"));
         var light = Style.alphaFor(wash.hover.alpha, ctx("light"));
         verify(dark > light);
@@ -710,7 +708,7 @@ TestCase {
     // either way round: a fill blends toward `background` rather than
     // washing toward the ink.
     function test_the_filled_steps_match_across_modes() {
-        var wash = Metamorphosis.STYLE.wash;
+        var wash = Themes.METAMORPHOSIS.wash;
         compare(Style.alphaFor(wash.filledHover.alpha, ctx("dark")),
             Style.alphaFor(wash.filledHover.alpha, ctx("light")));
         verify(Style.alphaFor(wash.filledPress.alpha, ctx("dark"))
@@ -720,7 +718,7 @@ TestCase {
     // Anything that is not the light theme is the dark one, the same
     // default Palette.fallback() takes for a theme.json with no `mode`.
     function test_an_unknown_mode_reads_as_dark() {
-        var wash = Metamorphosis.STYLE.wash;
+        var wash = Themes.METAMORPHOSIS.wash;
         compare(Style.alphaFor(wash.hover.alpha, ctx("")),
             Style.alphaFor(wash.hover.alpha, ctx("dark")));
     }
@@ -732,11 +730,11 @@ TestCase {
     }
 
     function test_a_tint_folds_into_the_fill_and_leaves_it_opaque() {
-        var press = Style.resolve(Metamorphosis.STYLE, "button.default", "press", ctx("dark"));
+        var press = Style.resolve(Themes.METAMORPHOSIS, "button.default", "press", ctx("dark"));
         compare(press.fill, "role:primary+role:background@0.18");
         compare(press.wash, null);
         // The variants with no colour of their own take the wash instead.
-        compare(Style.resolve(Metamorphosis.STYLE, "button.ghost", "press", ctx("dark")).wash,
+        compare(Style.resolve(Themes.METAMORPHOSIS, "button.ghost", "press", ctx("dark")).wash,
             "role:foreground@0.16");
     }
 
@@ -784,7 +782,7 @@ TestCase {
     // throwing, so the validation test above is what catches it and a
     // running shell never dies on a lookup.
     function test_an_unknown_role_resolves_to_an_empty_box() {
-        var box = Style.resolve(Metamorphosis.STYLE, "nonsense", null, ctx("dark"));
+        var box = Style.resolve(Themes.METAMORPHOSIS, "nonsense", null, ctx("dark"));
         compare(box.fill, Style.LITERAL_COLORS.transparent);
         compare(box.radius, 0);
         compare(box.border, null);
@@ -792,10 +790,10 @@ TestCase {
     }
 
     function test_a_wash_resolves_off_the_table() {
-        compare(Style.wash(Metamorphosis.STYLE, "hover", ctx("dark")), "role:foreground@0.1");
-        compare(Style.wash(Metamorphosis.STYLE, "hover", ctx("light")), "role:foreground@0.06");
-        compare(Style.wash(Metamorphosis.STYLE, "filledPress", ctx("dark")), "role:background@0.18");
-        compare(Style.wash(Metamorphosis.STYLE, "nonsense", ctx("dark")),
+        compare(Style.wash(Themes.METAMORPHOSIS, "hover", ctx("dark")), "role:foreground@0.1");
+        compare(Style.wash(Themes.METAMORPHOSIS, "hover", ctx("light")), "role:foreground@0.06");
+        compare(Style.wash(Themes.METAMORPHOSIS, "filledPress", ctx("dark")), "role:background@0.18");
+        compare(Style.wash(Themes.METAMORPHOSIS, "nonsense", ctx("dark")),
             Style.LITERAL_COLORS.transparent);
     }
 
@@ -840,17 +838,17 @@ TestCase {
     }
 
     function test_the_shipped_window_casts_nothing() {
-        var focused = Style.entry(Metamorphosis.STYLE, "window", "rest");
+        var focused = Style.entry(Themes.METAMORPHOSIS, "window", "rest");
         compare(focused.shadow.enabled, false);
         compare(focused.border.color, "primary");
         compare(focused.border.width, 1);
-        compare(Style.entry(Retro.STYLE, "window", "rest").shadow.enabled, false);
+        compare(Style.entry(Themes.RETRO, "window", "rest").shadow.enabled, false);
     }
 
     // elementary's focused window: `shadow(4)` as Hyprland draws it, under a
     // 1px `borders` frame, which under matugen is the `border` role.
     function test_the_pantheon_window_is_elementarys_shadow() {
-        var focused = Style.entry(Pantheon.STYLE, "window", "rest");
+        var focused = Style.entry(Themes.PANTHEON, "window", "rest");
         compare(focused.border.color, "border");
         compare(focused.border.width, 1);
         compare(focused.shadow.enabled, true);
@@ -858,6 +856,6 @@ TestCase {
         compare(focused.shadow.renderPower, 3);
         compare(focused.shadow.offset[1], 6);
         compare(focused.shadow.alpha, 0.35);
-        compare(Style.entry(Pantheon.STYLE, "window", "inactive").shadow.alpha, 0.25);
+        compare(Style.entry(Themes.PANTHEON, "window", "inactive").shadow.alpha, 0.25);
     }
 }

@@ -74,11 +74,13 @@ shell/
     palette.js                 pure JS, .pragma library: theme.json validate() + shadcn zinc fallback()
     style.js                   pure JS, .pragma library: resolve() turns a theme table's role+state
                                 into the colours/radius/layers Components/Box.qml draws (M59)
+    themes.js                  pure JS, .pragma library: reads themes/*.json once at import
+                                (a local XHR, allowed by shell.qml's Env pragma); retro is
+                                 metamorphosis's table, it differs only in presets.js's scalars
     themes/
-      metamorphosis.js           the shipped shadcn-on-Omarchy chrome table (M59)
-      retro.js                   re-exports metamorphosis.js's table; retro differs only in the
-                                  scalars presets.js already owns
-      pantheon.js                elementary OS 8's material transcribed from its own GTK
+      metamorphosis.json         the shipped shadcn-on-Omarchy chrome table (M59), shared with
+                                  crates/fs-theme
+      pantheon.json              elementary OS 8's material transcribed from its own GTK
                                   stylesheet, plus the `habits` swapping bar/emerge/notification/
                                   launcher/switcher shape (M60)
     barpaint.js                 pure JS, .pragma library: the wingpanel band's paint decision off

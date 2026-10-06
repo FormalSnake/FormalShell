@@ -1,4 +1,7 @@
 //@ pragma ShellId formalshell
+// The chrome tables are JSON that Theme/themes.js reads with a local XHR,
+// which Qt refuses without this.
+//@ pragma Env QML_XHR_ALLOW_FILE_READ = 1
 // UseQApplication: kept in place, out of scope to reassess for M32. Its
 // only known justification was QsMenuAnchor.open() in Tray.qml's old
 // native-QMenu context-menu path, which M32 removed for a shell-owned

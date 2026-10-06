@@ -9,7 +9,6 @@ mod store;
 mod surface;
 mod surfaces;
 mod text;
-mod theme;
 mod wayland;
 
 use std::time::{Instant, SystemTime};

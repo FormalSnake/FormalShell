@@ -2,8 +2,7 @@ import QtQuick
 import QtTest
 import qs.Core
 import "../shell/Surfaces/Notifications"
-import "../shell/Theme/themes/metamorphosis.js" as Metamorphosis
-import "../shell/Theme/themes/pantheon.js" as Pantheon
+import "../shell/Theme/themes.js" as Themes
 
 // NotificationCard as the facade over its two shapes (M60 T4): the contract
 // a consumer binds to has to mean the same thing under either habit, and the
@@ -88,7 +87,7 @@ TestCase {
     // --- the contract -----------------------------------------------------
 
     function test_the_derived_data_is_the_facades_under_both_habits() {
-        var tables = [Metamorphosis.STYLE, Pantheon.STYLE];
+        var tables = [Themes.METAMORPHOSIS, Themes.PANTHEON];
         for (var i = 0; i < tables.length; i++) {
             var card = testCase.cardOn(tables[i]);
             compare(card.role, "notification");
@@ -106,7 +105,7 @@ TestCase {
     // Urgency and `flat` name the box between them, and critical keeps its
     // rim through the flattening: that rim is what urgency asked for.
     function test_urgency_and_flat_name_the_box() {
-        var tables = [Metamorphosis.STYLE, Pantheon.STYLE];
+        var tables = [Themes.METAMORPHOSIS, Themes.PANTHEON];
         for (var i = 0; i < tables.length; i++) {
             Theme.style = tables[i];
             compare(testCase.cardOn(tables[i], { flat: true }).state, "flat");
@@ -133,9 +132,9 @@ TestCase {
     // the shell's own narrow snap point, the bubble on elementary's
     // transcribed 332.
     function test_each_shape_states_its_own_width() {
-        compare(testCase.cardOn(Metamorphosis.STYLE).implicitWidth,
+        compare(testCase.cardOn(Themes.METAMORPHOSIS).implicitWidth,
             Theme.space.popupWidthNarrow);
-        compare(testCase.cardOn(Pantheon.STYLE).implicitWidth,
+        compare(testCase.cardOn(Themes.PANTHEON).implicitWidth,
             Theme.space.popupWidthBubble);
         compare(Theme.space.popupWidthBubble, 332);
     }
@@ -144,7 +143,7 @@ TestCase {
     // font change: the advance of 33 digits at the body's own size, and
     // narrower than the column it sits in, or the measure is doing nothing.
     function test_the_bubbles_body_wraps_at_elementarys_character_measure() {
-        var card = testCase.cardOn(Pantheon.STYLE);
+        var card = testCase.cardOn(Themes.PANTHEON);
         var body = testCase.textNamed(card, card.styledBody);
         verify(body);
         metrics.font.family = Theme.fontFamilySans;
@@ -160,12 +159,12 @@ TestCase {
     // The row's close button is always there; the bubble's is not there until
     // the pointer is, and it cannot be clicked while it is not.
     function test_the_bubbles_close_button_waits_for_the_pointer() {
-        var row = testCase.cardOn(Metamorphosis.STYLE);
+        var row = testCase.cardOn(Themes.METAMORPHOSIS);
         var rowClose = testCase.iconButton(row, "x");
         verify(rowClose);
         compare(rowClose.visible, true);
 
-        var card = testCase.cardOn(Pantheon.STYLE);
+        var card = testCase.cardOn(Themes.PANTHEON);
         var close = testCase.iconButton(card, "x");
         verify(close);
         compare(close.visible, false);
@@ -188,13 +187,13 @@ TestCase {
     // Toasts.qml): the bubble's own 400ms unfold and its 200ms restack with
     // a stagger window, against the families the metamorphosis names.
     function test_the_arrival_and_restack_clocks_come_off_the_table() {
-        Theme.style = Pantheon.STYLE;
+        Theme.style = Themes.PANTHEON;
         compare(Theme.motion.arrive, 400);
         compare(Theme.motion.restack, 200);
         compare(Theme.motion.restackStagger, 150);
         compare(Theme.motion.curves.restack, Theme.motion.curves.emphasizedDecel);
 
-        Theme.style = Metamorphosis.STYLE;
+        Theme.style = Themes.METAMORPHOSIS;
         compare(Theme.motion.arrive, Theme.motion.spatial);
         compare(Theme.motion.restack, Theme.motion.spatial);
         compare(Theme.motion.restackStagger, 0);

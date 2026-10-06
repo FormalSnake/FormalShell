@@ -13,18 +13,57 @@ use crate::motion::{Animated, Deform, EMERGE, SPATIAL_FAST, SPATIAL_FAST_MS};
 use crate::scene::{Cast, IRect, NodeId, Paint, Scene};
 use crate::surfaces::shoulders;
 use crate::text::{Family, ShapedText, Text, TextStyle};
-use crate::theme::{self, DARK, Rgba};
+use fs_theme::color::Rgba;
+use fs_theme::style::Radius;
+use fs_theme::theme::Theme;
+use serde_json::json;
+
+use crate::services::theme::getter;
 
 /// Drawer.qml's `deformAmount` for a popout.
 const DEFORM_AMOUNT: f64 = 0.15;
 /// Room under the card's resting rect for the overshoot, the deform's
 /// stretch and the cast.
 const SLACK: i32 = 48;
-const TITLE: TextStyle =
-    TextStyle { family: Family::Generic(GenericFamily::SansSerif), size: theme::FONT_BODY, weight: theme::WEIGHT_MEDIUM };
+
+/// What the card takes off the theme: the `card` role, the ink, and
+/// pantheon's card casts for the spike's `cast` switch.
+struct Look {
+    fill: Rgba,
+    border: Rgba,
+    border_width: f64,
+    radius: f64,
+    foreground: Rgba,
+    padding: f64,
+    casts: Vec<fs_theme::style::Cast<Rgba>>,
+}
+
+impl Look {
+    fn new(theme: &Theme) -> Self {
+        let card = theme.box_style("card", None);
+        let border = card.border.clone().unwrap_or(fs_theme::style::Line { color: Rgba::TRANSPARENT, width: 0.0 });
+        let pantheon = Theme::resolve(
+            getter(json!({ "theme": { "preset": "pantheon" } })),
+            &fs_theme::palette::fallback(&theme.colors.mode),
+        );
+        Self {
+            fill: card.fill,
+            border: border.color,
+            border_width: border.width,
+            radius: match card.radius {
+                Radius::Px(px) => px,
+                Radius::Pill => theme.radii.xl,
+            },
+            foreground: theme.colors.get("foreground"),
+            padding: theme.space.panel_padding,
+            casts: pantheon.box_style("card", None).casts,
+        }
+    }
+}
 
 pub struct Panel {
     pub scene: Scene,
+    look: Look,
     rest: Rect,
     line_at: f64,
     open: bool,
@@ -46,24 +85,47 @@ pub struct Panel {
 impl Panel {
     /// A panel centred under `cell`, clamped a `screenPadding` in from
     /// either end, a `barMargin` under the bar's line.
-    pub fn new(output_width: i32, cell: IRect, height: f64, scale: f64, cast: bool, text: &mut Text, label: &str) -> Self {
-        let w = theme::POPUP_WIDTH_DEFAULT as f64;
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        theme: &Theme,
+        output_width: i32,
+        bar_thickness: i32,
+        cell: IRect,
+        height: f64,
+        scale: f64,
+        cast: bool,
+        text: &mut Text,
+        label: &str,
+    ) -> Self {
+        let look = Look::new(theme);
+        let w = theme.space.popup_width_default;
         let centre = cell.x as f64 + cell.w as f64 / 2.0;
-        let pad = theme::SCREEN_PADDING as f64;
+        let pad = theme.space.screen_padding;
         let x = (centre - w / 2.0).clamp(pad, output_width as f64 - w - pad).round();
-        let line_at = theme::BAR_THICKNESS as f64;
-        let rest = Rect::new(x, line_at + theme::BAR_MARGIN as f64, x + w, line_at + theme::BAR_MARGIN as f64 + height);
+        let line_at = bar_thickness as f64;
+        let margin = theme.space.bar_margin;
+        let rest = Rect::new(x, line_at + margin, x + w, line_at + margin + height);
         let mut scene = Scene::new(output_width, rest.y1 as i32 + SLACK);
         let empty = || Paint::Shape { fill: None, strokes: Vec::new() };
         let casts = scene.add(IRect::default(), empty());
         let shape = scene.add(IRect::default(), empty());
-        let title = text.shape(label, TITLE);
-        let label = scene.add(IRect::default(), Paint::Text { text: title.clone(), color: DARK.foreground });
+        let style = TextStyle {
+            family: Family::Generic(if theme.font_family_sans == "monospace" {
+                GenericFamily::Monospace
+            } else {
+                GenericFamily::SansSerif
+            }),
+            size: theme.font_size.body as f32,
+            weight: fs_theme::tokens::WEIGHTS.medium as f32,
+        };
+        let title = text.shape(label, style);
+        let label = scene.add(IRect::default(), Paint::Text { text: title.clone(), color: look.foreground });
         for id in [casts, shape, label] {
             scene.set_visible(id, false);
         }
         Self {
             scene,
+            look,
             rest,
             line_at,
             open: true,
@@ -129,8 +191,8 @@ impl Panel {
         self.last_tick = Some(now);
 
         let (w, h) = (self.rest.width(), self.rest.height());
-        let border = theme::EDGE_WIDTH as f64;
-        let radius = theme::radius_xl() as f64;
+        let border = self.look.border_width;
+        let radius = self.look.radius;
         let depth = (self.rest.y0 - self.line_at).max(0.0) + border;
         let travel = h + depth;
         let release_at = 0.85 - 0.35 * (depth / h.max(1.0)).clamp(0.0, 1.0);
@@ -180,8 +242,9 @@ impl Panel {
         let item_rect = Rect::new(0.0, 0.0, w + radius * 2.0, shape_depth);
         let visible = shown && shape_depth > 0.0;
         let paths = shoulders::paths(item_rect.width(), shape_depth, radius, border, a, near_inset);
-        let fill = DARK.card.with_alpha(theme::SURFACE_OPACITY);
-        let near = DARK.border.with_alpha((1.0 - a) as f32);
+        let fill = self.look.fill;
+        let line = self.look.border;
+        let near = line.with_alpha(line.a * (1.0 - a) as f32);
         let bounds = Scene::cover(item_rect, item, 2.0).intersect(&band);
         let cutout = paths.fill.clone();
         self.scene.update_with(
@@ -189,7 +252,7 @@ impl Panel {
             bounds,
             Paint::Shape {
                 fill: Some((paths.fill, fill)),
-                strokes: vec![(paths.outer, DARK.border, border), (paths.near, near, border)],
+                strokes: vec![(paths.outer, line, border), (paths.near, near, border)],
             },
             visible,
             item,
@@ -197,14 +260,16 @@ impl Panel {
         );
 
         let cast_alpha = if self.cast { 1.0 - a } else { 0.0 };
-        let layers: Vec<Cast> = theme::PANTHEON_SHADOW_2
+        let layers: Vec<Cast> = self
+            .look
+            .casts
             .iter()
-            .map(|&(y, blur, spread, alpha)| Cast {
-                x: 0.0,
-                y,
-                blur,
-                spread,
-                color: Rgba::hex(0).with_alpha(alpha * cast_alpha as f32),
+            .map(|c| Cast {
+                x: c.x,
+                y: c.y,
+                blur: c.blur,
+                spread: c.spread,
+                color: c.color.with_alpha(c.color.a * cast_alpha as f32),
             })
             .collect();
         let reach_out = layers.iter().map(|c| c.blur + c.spread.max(0.0) + c.y.abs()).fold(0.0, f64::max);
@@ -219,7 +284,7 @@ impl Panel {
         );
 
         let content = ((pose - 0.3) / 0.7).clamp(0.0, 1.0);
-        let pad = theme::PANEL_PADDING as f64;
+        let pad = self.look.padding;
         let (tw, th) = self.title.box_size();
         let label_rect = Rect::new(pad, pad, pad + tw as f64, pad + th as f64);
         let label_bounds = Scene::cover(label_rect, frame, 1.0).intersect(&band);
@@ -229,7 +294,7 @@ impl Panel {
         self.scene.update_with(
             self.label,
             label_bounds,
-            Paint::Text { text: self.title.clone(), color: DARK.foreground.with_alpha(content as f32) },
+            Paint::Text { text: self.title.clone(), color: self.look.foreground.with_alpha(content as f32) },
             visible && content > 0.0,
             text_at,
             Some(band),
@@ -247,11 +312,14 @@ pub struct Scrim {
     mapped: bool,
     pose: Animated,
     scale: f64,
+    /// The `scrim` role's fill alpha over its plain black.
+    alpha: f64,
 }
 
 impl Scrim {
-    pub fn new(scale: f64) -> Self {
-        Self { open: true, mapped: false, pose: Animated::new(0.0, EMERGE.1), scale }
+    pub fn new(theme: &Theme, scale: f64) -> Self {
+        let alpha = f64::from(theme.box_style("scrim", None).fill.a);
+        Self { open: true, mapped: false, pose: Animated::new(0.0, EMERGE.1), scale, alpha }
     }
 
     pub fn mapped(&mut self, now: Instant) {
@@ -278,6 +346,6 @@ impl Scrim {
     /// The `scrim` role's opacity on this frame.
     pub fn alpha(&self, now: Instant) -> f64 {
         // The spatial pose overshoots both ends; an opacity may not.
-        theme::SCRIM_ALPHA as f64 * self.pose.value(now).clamp(0.0, 1.0)
+        self.alpha * self.pose.value(now).clamp(0.0, 1.0)
     }
 }

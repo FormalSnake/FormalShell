@@ -12,7 +12,9 @@ use serde::Deserialize;
 
 use crate::runtime::Ctx;
 use crate::store;
-use crate::theme;
+
+/// `workspaces.persistent`'s default: slots 1..n show even when empty.
+const PERSISTENT_WORKSPACES: i64 = 5;
 
 #[derive(Default)]
 pub struct State {
@@ -51,7 +53,7 @@ pub async fn request(command: &str) -> io::Result<String> {
 }
 
 async fn publish_slots(ctx: &Ctx) {
-    match slots(theme::PERSISTENT_WORKSPACES).await {
+    match slots(PERSISTENT_WORKSPACES).await {
         Ok(slots) => ctx.publish(store::Diff::Hyprland(Diff::Slots(slots))),
         Err(err) => eprintln!("hyprland: workspaces unavailable: {err}"),
     }

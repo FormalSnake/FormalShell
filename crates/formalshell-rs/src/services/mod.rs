@@ -4,10 +4,12 @@
 
 pub mod clock;
 pub mod hyprland;
+pub mod theme;
 
 use crate::runtime::Ctx;
 
 pub fn start(ctx: &Ctx) {
     ctx.spawn(clock::run(ctx.clone()));
     ctx.spawn(hyprland::run(ctx.clone()));
+    ctx.spawn(theme::watch(ctx.clone()));
 }

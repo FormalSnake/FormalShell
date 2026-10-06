@@ -12,5 +12,6 @@ pub fn changed(app: &mut App, topic: Topic) {
     match topic {
         Topic::Clock => app.bar.set_clock(&app.store.clock.text),
         Topic::Hyprland => app.bar.set_workspaces(&app.store.hyprland.slots),
+        Topic::Theme => app.bar.set_theme(&app.store.theme.theme),
     }
 }

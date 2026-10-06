@@ -8,7 +8,7 @@ use vello_cpu::peniko::{BlendMode, Compose, Mix};
 use vello_cpu::{Pixmap, RenderContext, Resources};
 
 use crate::scene::{IRect, Paint, Scene};
-use crate::theme::Rgba;
+use fs_theme::color::Rgba;
 
 pub struct Renderer {
     ctx: RenderContext,
@@ -83,7 +83,7 @@ impl Renderer {
                         self.ctx.fill_path(path);
                     }
                     for (path, ink, width) in strokes {
-                        if ink.a == 0 {
+                        if ink.to_u8()[3] == 0 {
                             continue;
                         }
                         // ShapePath's own defaults.
@@ -130,5 +130,6 @@ impl Renderer {
 }
 
 fn color(c: Rgba) -> AlphaColor<Srgb> {
-    AlphaColor::from_rgba8(c.r, c.g, c.b, c.a)
+    let [r, g, b, a] = c.to_u8();
+    AlphaColor::from_rgba8(r, g, b, a)
 }
