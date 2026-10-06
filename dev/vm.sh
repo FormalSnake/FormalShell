@@ -146,9 +146,13 @@ cmd_sync() {
   # which leaves the VM's copy dangling and every `git add -A` there
   # failing. The VM keeps its own repo instead (created below on first
   # sync); the flake only needs the files tracked, not the history.
+  # /.claude holds every agent worktree with its own cargo target, tens of
+  # gigabytes that filled the VM's 40G disk.
   rsync -az --delete \
     --exclude 'result*' \
     --exclude '/.git' \
+    --exclude '/.claude/' \
+    --exclude '/crates/target/' \
     --exclude 'artifacts/' \
     --exclude '/dev/.linux-builder/' \
     --exclude '/dev/.testvm/' \
