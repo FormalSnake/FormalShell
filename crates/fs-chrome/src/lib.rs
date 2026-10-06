@@ -12,7 +12,6 @@ pub mod dither;
 pub mod drawer;
 pub mod frame;
 pub mod hot_corners;
-mod js;
 pub mod plugins;
 pub mod switcher;
 pub mod types;

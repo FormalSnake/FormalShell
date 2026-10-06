@@ -34,7 +34,7 @@ use regex::Regex;
 use serde::de::{self, Deserialize, Deserializer, IgnoredAny, MapAccess, SeqAccess, Visitor};
 use serde_json::Value;
 
-use crate::js;
+use fs_js as js;
 use crate::types::Region;
 
 pub const API_VERSION: i64 = 1;
@@ -305,7 +305,7 @@ pub fn validate_record(record: &Record) -> (Option<Plugin>, Vec<String>) {
             &mut warnings,
             format!(
                 "apiVersion {} is not supported (this shell speaks {API_VERSION})",
-                js::string(api)
+                js::to_str(api)
             ),
         );
     }
@@ -315,7 +315,7 @@ pub fn validate_record(record: &Record) -> (Option<Plugin>, Vec<String>) {
             &mut warnings,
             format!(
                 "manifest id \"{}\" does not match its directory name",
-                js::string_opt(get("id"))
+                js::str_or_undefined(get("id"))
             ),
         );
     }
@@ -334,7 +334,7 @@ pub fn validate_record(record: &Record) -> (Option<Plugin>, Vec<String>) {
     let Some(kind) = kind_value.as_str().and_then(Kind::parse) else {
         return reject(
             &mut warnings,
-            format!("unknown kind \"{}\"", js::string(kind_value)),
+            format!("unknown kind \"{}\"", js::to_str(kind_value)),
         );
     };
 
@@ -346,7 +346,7 @@ pub fn validate_record(record: &Record) -> (Option<Plugin>, Vec<String>) {
                 &mut warnings,
                 format!(
                     "entry \"{}\" must be a path inside the plugin directory",
-                    js::string(entry_value)
+                    js::to_str(entry_value)
                 ),
             );
         }
@@ -391,7 +391,7 @@ pub fn validate_record(record: &Record) -> (Option<Plugin>, Vec<String>) {
                 Some(r) => region = Some(r),
                 None => warnings.push(format!(
                     "{prefix}unknown region \"{}\", using \"right\"",
-                    js::string(v)
+                    js::to_str(v)
                 )),
             }
         }
@@ -418,7 +418,7 @@ pub fn validate_record(record: &Record) -> (Option<Plugin>, Vec<String>) {
                 Some(w) => width = Some(w),
                 None => warnings.push(format!(
                     "{prefix}unknown width \"{}\", using \"default\"",
-                    js::string(v)
+                    js::to_str(v)
                 )),
             }
         }

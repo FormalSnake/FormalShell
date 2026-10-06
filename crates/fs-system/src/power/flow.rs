@@ -8,7 +8,7 @@
 //! microwatts, voltage_now microvolts, current_now microamps, capacity and
 //! charge_control_end_threshold whole percents.
 
-use crate::js;
+use fs_js as js;
 use regex::Regex;
 use std::collections::HashMap;
 use std::sync::LazyLock;
@@ -44,7 +44,7 @@ fn num(text: &str) -> Option<f64> {
     if js::trim(text).is_empty() {
         return None;
     }
-    Some(js::number(text)).filter(|n| n.is_finite())
+    Some(js::parse_number(text)).filter(|n| n.is_finite())
 }
 
 fn micro(text: &str) -> Option<f64> {

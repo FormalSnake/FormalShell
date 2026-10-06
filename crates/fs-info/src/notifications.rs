@@ -13,7 +13,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::js;
+use fs_js as js;
 
 /// Caps GROUPS on screen, not raw entries: five repeats of one notification
 /// must not evict four unrelated toasts.

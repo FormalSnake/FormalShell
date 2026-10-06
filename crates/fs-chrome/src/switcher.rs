@@ -3,7 +3,7 @@
 
 use std::collections::HashSet;
 
-use crate::js;
+use fs_js as js;
 use crate::types::Rect;
 
 /// What the switcher needs to know about a window to offer it.

@@ -10,7 +10,7 @@
 //! which is how an IR sensor presents itself even when its card name says
 //! nothing.
 
-use crate::js;
+use fs_js as js;
 use regex::Regex;
 use std::collections::HashMap;
 use std::sync::LazyLock;

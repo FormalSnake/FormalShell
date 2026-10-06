@@ -4,7 +4,7 @@
 
 use chrono::{Datelike, NaiveDate};
 
-use crate::js;
+use fs_js as js;
 
 /// Right-click on the bar clock walks this ring in order. Each 24-hour
 /// preset sits next to its 12-hour twin so one more click swaps notation

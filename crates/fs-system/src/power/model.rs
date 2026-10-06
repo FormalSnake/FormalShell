@@ -2,7 +2,7 @@
 //! `warn_event`, which hands back the `fired` state for the next call, and the
 //! static BATTERY meta rows use the formatters below.
 
-use crate::js;
+use fs_js as js;
 
 pub const DEFAULT_WARN_PCT: f64 = 10.0;
 pub const DEFAULT_CRITICAL_PCT: f64 = 5.0;

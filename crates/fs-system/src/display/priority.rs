@@ -15,7 +15,7 @@
 //! falls through to the focused output, which on a single-head session is the
 //! only output there is.
 
-use crate::js;
+use fs_js as js;
 use serde_json::Value;
 
 /// Connectors the panel built into the machine shows up as.

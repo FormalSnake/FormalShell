@@ -17,7 +17,7 @@ use serde_json::Value as Json;
 use super::{
     Battery, BatteryId, ControlOption, Device, DeviceFields, DeviceKind, Value, choice, device, range, toggle, Unit,
 };
-use crate::js;
+use fs_js as js;
 
 pub const BACKEND: &str = "airpods";
 

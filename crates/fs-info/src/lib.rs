@@ -8,7 +8,6 @@
 pub mod calendar;
 pub mod clock;
 pub mod herdr;
-mod js;
 pub mod location;
 pub mod notifications;
 pub mod reminders;

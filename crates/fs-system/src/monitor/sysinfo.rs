@@ -11,7 +11,7 @@
 //! fabricated 0, which would read as "measured zero load" instead of "no
 //! measurement yet".
 
-use crate::js;
+use fs_js as js;
 use regex::Regex;
 use std::collections::HashMap;
 use std::sync::LazyLock;
@@ -49,7 +49,7 @@ pub fn parse_stat(text: &str) -> Vec<CpuRecord> {
     let mut records = Vec::new();
     for line in lines(text) {
         let Some(m) = STAT_LINE.captures(line) else { continue };
-        let fields: Vec<f64> = js::split_ws(&m[2]).into_iter().map(js::number).collect();
+        let fields: Vec<f64> = js::split_ws(&m[2]).into_iter().map(js::parse_number).collect();
         if fields.len() < 4 {
             continue;
         }
@@ -146,7 +146,7 @@ pub fn parse_mem(text: &str) -> Option<Mem> {
     let mut kb: HashMap<String, f64> = HashMap::new();
     for line in lines(text) {
         if let Some(m) = MEM_LINE.captures(line) {
-            kb.insert(m[1].to_string(), js::number(&m[2]));
+            kb.insert(m[1].to_string(), js::parse_number(&m[2]));
         }
     }
     let total = *kb.get("MemTotal")? * 1024.0;
@@ -180,7 +180,7 @@ static LOAD_LINE: LazyLock<Regex> =
 pub fn parse_load(text: &str) -> Option<Load> {
     let line = lines(text).next()?;
     let m = LOAD_LINE.captures(js::trim(line))?;
-    let n = |i: usize| js::number(&m[i]);
+    let n = |i: usize| js::parse_number(&m[i]);
     Some(Load {
         load1: n(1),
         load5: n(2),
@@ -205,7 +205,7 @@ pub fn parse_uptime(text: &str) -> Option<Uptime> {
     if parts.len() < 2 {
         return None;
     }
-    let (up, idle) = (js::number(parts[0]), js::number(parts[1]));
+    let (up, idle) = (js::parse_number(parts[0]), js::parse_number(parts[1]));
     (up.is_finite() && idle.is_finite()).then_some(Uptime { uptime_seconds: up, idle_seconds: idle })
 }
 
@@ -230,7 +230,7 @@ pub fn parse_net(text: &str) -> Vec<NetRow> {
         if iface.is_empty() || iface == "lo" {
             continue;
         }
-        let fields: Vec<f64> = js::split_ws(&line[colon + 1..]).into_iter().map(js::number).collect();
+        let fields: Vec<f64> = js::split_ws(&line[colon + 1..]).into_iter().map(js::parse_number).collect();
         if fields.len() < 9 {
             continue;
         }
@@ -295,7 +295,7 @@ pub fn parse_temps(text: &str) -> Vec<Temp> {
         if fields.len() < 4 {
             continue;
         }
-        let milli = js::number(fields[3]);
+        let milli = js::parse_number(fields[3]);
         if !milli.is_finite() {
             continue;
         }
@@ -335,7 +335,7 @@ pub fn parse_fans(text: &str) -> Vec<Fan> {
         if fields.len() < 4 || js::trim(fields[3]).is_empty() {
             continue;
         }
-        let rpm = js::number(fields[3]);
+        let rpm = js::parse_number(fields[3]);
         if !rpm.is_finite() {
             continue;
         }
@@ -378,8 +378,8 @@ pub fn parse_disk(text: &str) -> Vec<Disk> {
     let mut order: Vec<String> = Vec::new();
     for line in lines(text) {
         let Some(m) = DISK_LINE.captures(js::trim(line)) else { continue };
-        let size = js::number(&m[3]);
-        let used = js::number(&m[4]);
+        let size = js::parse_number(&m[3]);
+        let used = js::parse_number(&m[4]);
         let row = Disk {
             source: m[1].to_string(),
             mount: m[2].to_string(),

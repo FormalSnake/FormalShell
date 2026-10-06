@@ -3,7 +3,7 @@
 //! and builds the argv for the other, so both ends are testable without a
 //! keyboard.
 
-use crate::js;
+use fs_js as js;
 use regex::Regex;
 use std::sync::LazyLock;
 

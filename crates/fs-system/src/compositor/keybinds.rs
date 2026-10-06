@@ -6,7 +6,7 @@
 //! panics: unreadable output yields an empty list, which the surface renders as
 //! an honest unavailable row rather than a warning.
 
-use crate::js;
+use fs_js as js;
 use regex::Regex;
 use std::collections::HashMap;
 use std::sync::LazyLock;
@@ -53,7 +53,7 @@ pub struct Bind {
 }
 
 fn hypr_mods(modmask: &str) -> Vec<String> {
-    let n = js::number(modmask);
+    let n = js::parse_number(modmask);
     let mask = if n.is_nan() { 0 } else { n as i64 as u32 };
     HYPR_MODS.iter().filter(|(bit, _)| mask & bit != 0).map(|(_, name)| name.to_string()).collect()
 }

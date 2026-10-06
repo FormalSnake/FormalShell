@@ -9,7 +9,7 @@ use std::sync::LazyLock;
 use regex::Regex;
 use serde_json::Value;
 
-use crate::js;
+use fs_js as js;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Corner {
@@ -165,7 +165,7 @@ fn clamped_number(
     let Some(value) = value.filter(|v| !v.is_null()) else {
         return fallback;
     };
-    let n = js::to_number(value);
+    let n = js::to_number(Some(value));
     if !n.is_finite() {
         warnings.push(format!(
             "hotCorners.{key}: expected a number, got {}",

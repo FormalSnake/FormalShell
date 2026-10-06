@@ -20,7 +20,7 @@ use super::{
     Battery, BatteryId, ControlOption, Device, DeviceFields, DeviceKind, Value, choice, device, valid_address,
 };
 use crate::bluetooth;
-use crate::js;
+use fs_js as js;
 
 pub const BACKEND: &str = "soundcore";
 pub const BINARY: &str = "openscq30";

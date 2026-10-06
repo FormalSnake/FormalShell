@@ -10,7 +10,7 @@
 //! the rule.
 
 use super::outputs::{self, Color, Output};
-use crate::js;
+use fs_js as js;
 use serde_json::{Map, Value, json};
 use std::collections::{HashMap, HashSet};
 

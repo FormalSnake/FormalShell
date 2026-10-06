@@ -387,6 +387,7 @@ dependencies = [
 name = "fs-chrome"
 version = "0.1.1"
 dependencies = [
+ "fs-js",
  "regex",
  "serde",
  "serde_json",
@@ -396,7 +397,7 @@ dependencies = [
 name = "fs-devices"
 version = "0.1.1"
 dependencies = [
- "icu_collator",
+ "fs-js",
  "percent-encoding",
  "regex",
  "serde_json",
@@ -408,9 +409,20 @@ name = "fs-info"
 version = "0.1.1"
 dependencies = [
  "chrono",
+ "fs-js",
  "percent-encoding",
  "regex",
  "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "fs-js"
+version = "0.1.1"
+dependencies = [
+ "icu_collator",
+ "percent-encoding",
+ "regex",
  "serde_json",
 ]
 
@@ -419,7 +431,7 @@ name = "fs-media"
 version = "0.1.1"
 dependencies = [
  "fastrand",
- "percent-encoding",
+ "fs-js",
  "regex",
  "serde",
  "serde_json",
@@ -430,6 +442,8 @@ name = "fs-menu"
 version = "0.1.1"
 dependencies = [
  "chrono",
+ "fs-devices",
+ "fs-js",
  "indexmap",
  "percent-encoding",
  "regex",
@@ -446,7 +460,7 @@ name = "fs-system"
 version = "0.1.1"
 dependencies = [
  "chrono",
- "icu_collator",
+ "fs-js",
  "regex",
  "serde",
  "serde_json",

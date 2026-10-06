@@ -4,9 +4,10 @@
 
 use std::collections::HashSet;
 
+use fs_devices::bluetooth::{Device as BluetoothDevice, DeviceState};
 use fs_menu::node::{Kind, Node};
 use fs_menu::providers::{
-    AudioDevice, BluetoothDevice, BluetoothState, RadioState, RadioStation, WifiNetwork, WifiState, audio_rows,
+    AudioDevice, BluetoothState, RadioState, RadioStation, WifiNetwork, WifiState, audio_rows,
     bluetooth_rows, id_part, radio_result_rows, radio_rows, radio_trigger_query, wifi_rows,
 };
 
@@ -203,8 +204,8 @@ fn bluetooth_unnamed_devices_are_dropped() {
 fn bluetooth_desc_prefers_activity_then_battery() {
     let connected = |address: &str, name: &str| BluetoothDevice { connected: true, ..dev(address, name) };
     let rows = bt(vec![
-        BluetoothDevice { activity: "Connecting\u{2026}".into(), battery: "80%".into(), ..connected("AA:01", "A") },
-        BluetoothDevice { battery: "50%".into(), ..connected("AA:02", "B") },
+        BluetoothDevice { state: DeviceState::Connecting, battery: 0.8, battery_available: true, ..connected("AA:01", "A") },
+        BluetoothDevice { battery: 0.5, battery_available: true, ..connected("AA:02", "B") },
         connected("AA:03", "C"),
     ]);
     assert_eq!(desc_of(&rows, "A"), "Connecting\u{2026}");

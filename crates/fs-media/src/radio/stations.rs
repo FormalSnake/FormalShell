@@ -18,7 +18,7 @@ use regex::Regex;
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::js::{number_from_str, slice_utf16, to_js_string, utf16_len};
+use fs_js::{parse_number, slice_utf16, to_str, utf16_len};
 
 pub const API_FALLBACK: &str = "https://all.api.radio-browser.info";
 pub const SERVERS_URL: &str = "https://all.api.radio-browser.info/json/servers";
@@ -154,7 +154,7 @@ fn or<'a>(value: Option<&'a Value>, fallback: Option<&'a Value>) -> Option<&'a V
 fn number(value: Option<&Value>) -> Option<f64> {
     let n = match value {
         Some(Value::Number(n)) => n.as_f64().unwrap_or(f64::NAN),
-        Some(Value::String(s)) if !s.trim().is_empty() => number_from_str(s),
+        Some(Value::String(s)) if !s.trim().is_empty() => parse_number(s),
         _ => f64::NAN,
     };
     n.is_finite().then_some(n)
@@ -581,7 +581,7 @@ pub fn parse_sinks(text: &str) -> Option<Vec<Sink>> {
             continue;
         }
         let mut label = match or(row.get("description"), row.get("name")) {
-            Some(v) => to_js_string(v),
+            Some(v) => to_str(v),
             None => "undefined".into(),
         };
         if name.starts_with("raop_sink.") {

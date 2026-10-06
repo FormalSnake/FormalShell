@@ -5,7 +5,6 @@ use serde::Deserialize;
 
 use super::apps::now_ms;
 use crate::frecency::{self, Record};
-use crate::jsstr;
 use crate::node::{Kind, Node};
 
 /// One dataset entry. `kw` is CLDR's lowercase, pipe separated annotations;
@@ -106,7 +105,7 @@ impl EmojiIndex {
     /// across: what gets used most leads the browse grid and leads among
     /// equally-good matches, and a better match still wins outright.
     pub fn search(&self, query: &str, uses: &[Record], now: Option<f64>) -> Vec<&EmojiEntry> {
-        let q = jsstr::trim(query).to_lowercase();
+        let q = fs_js::trim(query).to_lowercase();
         if q.is_empty() {
             return rank(self.entries.iter().collect(), uses, now);
         }

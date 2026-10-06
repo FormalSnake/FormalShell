@@ -9,7 +9,7 @@ use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, TimeZone};
 use regex::Regex;
 use serde_json::Value;
 
-use crate::js;
+use fs_js as js;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ParseError {
@@ -56,7 +56,7 @@ impl fmt::Debug for Credentials {
 }
 
 fn normalize_expires_at_ms(v: Option<&Value>) -> f64 {
-    let n = js::number(v);
+    let n = js::to_number(v);
     if n.is_finite() && n > 0.0 { n } else { 0.0 }
 }
 
@@ -180,13 +180,13 @@ fn bucket_label(key: &str) -> String {
 /// is percent-scaled.
 fn uses_percent_scale<'a>(buckets: impl Iterator<Item = &'a Value>) -> bool {
     buckets
-        .map(|b| js::number(b.get("utilization")))
+        .map(|b| js::to_number(b.get("utilization")))
         .any(|n| n.is_finite() && n >= 1.0)
 }
 
 fn usage_row(label: &str, bucket: &Value, percent_scale: bool) -> Option<UsageRow> {
     let utilization = bucket.get("utilization").filter(|u| !u.is_null())?;
-    let n = js::number(Some(utilization));
+    let n = js::to_number(Some(utilization));
     if !n.is_finite() || n < 0.0 {
         return None;
     }
@@ -330,25 +330,25 @@ pub fn parse_codex_rate_limits(body: &str) -> Result<CodexLimits, ParseError> {
 
 fn codex_window_row(window: Option<&Value>) -> Option<UsageRow> {
     let window = window.filter(|w| w.is_object())?;
-    let used = js::number(window.get("usedPercent"));
+    let used = js::to_number(window.get("usedPercent"));
     if !used.is_finite() || used < 0.0 {
         return None;
     }
 
-    let mins = js::number(window.get("windowDurationMins"));
+    let mins = js::to_number(window.get("windowDurationMins"));
     let label = if mins.is_finite() && mins > 0.0 {
         if mins == 10080.0 {
             "Weekly".to_owned()
         } else if mins % 60.0 == 0.0 {
-            format!("{}h window", js::num_to_string(mins / 60.0))
+            format!("{}h window", js::num_str(mins / 60.0))
         } else {
-            format!("{}m window", js::num_to_string(mins))
+            format!("{}m window", js::num_str(mins))
         }
     } else {
         "Window".to_owned()
     };
 
-    let reset = js::number(window.get("resetsAt"));
+    let reset = js::to_number(window.get("resetsAt"));
     let resets_at = if reset.is_finite() && reset > 0.0 {
         DateTime::from_timestamp_millis((reset * 1000.0) as i64)
             .map(|t| t.format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string())

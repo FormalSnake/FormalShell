@@ -12,7 +12,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::js;
+use fs_js as js;
 
 pub const MAX_DURATION_SECONDS: u64 = 30 * 24 * 60 * 60;
 
@@ -106,7 +106,7 @@ pub fn parse_spec(text: &str) -> Option<Spec> {
 /// separates two reminders set within the same millisecond.
 pub fn make_entry(seconds: u64, message: &str, now_ms: f64, serial: u64) -> Entry {
     Entry {
-        id: format!("rem-{}-{serial}", js::num_to_string(now_ms)),
+        id: format!("rem-{}-{serial}", js::num_str(now_ms)),
         message: message.to_owned(),
         set_at: now_ms,
         due_at: now_ms + seconds as f64 * 1000.0,
@@ -141,7 +141,7 @@ pub fn normalize(raw: &Value) -> Vec<Entry> {
             let due_at = js::finite_number(obj.get("dueAt"))?;
             Some(Entry {
                 id: id.to_owned(),
-                message: js::str_of(obj.get("message")),
+                message: js::opt_str(obj.get("message")),
                 set_at: js::finite_number(obj.get("setAt")).unwrap_or(due_at),
                 due_at,
             })

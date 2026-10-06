@@ -15,7 +15,7 @@ use std::sync::LazyLock;
 use regex::Regex;
 use serde_json::Value;
 
-use crate::js::{encode_uri_component, parse_digits, parse_float};
+use fs_js::{encode_uri_component, parse_digits, parse_float};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ParseError {

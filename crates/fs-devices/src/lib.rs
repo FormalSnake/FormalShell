@@ -7,6 +7,5 @@ pub mod bluetooth;
 pub mod earbuds;
 pub mod iphone;
 pub mod localsend;
-mod js;
 pub mod network;
 pub mod tailscale;

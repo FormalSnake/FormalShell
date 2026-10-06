@@ -4,7 +4,6 @@ use chrono::{DateTime, Local, Timelike};
 
 use crate::clipboard::emoji::is_emoji_only;
 use crate::clipboard::history::{Entry, EntryKind};
-use crate::jsstr;
 use crate::node::{Kind, Node};
 
 /// Local `HH:MM` of a capture time. A legacy entry with no timestamp reads
@@ -59,7 +58,7 @@ pub fn clipboard_provider(items: &[Entry], mode: ClipMode, paste: bool) -> Vec<N
             let label = if is_image {
                 "Image".to_string()
             } else if emoji_only {
-                jsstr::collapse_spaces(text)
+                fs_js::collapse_spaces(text)
             } else {
                 preview_label(text, None)
             };
@@ -108,7 +107,7 @@ const PASTE_MODIFIERS: &[&str] = &["shift", "capslock", "ctrl", "logo", "win", "
 /// terminals, which almost universally want Ctrl+Shift+V.
 pub fn paste_argv(chord: &str) -> Option<Vec<String>> {
     let lowered = chord.to_lowercase();
-    let mut parts: Vec<&str> = lowered.split('+').map(jsstr::trim).filter(|p| !p.is_empty()).collect();
+    let mut parts: Vec<&str> = lowered.split('+').map(fs_js::trim).filter(|p| !p.is_empty()).collect();
     let key = parts.pop()?;
     let mods = parts;
     if mods.iter().any(|m| !PASTE_MODIFIERS.contains(m)) || PASTE_MODIFIERS.contains(&key) {
@@ -132,7 +131,7 @@ pub fn paste_argv(chord: &str) -> Option<Vec<String>> {
 /// is non-empty. Case-insensitive substring, not fuzzy: the ask is "does this
 /// entry contain what I typed".
 pub fn clipboard_search<'a>(rows: &'a [Node], query: &str) -> Vec<&'a Node> {
-    let q = jsstr::trim(query).to_lowercase();
+    let q = fs_js::trim(query).to_lowercase();
     if q.is_empty() {
         return rows.iter().collect();
     }
@@ -190,10 +189,10 @@ pub fn preview_label(text: &str, max_len: Option<usize>) -> String {
     let lines: Vec<&str> = text.split('\n').collect();
     let first_line = lines
         .iter()
-        .map(|l| jsstr::trim(l))
+        .map(|l| fs_js::trim(l))
         .find(|l| !l.is_empty())
-        .unwrap_or_else(|| jsstr::trim(text));
-    let truncated = jsstr::utf16_len(first_line) > max_len;
-    let out = if truncated { jsstr::utf16_prefix(first_line, max_len) } else { first_line.to_string() };
+        .unwrap_or_else(|| fs_js::trim(text));
+    let truncated = fs_js::utf16_len(first_line) > max_len;
+    let out = if truncated { fs_js::utf16_prefix(first_line, max_len) } else { first_line.to_string() };
     if truncated || lines.len() > 1 { format!("{out}\u{2026}") } else { out }
 }

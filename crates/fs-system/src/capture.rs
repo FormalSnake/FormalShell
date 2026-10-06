@@ -6,7 +6,7 @@
 //! process with no shell in between, so a recording directory carrying a space
 //! or a quote can never splice a command.
 
-use crate::js;
+use fs_js as js;
 use chrono::{Datelike, NaiveDateTime, Timelike};
 use regex::Regex;
 use std::sync::LazyLock;
@@ -63,7 +63,7 @@ pub fn parse_geometry(text: &str) -> String {
     let Some(m) = GEOMETRY_RE.captures(js::trim(text)) else {
         return String::new();
     };
-    if js::number(&m[3]) <= 0.0 || js::number(&m[4]) <= 0.0 {
+    if js::parse_number(&m[3]) <= 0.0 || js::parse_number(&m[4]) <= 0.0 {
         return String::new();
     }
     format!("{},{} {}x{}", &m[1], &m[2], &m[3], &m[4])
@@ -94,7 +94,7 @@ pub fn hex_from_ppm_bytes(text: &str) -> String {
         if !all_digits(part) {
             return String::new();
         }
-        let v = js::number(part);
+        let v = js::parse_number(part);
         if v > 255.0 {
             return String::new();
         }
@@ -123,7 +123,7 @@ pub fn parse_audio_setup(text: &str) -> AudioSetup {
             if !all_digits(part) {
                 return AudioSetup { modules: Vec::new(), device: String::new() };
             }
-            ids.push(js::number(part));
+            ids.push(js::parse_number(part));
         }
     }
     let device = js::trim(lines.get(1).copied().unwrap_or("")).to_string();
@@ -214,7 +214,7 @@ pub fn resolve_max_height(arg: Option<&str>, config_default: f64) -> f64 {
     if !all_digits(raw) {
         return f64::NAN;
     }
-    js::number(raw)
+    js::parse_number(raw)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -517,7 +517,7 @@ pub fn webcam_geometry(size_name: &str, region: Region, margin: f64) -> WebcamGe
 /// round trip through a string.
 pub fn region_from_geometry(geometry: &str) -> Option<Region> {
     let m = GEOMETRY_RE.captures(js::trim(geometry))?;
-    Some(Region { x: js::number(&m[1]), y: js::number(&m[2]), width: js::number(&m[3]), height: js::number(&m[4]) })
+    Some(Region { x: js::parse_number(&m[1]), y: js::parse_number(&m[2]), width: js::parse_number(&m[3]), height: js::parse_number(&m[4]) })
 }
 
 #[cfg(test)]
@@ -682,7 +682,7 @@ mod tests {
     #[test]
     fn scale_cap_filter_clamps_height_and_keeps_width_even() {
         assert_eq!(scale_cap_filter(720.0), "scale=-2:'min(ih,720)'");
-        assert_eq!(scale_cap_filter(js::number("1080")), "scale=-2:'min(ih,1080)'");
+        assert_eq!(scale_cap_filter(js::parse_number("1080")), "scale=-2:'min(ih,1080)'");
         assert_eq!(scale_cap_filter(480.9), "scale=-2:'min(ih,480)'");
     }
 

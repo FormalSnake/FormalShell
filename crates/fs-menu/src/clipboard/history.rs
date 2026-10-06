@@ -93,7 +93,7 @@ fn no_removal(state: &State) -> Reduced {
 /// back into one row, and a NUL could never survive wl-copy's argv anyway.
 pub fn sanitize(text: &str) -> Option<String> {
     let stripped: String = text.chars().filter(|&c| c != '\0').collect();
-    if crate::jsstr::trim(&stripped).is_empty() { None } else { Some(stripped) }
+    if fs_js::trim(&stripped).is_empty() { None } else { Some(stripped) }
 }
 
 /// Reads an entry out of persisted JSON, migrating a legacy one (no `kind`)
@@ -197,7 +197,7 @@ pub fn drop_echo(state: &State, texts: &[&str], now: i64, window_ms: i64) -> Sta
     if top.kind == EntryKind::Image || top.captured_at.is_some_and(|at| now - at > window_ms) {
         return state.clone();
     }
-    let top_text = crate::jsstr::trim(top.text.as_deref().unwrap_or(""));
+    let top_text = fs_js::trim(top.text.as_deref().unwrap_or(""));
     if !texts.contains(&top_text) {
         return state.clone();
     }

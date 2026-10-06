@@ -4,7 +4,7 @@
 
 use serde_json::Value;
 
-use crate::js::utf16_len;
+use fs_js::utf16_len;
 
 pub const BUS_PREFIX: &str = "org.mpris.MediaPlayer2.";
 

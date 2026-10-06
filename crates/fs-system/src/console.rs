@@ -6,7 +6,7 @@
 //! an output rescaled afterwards leaves a console that is no longer half of
 //! anything (omarchy hit this and worked around it with a gap rule).
 
-use crate::js;
+use fs_js as js;
 
 pub const SHARE_MIN: f64 = 0.2;
 pub const SHARE_MAX: f64 = 1.0;

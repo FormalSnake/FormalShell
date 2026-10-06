@@ -12,7 +12,6 @@ pub mod calc;
 pub mod clipboard;
 pub mod frecency;
 pub mod icons;
-pub mod jsstr;
 pub mod model;
 pub mod nav;
 pub mod node;

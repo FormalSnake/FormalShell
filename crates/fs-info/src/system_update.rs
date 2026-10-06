@@ -34,7 +34,7 @@ use std::collections::HashMap;
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 use serde_json::Value;
 
-use crate::js;
+use fs_js as js;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct FlakeInput {

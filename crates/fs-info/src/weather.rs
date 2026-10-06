@@ -5,7 +5,7 @@
 use chrono::{Datelike, NaiveDate};
 use serde_json::Value;
 
-use crate::js;
+use fs_js as js;
 
 pub fn build_url(latitude: f64, longitude: f64) -> Option<String> {
     if !latitude.is_finite() || !longitude.is_finite() {
@@ -19,8 +19,8 @@ pub fn build_url(latitude: f64, longitude: f64) -> Option<String> {
          &current=temperature_2m,weather_code\
          &daily=temperature_2m_max,temperature_2m_min,weather_code\
          &timezone=auto&forecast_days=5",
-        js::num_to_string(latitude),
-        js::num_to_string(longitude),
+        js::num_str(latitude),
+        js::num_str(longitude),
     ))
 }
 
@@ -99,7 +99,7 @@ pub fn parse_response(status: u16, body: &str) -> Result<Weather, Error> {
             Some(Day {
                 date: match date {
                     Value::String(s) => s.clone(),
-                    other => js::to_js_string(other),
+                    other => js::to_str(other),
                 },
                 high: js::finite_number(max.get(i))?,
                 low: js::finite_number(min.get(i))?,

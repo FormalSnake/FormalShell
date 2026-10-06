@@ -11,7 +11,7 @@
 //! to us. An LED already at 0 is left alone so disable() never turns on
 //! something that was off.
 
-use crate::js;
+use fs_js as js;
 use regex::Regex;
 use serde_json::Value;
 use std::sync::LazyLock;

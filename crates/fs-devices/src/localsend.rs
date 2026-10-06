@@ -14,7 +14,7 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-use crate::js::{self, DOT, SPACE};
+use fs_js::{self as js, DOT, SPACE};
 
 /// "\tName: <alias>, Version: <ver>, Address: <ip>:<port>, Protocol: <proto>"
 /// (cmd/scan/scan.go's Fprintf), one line per peer, following the "Found
