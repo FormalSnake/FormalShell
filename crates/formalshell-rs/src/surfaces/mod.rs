@@ -11,6 +11,7 @@ use crate::wayland::App;
 pub fn changed(app: &mut App, topic: Topic) {
     match topic {
         Topic::Clock => app.bar.set_clock(&app.store.clock.text),
+        Topic::Config | Topic::State => {}
         Topic::Hyprland => app.bar.set_workspaces(&app.store.hyprland.slots),
     }
 }
