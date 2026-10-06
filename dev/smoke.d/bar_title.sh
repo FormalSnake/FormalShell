@@ -28,6 +28,7 @@
 # a second apart, `bar-title.png` and `bar-title-later.png`, are the marquee
 # moving, read by eye.
 leg_bar_title_flag="--bar-title"
+leg_bar_title_rust=1
 leg_bar_title_order=196
 leg_bar_title_needs="foot jq mpv ffmpeg"
 

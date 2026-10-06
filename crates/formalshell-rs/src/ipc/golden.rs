@@ -72,6 +72,28 @@ fn stub() -> Registry<()> {
                 ],
             },
             Target {
+                name: "bar",
+                functions: vec![
+                    f("chevron", &[("action", Type::String)], Type::String, |_, a| s(format!("chevron {}", a[0].str()))),
+                    f("chevronAt", &[("action", Type::String), ("region", Type::String)], Type::String, |_, a| {
+                        s(format!("chevronAt {} {}", a[0].str(), a[1].str()))
+                    }),
+                    f("room", &[], Type::String, |_, _| s("[]")),
+                    f("paint", &[], Type::String, |_, _| s("[]")),
+                ],
+            },
+            Target {
+                name: "panel",
+                functions: vec![
+                    f("open", &[("name", Type::String)], Type::String, |_, a| s(format!("open {}", a[0].str()))),
+                    f("close", &[], Type::String, |_, _| s("ok")),
+                    f("toggle", &[("name", Type::String)], Type::String, |_, a| s(format!("toggle {}", a[0].str()))),
+                    f("toggleAt", &[("n", Type::Int)], Type::String, |_, a| s(format!("toggleAt {}", a[0].int()))),
+                    f("state", &[], Type::String, |_, _| s("")),
+                ],
+            },
+            Target { name: "media", functions: vec![f("status", &[], Type::String, |_, _| s("{}"))] },
+            Target {
                 name: "probe",
                 functions: vec![
                     f("s", &[STR], Type::String, |_, a| s(format!("[{}]", a[0].str()))),
@@ -155,7 +177,14 @@ fn matches_qs_ipc() {
 #[test]
 fn signatures_match_qml() {
     let stub = stub();
-    for real in [super::debug::target(), super::theme::target(), super::theme::wallpaper()] {
+    for real in [
+        super::debug::target(),
+        super::theme::target(),
+        super::theme::wallpaper(),
+        super::bar::target(),
+        super::panel::target(),
+        super::media::target(),
+    ] {
         let defs: Vec<String> = real.functions.iter().map(|f| f.definition()).collect();
         let qml = stub.targets.iter().find(|t| t.name == real.name).expect("a stub target");
         for function in &qml.functions {

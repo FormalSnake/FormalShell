@@ -29,6 +29,7 @@
 # position into it, since two top-level `bar` keys leave only the later one
 # standing.
 leg_bar_position_flag="--bar-position <edge>"
+leg_bar_position_rust=1
 leg_bar_position_order=185
 leg_bar_position_needs="jq"
 

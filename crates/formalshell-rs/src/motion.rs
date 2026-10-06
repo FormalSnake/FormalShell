@@ -12,6 +12,7 @@ pub struct Curve(pub &'static [f64]);
 
 pub const SPATIAL_FAST: Curve = Curve(&[0.42, 1.67, 0.21, 0.9, 1.0, 1.0]);
 pub const SPATIAL: Curve = Curve(&[0.38, 1.21, 0.22, 1.0, 1.0, 1.0]);
+pub const EFFECTS: Curve = Curve(&[0.34, 0.8, 0.34, 1.0, 1.0, 1.0]);
 /// M3's two-segment curve, the workspace pill's alone.
 pub const EMPHASIZED: Curve =
     Curve(&[0.05, 0.0, 2.0 / 15.0, 0.06, 1.0 / 6.0, 0.4, 5.0 / 24.0, 0.82, 0.25, 1.0, 1.0, 1.0]);

@@ -1,0 +1,104 @@
+//! The wingpanel band's one reading of the wallpaper (Theme/BarPaint.qml,
+//! BarPaintService.qml): the wallpaper decoded small and cover-cropped to
+//! the main output, the band's rows read back, three numbers. Sampled on a
+//! wallpaper or band change and never on a clock; the decode runs on the
+//! pool.
+
+use std::sync::OnceLock;
+
+use fs_theme::barpaint::{self, SAMPLE_WIDTH, Stats};
+
+use crate::runtime::Ctx;
+use crate::store;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Request {
+    pub wallpaper: String,
+    pub edge: &'static str,
+    pub thickness: f64,
+    pub screen: (f64, f64),
+    pub output: String,
+}
+
+#[derive(Default)]
+pub struct State {
+    /// The output the reading was taken on, empty until one was.
+    pub source: String,
+    pub stats: Option<Stats>,
+}
+
+pub struct Diff(pub String, pub Option<Stats>);
+
+impl State {
+    pub fn apply(&mut self, Diff(source, stats): Diff) -> bool {
+        if self.source == source && self.stats == stats {
+            return false;
+        }
+        (self.source, self.stats) = (source, stats);
+        true
+    }
+
+    /// The numbers as `bar paint` reports them: an unread band is all zeroes.
+    pub fn numbers(&self) -> Stats {
+        self.stats.unwrap_or(Stats { mean: 0.0, std: 0.0, acutance: 0.0, sampled: false })
+    }
+}
+
+static REQUESTS: OnceLock<async_channel::Sender<Request>> = OnceLock::new();
+
+pub fn sample(request: Request) {
+    if let Some(tx) = REQUESTS.get() {
+        let _ = tx.try_send(request);
+    }
+}
+
+/// The band's samples off the decoded wallpaper, drawn the way
+/// Background.qml crops it: cover, centred, nearest-neighbour.
+fn read(request: &Request) -> Option<Stats> {
+    let img = image::open(&request.wallpaper).ok()?.to_rgba8();
+    let (iw, ih) = (img.width() as f64, img.height() as f64);
+    let (sw, sh) = request.screen;
+    if iw <= 0.0 || ih <= 0.0 || sw <= 0.0 || sh <= 0.0 {
+        return None;
+    }
+    let cw = SAMPLE_WIDTH as f64;
+    let ch = (cw * sh / sw).round().max(1.0);
+    let cover = (cw / iw).max(ch / ih);
+    let (dw, dh) = (iw * cover, ih * cover);
+    let (ox, oy) = ((cw - dw) / 2.0, (ch - dh) / 2.0);
+    let band = barpaint::band_rect(request.edge, request.thickness, sw, sh, cw, ch);
+    let (bw, bh) = (band.width as usize, band.height as usize);
+    let mut data = Vec::with_capacity(bw * bh * 4);
+    for y in 0..bh {
+        for x in 0..bw {
+            let cx = band.x + x as f64 + 0.5;
+            let cy = band.y + y as f64 + 0.5;
+            let px = (((cx - ox) / cover).floor() as i64).clamp(0, img.width() as i64 - 1) as u32;
+            let py = (((cy - oy) / cover).floor() as i64).clamp(0, img.height() as i64 - 1) as u32;
+            data.extend_from_slice(&img.get_pixel(px, py).0);
+        }
+    }
+    Some(barpaint::stats(&data, bw, bh))
+}
+
+pub async fn run(ctx: Ctx) {
+    let (tx, rx) = async_channel::unbounded::<Request>();
+    let _ = REQUESTS.set(tx);
+    let mut last: Option<Request> = None;
+    while let Ok(mut request) = rx.recv().await {
+        while let Ok(newer) = rx.try_recv() {
+            request = newer;
+        }
+        if last.as_ref() == Some(&request) {
+            continue;
+        }
+        last = Some(request.clone());
+        let output = request.output.clone();
+        let stats = if request.wallpaper.is_empty() {
+            None
+        } else {
+            ctx.pool().run(move || read(&request)).await.flatten()
+        };
+        ctx.publish(store::Diff::BarPaint(Diff(output, stats)));
+    }
+}

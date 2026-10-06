@@ -56,6 +56,7 @@
 # any of it is believed: a cell repainting on its own would otherwise read as
 # layout motion that is not there.
 leg_chevron_quiet_flag="--chevron-quiet"
+leg_chevron_quiet_rust=1
 leg_chevron_quiet_order=181
 leg_chevron_quiet_needs="convert jq"
 

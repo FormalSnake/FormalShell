@@ -15,6 +15,10 @@ fs-theme = { version = "0.1.0", path = "../fs-theme" }
 futures-lite = "2.6"
 fs-chrome = { path = "../fs-chrome" }
 fs-system = { path = "../fs-system" }
+fs-mpris = { path = "../fs-mpris" }
+fs-bluez = { path = "../fs-bluez" }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+zbus = "5"
 parley = "0.11"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

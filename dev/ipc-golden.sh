@@ -8,7 +8,8 @@
 # compositor is involved: what is recorded is qs's own argument parsing,
 # type conversion, error strings, output framing and exit codes. `debug`,
 # `theme` and `wallpaper` carry DebugIpc.qml's, ThemeIpc.qml's and
-# WallpaperIpc.qml's exact signatures; `probe` covers every type qs
+# WallpaperIpc.qml's exact signatures, `bar`, `panel` and `media` BarIpc.qml's,
+# PanelIpc.qml's and MediaIpc.qml's `status`; `probe` covers every type qs
 # converts and the function names that collide with qs's subcommands.
 set -euo pipefail
 
@@ -42,6 +43,25 @@ ShellRoot {
         target: "wallpaper"
         function set(path: string): string { return "set " + path }
         function get(): string { return "" }
+    }
+    IpcHandler {
+        target: "bar"
+        function chevron(action: string): string { return "chevron " + action }
+        function chevronAt(action: string, region: string): string { return "chevronAt " + action + " " + region }
+        function room(): string { return "[]" }
+        function paint(): string { return "[]" }
+    }
+    IpcHandler {
+        target: "panel"
+        function open(name: string): string { return "open " + name }
+        function close(): string { return "ok" }
+        function toggle(name: string): string { return "toggle " + name }
+        function toggleAt(n: int): string { return "toggleAt " + n }
+        function state(): string { return "" }
+    }
+    IpcHandler {
+        target: "media"
+        function status(): string { return "{}" }
     }
     IpcHandler {
         target: "probe"
@@ -211,6 +231,28 @@ rec call wallpaper get x
 rec show theme
 rec show wallpaper
 rec show wallpaper set
+rec call bar chevron status
+rec call bar chevron expand
+rec call bar chevron
+rec call bar chevronAt collapse right
+rec call bar chevronAt collapse
+rec call bar room
+rec call bar room x
+rec call bar paint
+rec show bar
+rec show bar chevronAt
+rec call panel open audio
+rec call panel open
+rec call panel close
+rec call panel toggle weather
+rec call panel toggleAt 2
+rec call panel toggleAt x
+rec call panel toggleAt -1
+rec call panel state
+rec show panel
+rec call media status
+rec call media status x
+rec show media
 
 kill "$qs_pid"
 wait "$qs_pid" 2>/dev/null || true

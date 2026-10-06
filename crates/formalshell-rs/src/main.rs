@@ -33,7 +33,7 @@ fn main() {
     let (globals, queue) = registry_queue_init::<App>(&conn).expect("wl_registry");
     let qh = queue.handle();
 
-    let mut event_loop: EventLoop<App> = EventLoop::try_new().expect("event loop");
+    let mut event_loop: EventLoop<'static, App> = EventLoop::try_new().expect("event loop");
     let handle = event_loop.handle();
     WaylandSource::new(conn.clone(), queue).insert(handle.clone()).expect("wayland source");
 
@@ -47,10 +47,12 @@ fn main() {
             }
         })
         .expect("runtime channel");
-    let _runtime = Runtime::start(Publisher::new(sender), |ctx| {
+    let runtime = Runtime::start(Publisher::new(sender), |ctx| {
         services::start(ctx);
         ipc::start(ctx);
     });
+    app.runtime = Some(runtime);
+    app.set_handle(handle.clone());
 
     let signal = event_loop.get_signal();
     let ended = event_loop.run(None, &mut app, |app| {

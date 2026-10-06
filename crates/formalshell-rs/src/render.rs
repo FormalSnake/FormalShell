@@ -4,7 +4,7 @@
 
 use vello_cpu::color::{AlphaColor, Srgb};
 use vello_cpu::kurbo::{Affine, Cap, Join, Rect, RoundedRect, Shape, Stroke, Vec2};
-use vello_cpu::peniko::{BlendMode, Compose, Mix};
+use vello_cpu::peniko::{BlendMode, Compose, Fill, Mix};
 use vello_cpu::{Pixmap, RenderContext, Resources};
 
 use crate::scene::{IRect, Paint, Scene};
@@ -68,6 +68,45 @@ impl Renderer {
                         self.ctx.fill_rect(&r);
                     }
                 }
+                Paint::Framed { fill, radius, border, width } => {
+                    self.ctx.set_transform(at);
+                    let b = node.bounds;
+                    let r = Rect::new(b.x as f64, b.y as f64, b.right() as f64, b.bottom() as f64);
+                    let rr = |r: Rect, radius: f64| RoundedRect::from_rect(r, radius.max(0.0)).to_path(0.1);
+                    if fill.to_u8()[3] > 0 {
+                        self.ctx.set_paint(color(*fill));
+                        self.ctx.fill_path(&rr(r, *radius as f64));
+                    }
+                    if *width > 0.0 && border.to_u8()[3] > 0 {
+                        let half = *width as f64 / 2.0;
+                        self.ctx.set_stroke(Stroke::new(*width as f64));
+                        self.ctx.set_paint(color(*border));
+                        self.ctx.stroke_path(&rr(r.inflate(-half, -half), *radius as f64 - half));
+                    }
+                }
+                Paint::Glow { text, color: ink, x, y, blur } => {
+                    // A box of taps over the blur's reach, each carrying its
+                    // share of the alpha: cheap, and close enough at the 2px
+                    // the tables ask for.
+                    let reach = (*blur / 2.0).max(0.0);
+                    let taps: &[(f32, f32)] = if reach < 0.25 {
+                        &[(0.0, 0.0)]
+                    } else {
+                        &[(0.0, 0.0), (-1.0, 0.0), (1.0, 0.0), (0.0, -1.0), (0.0, 1.0), (-0.7, -0.7), (0.7, -0.7), (-0.7, 0.7), (0.7, 0.7)]
+                    };
+                    let share = ink.with_alpha(ink.a / taps.len() as f32 * if taps.len() > 1 { 2.0 } else { 1.0 });
+                    self.ctx.set_paint(color(share));
+                    for (dx, dy) in taps {
+                        for glyph in &text.glyphs {
+                            let p = (
+                                node.bounds.x as f32 + glyph.x as f32 + x + dx * reach,
+                                node.bounds.y as f32 + glyph.y as f32 + y + dy * reach,
+                            );
+                            self.ctx.set_transform(at * Affine::translate((p.0 as f64, p.1 as f64)));
+                            self.ctx.fill_path(&glyph.path);
+                        }
+                    }
+                }
                 Paint::Text { text, color: ink } => {
                     self.ctx.set_paint(color(*ink));
                     for glyph in &text.glyphs {
@@ -79,8 +118,11 @@ impl Renderer {
                 Paint::Shape { fill, strokes } => {
                     self.ctx.set_transform(at);
                     if let Some((path, ink)) = fill {
+                        // Even-odd, so a band carries its cut-out as a second subpath.
+                        self.ctx.set_fill_rule(Fill::EvenOdd);
                         self.ctx.set_paint(color(*ink));
                         self.ctx.fill_path(path);
+                        self.ctx.set_fill_rule(Fill::NonZero);
                     }
                     for (path, ink, width) in strokes {
                         if ink.to_u8()[3] == 0 {

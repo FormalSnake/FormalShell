@@ -14,6 +14,7 @@
 # two drawn cells intersect and none is cut by its region clip
 # (bar_title.sh's bar_cells_defects).
 leg_bar_room_flag="--bar-room"
+leg_bar_room_rust=1
 leg_bar_room_order=195
 leg_bar_room_needs="mpv ffmpeg jq"
 
