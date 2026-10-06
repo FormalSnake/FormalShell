@@ -123,7 +123,7 @@
           localsend-cli = pkgs.callPackage ./nix/localsend-cli.nix { };
           openscq30 = pkgs.callPackage ./nix/openscq30.nix { };
           nothingctl = pkgs.callPackage ./nix/nothingctl.nix { };
-          formalshell-rs = pkgs.callPackage ./nix/formalshell-rs.nix { inherit lucide-font; };
+          formalshell-rs = pkgs.callPackage ./nix/formalshell-rs.nix { inherit lucide-font iphone-bridge; };
           formalshell = pkgs.callPackage ./nix/package.nix {
             quickshell = qsFor system;
             inherit formalshell-eds tensaku ttfx clipssh lucide-font iphone-bridge localsend-cli openscq30 nothingctl;

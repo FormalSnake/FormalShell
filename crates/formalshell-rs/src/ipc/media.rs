@@ -1,17 +1,117 @@
-//! `media`, MediaIpc.qml's read of the active source. The controls join
-//! with the media panel.
+//! `media`, MediaIpc.qml's verbs over the active source. Every verb that acts
+//! on a source it does not have (no player at all, or one that does not
+//! implement that part of MPRIS) answers with an error string naming which,
+//! rather than "ok" over a call that went nowhere.
 
 use super::registry::{Function, Target, Type, Value};
+use crate::store::Topic;
 use crate::wayland::App;
+
+fn text(s: impl Into<String>) -> Value {
+    Value::Str(s.into())
+}
+
+const OK: &str = "ok";
 
 pub fn target() -> Target<App> {
     Target {
         name: "media",
-        functions: vec![Function {
-            name: "status",
-            params: &[],
-            ret: Type::String,
-            call: |app, _| Value::Str(app.store.media.status().to_string()),
-        }],
+        functions: vec![
+            Function { name: "playPause", params: &[], ret: Type::String, call: play_pause },
+            Function { name: "next", params: &[], ret: Type::String, call: next },
+            Function { name: "previous", params: &[], ret: Type::String, call: previous },
+            Function { name: "shuffle", params: &[("mode", Type::String)], ret: Type::String, call: shuffle },
+            Function { name: "loop", params: &[("mode", Type::String)], ret: Type::String, call: loop_mode },
+            Function { name: "volume", params: &[("percent", Type::Int)], ret: Type::String, call: volume },
+            Function { name: "raise", params: &[], ret: Type::String, call: raise },
+            Function { name: "select", params: &[("id", Type::String)], ret: Type::String, call: select },
+            Function { name: "players", params: &[], ret: Type::String, call: players },
+            Function { name: "status", params: &[], ret: Type::String, call: status },
+        ],
     }
+}
+
+fn play_pause(app: &mut App, _: &[Value]) -> Value {
+    app.store.media.play_pause();
+    text(OK)
+}
+
+fn next(app: &mut App, _: &[Value]) -> Value {
+    app.store.media.next();
+    text(OK)
+}
+
+fn previous(app: &mut App, _: &[Value]) -> Value {
+    app.store.media.previous();
+    text(OK)
+}
+
+fn shuffle(app: &mut App, args: &[Value]) -> Value {
+    let Some(a) = app.store.media.active() else { return text("error: no player") };
+    let Some(on) = a.shuffle else { return text("error: player does not support shuffle") };
+    let mode = args[0].str();
+    match mode {
+        "on" => app.store.media.set_shuffle(true),
+        "off" => app.store.media.set_shuffle(false),
+        "toggle" => app.store.media.set_shuffle(!on),
+        _ => return text(format!("error: unknown mode {mode} (on|off|toggle)")),
+    }
+    text(OK)
+}
+
+fn loop_mode(app: &mut App, args: &[Value]) -> Value {
+    let Some(a) = app.store.media.active() else { return text("error: no player") };
+    let Some(current) = a.loop_name else { return text("error: player does not support loop") };
+    let mode = args[0].str();
+    match mode {
+        "cycle" => app.store.media.set_loop(fs_media::media::next_loop(current)),
+        "none" | "track" | "playlist" => app.store.media.set_loop(mode),
+        _ => return text(format!("error: unknown mode {mode} (none|track|playlist|cycle)")),
+    }
+    text(OK)
+}
+
+/// Percent on the wire, the player's own 0..1 underneath: a CLI argument reads
+/// better as 30 than 0.3.
+fn volume(app: &mut App, args: &[Value]) -> Value {
+    let Some(a) = app.store.media.active() else { return text("error: no player") };
+    if a.volume.is_none() {
+        return text("error: player does not support volume");
+    }
+    let percent = args[0].int();
+    if !(0..=100).contains(&percent) {
+        return text(format!("error: volume out of range {percent} (0-100)"));
+    }
+    app.store.media.set_volume(f64::from(percent) / 100.0);
+    text(OK)
+}
+
+fn raise(app: &mut App, _: &[Value]) -> Value {
+    let Some(a) = app.store.media.active() else { return text("error: no player") };
+    if !a.can_raise {
+        return text("error: player does not support raise");
+    }
+    app.store.media.raise();
+    text(OK)
+}
+
+/// A bus name, "radio", "iphone" or "airplay", exactly as `status` and
+/// `players` report it; "" puts the pick back on auto. An unknown one is an
+/// error rather than a selection nothing can satisfy.
+fn select(app: &mut App, args: &[Value]) -> Value {
+    let id = args[0].str();
+    if !id.is_empty() && !app.store.media.players().iter().any(|r| r.id == id) {
+        return text(format!("error: no player {id}"));
+    }
+    app.store.media.select(id);
+    crate::surfaces::changed(app, Topic::Media);
+    text(OK)
+}
+
+fn players(app: &mut App, _: &[Value]) -> Value {
+    text(app.store.media.players_json().to_string())
+}
+
+fn status(app: &mut App, _: &[Value]) -> Value {
+    text(app.store.media.status().to_string())
 }

@@ -1,4 +1,4 @@
-{ lib, rustPlatform, pkg-config, makeWrapper, fontconfig, lucide-font, nerd-fonts, matugen, wireplumber }:
+{ lib, rustPlatform, pkg-config, makeWrapper, fontconfig, lucide-font, nerd-fonts, matugen, wireplumber, cava, mpv, curl, util-linux, uxplay, iphone-bridge }:
 
 rustPlatform.buildRustPackage {
   pname = "formalshell-rs";
@@ -41,7 +41,8 @@ rustPlatform.buildRustPackage {
       --set-default FS_RS_ICON_FONT ${lucide-font}/share/fonts/truetype/lucide.ttf \
       --set-default FS_RS_FONT_DIRS ${nerd-fonts.symbols-only}/share/fonts \
       --set-default FS_TEMPLATE_DIR $out/share/formalshell-rs/templates \
-      --prefix PATH : ${lib.makeBinPath [ matugen wireplumber ]}
+      --prefix PATH : ${lib.makeBinPath [ matugen wireplumber cava mpv curl util-linux ]} \
+      --suffix PATH : ${lib.makeBinPath [ uxplay iphone-bridge ]}
   '';
 
   meta = {

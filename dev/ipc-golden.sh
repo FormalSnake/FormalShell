@@ -61,6 +61,33 @@ ShellRoot {
     }
     IpcHandler {
         target: "media"
+        function playPause(): string { return "playPause" }
+        function next(): string { return "next" }
+        function previous(): string { return "previous" }
+        function shuffle(mode: string): string { return "shuffle " + mode }
+        function loop(mode: string): string { return "loop " + mode }
+        function volume(percent: int): string { return "volume " + percent }
+        function raise(): string { return "raise" }
+        function select(id: string): string { return "select " + id }
+        function players(): string { return "[]" }
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "radio"
+        function status(): string { return "{}" }
+        function play(id: string): string { return "play " + id }
+        function toggle(): string { return "toggle" }
+        function random(): string { return "random" }
+        function stop(): string { return "stop" }
+    }
+    IpcHandler {
+        target: "airplay"
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "visualizer"
+        function style(name: string): string { return "style " + name }
+        function styles(): string { return "bars\nline" }
         function status(): string { return "{}" }
     }
     IpcHandler {
@@ -198,6 +225,30 @@ rec call probe ss '[,]'
 rec call probe ss '["a,b",c]'
 rec call probe s '[[a]]'
 rec call probe s '[ ]'
+rec call media playPause
+rec call media shuffle on
+rec call media shuffle
+rec call media loop cycle
+rec call media volume 30
+rec call media volume ' 30 '
+rec call media volume -5
+rec call media volume 1.5
+rec call media volume x
+rec call media volume
+rec call media select ''
+rec call media select 'org.mpris.MediaPlayer2.mpv'
+rec call media players
+rec call radio play smoke-radio-1
+rec call radio play
+rec call radio toggle
+rec call radio random
+rec call radio stop
+rec call radio status
+rec call airplay status
+rec call airplay start
+rec call visualizer style next
+rec call visualizer style config
+rec call visualizer styles
 rec call probe s 'x[a,b]'
 rec call probe i 'a"b'
 rec call probe i 'a\b'

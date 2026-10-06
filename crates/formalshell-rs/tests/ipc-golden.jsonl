@@ -39,7 +39,7 @@
 {"argv":["call","probe","ss","--","a"],"live":true,"stdout":"Too few arguments provided (2 required but 1 were provided.)\nFunction definition: function ss(a: string, b: string): string\n","stderr":"","exit":0}
 {"argv":["call","probe","s","--"],"live":true,"stdout":"Too few arguments provided (1 required but 0 were provided.)\nFunction definition: function s(a: string): string\n","stderr":"","exit":0}
 {"argv":["call","probe","s","-"],"live":true,"stdout":"[-]\n","stderr":"","exit":0}
-{"argv":["call","probe","show"],"live":true,"stdout":"target probe\n  function ss(a: string, b: string): string\n  function ri(a: real): real\n  function b(a: bool): string\n  function sss(a: string, b: string, c: string): string\n  function empty(): string\n  function show(): string\n  function bb(a: bool): bool\n  function call(): string\n  function s(a: string): string\n  function v(): void\n  function i(a: int): string\n  function nl(): string\n  function r(a: real): string\n  function ii(a: int): int\n","stderr":"","exit":0}
+{"argv":["call","probe","show"],"live":true,"stdout":"target probe\n  function show(): string\n  function sss(a: string, b: string, c: string): string\n  function r(a: real): string\n  function nl(): string\n  function ri(a: real): real\n  function empty(): string\n  function v(): void\n  function ii(a: int): int\n  function bb(a: bool): bool\n  function call(): string\n  function s(a: string): string\n  function ss(a: string, b: string): string\n  function b(a: bool): string\n  function i(a: int): string\n","stderr":"","exit":0}
 {"argv":["call","probe","call"],"live":true,"stdout":"probe-call\n","stderr":"","exit":0}
 {"argv":["call","probe","s","show"],"live":true,"stdout":"function s(a: string): string\n","stderr":"","exit":0}
 {"argv":["call","probe","b","true"],"live":true,"stdout":"true\n","stderr":"","exit":0}
@@ -74,7 +74,7 @@
 {"argv":["call"],"live":true,"stdout":"Target required to send message.\n","stderr":"","exit":0}
 {"argv":["call","","dump"],"live":true,"stdout":"Target required to send message.\n","stderr":"","exit":0}
 {"argv":["call","debug",""],"live":true,"stdout":"Function required to send message.\n","stderr":"","exit":0}
-{"argv":["show"],"live":true,"stdout":"target bar\n  function chevronAt(action: string, region: string): string\n  function chevron(action: string): string\n  function paint(): string\n  function room(): string\ntarget media\n  function status(): string\ntarget theme\n  function mode(m: string): string\n  function retheme(): string\n  function status(): string\ntarget debug\n  function joinClear(): string\n  function dump(): string\n  function join(edge: string, x: int, width: int): string\n  function motionScale(percent: int): string\n  function query(q: string): string\ntarget wallpaper\n  function set(path: string): string\n  function get(): string\ntarget probe\n  function ss(a: string, b: string): string\n  function ri(a: real): real\n  function b(a: bool): string\n  function sss(a: string, b: string, c: string): string\n  function empty(): string\n  function show(): string\n  function bb(a: bool): bool\n  function call(): string\n  function s(a: string): string\n  function v(): void\n  function i(a: int): string\n  function nl(): string\n  function r(a: real): string\n  function ii(a: int): int\ntarget panel\n  function toggleAt(n: int): string\n  function state(): string\n  function open(name: string): string\n  function toggle(name: string): string\n  function close(): string\n","stderr":"","exit":0}
+{"argv":["show"],"live":true,"stdout":"target debug\n  function dump(): string\n  function join(edge: string, x: int, width: int): string\n  function joinClear(): string\n  function query(q: string): string\n  function motionScale(percent: int): string\ntarget probe\n  function show(): string\n  function sss(a: string, b: string, c: string): string\n  function r(a: real): string\n  function nl(): string\n  function ri(a: real): real\n  function empty(): string\n  function v(): void\n  function ii(a: int): int\n  function bb(a: bool): bool\n  function call(): string\n  function s(a: string): string\n  function ss(a: string, b: string): string\n  function b(a: bool): string\n  function i(a: int): string\ntarget radio\n  function play(id: string): string\n  function random(): string\n  function status(): string\n  function stop(): string\n  function toggle(): string\ntarget panel\n  function close(): string\n  function state(): string\n  function toggle(name: string): string\n  function toggleAt(n: int): string\n  function open(name: string): string\ntarget airplay\n  function status(): string\ntarget theme\n  function mode(m: string): string\n  function status(): string\n  function retheme(): string\ntarget visualizer\n  function status(): string\n  function style(name: string): string\n  function styles(): string\ntarget media\n  function players(): string\n  function volume(percent: int): string\n  function status(): string\n  function raise(): string\n  function next(): string\n  function shuffle(mode: string): string\n  function loop(mode: string): string\n  function playPause(): string\n  function select(id: string): string\n  function previous(): string\ntarget wallpaper\n  function get(): string\n  function set(path: string): string\ntarget bar\n  function chevronAt(action: string, region: string): string\n  function room(): string\n  function paint(): string\n  function chevron(action: string): string\n","stderr":"","exit":0}
 {"argv":["call","debug","dump","extra"],"live":true,"stdout":"Too many arguments provided (0 required but 1 were provided.)\nFunction definition: function dump(): string\n","stderr":"","exit":0}
 {"argv":["call","debug","dump","--any-display"],"live":true,"stdout":"","stderr":"The following argument was not expected: --any-display\nRun with --help for more information.\n","exit":109}
 {"argv":["call","debug","motionScale","-1.5"],"live":true,"stdout":"Unable to parse argument 1 as \"int\". Provided argument: \"-1.5\"\nFunction definition: function motionScale(percent: int): string\n","stderr":"","exit":0}
@@ -96,6 +96,30 @@
 {"argv":["call","probe","ss","[\"a,b\",c]"],"live":true,"stdout":"[\"a,b\"][c]\n","stderr":"","exit":0}
 {"argv":["call","probe","s","[[a]]"],"live":true,"stdout":"[a]\n","stderr":"","exit":0}
 {"argv":["call","probe","s","[ ]"],"live":true,"stdout":"Too few arguments provided (1 required but 0 were provided.)\nFunction definition: function s(a: string): string\n","stderr":"","exit":0}
+{"argv":["call","media","playPause"],"live":true,"stdout":"playPause\n","stderr":"","exit":0}
+{"argv":["call","media","shuffle","on"],"live":true,"stdout":"shuffle on\n","stderr":"","exit":0}
+{"argv":["call","media","shuffle"],"live":true,"stdout":"Too few arguments provided (1 required but 0 were provided.)\nFunction definition: function shuffle(mode: string): string\n","stderr":"","exit":0}
+{"argv":["call","media","loop","cycle"],"live":true,"stdout":"loop cycle\n","stderr":"","exit":0}
+{"argv":["call","media","volume","30"],"live":true,"stdout":"volume 30\n","stderr":"","exit":0}
+{"argv":["call","media","volume"," 30 "],"live":true,"stdout":"volume 30\n","stderr":"","exit":0}
+{"argv":["call","media","volume","-5"],"live":true,"stdout":"volume -5\n","stderr":"","exit":0}
+{"argv":["call","media","volume","1.5"],"live":true,"stdout":"Unable to parse argument 1 as \"int\". Provided argument: \"1.5\"\nFunction definition: function volume(percent: int): string\n","stderr":"","exit":0}
+{"argv":["call","media","volume","x"],"live":true,"stdout":"Unable to parse argument 1 as \"int\". Provided argument: \"x\"\nFunction definition: function volume(percent: int): string\n","stderr":"","exit":0}
+{"argv":["call","media","volume"],"live":true,"stdout":"Too few arguments provided (1 required but 0 were provided.)\nFunction definition: function volume(percent: int): string\n","stderr":"","exit":0}
+{"argv":["call","media","select",""],"live":true,"stdout":"select \n","stderr":"","exit":0}
+{"argv":["call","media","select","org.mpris.MediaPlayer2.mpv"],"live":true,"stdout":"select org.mpris.MediaPlayer2.mpv\n","stderr":"","exit":0}
+{"argv":["call","media","players"],"live":true,"stdout":"[]\n","stderr":"","exit":0}
+{"argv":["call","radio","play","smoke-radio-1"],"live":true,"stdout":"play smoke-radio-1\n","stderr":"","exit":0}
+{"argv":["call","radio","play"],"live":true,"stdout":"Too few arguments provided (1 required but 0 were provided.)\nFunction definition: function play(id: string): string\n","stderr":"","exit":0}
+{"argv":["call","radio","toggle"],"live":true,"stdout":"toggle\n","stderr":"","exit":0}
+{"argv":["call","radio","random"],"live":true,"stdout":"random\n","stderr":"","exit":0}
+{"argv":["call","radio","stop"],"live":true,"stdout":"stop\n","stderr":"","exit":0}
+{"argv":["call","radio","status"],"live":true,"stdout":"{}\n","stderr":"","exit":0}
+{"argv":["call","airplay","status"],"live":true,"stdout":"{}\n","stderr":"","exit":0}
+{"argv":["call","airplay","start"],"live":true,"stdout":"Function not found.\n","stderr":"","exit":0}
+{"argv":["call","visualizer","style","next"],"live":true,"stdout":"style next\n","stderr":"","exit":0}
+{"argv":["call","visualizer","style","config"],"live":true,"stdout":"style config\n","stderr":"","exit":0}
+{"argv":["call","visualizer","styles"],"live":true,"stdout":"bars\nline\n","stderr":"","exit":0}
 {"argv":["call","probe","s","x[a,b]"],"live":true,"stdout":"[x[a,b]]\n","stderr":"","exit":0}
 {"argv":["call","probe","i","a\"b"],"live":true,"stdout":"Unable to parse argument 1 as \"int\". Provided argument: \"a\\\"b\"\nFunction definition: function i(a: int): string\n","stderr":"","exit":0}
 {"argv":["call","probe","i","a\\b"],"live":true,"stdout":"Unable to parse argument 1 as \"int\". Provided argument: \"a\\\\b\"\nFunction definition: function i(a: int): string\n","stderr":"","exit":0}
@@ -151,5 +175,5 @@
 {"argv":["call","media","status"],"live":true,"stdout":"{}\n","stderr":"","exit":0}
 {"argv":["call","media","status","x"],"live":true,"stdout":"Too many arguments provided (0 required but 1 were provided.)\nFunction definition: function status(): string\n","stderr":"","exit":0}
 {"argv":["show","media"],"live":true,"stdout":"","stderr":"The following argument was not expected: media\nRun with --help for more information.\n","exit":109}
-{"argv":["call","debug","dump"],"live":false,"stdout":"No running instances for \"/tmp/tmp.F6ed1eCaRc/shell/shell.qml\"\n","stderr":"","exit":255}
-{"argv":["show"],"live":false,"stdout":"No running instances for \"/tmp/tmp.F6ed1eCaRc/shell/shell.qml\"\n","stderr":"","exit":255}
+{"argv":["call","debug","dump"],"live":false,"stdout":"No running instances for \"/tmp/tmp.2N1LwUwGBi/shell/shell.qml\"\n","stderr":"","exit":255}
+{"argv":["show"],"live":false,"stdout":"No running instances for \"/tmp/tmp.2N1LwUwGBi/shell/shell.qml\"\n","stderr":"","exit":255}
