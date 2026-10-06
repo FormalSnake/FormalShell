@@ -18,7 +18,8 @@ stdenv.mkDerivation {
 
   buildPhase = ''
     runHook preBuild
-    cargo test --offline --workspace --exclude formalshell-rs
+    # fs-auth links libpam and has its own VM check, checks.<system>.fs-auth.
+    cargo test --offline --workspace --exclude formalshell-rs --exclude fs-auth
     runHook postBuild
   '';
 
