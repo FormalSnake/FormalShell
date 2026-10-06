@@ -17,9 +17,13 @@ use smithay_client_toolkit::shell::wlr_layer::{
 use smithay_client_toolkit::shm::{Shm, ShmHandler};
 use smithay_client_toolkit::{delegate_dispatch2, delegate_registry, registry_handlers};
 
-use crate::bar::Bar;
-use crate::panel::{Panel, Scrim};
+use crate::surfaces::bar::Bar;
+use crate::surfaces::panel::{Panel, Scrim};
+use crate::ipc;
+use crate::runtime::Msg;
+use crate::store::Store;
 use crate::surface::{PixelSurface, Pixels, Surface};
+use crate::surfaces;
 use crate::theme;
 
 /// The panel's one line of content, standing in for a real panel body.
@@ -34,6 +38,7 @@ pub struct App {
     shm: Shm,
     pixels: Pixels,
     qh: QueueHandle<Self>,
+    pub store: Store,
     pub bar: Bar,
     bar_surface: Surface,
     panel: Option<(Panel, Surface)>,
@@ -78,6 +83,7 @@ impl App {
             shm,
             pixels,
             qh: qh.clone(),
+            store: Store::default(),
             bar: Bar::new(1),
             bar_surface,
             panel: None,
@@ -109,11 +115,12 @@ impl App {
         eprintln!("ctl t={}ms {what}", self.started.elapsed().as_millis());
     }
 
-    /// One line off the control socket; the reply goes back down it.
-    pub fn command(&mut self, line: &str) -> String {
+    /// The spike's control verbs, until Task 4's targets replace them.
+    pub fn command(&mut self, words: &[String]) -> String {
         let now = Instant::now();
-        let words: Vec<&str> = line.split_whitespace().collect();
-        self.log(line.trim());
+        let line = words.join(" ");
+        self.log(&line);
+        let words: Vec<&str> = words.iter().map(String::as_str).collect();
         match words.as_slice() {
             ["spinner", state @ ("on" | "off")] => self.bar.set_spinner(now, *state == "on"),
             ["panel", "open"] => self.set_panel(now, true),
@@ -128,7 +135,7 @@ impl App {
                 Ok(s) if s > 0.0 => self.motion_scale = s,
                 _ => return format!("error: bad motion scale '{scale}'\n"),
             },
-            _ => return format!("error: unknown command '{}'\n", line.trim()),
+            _ => return format!("error: unknown command '{line}'\n"),
         }
         "ok\n".into()
     }
@@ -163,6 +170,19 @@ impl App {
         let layer = self.overlay("formalshell:scrim", Anchor::all(), 0);
         let surface = PixelSurface::new("scrim", layer, &self.pixels, &self.qh, self.started);
         self.scrim = Some((scrim, surface));
+    }
+
+    pub fn receive(&mut self, msg: Msg) {
+        match msg {
+            Msg::Diff(diff) => {
+                if let Some(topic) = self.store.apply(diff) {
+                    surfaces::changed(self, topic);
+                }
+            }
+            Msg::Call(call, reply) => {
+                let _ = reply.try_send(ipc::dispatch(self, &call));
+            }
+        }
     }
 
     pub fn present(&mut self) {

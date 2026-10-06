@@ -7,7 +7,7 @@ use std::time::Instant;
 use parley::GenericFamily;
 use vello_cpu::kurbo::Affine;
 
-use crate::hyprland::Slot;
+use crate::services::hyprland::Slot;
 use crate::motion::PULSE_MS;
 use crate::scene::{IRect, NodeId, Paint, Scene};
 use crate::text::{self, Family, ShapedText, Text, TextStyle};

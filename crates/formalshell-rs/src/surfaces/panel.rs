@@ -11,7 +11,7 @@ use vello_cpu::kurbo::{Affine, Rect};
 
 use crate::motion::{Animated, Deform, EMERGE, SPATIAL_FAST, SPATIAL_FAST_MS};
 use crate::scene::{Cast, IRect, NodeId, Paint, Scene};
-use crate::shoulders;
+use crate::surfaces::shoulders;
 use crate::text::{Family, ShapedText, Text, TextStyle};
 use crate::theme::{self, DARK, Rgba};
 

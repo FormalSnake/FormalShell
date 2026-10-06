@@ -1,35 +1,13 @@
-//! The spike's control socket: one line in, one line back. R1 replaces it
-//! with the real IPC server.
+//! The spike's control socket: one line in, one line back. Task 4's
+//! `formalshell-ipc` replaces it.
 
 use std::io::{Read, Write};
-use std::os::unix::net::{UnixListener, UnixStream};
+use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
-use std::time::Duration;
 
 pub fn socket_path() -> PathBuf {
     let runtime = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
     runtime.join("formalshell").join("rs.sock")
-}
-
-pub fn listen() -> std::io::Result<UnixListener> {
-    let path = socket_path();
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
-    }
-    let _ = std::fs::remove_file(&path);
-    let listener = UnixListener::bind(&path)?;
-    listener.set_nonblocking(true)?;
-    Ok(listener)
-}
-
-/// Reads one request off a fresh connection. The client writes its line
-/// and shuts its half down, so this never waits on the loop for long.
-pub fn read_request(stream: &mut UnixStream) -> std::io::Result<String> {
-    stream.set_nonblocking(false)?;
-    stream.set_read_timeout(Some(Duration::from_millis(200)))?;
-    let mut line = String::new();
-    stream.read_to_string(&mut line)?;
-    Ok(line)
 }
 
 /// `formalshell-rs ctl <words...>`: the client half.
