@@ -598,6 +598,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs-notifd"
+version = "0.1.1"
+dependencies = [
+ "async-channel",
+ "async-io",
+ "futures-lite",
+ "zbus",
+]
+
+[[package]]
 name = "fs-screensaver"
 version = "0.1.0"
 

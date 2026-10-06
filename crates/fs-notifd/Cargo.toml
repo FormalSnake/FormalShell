@@ -1,0 +1,13 @@
+[package]
+name = "fs-notifd"
+version = "0.1.1"
+edition = "2024"
+publish = false
+
+[dependencies]
+async-channel = "2"
+zbus = "5"
+
+[dev-dependencies]
+async-io = "2"
+futures-lite = "2"
