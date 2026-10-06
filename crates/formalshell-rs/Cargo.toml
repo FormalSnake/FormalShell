@@ -25,6 +25,8 @@ serde_json = "1"
 skrifa = "0.44"
 smithay-client-toolkit = { version = "0.21", default-features = false, features = ["calloop"] }
 vello_cpu = "0.3"
+resvg = { version = "0.46", default-features = false }
+fs-info = { version = "0.1.1", path = "../fs-info" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 yeslogic-fontconfig-sys = "6"
