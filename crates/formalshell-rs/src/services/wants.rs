@@ -25,9 +25,11 @@ pub enum Source {
     Tailscale,
     Monitor,
     Iphone,
+    Processes,
+    PowerFlow,
 }
 
-pub const COUNT: usize = 7;
+pub const COUNT: usize = 9;
 
 const SOURCES: [Source; COUNT] = [
     Source::Weather,
@@ -37,6 +39,8 @@ const SOURCES: [Source; COUNT] = [
     Source::Tailscale,
     Source::Monitor,
     Source::Iphone,
+    Source::Processes,
+    Source::PowerFlow,
 ];
 
 /// How long a source with no wanter keeps running.
@@ -86,6 +90,8 @@ fn start(source: Source, ctx: Ctx) -> Pin<Box<dyn Future<Output = ()>>> {
         Source::Tailscale => Box::pin(info::tailscale::run(ctx)),
         Source::Monitor => Box::pin(info::monitor::run(ctx)),
         Source::Iphone => Box::pin(info::iphone::run(ctx)),
+        Source::Processes => Box::pin(info::procs::run(ctx)),
+        Source::PowerFlow => Box::pin(info::powerflow::run(ctx)),
     }
 }
 

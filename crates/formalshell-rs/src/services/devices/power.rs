@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 
 use fs_system::dualsense::{self, Supply};
 use fs_system::power::model::DeviceState;
-use fs_upower::{Change, Device, UPower};
+use fs_upower::{Change, Device, PowerProfiles, Profile, ProfilesState, UPower};
 use futures_lite::StreamExt;
 
 use crate::runtime::Ctx;
@@ -24,6 +24,11 @@ pub struct Battery {
     /// Seconds, 0 when UPower has no estimate.
     pub time_to_full: f64,
     pub time_to_empty: f64,
+    /// The pack's capacity against its design, off the physical battery:
+    /// the display device is an aggregate and publishes none.
+    pub health: Option<f64>,
+    /// Watt-hours, 0 when UPower has no reading.
+    pub size_wh: f64,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -48,7 +53,7 @@ fn state(s: fs_upower::DeviceState) -> DeviceState {
     }
 }
 
-fn battery(d: &Device) -> Option<Battery> {
+fn battery(d: &Device, physical: Option<&Device>) -> Option<Battery> {
     let secs = |t: Option<std::time::Duration>| t.map_or(0.0, |t| t.as_secs_f64());
     d.is_laptop_battery().then(|| Battery {
         percent: d.percentage.rounded() as f64,
@@ -56,6 +61,8 @@ fn battery(d: &Device) -> Option<Battery> {
         rate: d.energy_rate,
         time_to_full: secs(d.time_to_full),
         time_to_empty: secs(d.time_to_empty),
+        health: physical.and_then(|p| p.capacity).map(|c| c.as_percent()),
+        size_wh: d.energy_full,
     })
 }
 
@@ -88,7 +95,7 @@ struct Seen {
 impl Seen {
     fn power(&self) -> Power {
         Power {
-            battery: self.display.as_ref().and_then(battery),
+            battery: self.display.as_ref().and_then(|d| battery(d, self.devices.values().find(|d| d.is_laptop_battery()))),
             on_battery: self.on_battery,
             dualsense: dualsense(&self.devices),
         }
@@ -124,3 +131,29 @@ pub async fn run(ctx: Ctx) {
         publish(seen.power());
     }
 }
+
+/// power-profiles-daemon's active profile and the ones it offers, none
+/// while the daemon is not on the bus.
+pub async fn run_profiles(ctx: Ctx) {
+    let publish = |p| ctx.publish(store::Diff::Devices(super::Diff::Profiles(p)));
+    let Ok(conn) = zbus::Connection::system().await else { return publish(None) };
+    let Ok(profiles) = PowerProfiles::connect(&conn).await else { return publish(None) };
+    let Ok(changes) = profiles.changes().await else { return publish(None) };
+    let mut changes = std::pin::pin!(changes);
+    while let Some(state) = changes.next().await {
+        publish(Some(state));
+    }
+}
+
+/// The profile group's pick; a daemon that refuses leaves the live
+/// property, and with it the group, where it was.
+pub fn set_profile(ctx: &Ctx, profile: Profile) {
+    ctx.spawn(async move {
+        let Ok(conn) = zbus::Connection::system().await else { return };
+        if let Ok(profiles) = PowerProfiles::connect(&conn).await {
+            let _ = profiles.set_active(profile).await;
+        }
+    });
+}
+
+pub type Profiles = Option<ProfilesState>;

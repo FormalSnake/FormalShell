@@ -10,6 +10,8 @@
 pub mod github;
 pub mod iphone;
 pub mod monitor;
+pub mod powerflow;
+pub mod procs;
 pub mod tailscale;
 pub mod update;
 pub mod usage;
@@ -33,6 +35,8 @@ pub struct State {
     pub tailscale: tailscale::State,
     pub monitor: monitor::State,
     pub iphone: iphone::State,
+    pub procs: procs::State,
+    pub power_flow: powerflow::State,
 }
 
 pub enum Diff {
@@ -43,6 +47,8 @@ pub enum Diff {
     Tailscale(tailscale::State),
     Monitor(Box<monitor::State>),
     Iphone(iphone::State),
+    Procs(procs::Diff),
+    PowerFlow(powerflow::State),
 }
 
 impl State {
@@ -60,6 +66,8 @@ impl State {
             Diff::Tailscale(v) => set(&mut self.tailscale, v),
             Diff::Monitor(v) => set(&mut self.monitor, *v),
             Diff::Iphone(v) => set(&mut self.iphone, v),
+            Diff::Procs(d) => self.procs.apply(d),
+            Diff::PowerFlow(v) => set(&mut self.power_flow, v),
         }
     }
 }

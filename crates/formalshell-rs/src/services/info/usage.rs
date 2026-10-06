@@ -301,6 +301,7 @@ impl Poll {
 pub async fn run(ctx: Ctx) {
     let rx = changed();
     let kick = kicked(Source::Usage);
+    while kick.try_recv().is_ok() {}
     let mut poll = Poll { ctx: ctx.clone(), state: Rc::new(RefCell::new(State::default())), last_refresh: None };
     let mut force = false;
     loop {

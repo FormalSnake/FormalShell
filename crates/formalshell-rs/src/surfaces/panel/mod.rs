@@ -18,8 +18,14 @@
 
 pub mod audio;
 pub mod gallery;
+pub mod github;
 pub mod host;
+pub mod monitor;
+pub mod power;
 pub mod standin;
+pub mod systemupdate;
+pub mod tailscale;
+pub mod usage;
 
 use fs_theme::theme::Theme;
 
@@ -127,6 +133,12 @@ pub fn build(name: &str) -> Option<Box<dyn Panel>> {
     let id = known(name)?;
     Some(match id {
         "audio" => Box::new(audio::Audio::default()),
+        "github" => Box::new(github::Github::new()),
+        "monitor" => Box::new(monitor::Monitor::new()),
+        "power" => Box::new(power::Power::new()),
+        "systemupdate" => Box::new(systemupdate::SystemUpdate::new()),
+        "tailscale" => Box::new(tailscale::Tailscale::new()),
+        "usage" => Box::new(usage::Usage::new()),
         _ => Box::new(standin::StandIn::new(id)),
     })
 }

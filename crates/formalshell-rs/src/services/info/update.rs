@@ -10,9 +10,10 @@ use std::time::Duration;
 
 use fs_info::system_update::{self, Counts, FlakeInput, PollState};
 
-use super::{changed, idle, settings};
+use super::{changed, idle, kicked, settings};
 use crate::runtime::Ctx;
 use crate::services::proc;
+use crate::services::wants::Source;
 use crate::services::watch::Watch;
 use crate::store;
 
@@ -91,6 +92,8 @@ async fn pass(ctx: &Ctx, dir: &str) {
 
 pub async fn run(ctx: Ctx) {
     let rx = changed();
+    let kick = kicked(Source::SystemUpdate);
+    while kick.try_recv().is_ok() {}
     loop {
         let cfg = read();
         pass(&ctx, &cfg.dir).await;
@@ -101,6 +104,9 @@ pub async fn run(ctx: Ctx) {
                 None => std::future::pending().await,
             }
         };
-        futures_lite::future::or(idle(cfg.interval, &rx, &cfg, read), moved).await;
+        let asked = async {
+            let _ = kick.recv().await;
+        };
+        futures_lite::future::or(asked, futures_lite::future::or(idle(cfg.interval, &rx, &cfg, read), moved)).await;
     }
 }
