@@ -1,8 +1,6 @@
 //! Model groundwork for the audio panel's mixer: stream filtering, the label
 //! fallback chain, and the two volume clamps (device vs per-app overdrive).
 
-use icu_collator::Collator;
-use icu_collator::options::CollatorOptions;
 use std::collections::HashMap;
 
 /// The pre-bind-safe fields of a PipeWire node.
@@ -113,13 +111,7 @@ pub fn device_rows(nodes: &[PwNode]) -> Vec<DeviceRow> {
             is_sink: n.is_sink,
         })
         .collect();
-    let collator = Collator::try_new(Default::default(), CollatorOptions::default()).ok();
-    out.sort_by(|a, b| {
-        b.is_sink.cmp(&a.is_sink).then_with(|| match &collator {
-            Some(c) => c.compare(&a.label, &b.label),
-            None => a.label.cmp(&b.label),
-        })
-    });
+    out.sort_by(|a, b| b.is_sink.cmp(&a.is_sink).then_with(|| fs_js::locale_compare(&a.label, &b.label)));
     out
 }
 

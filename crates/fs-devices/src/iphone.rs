@@ -20,7 +20,7 @@ use serde_json::{Value as Json, json};
 use unicode_normalization::UnicodeNormalization;
 
 use crate::bluetooth;
-use crate::js::{self, SPACE};
+use fs_js::{self as js, SPACE};
 
 pub mod category {
     pub const OTHER: i64 = 0;

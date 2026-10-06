@@ -10,7 +10,7 @@
 //! host units own the lightbar/player-LED writes; this model only ever
 //! describes what was read.
 
-use crate::js;
+use fs_js as js;
 
 /// warn/critical thresholds mirror the retired `dualsense-bar` command module
 /// this panel replaces: a straight read of the capacity percentage, no

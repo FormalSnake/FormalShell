@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+fs-js = { path = "../fs-js" }
 chrono = "0.4"
 percent-encoding = "2"
 regex = "1"

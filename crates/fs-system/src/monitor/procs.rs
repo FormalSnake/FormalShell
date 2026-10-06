@@ -18,7 +18,7 @@
 //! here, where htop would say 100%. That keeps a process row directly
 //! comparable with the monitor view's own CPU TOTAL row.
 
-use crate::js;
+use fs_js as js;
 use regex::Regex;
 use std::collections::HashMap;
 use std::sync::LazyLock;
@@ -54,7 +54,7 @@ static CPU_LINE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^cpu\s+(.*)$").
 pub fn total_jiffies(text: &str) -> Option<f64> {
     for line in lines(text) {
         let Some(m) = CPU_LINE.captures(line) else { continue };
-        let fields: Vec<f64> = js::split_ws(&m[1]).into_iter().map(js::number).collect();
+        let fields: Vec<f64> = js::split_ws(&m[1]).into_iter().map(js::parse_number).collect();
         if fields.len() < 4 {
             return None;
         }
@@ -69,14 +69,14 @@ pub fn total_jiffies(text: &str) -> Option<f64> {
 static MEM_TOTAL: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"MemTotal:\s+(\d+)\s*kB").unwrap());
 
 pub fn mem_total_bytes(text: &str) -> Option<f64> {
-    MEM_TOTAL.captures(text).map(|m| js::number(&m[1]) * 1024.0)
+    MEM_TOTAL.captures(text).map(|m| js::parse_number(&m[1]) * 1024.0)
 }
 
 /// getconf PAGESIZE, because RSS in /proc/PID/stat is counted in pages and
 /// aarch64 kernels are free to use 16K ones. A missing or absurd answer
 /// falls back to 4096 rather than reporting every process at 0 bytes.
 pub fn page_size(text: &str) -> f64 {
-    let value = js::number(text);
+    let value = js::parse_number(text);
     if value.is_finite() && value >= 1024.0 { value } else { 4096.0 }
 }
 
@@ -107,7 +107,7 @@ pub fn parse_procs(text: &str) -> Vec<ProcRecord> {
         if open < 1 || close < open {
             continue;
         }
-        let pid = js::number(&line[..open]);
+        let pid = js::parse_number(&line[..open]);
         if !pid.is_finite() || pid <= 0.0 || pid.fract() != 0.0 {
             continue;
         }
@@ -327,7 +327,7 @@ pub const SIGNALS: [&str; 4] = ["TERM", "KILL", "HUP", "INT"];
 
 /// A positive whole number, as a string or a number the way IPC hands it.
 pub fn parse_pid(pid: &str) -> Option<u64> {
-    let n = js::number(pid);
+    let n = js::parse_number(pid);
     (n.is_finite() && n > 0.0 && n.floor() == n && n < u64::MAX as f64).then_some(n as u64)
 }
 

@@ -30,7 +30,7 @@
 //! wrong hit there focuses the wrong app. A wrong hit here costs a wrong
 //! picture on a tile that would otherwise be the generic one.
 
-use crate::js;
+use fs_js as js;
 use regex::Regex;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::LazyLock;
@@ -228,7 +228,7 @@ pub fn proc_command(pids: &[String]) -> Vec<String> {
     ]
     .concat();
     let mut argv = vec!["sh".to_string(), "-c".to_string(), script, "appicon".to_string()];
-    argv.extend(pids.iter().map(|p| js::num_str(js::number(p))));
+    argv.extend(pids.iter().map(|p| js::num_str(js::parse_number(p))));
     argv
 }
 

@@ -28,7 +28,7 @@ use std::collections::HashMap;
 
 use serde_json::Value;
 
-use crate::js;
+use fs_js as js;
 use crate::plugins::{PLUGIN_PREFIX, Plugin};
 use crate::types::{Edge, Insets, Region};
 
@@ -554,7 +554,7 @@ fn resolve_region(
                     } else {
                         warnings.push(format!(
                             "bar.layout.{at}: module \"{id}\" has unknown type \"{}\"",
-                            js::string_opt(module.get("type"))
+                            js::str_or_undefined(module.get("type"))
                         ));
                     }
                 }
@@ -564,7 +564,7 @@ fn resolve_region(
         } else {
             warnings.push(format!(
                 "bar.layout.{at}: unknown widget \"{}\"",
-                js::string(name)
+                js::to_str(name)
             ));
         }
     }

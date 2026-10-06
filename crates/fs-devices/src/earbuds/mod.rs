@@ -9,7 +9,7 @@
 use serde_json::Value as Json;
 
 use crate::bluetooth;
-use crate::js;
+use fs_js as js;
 
 pub mod airpods;
 pub mod nothing;

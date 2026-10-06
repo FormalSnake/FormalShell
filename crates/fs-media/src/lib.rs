@@ -3,7 +3,6 @@
 
 pub mod airplay;
 pub mod applemusic;
-pub mod js;
 pub mod lyrics;
 pub mod media;
 pub mod radio;

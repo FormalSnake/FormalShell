@@ -6,7 +6,7 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-use crate::js;
+use fs_js as js;
 
 /// BlueZ's connection state for a device.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

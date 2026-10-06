@@ -115,7 +115,7 @@ fn make_box(bucket_ids: Vec<usize>, h: &Buckets) -> Box3 {
         }
     }
     let pop_f = pop as f64;
-    let round = |t: u64| crate::js::round(t as f64 / pop_f) as u8;
+    let round = |t: u64| fs_js::round(t as f64 / pop_f) as u8;
     Box3 {
         buckets: bucket_ids,
         population: pop,

@@ -2,7 +2,7 @@
 //! everywhere: a reading nobody has taken yet must not render as a zero.
 //! Fractions are 0..1, the repo-wide convention.
 
-use crate::js;
+use fs_js as js;
 
 fn missing(value: Option<f64>) -> Option<f64> {
     value.filter(|v| v.is_finite())

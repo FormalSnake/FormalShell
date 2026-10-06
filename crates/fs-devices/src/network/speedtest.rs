@@ -7,7 +7,7 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-use crate::js::{self, SPACE};
+use fs_js::{self as js, SPACE};
 
 /// bytesDelta/msDelta -> Mbps. A non-positive duration (two samples with the
 /// same timestamp) and a non-positive delta (a counter reset, e.g. the

@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, Datelike, NaiveDate, TimeZone};
 
-use crate::js;
+use fs_js as js;
 
 fn utc_jan_first_ms(year: i32) -> Option<i64> {
     Some(

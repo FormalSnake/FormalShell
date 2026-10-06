@@ -9,7 +9,7 @@
 
 use serde_json::Value as Json;
 
-use crate::js;
+use fs_js as js;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Peer {

@@ -23,7 +23,7 @@ use super::{
     Battery, BatteryId, ControlOption, Device, DeviceFields, DeviceKind, Unit, Value, choice, device, range, toggle,
     valid_address,
 };
-use crate::js;
+use fs_js as js;
 
 pub const BACKEND: &str = "nothing";
 pub const BINARY: &str = "nothingctl";

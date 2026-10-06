@@ -27,7 +27,7 @@ use std::f64::consts::PI;
 
 use super::model::{BAR_COUNT, Band, LEVEL_ACCENT_FROM, LEVEL_DIM_BELOW, level_color_band};
 use super::scene::{Color, Scene, TextAlign, TextBaseline};
-use crate::js::math_round;
+use fs_js::round;
 
 pub struct StyleInfo {
     pub id: &'static str,
@@ -648,8 +648,8 @@ fn led(c: &mut Scene, f: &Frame, state: &mut State) {
     let top = h - (segs * (seg_h + gap_y) - gap_y);
     for i in 0..n {
         let x = i as f64 * (cw + ink.gap);
-        let lit = math_round(lv[i] * segs);
-        let cap = math_round(caps[i] * segs) - 1.0;
+        let lit = round(lv[i] * segs);
+        let cap = round(caps[i] * segs) - 1.0;
         let mut k = 0.0;
         while k < segs {
             let y = h - (k + 1.0) * seg_h - k * gap_y;
@@ -810,7 +810,7 @@ fn dots(c: &mut Scene, f: &Frame, _state: &mut State) {
     let oy = (h - ((rows as f64 - 1.0) * pitch + size)) / 2.0;
     for col in 0..cols {
         let l = lv[col];
-        let lit = math_round(l * rows as f64);
+        let lit = round(l * rows as f64);
         let colour = band(ink, l);
         for k in 0..rows {
             c.fill_style = if (k as f64) < lit { colour } else { ink.groove };
@@ -1250,7 +1250,7 @@ fn heartbeat(c: &mut Scene, f: &Frame, state: &mut State) {
         }
     }
     let hist = state.hist.as_ref().expect("history sized above");
-    let mid = math_round(h * 0.6) + 0.5;
+    let mid = round(h * 0.6) + 0.5;
     let lw = 1.5;
     c.fill_style = ink.groove;
     c.fill_rect(0.0, mid - 0.5, w, 1.0);
@@ -1473,7 +1473,7 @@ fn retro(c: &mut Scene, f: &Frame, state: &mut State) {
     let lv = fold(f.levels, 12);
     let bass = max_of(&lv, 0, 3);
     let energy = mean(&lv, 0, 12);
-    let horizon = math_round(h * 0.5).max(3.0);
+    let horizon = round(h * 0.5).max(3.0);
     let cx = w / 2.0;
 
     let sun_r = (horizon - 1.0).min(horizon * 0.7 + bass * 3.0);
@@ -1693,7 +1693,7 @@ fn firework(c: &mut Scene, f: &Frame, state: &mut State) {
         if state.rk_y[i] <= state.rk_top[i] {
             state.rk_alive[i] = false;
             let l = state.rk_l[i];
-            let count = 10 + math_round(l * 10.0) as usize;
+            let count = 10 + round(l * 10.0) as usize;
             let speed = 14.0 + l * 22.0;
             for k in 0..count {
                 let Some(slot) = pool.spawn_slot() else {
@@ -1874,7 +1874,7 @@ fn sand(c: &mut Scene, f: &Frame, state: &mut State) {
                 continue;
             }
             let col = clamp(
-                math_round((b as f64 + 0.5) * cols as f64 / 12.0 + (state.rng.f64() - 0.5) * 2.0),
+                round((b as f64 + 0.5) * cols as f64 / 12.0 + (state.rng.f64() - 0.5) * 2.0),
                 0.0,
                 cols as f64 - 1.0,
             ) as usize;
@@ -2074,8 +2074,8 @@ fn stereo(c: &mut Scene, f: &Frame, state: &mut State) {
         };
         c.fill_style = ink.dim;
         c.fill_text(if ch == 0 { "L" } else { "R" }, 0.0, y + meter_h / 2.0);
-        let lit = math_round(meter[ch] * segs);
-        let cap = math_round(caps[ch] * segs) - 1.0;
+        let lit = round(meter[ch] * segs);
+        let cap = round(caps[ch] * segs) - 1.0;
         let mut k = 0.0;
         while k < segs {
             if k < lit {
@@ -2248,7 +2248,7 @@ fn stipple(c: &mut Scene, f: &Frame, _state: &mut State) {
     let inset = (cw - ((dots_x as f64 - 1.0) * pitch + 1.0)) / 2.0;
     for i in 0..n {
         let x = i as f64 * (cw + ink.gap) + inset;
-        let lit = math_round(lv[i] * rows);
+        let lit = round(lv[i] * rows);
         let mut k = 0.0;
         while k < lit.max(1.0) {
             c.fill_style = if lit == 0.0 {
@@ -2258,7 +2258,7 @@ fn stipple(c: &mut Scene, f: &Frame, _state: &mut State) {
             };
             let y = h - 1.0 - k * pitch;
             for d in 0..dots_x {
-                c.fill_rect(math_round(x + d as f64 * pitch), y, 1.0, 1.0);
+                c.fill_rect(round(x + d as f64 * pitch), y, 1.0, 1.0);
             }
             k += 1.0;
         }

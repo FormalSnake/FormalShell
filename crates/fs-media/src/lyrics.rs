@@ -41,8 +41,8 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::js::{
-    encode_uri_component, is_space, math_round, number_from_str, to_js_string, trim, utf16_len,
+use fs_js::{
+    encode_uri_component, is_space, round, parse_number, to_str, trim, utf16_len,
 };
 
 pub const INTERLUDE_MIN_SECONDS: f64 = 5.0;
@@ -150,7 +150,7 @@ pub fn cache_key(artist: &str, title: &str, album: &str, duration_seconds: f64) 
     let raw = format!("{artist} {title} {album}").to_lowercase();
     let slug = NON_ALNUM.replace_all(&raw, "-");
     let slug = slug.trim_matches('-');
-    let seconds = math_round(duration_seconds);
+    let seconds = round(duration_seconds);
     let seconds = if seconds.is_finite() {
         seconds as i64
     } else {
@@ -173,7 +173,7 @@ pub fn get_url(artist: &str, title: &str, album: &str, duration_seconds: f64) ->
     if duration_seconds.is_finite() && duration_seconds > 0.0 {
         url.push_str(&format!(
             "&duration={}",
-            math_round(duration_seconds) as i64
+            round(duration_seconds) as i64
         ));
     }
     url
@@ -857,7 +857,7 @@ pub fn chunk_glow(words: &[Word], index: usize, line_end: Option<f64>, t: f64) -
     } else {
         1.0 - (t - end) / GLOW_DECAY_SECONDS
     };
-    math_round(glow.clamp(0.0, 1.0) / GLOW_QUANTUM) * GLOW_QUANTUM
+    round(glow.clamp(0.0, 1.0) / GLOW_QUANTUM) * GLOW_QUANTUM
 }
 
 /// A line's own words if it has any (not synthesised), the whole main-line
@@ -980,7 +980,7 @@ pub struct LatencyGraph {
 fn js_number(v: Option<&Value>) -> f64 {
     match v {
         Some(Value::Number(n)) => n.as_f64().unwrap_or(f64::NAN),
-        Some(Value::String(s)) => number_from_str(s),
+        Some(Value::String(s)) => parse_number(s),
         Some(Value::Null) => 0.0,
         Some(Value::Bool(b)) => f64::from(u8::from(*b)),
         _ => f64::NAN,
@@ -1056,7 +1056,7 @@ pub fn latency_graph(text: &str) -> Option<LatencyGraph> {
                 default_sink = value
                     .get("name")
                     .filter(|n| is_truthy(n))
-                    .map(to_js_string)
+                    .map(to_str)
                     .unwrap_or_default();
             }
         }
@@ -1085,9 +1085,9 @@ pub fn latency_graph(text: &str) -> Option<LatencyGraph> {
                 let Some(id) = o.get("id").and_then(Value::as_i64) else {
                     continue;
                 };
-                let class = prop("media.class").map(to_js_string).unwrap_or_default();
+                let class = prop("media.class").map(to_str).unwrap_or_default();
                 if class == "Stream/Output/Audio" {
-                    let key = |k: &str| prop(k).map(to_js_string);
+                    let key = |k: &str| prop(k).map(to_str);
                     graph.streams.push(Stream {
                         id,
                         keys: [
@@ -1099,7 +1099,7 @@ pub fn latency_graph(text: &str) -> Option<LatencyGraph> {
                     });
                 } else if class == "Audio/Sink"
                     && let Some(name) = prop("node.name")
-                        .map(to_js_string)
+                        .map(to_str)
                         .filter(|n| !n.is_empty())
                 {
                     graph.sinks.insert(name, id);
@@ -1173,7 +1173,7 @@ pub fn output_latency(
     let Some(graph) = graph else {
         return none;
     };
-    let clamp = |ms: f64| math_round(ms.clamp(0.0, OUTPUT_LATENCY_MAX_MS)) as u32;
+    let clamp = |ms: f64| round(ms.clamp(0.0, OUTPUT_LATENCY_MAX_MS)) as u32;
     let best = stream_ids
         .iter()
         .filter_map(|id| graph.latency.get(id).copied())
@@ -1501,7 +1501,7 @@ pub fn blur_for(distance: f64, strength_percent: f64, row_span: Option<f64>) -> 
         .unwrap_or(BLUR_MAX_PX / BLUR_STEP_PX);
     let capped = (distance.abs() / span).min(1.0) * BLUR_MAX_PX;
     let scaled = capped * (strength_percent / 100.0);
-    math_round(scaled / BLUR_QUANTUM_PX) * BLUR_QUANTUM_PX
+    round(scaled / BLUR_QUANTUM_PX) * BLUR_QUANTUM_PX
 }
 
 /// One laid-out text row of a chunk: its `y`, `height` and ink `width`.

@@ -14,7 +14,7 @@ use std::sync::LazyLock;
 use regex::Regex;
 use serde_json::Value;
 
-use crate::js;
+use fs_js as js;
 
 // ---- ps table ---------------------------------------------------------------
 

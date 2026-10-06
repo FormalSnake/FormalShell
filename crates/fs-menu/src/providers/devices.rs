@@ -3,20 +3,16 @@
 //! status text are testable without a radio.
 
 use std::collections::HashSet;
-use std::sync::LazyLock;
 
-use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
-use regex::Regex;
+use fs_devices::bluetooth::{Device, activity_text, battery_text, buckets};
+use fs_devices::network::model::{WifiRowLike, sort_wifi_rows};
 
 use crate::node::{Kind, Node};
-
-/// `encodeURIComponent`'s unreserved set.
-const URI_COMPONENT: &AsciiSet = &NON_ALPHANUMERIC.remove(b'-').remove(b'_').remove(b'.').remove(b'!').remove(b'~').remove(b'*').remove(b'\'').remove(b'(').remove(b')');
 
 /// Row ids are dotted tree paths, so a key that can carry a dot (an SSID, a
 /// PipeWire node name) is escaped before it goes into one.
 pub fn id_part(s: &str) -> String {
-    utf8_percent_encode(s, URI_COMPONENT).to_string().replace('.', "%2E")
+    fs_js::encode_uri_component(s).replace('.', "%2E")
 }
 
 fn key_row(id: String, label: String, action: &str, verb: &str) -> Node {
@@ -53,15 +49,18 @@ pub struct WifiState {
     pub failure_text: String,
 }
 
-/// Connected first, then known (saved) networks, then everything else, each
-/// tier by signal strength descending.
-fn sort_wifi_rows(rows: &mut [(WifiNetwork, f64)]) {
-    rows.sort_by(|(a, sa), (b, sb)| {
-        b.connected
-            .cmp(&a.connected)
-            .then(b.known.cmp(&a.known))
-            .then(sb.partial_cmp(sa).unwrap_or(std::cmp::Ordering::Equal))
-    });
+impl WifiRowLike for WifiNetwork {
+    fn connected(&self) -> bool {
+        self.connected
+    }
+
+    fn known(&self) -> bool {
+        self.known
+    }
+
+    fn signal_strength(&self) -> f64 {
+        self.signal_strength.unwrap_or(self.signal)
+    }
 }
 
 /// Wi-Fi route. Saved networks are reachable from a root query; nearby ones
@@ -76,19 +75,14 @@ pub fn wifi_rows(st: &WifiState) -> Vec<Node> {
         return vec![key_row("wifi.off".into(), "Turn Wi-Fi on".into(), "@ipc:wifi.enable", "Turn on")];
     }
     let mut seen: HashSet<&str> = HashSet::new();
-    let mut visible: Vec<(WifiNetwork, f64)> = st
-        .networks
-        .iter()
-        .filter(|n| !n.name.is_empty() && seen.insert(n.name.as_str()))
-        .map(|n| (n.clone(), n.signal_strength.unwrap_or(n.signal)))
-        .collect();
+    let visible: Vec<WifiNetwork> =
+        st.networks.iter().filter(|n| !n.name.is_empty() && seen.insert(n.name.as_str())).cloned().collect();
     if visible.is_empty() {
         return vec![Node::note("wifi.empty", "No networks found")];
     }
-    sort_wifi_rows(&mut visible);
-    visible
+    sort_wifi_rows(&visible)
         .into_iter()
-        .map(|(n, _)| {
+        .map(|n| {
             let busy = match st.action_kind.as_str() {
                 "connect" => "Connecting",
                 "disconnect" => "Disconnecting",
@@ -129,60 +123,16 @@ pub fn wifi_rows(st: &WifiState) -> Vec<Node> {
         .collect()
 }
 
-/// A paired or connected device. `activity` and `battery` are the display
-/// strings the Bluetooth model already formed.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct BluetoothDevice {
-    pub address: String,
-    pub name: String,
-    pub device_name: String,
-    pub connected: bool,
-    pub paired: bool,
-    pub bonded: bool,
-    pub trusted: bool,
-    pub activity: String,
-    pub battery: String,
-}
-
 /// `LiveMenuSources.bluetooth`.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BluetoothState {
     pub available: bool,
     pub enabled: bool,
-    pub devices: Vec<BluetoothDevice>,
+    pub devices: Vec<Device>,
 }
 
-static MAC_SHAPED: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new("(?i)^([0-9a-f]{2}[:-]){5}[0-9a-f]{2}$").expect("static regex"));
-static UUID_SHAPED: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new("(?i)^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{32})$")
-        .expect("static regex")
-});
-
-/// Rejects the empty string and the two label shapes BlueZ falls back to when
-/// a device has not advertised a real name yet, a raw address or a service
-/// UUID, neither of which is worth showing a person.
-fn has_human_name(name: &str) -> bool {
-    let label = crate::jsstr::trim(name);
-    !label.is_empty() && !MAC_SHAPED.is_match(label) && !UUID_SHAPED.is_match(label)
-}
-
-fn device_label(d: &BluetoothDevice) -> &str {
+fn device_label(d: &Device) -> &str {
     if !d.name.is_empty() { &d.name } else { &d.device_name }
-}
-
-/// The panel model's connected and known buckets (a device with no human
-/// name is dropped from both), each sorted by label. Sorting here is a
-/// case-insensitive comparison, an approximation of `String.localeCompare`.
-fn paired_devices(devices: &[BluetoothDevice]) -> Vec<&BluetoothDevice> {
-    fn sorted(mut list: Vec<&BluetoothDevice>) -> Vec<&BluetoothDevice> {
-        list.sort_by_cached_key(|d| (device_label(d).to_lowercase(), device_label(d).to_string()));
-        list
-    }
-    let named = devices.iter().filter(|d| has_human_name(device_label(d)));
-    let connected = sorted(named.clone().filter(|d| d.connected).collect());
-    let known = sorted(named.filter(|d| !d.connected && (d.paired || d.bonded || d.trusted)).collect());
-    connected.into_iter().chain(known).collect()
 }
 
 /// Bluetooth route. Paired devices only: pairing is watching a scan fill in,
@@ -194,14 +144,18 @@ pub fn bluetooth_rows(st: &BluetoothState) -> Vec<Node> {
     if !st.enabled {
         return vec![key_row("bluetooth.off".into(), "Turn Bluetooth on".into(), "@ipc:bluetooth.power:on", "Turn on")];
     }
-    let devices = paired_devices(&st.devices);
+    let b = buckets(&st.devices, false);
+    let devices: Vec<&Device> = b.connected.into_iter().chain(b.known).collect();
     if devices.is_empty() {
         return vec![Node::note("bluetooth.empty", "No paired devices")];
     }
     devices
         .into_iter()
         .map(|d| Node {
-            desc: Some(if !d.activity.is_empty() { d.activity.clone() } else { d.battery.clone() }),
+            desc: Some(match activity_text(Some(d)) {
+                "" => battery_text(Some(d)),
+                activity => activity.to_string(),
+            }),
             verb: Some(if d.connected { "Disconnect" } else { "Connect" }.to_string()),
             action: Some(format!("@ipc:bluetooth.toggle:{}", d.address)),
             checked: Some(format!("@state:bluetooth.connected={}", d.address.to_uppercase())),

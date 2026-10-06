@@ -12,7 +12,7 @@
 
 use serde_json::Value;
 
-use crate::js::{encode_uri_component, number_from_str, parse_int, to_js_string};
+use fs_js::{encode_uri_component, parse_number, parse_int, to_str};
 
 /// cava's own bar count. The bar cell still reads as `CELL_BAR_COUNT` tracks
 /// and downsamples.
@@ -300,7 +300,7 @@ pub fn parse_deezer_search(body: &str) -> String {
         .and_then(|d| d.get(0))
         .and_then(|hit| hit.get("id"))
     {
-        Some(id) => to_js_string(id),
+        Some(id) => to_str(id),
         None => String::new(),
     }
 }
@@ -312,7 +312,7 @@ pub fn parse_deezer_bpm(body: &str) -> f64 {
     };
     let bpm = match doc.get("bpm") {
         Some(Value::Number(n)) => n.as_f64().unwrap_or(f64::NAN),
-        Some(Value::String(s)) => number_from_str(s),
+        Some(Value::String(s)) => parse_number(s),
         Some(Value::Null) => 0.0,
         Some(Value::Bool(b)) => f64::from(u8::from(*b)),
         _ => f64::NAN,

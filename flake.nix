@@ -146,10 +146,11 @@
       };
 
       checks = nixpkgs.lib.recursiveUpdate
-        (forDarwin (system: pkgs: { qml-tests = qmlTests pkgs; primitives = primitivesCheck pkgs; }))
+        (forDarwin (system: pkgs: { qml-tests = qmlTests pkgs; primitives = primitivesCheck pkgs; rust-tests = pkgs.callPackage ./nix/rust-tests.nix { }; }))
         (forAllSystems (system: pkgs: {
         qml-tests = qmlTests pkgs;
         primitives = primitivesCheck pkgs;
+        rust-tests = pkgs.callPackage ./nix/rust-tests.nix { };
         nixos-module-eval = nixosModuleEval system pkgs;
 
         qmllint = pkgs.runCommand "formalshell-qmllint" {

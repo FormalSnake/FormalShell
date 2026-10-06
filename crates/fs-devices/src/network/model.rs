@@ -6,7 +6,7 @@
 
 use std::cmp::Ordering;
 
-use crate::js;
+use fs_js as js;
 
 /// Quickshell's `WifiSecurityType` (src/network/enums.hpp:107-128), by its
 /// integer value.

@@ -1,12 +1,11 @@
 [package]
-name = "fs-devices"
+name = "fs-js"
 version = "0.1.1"
 edition = "2024"
 publish = false
 
 [dependencies]
-fs-js = { path = "../fs-js" }
+icu_collator = "2.3"
 percent-encoding = "2"
 regex = "1"
 serde_json = { version = "1", features = ["preserve_order"] }
-unicode-normalization = "0.1"

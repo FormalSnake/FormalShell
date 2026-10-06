@@ -26,7 +26,7 @@ use chrono::{DateTime, Datelike, Days, Local, NaiveDate, TimeZone, Timelike, Utc
 use regex::Regex;
 
 use super::{local_from_fields, localize, naive_from_fields};
-use crate::js;
+use fs_js as js;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Event {
@@ -195,10 +195,10 @@ fn parse_rrule(value: &str) -> Option<Rule> {
                 }
             }
             "INTERVAL" => {
-                interval = js::parse_int(val).filter(|n| *n >= 1.0)? as i64;
+                interval = Some(js::parse_int(val)).filter(|n| *n >= 1.0)? as i64;
             }
             "COUNT" => {
-                count = js::parse_int(val).filter(|n| *n >= 1.0)? as i64;
+                count = Some(js::parse_int(val)).filter(|n| *n >= 1.0)? as i64;
             }
             "UNTIL" => {
                 let (date, all_day) = parse_date_value("", val)?;

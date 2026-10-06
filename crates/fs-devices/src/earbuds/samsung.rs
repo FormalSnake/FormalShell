@@ -13,7 +13,7 @@ use serde_json::Value as Json;
 
 use super::{Battery, BatteryId, ControlOption, Device, DeviceFields, DeviceKind, Value, choice, device, toggle, valid_address};
 use crate::bluetooth;
-use crate::js;
+use fs_js as js;
 
 pub const BACKEND: &str = "samsung";
 pub const BINARY: &str = "earbuds";

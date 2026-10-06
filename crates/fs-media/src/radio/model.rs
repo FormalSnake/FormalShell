@@ -418,7 +418,7 @@ pub struct Feature {
 fn coord(v: Option<&Value>) -> f64 {
     match v {
         Some(Value::Number(n)) => n.as_f64().unwrap_or(f64::NAN),
-        Some(Value::String(s)) => crate::js::number_from_str(s),
+        Some(Value::String(s)) => fs_js::parse_number(s),
         Some(Value::Null) | None => f64::NAN,
         Some(Value::Bool(b)) => f64::from(u8::from(*b)),
         Some(_) => f64::NAN,

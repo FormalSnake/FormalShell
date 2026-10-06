@@ -6,7 +6,6 @@
 //! machinery the launcher has (cursor wrap, `activate(index)` over IPC, the
 //! confirm and close paths) applies to them unchanged.
 
-use crate::jsstr;
 use crate::node::{Kind, Node};
 
 /// The file name of a path.
@@ -128,7 +127,7 @@ pub fn wallpaper_pick_mode(variants: &WallpaperVariants, variant: Option<Variant
 /// path's directory component is identical for every row in a listing, so
 /// matching it would make every query match everything.
 pub fn image_rows(paths: &[String], query: &str) -> Vec<Node> {
-    let q = jsstr::trim(query).to_lowercase();
+    let q = fs_js::trim(query).to_lowercase();
     paths
         .iter()
         .filter(|p| q.is_empty() || image_basename(p).to_lowercase().contains(&q))

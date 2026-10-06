@@ -13,7 +13,7 @@
 //! stubbed value the honest-state rule forbids. `mirror_of` is "" when the
 //! output isn't mirroring anything.
 
-use crate::js;
+use fs_js as js;
 use crate::monitor::gpu;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -56,7 +56,7 @@ fn positive(value: f64, fallback: f64) -> f64 {
 /// Fixed-decimal, then back through a number so a whole scale prints "1"
 /// rather than "1.00" and a two-place refresh prints "60" rather than "60.00".
 fn trim_number(value: f64, decimals: usize) -> String {
-    js::num_str(js::number(&js::to_fixed(value, decimals)))
+    js::num_str(js::parse_number(&js::to_fixed(value, decimals)))
 }
 
 fn gcd(mut a: i64, mut b: i64) -> i64 {
@@ -245,27 +245,27 @@ pub fn parse_hyprland_outputs(text: &str) -> Vec<Output> {
                 Value::Null => "null".to_string(),
                 _ => continue,
             };
-            names.insert(key, js::json_text(obj.get("name")));
+            names.insert(key, js::text(obj.get("name")));
         }
     }
 
     let mut rows = Vec::new();
     for entry in &data {
         let Some(m) = entry.as_object() else { continue };
-        let name = js::json_text(m.get("name"));
+        let name = js::text(m.get("name"));
         if name.is_empty() {
             continue;
         }
         let enabled = m.get("disabled") != Some(&Value::Bool(true));
-        let mut mirror_of = js::json_text(m.get("mirrorOf"));
+        let mut mirror_of = js::text(m.get("mirrorOf"));
         if let Some(resolved) = names.get(&mirror_of) {
             mirror_of = resolved.clone();
         }
-        let num = |key: &str| js::json_number(m.get(key));
+        let num = |key: &str| js::to_number(m.get(key));
         rows.push(Output {
             name,
-            make: js::json_text(m.get("make")),
-            model: js::json_text(m.get("model")),
+            make: js::text(m.get("make")),
+            model: js::text(m.get("model")),
             x: if enabled { int(num("x")) } else { 0 },
             y: if enabled { int(num("y")) } else { 0 },
             width: if enabled { int(num("width")) } else { 0 },
@@ -276,8 +276,8 @@ pub fn parse_hyprland_outputs(text: &str) -> Vec<Output> {
             mirror_of: if mirror_of == "none" { String::new() } else { mirror_of },
             transform: int(num("transform")),
             vrr: m.get("vrr") == Some(&Value::Bool(true)),
-            cm: js::json_text(m.get("colorManagementPreset")),
-            ten_bit: js::json_text(m.get("currentFormat")).contains("2101010"),
+            cm: js::text(m.get("colorManagementPreset")),
+            ten_bit: js::text(m.get("currentFormat")).contains("2101010"),
             sdr_brightness: positive(num("sdrBrightness"), 1.0),
             sdr_saturation: positive(num("sdrSaturation"), 1.0),
         });

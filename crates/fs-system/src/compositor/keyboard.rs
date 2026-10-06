@@ -17,7 +17,7 @@
 //! (US)"), so there is no reliable index mapping between them and
 //! `current_idx` stays -1.
 
-use crate::js;
+use fs_js as js;
 use serde_json::Value;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -82,12 +82,12 @@ pub fn parse_hyprland_layouts(text: &str) -> Layout {
         .find(|k| k.get("main") == Some(&Value::Bool(true)))
         .unwrap_or_else(|| if keyboards[0].is_null() { &empty } else { &keyboards[0] });
 
-    let names: Vec<String> = js::json_string_or_empty(main.get("layout"))
+    let names: Vec<String> = js::str_or_empty(main.get("layout"))
         .split(',')
         .map(|s| js::trim(s).to_string())
         .filter(|s| !s.is_empty())
         .collect();
-    let current = js::json_string_or_empty(main.get("active_keymap"));
+    let current = js::str_or_empty(main.get("active_keymap"));
     if names.is_empty() && current.is_empty() {
         return unavailable();
     }

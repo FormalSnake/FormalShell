@@ -5,7 +5,6 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-use crate::jsstr;
 use crate::node::{Kind, Node};
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -21,7 +20,7 @@ pub struct ClipsshAlias {
 pub fn clipssh_aliases(text: &str) -> Vec<ClipsshAlias> {
     let mut out = Vec::new();
     for line in text.split('\n') {
-        let trimmed = jsstr::trim(line);
+        let trimmed = fs_js::trim(line);
         if trimmed.is_empty() {
             continue;
         }
@@ -30,7 +29,7 @@ pub fn clipssh_aliases(text: &str) -> Vec<ClipsshAlias> {
             continue;
         }
         let name = &trimmed[..eq];
-        if name.chars().any(jsstr::is_space) {
+        if name.chars().any(fs_js::is_space) {
             continue;
         }
         out.push(ClipsshAlias { name: name.to_string(), target: trimmed[eq + 1..].to_string() });
@@ -76,7 +75,7 @@ pub fn clipssh_outcome(exit_code: i32, stdout: &str, stderr: &str) -> ClipsshOut
     }
     // No line in clipssh's own shape: fall back to whatever it did say, and
     // only then to the bare code, so a failure never reports as nothing.
-    let last = err.split('\n').map(jsstr::trim).rfind(|l| !l.is_empty());
+    let last = err.split('\n').map(fs_js::trim).rfind(|l| !l.is_empty());
     ClipsshOutcome::Failed {
         error: last.map_or_else(|| format!("clipssh exited with code {exit_code}"), str::to_string),
     }

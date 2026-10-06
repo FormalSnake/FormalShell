@@ -11,7 +11,7 @@ use regex::Regex;
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::js;
+use fs_js as js;
 
 pub const GEOLOCATE_URL: &str = "https://api.beacondb.net/v1/geolocate";
 
@@ -59,12 +59,12 @@ pub fn access_points_from_iwd(text: &str) -> Vec<AccessPoint> {
             .and_then(|p| p.get("net.connman.iwd.Network"))
             .and_then(|n| n.get("Name"))
             .filter(|n| js::truthy(Some(n)))
-            .map(|n| js::str_of(n.get("data")))
+            .map(|n| js::opt_str(n.get("data")))
             .unwrap_or_default();
         if is_nomap(&name) {
             continue;
         }
-        let address = js::str_of(bss.get("Address").and_then(|a| a.get("data")));
+        let address = js::opt_str(bss.get("Address").and_then(|a| a.get("data")));
         result.push(AccessPoint::bare(address.to_lowercase()));
     }
     result
@@ -98,8 +98,8 @@ pub fn access_points_from_nmcli(text: &str) -> Vec<AccessPoint> {
         }
         result.push(AccessPoint {
             mac_address: fields[0].to_lowercase(),
-            signal_strength: js::parse_int(&fields[2]).map(|s| js::round(s / 2.0 - 100.0) as i64),
-            frequency: js::parse_int(&fields[3]).map(|f| f as i64),
+            signal_strength: Some(js::parse_int(&fields[2])).filter(|n| !n.is_nan()).map(|s| js::round(s / 2.0 - 100.0) as i64),
+            frequency: Some(js::parse_int(&fields[3])).filter(|n| !n.is_nan()).map(|f| f as i64),
         });
     }
     result
@@ -147,12 +147,12 @@ pub struct Fix {
 pub fn parse_geolocate(body: &str) -> Option<Fix> {
     let data: Value = serde_json::from_str(body).ok()?;
     let loc = data.get("location").filter(|l| js::truthy(Some(l)))?;
-    let latitude = js::number(loc.get("lat"));
-    let longitude = js::number(loc.get("lng"));
+    let latitude = js::to_number(loc.get("lat"));
+    let longitude = js::to_number(loc.get("lng"));
     if !latitude.is_finite() || !longitude.is_finite() {
         return None;
     }
-    let accuracy = js::number(data.get("accuracy"));
+    let accuracy = js::to_number(data.get("accuracy"));
     Some(Fix {
         latitude,
         longitude,
@@ -171,7 +171,7 @@ pub fn place_key(latitude: f64, longitude: f64) -> String {
     if !latitude.is_finite() || !longitude.is_finite() {
         return String::new();
     }
-    format!("{},{}", js::to_fixed2(latitude), js::to_fixed2(longitude))
+    format!("{},{}", js::to_fixed(latitude, 2), js::to_fixed(longitude, 2))
 }
 
 pub fn reverse_url(key: &str) -> String {
@@ -201,7 +201,7 @@ pub fn parse_place(body: &str) -> String {
             .filter_map(|k| address.and_then(|a| a.get(*k)))
             .chain(fallback)
             .find(|v| js::truthy(Some(v)));
-        js::str_of(hit)
+        js::opt_str(hit)
     };
     let town = first_of(&["city", "town", "village", "municipality", "county"], data.get("name"));
     let region = first_of(&["state", "country"], None);

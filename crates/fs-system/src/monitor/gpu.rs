@@ -7,7 +7,7 @@
 //! pins this: the dGPU enumerates as card0 with boot_vga=0, the iGPU as card1
 //! with boot_vga=1.
 
-use crate::js;
+use fs_js as js;
 use std::collections::HashMap;
 
 /// Desktop-entry Exec field codes, per the freedesktop spec. `%%` is a
@@ -94,7 +94,7 @@ pub fn parse_metrics(drm_text: &str) -> CardMetrics {
         if parts[0] != "metric" {
             continue;
         }
-        let n = parts.get(3).map_or(f64::NAN, |p| js::number(p));
+        let n = parts.get(3).map_or(f64::NAN, |p| js::parse_number(p));
         if !n.is_finite() {
             continue;
         }
@@ -112,7 +112,7 @@ fn num_or_none(field: &str) -> Option<f64> {
     if field == "[N/A]" || field == "N/A" {
         return None;
     }
-    Some(js::number(field)).filter(|n| n.is_finite())
+    Some(js::parse_number(field)).filter(|n| n.is_finite())
 }
 
 /// One `nvidia-smi --query-gpu=index,name,utilization.gpu,temperature.gpu,
