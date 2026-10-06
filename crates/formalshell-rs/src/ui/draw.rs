@@ -230,6 +230,7 @@ pub fn measure(cx: &mut Cx, el: &El, avail: f64) -> (f64, f64) {
             (s.keycap_height.max(w + s.sm * 2.0), s.keycap_height)
         }
         Kind::Swatch { w, h, .. } => (*w, *h),
+        Kind::Picture { size, .. } => (*size, *size),
         Kind::Sparkline(_) => (inner, s.control_height),
         Kind::Shoulders { edge, span, depth, run } => {
             if edge.is_vertical() { (*depth, span + run * 2.0) } else { (span + run * 2.0, *depth) }
@@ -468,6 +469,18 @@ pub fn paint(cx: &mut Cx, el: &El, rect: Rect, path: &str) {
             let (fill, line) = (cx.a(*color), cx.a(line));
             let mut p = cx.painter(path);
             p.framed(irect(inner), fill, *radius as f32, line, bw);
+            let last = p.last();
+            p.finish();
+            cx.done(last);
+        }
+        Kind::Picture { image, .. } => {
+            let a = cx.alpha;
+            let mut p = cx.painter(path);
+            if let Some(bm) = &image.0 {
+                let (w, h) = (bm.pixmap.width() as f64, bm.pixmap.height() as f64);
+                let at = ((inner.x0 + (inner.width() - w) / 2.0).round() as i32, (inner.y0 + (inner.height() - h) / 2.0).round() as i32);
+                p.image(bm, at, a);
+            }
             let last = p.last();
             p.finish();
             cx.done(last);

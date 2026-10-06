@@ -5,6 +5,7 @@
 //! callback or an input event belongs to.
 
 mod caffeinate;
+mod launcher;
 
 use std::time::Instant;
 
@@ -130,6 +131,9 @@ enum Owner {
     Scrim,
     Zone(usize),
     Backdrop,
+    Launcher,
+    /// The launcher's scrim: 0 the top line's band, 1 the rest.
+    LauncherScrim(u8),
 }
 
 pub struct App {
@@ -182,6 +186,12 @@ pub struct App {
     debug_join: Option<(i32, i32)>,
     pub exit: bool,
     started: Instant,
+    pub launcher: crate::surfaces::launcher::Model,
+    launch: Option<launcher::Window>,
+    launcher_resolve: bool,
+    mods: fs_menu::nav::Modifiers,
+    menu_buttons: Option<serde_json::Value>,
+    menu_launches: Option<serde_json::Value>,
 }
 
 impl App {
@@ -235,6 +245,12 @@ impl App {
             debug_join: None,
             exit: false,
             started,
+            launcher: Default::default(),
+            launch: None,
+            launcher_resolve: true,
+            mods: Default::default(),
+            menu_buttons: None,
+            menu_launches: None,
         };
         app.place_chrome();
         let layer = app.overlay("formalshell:wallpaper", Layer::Background, Anchor::all(), (0, 0), -1);
@@ -518,6 +534,7 @@ impl App {
         if let Some(o) = &self.overflow {
             joins.extend(o.card.joins.iter().map(|j| (j.edge, j.x, j.width, j.reach)));
         }
+        joins.extend(self.launcher_joins());
         let edge = self.bar.edge();
         if !joins.iter().any(|j| j.0 == edge)
             && let Some((x, width)) = self.debug_join
@@ -1080,6 +1097,7 @@ impl App {
             h.surface.present(&mut h.card.scene, animating, &qh);
         }
         self.panel_dirty = false;
+        self.present_launcher(now);
         self.present_tooltip(now);
         if let Some((surface, scene, _)) = &mut self.preview {
             surface.present(scene, false, &qh);
@@ -1155,6 +1173,9 @@ impl App {
     }
 
     fn owner(&self, surface: &wl_surface::WlSurface) -> Option<Owner> {
+        if let Some(o) = self.launcher_owner(surface) {
+            return Some(o);
+        }
         if self.bar_surface.as_ref().is_some_and(|s| s.layer.wl_surface() == surface) {
             return Some(Owner::Bar);
         }
@@ -1193,6 +1214,7 @@ impl App {
         parts.extend(self.menu.as_ref().map(|p| p.surface.report()));
         parts.extend(self.tip_card.as_ref().map(|c| c.surface.report()));
         parts.extend(self.scrim.as_ref().map(|(_, s)| s.report()));
+        parts.extend(self.launch.as_ref().map(|w| w.shown.surface.report()));
         eprintln!("exit t={}ms {}", self.started.elapsed().as_millis(), parts.join(" "));
     }
 
@@ -1279,6 +1301,9 @@ impl App {
     fn pointer_events(&mut self, events: &[PointerEvent]) {
         for e in events {
             let owner = self.owner(&e.surface);
+            if self.launcher_pointer(e, owner) {
+                continue;
+            }
             let (x, y) = e.position;
             match e.kind {
                 PointerEventKind::Enter { serial } => {
@@ -1414,6 +1439,13 @@ impl App {
     /// One key on the keyboard: the open panel's, as KeyCatcher.qml binds
     /// them.
     fn key_event(&mut self, event: KeyEvent) {
+        self.key_event_from(event, false);
+    }
+
+    fn key_event_from(&mut self, event: KeyEvent, repeat: bool) {
+        if self.launcher_key(&event, repeat) {
+            return;
+        }
         let key = match event.keysym {
             Keysym::Escape => Key::Escape,
             Keysym::Tab => Key::Tab(1),
@@ -1517,6 +1549,7 @@ impl CompositorHandler for App {
                 let z = &mut self.zones[i].1;
                 (z.frame_pending, z.mapped, z.callbacks) = (false, true, z.callbacks + 1);
             }
+            Some(o @ (Owner::Launcher | Owner::LauncherScrim(_))) => self.launcher_frame(o, now),
             Some(Owner::Backdrop) | None => {}
         }
     }
@@ -1547,7 +1580,8 @@ impl LayerShellHandler for App {
             Some(Owner::Menu) => self.menu = None,
             Some(Owner::Scrim) => self.scrim = None,
             Some(Owner::Backdrop) => self.backdrop = None,
-            Some(Owner::Zone(_)) | None => {}
+            Some(Owner::Launcher) => self.launcher_closed(),
+            Some(Owner::Zone(_) | Owner::LauncherScrim(_)) | None => {}
         }
     }
 
@@ -1598,6 +1632,7 @@ impl LayerShellHandler for App {
                 }
                 self.update_backdrop();
             }
+            Some(o @ (Owner::Launcher | Owner::LauncherScrim(_))) => self.launcher_configure(o, width, height),
             None if self.caffeinate_owns(layer) => self.caffeinate_configure(),
             None => {}
         }
@@ -1623,7 +1658,7 @@ impl SeatHandler for App {
         }
         if capability == Capability::Keyboard && self.keyboard.is_none() {
             // Repeats come off the loop, so a held arrow glides the cursor.
-            let repeat: smithay_client_toolkit::seat::keyboard::repeat::RepeatCallback<App> = Box::new(|app, _, event| app.key_event(event));
+            let repeat: smithay_client_toolkit::seat::keyboard::repeat::RepeatCallback<App> = Box::new(|app, _, event| app.key_event_from(event, true));
             self.keyboard = match self.handle.clone() {
                 Some(handle) => self.seats.get_keyboard_with_repeat(qh, &seat, None, handle, repeat).ok(),
                 None => self.seats.get_keyboard(qh, &seat, None).ok(),
@@ -1659,12 +1694,14 @@ impl KeyboardHandler for App {
     }
 
     fn repeat_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, event: KeyEvent) {
-        self.key_event(event);
+        self.key_event_from(event, true);
     }
 
     fn release_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, _: KeyEvent) {}
 
-    fn update_modifiers(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, _: Modifiers, _: RawModifiers, _: u32) {}
+    fn update_modifiers(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, m: Modifiers, _: RawModifiers, _: u32) {
+        self.mods = fs_menu::nav::Modifiers { ctrl: m.ctrl, shift: m.shift, alt: m.alt };
+    }
 }
 
 impl OutputHandler for App {

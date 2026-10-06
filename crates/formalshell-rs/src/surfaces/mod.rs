@@ -3,6 +3,7 @@
 
 pub mod bar;
 pub mod card;
+pub mod launcher;
 pub mod panel;
 pub mod shoulders;
 pub mod tray_menu;
@@ -14,7 +15,9 @@ use crate::wayland::{App, theme_inputs};
 
 pub fn changed(app: &mut App, topic: Topic) {
     match topic {
+        Topic::Menu => app.launcher_store_changed(),
         Topic::Config => {
+            app.launcher_inputs();
             let settings = app.store.config.settings().clone();
             if app.store.theme.apply(theme::Diff::Settings(settings)) {
                 changed(app, Topic::Theme);
@@ -23,12 +26,15 @@ pub fn changed(app: &mut App, topic: Topic) {
             theme_inputs(app);
         }
         Topic::State => {
+            app.launcher_inputs();
+            app.launcher_store_changed();
             theme_inputs(app);
             app.refresh_bar(Some(topic));
         }
         Topic::Plugins => app.apply_config(),
         Topic::Theme => app.set_bar_theme(),
         Topic::Tray => {
+            app.launcher_tray();
             app.tray_changed();
             app.refresh_bar(Some(topic));
         }

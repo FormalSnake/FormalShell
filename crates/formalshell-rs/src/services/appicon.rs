@@ -154,7 +154,7 @@ fn window_of(q: &Query) -> appicon::Window {
     appicon::Window { app_id: q.app_id.clone(), initial_class: q.initial_class.clone(), initial_title: q.initial_title.clone() }
 }
 
-fn applications_dirs() -> Vec<PathBuf> {
+pub fn applications_dirs() -> Vec<PathBuf> {
     icons::data_dirs().into_iter().map(|d| d.join("applications")).collect()
 }
 
@@ -162,7 +162,7 @@ fn applications_dirs() -> Vec<PathBuf> {
 
 /// Every launchable entry, a higher-priority directory shadowing a lower one's
 /// entry of the same id.
-fn scan_entries(dirs: &[PathBuf]) -> Vec<DesktopEntry> {
+pub fn scan_entries(dirs: &[PathBuf]) -> Vec<DesktopEntry> {
     let mut seen: HashSet<String> = HashSet::new();
     let mut out = Vec::new();
     for dir in dirs {
@@ -219,6 +219,7 @@ fn parse_entry(id: &str, path: &Path) -> Option<DesktopEntry> {
         startup_class: text("StartupWMClass"),
         icon: text("Icon"),
         command: split_exec(fields.get("Exec").copied().unwrap_or_default()),
+        generic_name: text("GenericName"),
     })
 }
 

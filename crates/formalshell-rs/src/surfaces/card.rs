@@ -142,6 +142,8 @@ pub struct Card {
     pub far_gap: Option<(f64, f64)>,
     /// The frame's whole opacity: 0 cuts a handed-over card outright.
     pub frame_alpha: f32,
+    /// Drawer.qml's `deformAmount`.
+    pub deform_amount: f64,
     casts: NodeId,
     shape: NodeId,
     /// Every gap this card opens this frame: the line's, and a walled side's.
@@ -203,6 +205,7 @@ impl Card {
             ends: Ends::default(),
             far_gap: None,
             frame_alpha: 1.0,
+            deform_amount: DEFORM_AMOUNT,
             casts,
             shape,
             joins: Vec::new(),
@@ -309,6 +312,16 @@ impl Card {
         self.open
     }
 
+    /// Presence's pose, held to 0..1 the way an opacity riding it must be.
+    pub fn pose(&self, now: Instant) -> f64 {
+        if self.bypass { if self.open { 1.0 } else { 0.0 } } else { self.progress.value(now).clamp(0.0, 1.0) }
+    }
+
+    /// Joint's `attach`: 1 while the card still hangs off its line.
+    pub fn attach(&self, now: Instant) -> f64 {
+        self.attach.value(now).clamp(0.0, 1.0)
+    }
+
     fn shown(&self, now: Instant) -> bool {
         self.open || self.progress.value(now) > 0.0
     }
@@ -398,7 +411,7 @@ impl Card {
         let depth = (rest.y0 - self.line_at).max(0.0) + border;
         let travel = rest_extent + depth;
         let release_at = 0.85 - 0.35 * (depth / rest_extent.max(1.0)).clamp(0.0, 1.0);
-        let amount = DEFORM_AMOUNT * rest_extent / (rest_extent + depth).max(1.0);
+        let amount = self.deform_amount * rest_extent / (rest_extent + depth).max(1.0);
 
         let pose = if self.bypass { if self.open { 1.0 } else { 0.0 } } else { self.progress.value(now) };
         let shown = self.shown(now);

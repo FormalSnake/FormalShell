@@ -52,6 +52,7 @@ pub struct DesktopEntry {
     pub startup_class: String,
     pub icon: String,
     pub command: Vec<String>,
+    pub generic_name: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -249,6 +250,7 @@ mod tests {
             startup_class: String::new(),
             icon: id.into(),
             command: vec![id.into()],
+            generic_name: String::new(),
         };
         f(&mut e);
         e

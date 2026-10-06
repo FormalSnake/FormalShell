@@ -161,6 +161,10 @@ pub fn shoulders(edge: Edge, span: f64, depth: f64, run: f64) -> El {
     El::new(Kind::Shoulders { edge, span, depth, run })
 }
 
+pub fn picture(image: Option<crate::scene::Bitmap>, size: f64) -> El {
+    El::new(Kind::Picture { image: super::el::Picture(image), size })
+}
+
 pub fn marquee(text: impl Into<String>, max: f64) -> El {
     El::new(Kind::Marquee { text: text.into(), ink: Ink::Fg, max })
 }

@@ -145,6 +145,28 @@ pub enum Kind {
     /// A shape budding off a line on `edge`, for the gallery.
     Shoulders { edge: fs_chrome::types::Edge, span: f64, depth: f64, run: f64 },
     Marquee { text: String, ink: Ink, max: f64 },
+    /// A decoded picture centred in a `size` square, or the square empty.
+    Picture { image: Picture, size: f64 },
+}
+
+/// A bitmap compared by identity, so an unchanged picture is no change.
+#[derive(Clone)]
+pub struct Picture(pub Option<crate::scene::Bitmap>);
+
+impl PartialEq for Picture {
+    fn eq(&self, other: &Self) -> bool {
+        match (&self.0, &other.0) {
+            (Some(a), Some(b)) => a.same_as(b),
+            (None, None) => true,
+            _ => false,
+        }
+    }
+}
+
+impl std::fmt::Debug for Picture {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Picture({})", self.0.is_some())
+    }
 }
 
 /// One element: what it is, how wide it sits, and how it is addressed.

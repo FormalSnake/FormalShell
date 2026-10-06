@@ -18,6 +18,7 @@ mod gallery;
 #[cfg(test)]
 mod golden;
 mod media;
+mod menu;
 mod overnight;
 mod monitor;
 mod panel;
@@ -66,6 +67,7 @@ fn registry() ->&'static Registry<App> {
             plugins::target(),
             caffeinate::target(),
             gallery::target(),
+            menu::target(),
         ],
     })
 }
