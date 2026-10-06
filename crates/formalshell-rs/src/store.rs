@@ -2,7 +2,7 @@
 //! diff applies to it; the UI thread is the only writer, through
 //! [`Store::apply`].
 
-use crate::services::{barpaint, clock, commands, config, devices, hyprland, media, state, theme, tray, wallpaper};
+use crate::services::{appicon, barpaint, clock, commands, config, devices, herdr, hyprland, media, state, theme, tray, wallpaper};
 
 #[derive(Default)]
 pub struct Store {
@@ -17,6 +17,8 @@ pub struct Store {
     pub bar_paint: barpaint::State,
     pub wallpaper: wallpaper::State,
     pub tray: tray::State,
+    pub herdr: herdr::State,
+    pub appicon: appicon::State,
 }
 
 /// One service's change, tagged with the slice it applies to.
@@ -32,6 +34,8 @@ pub enum Diff {
     BarPaint(barpaint::Diff),
     Wallpaper(wallpaper::Diff),
     Tray(tray::Diff),
+    Herdr(herdr::Diff),
+    AppIcon(appicon::Diff),
 }
 
 /// The slice a diff changed, for the surfaces that read it.
@@ -48,6 +52,8 @@ pub enum Topic {
     BarPaint,
     Wallpaper,
     Tray,
+    Herdr,
+    AppIcon,
 }
 
 impl Store {
@@ -65,6 +71,8 @@ impl Store {
             Diff::BarPaint(d) => self.bar_paint.apply(d).then_some(Topic::BarPaint),
             Diff::Wallpaper(d) => self.wallpaper.apply(d).then_some(Topic::Wallpaper),
             Diff::Tray(d) => self.tray.apply(d).then_some(Topic::Tray),
+            Diff::Herdr(d) => self.herdr.apply(d).then_some(Topic::Herdr),
+            Diff::AppIcon(d) => self.appicon.apply(d).then_some(Topic::AppIcon),
         }
     }
 }

@@ -621,6 +621,7 @@ dependencies = [
  "fs-bluez",
  "fs-chrome",
  "fs-devices",
+ "fs-info",
  "fs-mpris",
  "fs-network",
  "fs-system",

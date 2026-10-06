@@ -81,7 +81,7 @@ impl Slot {
         let vertical = env.edge.is_vertical();
         self.view = self.cell.view(&kit.look);
         let natural = match self.cell.custom() {
-            Some(c) if self.view.shown => c.measure(kit, vertical) + 0.0,
+            Some(c) if self.view.shown => c.measure(kit, vertical, band),
             _ => {
                 self.measured = kit.measure(&self.view, vertical, self.budget, band);
                 if let Some(free) = &self.measured.free {

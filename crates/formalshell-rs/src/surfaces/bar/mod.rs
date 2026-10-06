@@ -299,6 +299,29 @@ impl Bar {
         }
     }
 
+    /// The pointer over the strip, handed to each cell that washes its own
+    /// parts in the cell's own coordinates; true when the strip needs a pass.
+    pub fn pointer(&mut self, over: Option<usize>, at: (f64, f64), store: &Store, now: Instant) -> bool {
+        let (mut redraw, mut relayout) = (false, false);
+        for (i, s) in self.slots.iter_mut().enumerate() {
+            let local = (Some(i) == over).then(|| (at.0 - s.rect.x as f64, at.1 - s.rect.y as f64));
+            if let Some(c) = s.cell.custom() {
+                let (r, l) = c.pointer(local);
+                s.dirty |= r;
+                (redraw, relayout) = (redraw | r, relayout | l);
+            }
+        }
+        if relayout {
+            self.read(store, Some(Topic::Hyprland), now);
+        }
+        redraw
+    }
+
+    /// `workspaces status`'s cell, when the strip carries one.
+    pub fn workspaces_status(&self) -> Option<Value> {
+        self.slots.iter().find_map(|s| s.cell.status())
+    }
+
     /// Which panel or second bar each cell has open.
     pub fn set_open(&mut self, panel: Option<&str>, overflow: Option<Region>, now: Instant) {
         for slot in &mut self.slots {

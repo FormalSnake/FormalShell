@@ -21,6 +21,7 @@ pub mod registry;
 mod theme;
 mod tray;
 pub mod wire;
+mod workspaces;
 
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::sync::OnceLock;
@@ -50,6 +51,7 @@ fn registry() ->&'static Registry<App> {
             tray::target(),
             overnight::target(),
             earbuds::target(),
+            workspaces::target(),
         ],
     })
 }

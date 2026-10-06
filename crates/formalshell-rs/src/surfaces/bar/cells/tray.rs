@@ -176,7 +176,7 @@ impl Cell for Tray {
 }
 
 impl Custom for Tray {
-    fn measure(&mut self, kit: &mut Kit, vertical: bool) -> f64 {
+    fn measure(&mut self, kit: &mut Kit, vertical: bool, _band: bool) -> f64 {
         let look = &kit.look;
         self.vertical = vertical;
         self.unit = look.body as f64 + look.pad_x * 2.0;
@@ -231,11 +231,11 @@ impl Custom for Tray {
         self.icons()
     }
 
-    fn pointer(&mut self, at: Option<(f64, f64)>) -> bool {
+    fn pointer(&mut self, at: Option<(f64, f64)>) -> (bool, bool) {
         let hover = at.and_then(|(x, y)| self.box_at(if self.vertical { y } else { x }));
         let changed = hover != self.hover;
         self.hover = hover;
-        changed
+        (changed, false)
     }
 
     fn room(&mut self, budget: f64) -> bool {

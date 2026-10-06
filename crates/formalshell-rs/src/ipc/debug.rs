@@ -74,6 +74,7 @@ fn dump(app: &mut App, _: &[Value]) -> Value {
         "focusedWorkspaceId": c.focused_workspace_id,
         "fullscreenOutputs": c.fullscreen_outputs,
         "configLoaded": app.store.config.settings(),
+        "herdr": {"stateByWindow": app.store.herdr.by_window, "stateByKey": app.store.herdr.by_key},
         "bar": [{"screen": screen, "edge": edge.as_str(), "line": line, "paint": app.bar.paint_state(&app.store)}],
         "join": join,
         "frame": app.bar.frame_state(),

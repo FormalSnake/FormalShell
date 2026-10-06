@@ -91,6 +91,12 @@ impl Bitmap {
     }
 }
 
+impl std::fmt::Debug for Bitmap {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Bitmap({}x{})", self.pixmap.width(), self.pixmap.height())
+    }
+}
+
 pub enum Paint {
     Rect { fill: Rgba, radius: f32 },
     /// A bitmap drawn at the node's bounds origin, one pixel to a pixel.

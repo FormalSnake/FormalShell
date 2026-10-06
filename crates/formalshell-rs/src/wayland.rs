@@ -890,6 +890,8 @@ impl App {
                 self.set_overflow(region, open);
             }
             Action::Workspace(id) => hyprland::focus_workspace(&id),
+            Action::WorkspaceAt(idx) => hyprland::focus_workspace_at(idx),
+            Action::Window(id) => hyprland::focus_window(&id),
             Action::Device(op) => {
                 if let Some(rt) = &self.runtime {
                     rt.service(move |ctx| devices::run(ctx, op));
@@ -1009,13 +1011,6 @@ impl App {
 
     fn hover(&mut self, owner: Option<Owner>, at: (f64, f64)) {
         let bar_hover = (owner == Some(Owner::Bar)).then(|| self.bar.hit(at.0, at.1)).flatten();
-        for (i, s) in self.bar.slots.iter_mut().enumerate() {
-            let rel = (bar_hover == Some(i)).then(|| (at.0 - s.rect.x as f64, at.1 - s.rect.y as f64));
-            if s.cell.custom().is_some_and(|c| c.pointer(rel)) {
-                s.dirty = true;
-                self.bar_dirty = true;
-            }
-        }
         if bar_hover != self.bar.hover {
             self.bar.hover = bar_hover;
             for s in &mut self.bar.slots {
@@ -1023,12 +1018,15 @@ impl App {
             }
             self.bar_dirty = true;
         }
+        if self.bar.pointer(bar_hover, at, &self.store, Instant::now()) {
+            self.bar_dirty = true;
+        }
         for (o, p) in [(Owner::Overflow, &mut self.overflow), (Owner::Panel, &mut self.panel)] {
             if let Some(p) = p {
                 let hit = (owner == Some(o)).then(|| p.hit(at.0, at.1)).flatten();
                 for (i, s) in p.slots.iter_mut().enumerate() {
                     let rel = (hit == Some(i)).then(|| (at.0 - s.rect.x as f64, at.1 - s.rect.y as f64));
-                    if s.cell.custom().is_some_and(|c| c.pointer(rel)) {
+                    if s.cell.custom().is_some_and(|c| c.pointer(rel).0) {
                         s.dirty = true;
                     }
                 }

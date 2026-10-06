@@ -58,8 +58,16 @@
 #   viewport (its thumbnail as wide as the window's rect at the miniature's
 #   scale, not a clamped sliver), and a real wheel notch over the card
 #   scrolls the strip along x, then a notch the other way scrolls it back.
+#
+# Under FS_IMPL=rust the preview waits for the window thumbnails (R8): its
+# reads and assertions are skipped, the cell's own (chips, icons, badges, the
+# wheel) are not. The rust shell also logs every commit with its damage, so a
+# stretch with both badges animating (the working spinner, the blocked pulse)
+# is read off that log: every damage rect has to sit on one of those two
+# icons' badges, which is what "the spinner damages only its own rect" means.
 leg_spaces_flag="--spaces"
 leg_spaces_order=196
+leg_spaces_rust=1
 leg_spaces_needs="foot jq convert wlrctl"
 leg_spaces_fixture_window=keep
 
@@ -80,6 +88,7 @@ spaces_status_pad_path="$shot_dir/spaces-status-pad.json"
 spaces_status_pad_back_path="$shot_dir/spaces-status-pad-back.json"
 spaces_status_wheel_path="$shot_dir/spaces-status-wheel.json"
 spaces_status_wheel_back_path="$shot_dir/spaces-status-wheel-back.json"
+spaces_status_quiet_path="$shot_dir/spaces-status-quiet.json"
 spaces_dump_path="$shot_dir/spaces-dump.json"
 spaces_dump_idle_path="$shot_dir/spaces-dump-idle.json"
 spaces_peek_reply_path="$shot_dir/spaces-peek-reply.txt"
@@ -252,6 +261,13 @@ call debug dump > "$spaces_dump_idle_path" 2>&1
 "$grim_bin" "$spaces_idle_png" > /dev/null 2>&1
 echo blocked > "$spaces_remote_state_path"
 sleep 4
+# A stretch with the working spinner and the blocked pulse both running and
+# nothing else moving, clear of the clock's minute edge.
+while s=\$(date +%S); [ "\$((10#\$s))" -ge 52 ] || [ "\$((10#\$s))" -lt 2 ]; do sleep 1; done
+call debug query spaces-quiet-start
+sleep 3
+call debug query spaces-quiet-end
+call workspaces status > "$spaces_status_quiet_path" 2>&1
 park \$(centre 0 "$spaces_status_one_path")
 sleep 1
 "$wlrctl_bin" pointer scroll 15 0 >> "$spaces_dispatch_path" 2>&1
@@ -319,10 +335,55 @@ spaces_icon() {
     '[.slots | to_entries[] | .key as $s | .value.icons | to_entries[] | select(.value.appId == $app) | .value + {slot: $s, at: .key}] | first' "$1"
 }
 
+# Every commit the rust shell made between the two quiet markers, read off
+# its log: the bar's damage rects, each of which has to lie on the badge of
+# an icon herdr marks working or blocked (the icon's own box grown by the
+# badge's reach), and enough of them that the animations really ran.
+spaces_badge_damage() {
+  local t0 t1 boxes commits verdict
+  t0=$(sed -n 's/^ipc t=\([0-9]*\)ms .*spaces-quiet-start.*/\1/p' "$shell_log_path" | head -n 1)
+  t1=$(sed -n 's/^ipc t=\([0-9]*\)ms .*spaces-quiet-end.*/\1/p' "$shell_log_path" | head -n 1)
+  [ -n "$t0" ] && [ -n "$t1" ] || fail "the shell log carries no quiet-stretch markers"
+  boxes=$("$jq_bin" -r '[.slots[].icons[] | select(.agent == "working" or .agent == "blocked") | .rect | "\(.x - 10),\(.y - 10),\(.x + .width + 10),\(.y + .height + 10)"] | join(";")' "$spaces_status_quiet_path")
+  echo "badge boxes: $boxes"
+  [ -n "$boxes" ] || fail "no icon carries a working or blocked badge in the quiet stretch"
+  verdict=$(grep '^commit surface=bar ' "$shell_log_path" | awk -v t0="$t0" -v t1="$t1" -v boxes="$boxes" '
+    BEGIN { n = split(boxes, b, ";") }
+    {
+      if (match($0, / t=[0-9]+ms/) == 0) next
+      t = substr($0, RSTART + 3, RLENGTH - 5) + 0
+      if (t <= t0 || t > t1) next
+      commits++
+      if (match($0, /damage=\[[^]]*\]/) == 0) next
+      list = substr($0, RSTART + 8, RLENGTH - 9)
+      m = split(list, rects, " ")
+      for (i = 1; i <= m; i++) {
+        split(rects[i], p, /[,x]/)
+        x0 = p[1]; y0 = p[2]; x1 = p[1] + p[3]; y1 = p[2] + p[4]
+        inside = 0
+        for (k = 1; k <= n; k++) {
+          split(b[k], q, ",")
+          if (x0 >= q[1] && y0 >= q[2] && x1 <= q[3] && y1 <= q[4]) inside = 1
+        }
+        if (!inside) { bad++; print "outside: " rects[i] " in " $0 > "/dev/stderr" }
+        rectsn++
+      }
+    }
+    END { printf "commits=%d rects=%d outside=%d\n", commits, rectsn, bad }')
+  echo "quiet stretch t=${t0}..${t1}ms: $verdict"
+  commits=${verdict#commits=}
+  commits=${commits%% *}
+  [ "${commits:-0}" -ge 20 ] || fail "the spinner stretch made only $commits commits: the badges did not animate ($verdict)"
+  case "$verdict" in
+    *"outside=0") ;;
+    *) fail "a commit while the badges animated damaged more than a badge ($verdict)" ;;
+  esac
+}
+
 leg_spaces_assert() {
   local f blocked working plain blocked_id working_id slot_one slot_bare
   [ -f "$spaces_done_path" ] || fail "the spaces drive never finished; last dispatch output: $(tail -n 5 "$spaces_dispatch_path" 2>/dev/null)"
-  for f in "$spaces_status_one_path" "$spaces_dump_path" "$spaces_dump_idle_path" \
+  for f in "$spaces_status_one_path" "$spaces_dump_path" "$spaces_dump_idle_path" "$spaces_status_quiet_path" \
     "$spaces_status_two_path" "$spaces_status_peek_path" "$spaces_status_hover_path" \
     "$spaces_status_moved_path" "$spaces_status_left_path" \
     "$spaces_status_pad_path" "$spaces_status_pad_back_path" \
@@ -457,6 +518,12 @@ leg_spaces_assert() {
   [ "$("$jq_bin" -r .id "$spaces_ws_up_path")" = 1 ] || fail "a wheel notch back did not return focus to workspace 1"
   "$jq_bin" -e '.slots[1].active and (.slots[1].icons | map(.agent) | index("working") != null)' "$spaces_status_two_path" > /dev/null \
     || fail "workspace 2's slot is not active with its working badge after the notch: $(cat "$spaces_status_two_path")"
+
+  if [ "$fs_impl" = rust ]; then
+    spaces_badge_damage
+    [ -f "$spaces_wheel_png" ] || fail "no spaces screenshot produced at $spaces_wheel_png"
+    return 0
+  fi
 
   # The preview, by IPC and by pointer.
   cat "$spaces_peek_reply_path"

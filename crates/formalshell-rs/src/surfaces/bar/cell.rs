@@ -20,7 +20,7 @@ use fs_theme::tokens::WEIGHTS;
 use parley::GenericFamily;
 use vello_cpu::kurbo::Affine;
 
-use crate::scene::{IRect, NodeId, Paint, Scene};
+use crate::scene::{Bitmap, IRect, NodeId, Paint, Scene};
 use crate::store::{Store, Topic};
 use crate::text::{self, Family, ShapedText, Text, TextStyle};
 
@@ -40,6 +40,9 @@ pub enum Action {
     /// Open or close the chevron's second bar for its region.
     Overflow(Region),
     Workspace(String),
+    /// A persistent placeholder has no id: the workspace by ordinal.
+    WorkspaceAt(i64),
+    Window(String),
     /// A click on one tray item; `offset` is that item's centre along the
     /// strip from the cell's own centre, for a menu to hang under it.
     Tray { id: String, click: TrayClick, offset: f64 },
@@ -169,12 +172,16 @@ pub trait Cell {
     fn custom(&mut self) -> Option<&mut dyn Custom> {
         None
     }
+    /// What `workspaces status` reads off the cell that carries it.
+    fn status(&self) -> Option<serde_json::Value> {
+        None
+    }
 }
 
 /// A self-drawn cell: it measures and paints its own content inside the
 /// kit's cell box, and says while it animates.
 pub trait Custom {
-    fn measure(&mut self, kit: &mut Kit, vertical: bool) -> f64;
+    fn measure(&mut self, kit: &mut Kit, vertical: bool, band: bool) -> f64;
     fn draw(&mut self, kit: &mut Kit, p: &mut Painter, rect: IRect, ink: &Ink, now: Instant);
     fn animating(&self, now: Instant) -> bool;
     /// `debug r0Spinner`: the herdr badge on the first chip.
@@ -184,10 +191,11 @@ pub trait Custom {
     fn own_hover(&self) -> bool {
         false
     }
-    /// The pointer's place in the cell's box, or none once it left; true
-    /// when what the cell draws moved with it.
-    fn pointer(&mut self, _at: Option<(f64, f64)>) -> bool {
-        false
+    /// The pointer's place in the cell's box, or none once it left. Answers
+    /// whether what the cell draws moved with it and whether it changed what
+    /// the cell measures.
+    fn pointer(&mut self, _at: Option<(f64, f64)>) -> (bool, bool) {
+        (false, false)
     }
     /// The room the strip has for this cell (its own extent plus what the
     /// strip has left over); true when the cell's answer to it changed, which
@@ -235,6 +243,7 @@ pub struct Look {
     pub mark_radius: f32,
     pub border_width: f64,
     pub effects: f64,
+    pub effects_slow: f64,
     pub spatial: f64,
     pub spatial_fast: f64,
     pub emphasized: f64,
@@ -294,6 +303,7 @@ impl Look {
             mark_radius: theme.box_radius(&mark, theme.border_width * 2.0) as f32,
             border_width: theme.border_width,
             effects: motion.effects,
+            effects_slow: motion.effects_slow,
             spatial: motion.spatial,
             spatial_fast: motion.spatial_fast,
             emphasized: motion.emphasized,
@@ -388,6 +398,14 @@ impl<'a> Painter<'a> {
     pub fn framed(&mut self, r: IRect, fill: Rgba, radius: f32, border: Rgba, width: f32) {
         if (fill.a > 0.0 || (border.a > 0.0 && width > 0.0)) && !r.is_empty() {
             self.put(r, Paint::Framed { fill, radius, border, width }, Affine::IDENTITY, self.clip);
+        }
+    }
+
+    /// Pixels drawn with their top-left on `at`.
+    pub fn image(&mut self, image: &Bitmap, at: (i32, i32), alpha: f32) {
+        if alpha > 0.0 {
+            let bounds = IRect::new(at.0, at.1, image.pixmap.width() as i32, image.pixmap.height() as i32);
+            self.put(bounds, Paint::Image { image: image.clone(), alpha }, Affine::IDENTITY, self.clip);
         }
     }
 
