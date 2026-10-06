@@ -150,6 +150,7 @@
         (forAllSystems (system: pkgs: {
         qml-tests = qmlTests pkgs;
         primitives = primitivesCheck pkgs;
+        fs-notifd = pkgs.callPackage ./nix/fs-notifd-check.nix { };
         nixos-module-eval = nixosModuleEval system pkgs;
 
         qmllint = pkgs.runCommand "formalshell-qmllint" {
