@@ -7,11 +7,14 @@
 //! source as an argument and return nodes, so a caller can recompute one
 //! source alone and re-attach it with `providers::attach_children`.
 
+pub mod actions;
+pub mod appgrid;
 pub mod appmatch;
 pub mod calc;
 pub mod clipboard;
 pub mod frecency;
 pub mod icons;
+pub mod keybinds;
 pub mod model;
 pub mod nav;
 pub mod node;
