@@ -14,6 +14,8 @@ pub struct Audio {
     /// None while there is no default sink with an audio interface.
     pub volume: Option<f64>,
     pub muted: bool,
+    /// The default sink's description, or its node name.
+    pub name: String,
     /// A default source with an audio interface exists.
     pub source: bool,
     pub source_muted: bool,
@@ -29,11 +31,16 @@ thread_local! {
 }
 
 fn snapshot(graph: &Graph) -> Audio {
-    let sink = graph.default_sink().and_then(|n| n.audio.as_ref());
+    let node = graph.default_sink();
+    let sink = node.and_then(|n| n.audio.as_ref());
     let source = graph.default_source().and_then(|n| n.audio.as_ref());
     Audio {
         volume: sink.map(|a| a.volume() as f64),
         muted: sink.is_some_and(|a| a.muted),
+        name: node
+            .filter(|_| sink.is_some())
+            .map(|n| if n.description.is_empty() { n.name.clone() } else { n.description.clone() })
+            .unwrap_or_default(),
         source: source.is_some(),
         source_muted: source.is_some_and(|a| a.muted),
     }

@@ -179,6 +179,15 @@ fn stub() -> Registry<()> {
                 ],
             },
             Target {
+                name: "gallery",
+                functions: vec![
+                    f("open", &[], Type::String, |_, _| s("ok")),
+                    f("close", &[], Type::String, |_, _| s("ok")),
+                    f("toggle", &[], Type::String, |_, _| s("ok")),
+                    f("status", &[], Type::String, |_, _| s("{\"isOpen\":false}")),
+                ],
+            },
+            Target {
                 name: "probe",
                 functions: vec![
                     f("s", &[STR], Type::String, |_, a| s(format!("[{}]", a[0].str()))),
@@ -295,6 +304,7 @@ fn signatures_match_qml() {
         super::monitor::target(),
         super::plugins::target(),
         super::caffeinate::target(),
+        super::gallery::target(),
     ] {
         let defs: Vec<String> = real.functions.iter().map(|f| f.definition()).collect();
         let qml = stub.targets.iter().find(|t| t.name == real.name).expect("a stub target");

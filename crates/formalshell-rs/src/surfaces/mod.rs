@@ -3,8 +3,10 @@
 
 pub mod bar;
 pub mod card;
+pub mod panel;
 pub mod shoulders;
 pub mod tray_menu;
+pub mod tooltip;
 
 use crate::services::theme;
 use crate::store::Topic;

@@ -1,11 +1,12 @@
-//! `panel`, PanelIpc.qml's verbs over the panels' cards. `open` hangs a
-//! card under its cell when the strip has one, and at the strip's end
-//! otherwise.
+//! `panel`, PanelIpc.qml's verbs over the panels' cards. `toggle` hangs a
+//! card under its cell when the strip has one; `open` hangs it at the
+//! strip's end.
 
 use fs_chrome::bar::{layout, panels};
 
 use super::registry::{Function, Target, Type, Value};
-use crate::wayland::{App, PANELS};
+use crate::surfaces::panel;
+use crate::wayland::App;
 
 fn text(s: impl Into<String>) -> Value {
     Value::Str(s.into())
@@ -25,7 +26,7 @@ pub fn target() -> Target<App> {
 }
 
 fn known(name: &str) -> Option<&'static str> {
-    PANELS.iter().find(|(n, _)| *n == name).map(|(n, _)| *n)
+    panel::known(name)
 }
 
 fn open(app: &mut App, args: &[Value]) -> Value {
@@ -42,7 +43,10 @@ fn close(app: &mut App, _: &[Value]) -> Value {
 fn toggle(app: &mut App, args: &[Value]) -> Value {
     let Some(name) = known(args[0].str()) else { return text(format!("error: unknown panel '{}'", args[0].str())) };
     let open = app.panel_open() != Some(name);
-    app.set_panel(name, open, None);
+    // A toggle hangs the card under the cell that owns it; `open` is the
+    // anchorless route, at the line's end.
+    let anchor = app.bar.panel_anchor(name);
+    app.set_panel(name, open, anchor);
     text("ok")
 }
 

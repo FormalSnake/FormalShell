@@ -67,6 +67,10 @@ pub enum Op {
     ToggleMute,
     ToggleSourceMute,
     ToggleWifi,
+    /// The network panel's radio switch.
+    Wifi(bool),
+    /// The network panel's rescan button.
+    Rescan,
     ToggleBluetooth,
     /// Battery.qml's right click: state.json's `batteryShowPercent`.
     BatteryPercent(bool),
@@ -78,6 +82,8 @@ pub fn run(ctx: &Ctx, op: Op) {
         Op::ToggleMute => audio::toggle_mute(ctx),
         Op::ToggleSourceMute => audio::toggle_source_mute(ctx),
         Op::ToggleWifi => network::toggle_wifi(ctx),
+        Op::Wifi(on) => network::set_wifi(ctx, on),
+        Op::Rescan => network::rescan(ctx),
         Op::ToggleBluetooth => bluetooth::toggle_power(ctx),
         Op::BatteryPercent(on) => {
             crate::services::state::set(vec![crate::services::state::Field::BatteryShowPercent(serde_json::Value::Bool(on))])

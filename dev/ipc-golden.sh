@@ -137,6 +137,13 @@ ShellRoot {
         function status(): string { return "{}" }
     }
     IpcHandler {
+        target: "gallery"
+        function open(): string { return "ok" }
+        function close(): string { return "ok" }
+        function toggle(): string { return "ok" }
+        function status(): string { return JSON.stringify({ isOpen: false }) }
+    }
+    IpcHandler {
         target: "probe"
         function s(a: string): string { return "[" + a + "]" }
         function ss(a: string, b: string): string { return "[" + a + "][" + b + "]" }
@@ -395,6 +402,12 @@ rec call caffeinate disable
 rec call caffeinate status
 rec call caffeinate status x
 rec show caffeinate
+rec call gallery open
+rec call gallery status
+rec call gallery status x
+rec call gallery toggle
+rec call gallery close
+rec show gallery
 
 kill "$qs_pid"
 wait "$qs_pid" 2>/dev/null || true

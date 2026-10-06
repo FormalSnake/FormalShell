@@ -14,6 +14,7 @@ mod caffeinate;
 mod cli;
 mod debug;
 mod earbuds;
+mod gallery;
 #[cfg(test)]
 mod golden;
 mod media;
@@ -64,6 +65,7 @@ fn registry() ->&'static Registry<App> {
             monitor::target(),
             plugins::target(),
             caffeinate::target(),
+            gallery::target(),
         ],
     })
 }

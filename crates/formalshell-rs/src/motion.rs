@@ -7,15 +7,80 @@ use std::time::{Duration, Instant};
 /// Qt's `BezierSpline` as `easing.bezierCurve` takes it: per segment the
 /// two control points and the end point, starting from (0,0) and ending on
 /// (1,1).
-#[derive(Clone, Copy, Debug)]
-pub struct Curve(pub &'static [f64]);
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Curve {
+    points: [f64; 12],
+    len: usize,
+}
 
-pub const SPATIAL_FAST: Curve = Curve(&[0.42, 1.67, 0.21, 0.9, 1.0, 1.0]);
-pub const SPATIAL: Curve = Curve(&[0.38, 1.21, 0.22, 1.0, 1.0, 1.0]);
-pub const EFFECTS: Curve = Curve(&[0.34, 0.8, 0.34, 1.0, 1.0, 1.0]);
+impl Curve {
+    pub const fn new(points: &[f64]) -> Self {
+        let mut out = [0.0; 12];
+        let mut i = 0;
+        while i < points.len() && i < 12 {
+            out[i] = points[i];
+            i += 1;
+        }
+        Self { points: out, len: i }
+    }
+
+    /// A table's own curve (`motion.emerge` and friends), spatial if it
+    /// carries no whole segment.
+    pub fn from_table(points: &[f64]) -> Self {
+        if points.len() < 6 { SPATIAL } else { Self::new(points) }
+    }
+}
+
+pub const SPATIAL_FAST: Curve = Curve::new(&[0.42, 1.67, 0.21, 0.9, 1.0, 1.0]);
+pub const SPATIAL: Curve = Curve::new(&[0.38, 1.21, 0.22, 1.0, 1.0, 1.0]);
+pub const EFFECTS: Curve = Curve::new(&[0.34, 0.8, 0.34, 1.0, 1.0, 1.0]);
 /// M3's two-segment curve, the workspace pill's alone.
 pub const EMPHASIZED: Curve =
-    Curve(&[0.05, 0.0, 2.0 / 15.0, 0.06, 1.0 / 6.0, 0.4, 5.0 / 24.0, 0.82, 0.25, 1.0, 1.0, 1.0]);
+    Curve::new(&[0.05, 0.0, 2.0 / 15.0, 0.06, 1.0 / 6.0, 0.4, 5.0 / 24.0, 0.82, 0.25, 1.0, 1.0, 1.0]);
+
+pub const SPATIAL_SLOW: Curve = Curve::new(&[0.39, 1.29, 0.35, 0.98, 1.0, 1.0]);
+pub const EFFECTS_FAST: Curve = Curve::new(&[0.31, 0.94, 0.34, 1.0, 1.0, 1.0]);
+pub const EFFECTS_SLOW: Curve = Curve::new(&[0.34, 0.88, 0.34, 1.0, 1.0, 1.0]);
+
+/// `Anim`'s `kind`: which family's clock and curve a property rides.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Kind {
+    SpatialFast,
+    Spatial,
+    SpatialSlow,
+    EffectsFast,
+    Effects,
+    EffectsSlow,
+}
+
+impl Kind {
+    pub fn curve(self) -> Curve {
+        match self {
+            Kind::SpatialFast => SPATIAL_FAST,
+            Kind::Spatial => SPATIAL,
+            Kind::SpatialSlow => SPATIAL_SLOW,
+            Kind::EffectsFast => EFFECTS_FAST,
+            Kind::Effects => EFFECTS,
+            Kind::EffectsSlow => EFFECTS_SLOW,
+        }
+    }
+
+    /// The live table's duration for this kind, 0 with motion off.
+    pub fn ms(self, theme: &fs_theme::theme::Theme) -> f64 {
+        if !theme.motion_enabled {
+            return 0.0;
+        }
+        let m = theme.motion().families;
+        match self {
+            Kind::SpatialFast => m.spatial_fast,
+            Kind::Spatial => m.spatial,
+            Kind::SpatialSlow => m.spatial_slow,
+            Kind::EffectsFast => m.effects_fast,
+            Kind::Effects => m.effects,
+            Kind::EffectsSlow => m.effects_slow,
+        }
+    }
+}
 
 pub const SPATIAL_FAST_MS: f64 = 350.0;
 pub const SPATIAL_MS: f64 = 500.0;
@@ -39,7 +104,7 @@ impl Curve {
             u * u * u * p0 + 3.0 * u * u * t * a + 3.0 * u * t * t * b + t * t * t * p3
         };
         let (mut x0, mut y0) = (0.0, 0.0);
-        for seg in self.0.chunks_exact(6) {
+        for seg in self.points[..self.len].chunks_exact(6) {
             let [x1, y1, x2, y2, x3, y3] = [seg[0], seg[1], seg[2], seg[3], seg[4], seg[5]];
             if x <= x3 {
                 let (mut lo, mut hi) = (0.0, 1.0);
@@ -80,6 +145,10 @@ impl Animated {
 
     pub fn running(&self, now: Instant) -> bool {
         !self.duration.is_zero() && now < self.start + self.duration
+    }
+
+    pub fn target(&self) -> f64 {
+        self.target
     }
 
     pub fn set(&mut self, now: Instant, target: f64, duration_ms: f64) {

@@ -42,6 +42,7 @@
 # The travel is front-loaded, which is why three of the five sit inside its
 # first third: that is where a card is between the two rests.
 leg_panel_handoff_flag="--panel-handoff"
+leg_panel_handoff_rust=1
 leg_panel_handoff_order=78
 leg_panel_handoff_needs="convert"
 
@@ -64,7 +65,11 @@ panel_handoff_mid_paths=(
 )
 
 panel_handoff_clock_ms=500
+# The rust shell has its incoming window up within a frame or two of the
+# call rather than Qt's couple of hundred milliseconds, so the travel starts
+# that much sooner.
 panel_handoff_map_ms=200
+if [ "${FS_IMPL:-qml}" = rust ]; then panel_handoff_map_ms=20; fi
 panel_handoff_mid_fractions=(0 16 32 72 130)
 panel_handoff_mid_sleeps=()
 for panel_handoff_f in "${panel_handoff_mid_fractions[@]}"; do

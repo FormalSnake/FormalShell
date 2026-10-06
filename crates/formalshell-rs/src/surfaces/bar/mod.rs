@@ -89,8 +89,9 @@ pub struct Bar {
     pub slots: Vec<Slot>,
     strip_nodes: Vec<NodeId>,
     strip_key: Option<String>,
-    /// The gap a joined card opens in the line, `[start, end)` along it.
-    gap: Option<(i32, i32)>,
+    /// The gaps joined cards open in the lines, `[start, end)` along each:
+    /// the strip's own, and a frame ring's side a walled card runs out to.
+    gaps: Vec<(Edge, (i32, i32))>,
     line_rects: Vec<IRect>,
     pub output: String,
     pub paint: Option<PaintState>,
@@ -125,7 +126,7 @@ impl Bar {
             slots: Vec::new(),
             strip_nodes: Vec::new(),
             strip_key: None,
-            gap: None,
+            gaps: Vec::new(),
             line_rects: Vec::new(),
             output: String::new(),
             paint: None,
@@ -212,7 +213,7 @@ impl Bar {
         }
         let turned = edge.is_vertical() != self.edge.is_vertical();
         self.edge = edge;
-        self.gap = None;
+        self.gaps.clear();
         let (w, h) = self.placed_size(turned);
         self.scene = Scene::new(w, h);
         self.rebuild();
@@ -399,14 +400,21 @@ impl Bar {
         &self.line_rects
     }
 
-    /// The join a card publishes (Joint.qml's `join`): its start and width
-    /// along the line and the fillets' reach, or none.
-    pub fn set_join(&mut self, join: Option<(f64, f64, f64)>) {
-        let gap = join.map(|(x, width, reach)| ((x - reach).round() as i32, (x + width + reach).round() as i32));
-        if gap != self.gap {
-            self.gap = gap;
+    /// The joins cards publish (Joint.qml's `join`): each one's edge, its
+    /// start and width along that line and the fillets' reach.
+    /// Every gap open this frame, one per edge at most.
+    pub fn set_joins(&mut self, joins: &[(Edge, f64, f64, f64)]) {
+        let gaps: Vec<(Edge, (i32, i32))> =
+            joins.iter().map(|(e, x, width, reach)| (*e, ((x - reach).round() as i32, (x + width + reach).round() as i32))).collect();
+        if gaps != self.gaps {
+            self.gaps = gaps;
             self.strip_key = None;
         }
+    }
+
+    /// The gap in the strip's own line.
+    fn gap(&self) -> Option<(i32, i32)> {
+        self.gaps.iter().find(|(e, _)| *e == self.edge).map(|(_, g)| *g)
     }
 
     /// One pass: budgets, positions and paint. Cheap enough per frame;
@@ -558,7 +566,7 @@ impl Bar {
     /// The strip's own paint: the strip habit's fill and hairline, the
     /// band's fill, or the frame's ring with its line.
     fn paint_strip(&mut self) {
-        let key = format!("{:?} {:?} {:?} {:?} {:?}", self.scene.size, self.gap, self.edge, self.paint, self.ring_box);
+        let key = format!("{:?} {:?} {:?} {:?} {:?}", self.scene.size, self.gaps, self.edge, self.paint, self.ring_box);
         if self.strip_key.as_deref() == Some(key.as_str()) {
             return;
         }
@@ -570,7 +578,8 @@ impl Bar {
         let t = self.thickness() as f64;
         let edge = self.edge;
         let ring = self.ring_box;
-        let gap = self.gap;
+        let gap = self.gap();
+        let all_gaps = self.gaps.clone();
         let band_fill = self.band_fill;
         let mut p = Painter::new(&mut self.scene, &mut self.strip_nodes, None);
         if self.style.frame.0 {
@@ -583,12 +592,14 @@ impl Bar {
             let inner = Rect::new(g.inner.x, g.inner.y, g.inner.x + g.inner.width, g.inner.y + g.inner.height);
             band.extend(RoundedRect::from_rect(inner, g.radius).path_elements(0.1));
             let mut gaps = Gaps::default();
-            let gap = gap.map(|(a, b)| (a as f64, b as f64));
-            match edge {
-                Edge::Top => gaps.top = gap,
-                Edge::Bottom => gaps.bottom = gap,
-                Edge::Left => gaps.left = gap,
-                Edge::Right => gaps.right = gap,
+            for (e, (a, b)) in &all_gaps {
+                let gap = Some((*a as f64, *b as f64));
+                match e {
+                    Edge::Top => gaps.top = gap,
+                    Edge::Bottom => gaps.bottom = gap,
+                    Edge::Left => gaps.left = gap,
+                    Edge::Right => gaps.right = gap,
+                }
             }
             let sr = frame::stroke_rect(g.inner, g.radius, ring.1);
             let line = frame::ring_line(fs_chrome::types::Rect::new(sr.x, sr.y, sr.width, sr.height), sr.radius, gaps);

@@ -88,6 +88,8 @@ pub struct Menu {
     pub cursor_active: bool,
     /// The tallest the card may be, which rows past it are cut at.
     pub cap: f64,
+    /// Where along the line the card centres, for a resize to clamp again.
+    pub anchor: f64,
     close_hover: bool,
     look: Look,
     nodes: Vec<NodeId>,
@@ -108,6 +110,7 @@ impl Menu {
             cursor: None,
             cursor_active: false,
             cap: f64::INFINITY,
+            anchor: 0.0,
             close_hover: false,
             look: Look::new(theme),
             nodes: Vec::new(),

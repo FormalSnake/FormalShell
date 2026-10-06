@@ -59,6 +59,26 @@ pub async fn run(ctx: Ctx) {
     }
 }
 
+/// NetworkManager's radio switch, set outright.
+pub fn set_wifi(ctx: &Ctx, on: bool) {
+    let Some(nm) = NM.with_borrow(|n| n.clone()) else { return };
+    ctx.spawn(async move {
+        if let Err(err) = nm.set_wifi_enabled(on).await {
+            eprintln!("network: {err}");
+        }
+    });
+}
+
+/// `RequestScan` on every Wi-Fi device NetworkManager has.
+pub fn rescan(ctx: &Ctx) {
+    let Some(nm) = NM.with_borrow(|n| n.clone()) else { return };
+    ctx.spawn(async move {
+        if let Err(err) = nm.request_scan().await {
+            eprintln!("network: {err}");
+        }
+    });
+}
+
 /// NetworkWidget.qml's right click: `Networking.wifiEnabled` flipped.
 pub fn toggle_wifi(ctx: &Ctx) {
     let Some(nm) = NM.with_borrow(|n| n.clone()) else { return };

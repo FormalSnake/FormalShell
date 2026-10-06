@@ -7,6 +7,7 @@
 # is read at startup, which is why it is a fixture and not an IPC call, and
 # why there is nothing to assert here beyond the frame the other leg takes.
 leg_retro_flag="--retro"
+leg_retro_rust=1
 leg_retro_order=5
 # See pantheon.sh: a rider with no drive or assert of its own must never
 # vote the base fixture window off through fixture_window_mode's AND.

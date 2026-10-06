@@ -392,16 +392,35 @@ pub struct Painter<'a> {
     nodes: &'a mut Vec<NodeId>,
     used: usize,
     pub clip: Option<IRect>,
+    /// Where a node this painter has not drawn before goes in paint order:
+    /// after its own last one, or after this.
+    anchor: Option<NodeId>,
 }
 
 impl<'a> Painter<'a> {
     pub fn new(scene: &'a mut Scene, nodes: &'a mut Vec<NodeId>, clip: Option<IRect>) -> Self {
-        Self { scene, nodes, used: 0, clip }
+        Self { scene, nodes, used: 0, clip, anchor: None }
+    }
+
+    /// New nodes start right after `anchor` rather than on top of the scene.
+    pub fn after(mut self, anchor: Option<NodeId>) -> Self {
+        self.anchor = anchor;
+        self
+    }
+
+    /// The last node this painter drew, for the next group to follow.
+    pub fn last(&self) -> Option<NodeId> {
+        self.nodes.last().copied().or(self.anchor)
+    }
+
+    pub fn scene(&mut self) -> &mut Scene {
+        self.scene
     }
 
     fn put(&mut self, bounds: IRect, paint: Paint, transform: Affine, clip: Option<IRect>) {
         if self.used == self.nodes.len() {
-            let id = self.scene.add(IRect::default(), Paint::Rect { fill: Rgba::TRANSPARENT, radius: 0.0 });
+            let prev = self.nodes.last().copied().or(self.anchor);
+            let id = self.scene.add_after(prev, IRect::default(), Paint::Rect { fill: Rgba::TRANSPARENT, radius: 0.0 });
             self.scene.set_visible(id, false);
             self.nodes.push(id);
         }
@@ -432,6 +451,12 @@ impl<'a> Painter<'a> {
 
     pub fn shape(&mut self, bounds: IRect, paint: Paint) {
         self.put(bounds, paint, Affine::IDENTITY, self.clip);
+    }
+
+    /// A node under its own clip, inside the painter's.
+    pub fn shape_in(&mut self, bounds: IRect, paint: Paint, clip: IRect) {
+        let clip = self.clip.map_or(clip, |c| c.intersect(&clip));
+        self.put(bounds, paint, Affine::IDENTITY, Some(clip));
     }
 
     /// A line whose line box's top-left lands on `at`.
