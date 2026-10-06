@@ -112,8 +112,7 @@ fn output_row(v: &View, rows: &[Output], row: &Output, main: &str) -> El {
         head.push(w::value(outputs::format_scale(row.scale)));
     }
     let toggles = display::config_available() && outputs::can_toggle(rows, &row.name);
-    let switch = w::switch(row.enabled);
-    head.push(if toggles { switch.on(format!("enable:{}", row.name)) } else { switch });
+    head.push(w::switch(row.enabled).enabled(toggles).on(format!("enable:{}", row.name)));
 
     let mut lines = vec![w::row(s.icon_gap, head).fill()];
     if !row.enabled {
@@ -213,8 +212,9 @@ impl Panel for Display {
         let mut bright = vec![w::section_label(s, "Brightness", Some(devices.len()), true)];
         if devices.is_empty() {
             bright.push(w::section_label(s, "No backlight", None, true));
+        } else {
+            bright.push(w::column(0.0, devices.iter().map(|d| brightness_row(v, d)).collect()));
         }
-        bright.push(w::column(0.0, devices.iter().map(|d| brightness_row(v, d)).collect()));
         parts.push(w::column(s.row_gap, bright));
 
         let hdr = hdr_names(store, &rows);
