@@ -30,7 +30,7 @@ use smithay_client_toolkit::{delegate_dispatch2, delegate_registry, registry_han
 use crate::ipc;
 use crate::runtime::{Msg, Runtime};
 use crate::scene::{IRect, NodeId};
-use crate::services::{barpaint, commands, devices, hyprland, theme, tray, wallpaper};
+use crate::services::{barpaint, commands, devices, hyprland, media, theme, tray, wallpaper};
 use crate::store::{Store, Topic};
 use crate::surface::{Backdrop, PixelSurface, Pixels, Surface};
 use crate::surfaces;
@@ -376,6 +376,7 @@ impl App {
             })
             .collect();
         commands::configure(modules);
+        media::configure(self.store.config.settings());
         let edge = layout::position(self.store.config.str("bar.position"));
         let moved = self.bar.set_edge(edge);
         let relaid = self.bar.set_layout(resolved);
@@ -914,6 +915,8 @@ impl App {
                     self.close_panels();
                 }
             }
+            Action::MediaNext => self.store.media.next(),
+            Action::MediaPrevious => self.store.media.previous(),
         }
     }
 

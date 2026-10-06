@@ -1,0 +1,823 @@
+// Portions from omarchy-radio-atlas (MIT, Copyright 2026 Akshar Patel)
+
+//! RadioService.qml, as far as the bar reads it: the one mpv child, what it
+//! is playing, the saved favourites, recents, volume and output, and the
+//! Radio Browser requests playing a station makes. The atlas surface (search,
+//! the globe, country lists) arrives with its own milestone.
+//!
+//! mpv runs unsandboxed, so a station URL is only ever checked to be http(s).
+
+use std::cell::RefCell;
+use std::path::PathBuf;
+use std::rc::Rc;
+use std::sync::OnceLock;
+use std::time::{Duration, Instant};
+
+use async_io::{Async, Timer};
+use fs_media::radio::stations::{self, Station};
+use futures_lite::io::{AsyncWriteExt, BufReader, ReadHalf, WriteHalf, split};
+use futures_lite::{AsyncBufReadExt, FutureExt, StreamExt};
+use serde_json::{Value, json};
+use std::os::unix::net::UnixStream;
+
+use crate::runtime::Ctx;
+use crate::store;
+
+const USER_AGENT: &str = "Radio Atlas (FormalShell)";
+/// What mpv names its Pipewire stream, which is how an audio graph tells the
+/// radio's stream from any other mpv's.
+const CLIENT_NAME: &str = "FormalShell Radio";
+const SAVE_DELAY: Duration = Duration::from_millis(600);
+const STOP_GRACE: Duration = Duration::from_millis(1500);
+const CONNECT_EVERY: Duration = Duration::from_millis(100);
+const CONNECT_TRIES: u32 = 60;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct State {
+    pub favorites: Vec<Station>,
+    pub recent: Vec<Station>,
+    pub volume: i64,
+    pub output: String,
+    pub station: Option<Station>,
+    pub queue: Vec<Station>,
+    pub mpv_paused: bool,
+    pub muted: bool,
+    pub title: String,
+    pub loaded: bool,
+    /// A stream that failed or dropped, kept with the station selected and
+    /// never retried on its own.
+    pub error: String,
+    pub player_error: String,
+    pub local_error: String,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            favorites: Vec::new(),
+            recent: Vec::new(),
+            volume: 70,
+            output: String::new(),
+            station: None,
+            queue: Vec::new(),
+            mpv_paused: false,
+            muted: false,
+            title: String::new(),
+            loaded: false,
+            error: String::new(),
+            player_error: String::new(),
+            local_error: String::new(),
+        }
+    }
+}
+
+impl State {
+    pub fn running(&self) -> bool {
+        self.station.is_some()
+    }
+
+    pub fn paused(&self) -> bool {
+        self.mpv_paused || !self.error.is_empty()
+    }
+
+    /// mpv falls back to the stream's file name when the station sends no
+    /// title of its own, which is not a track.
+    pub fn track_title(&self) -> String {
+        let t = self.title.trim();
+        let Some(station) = &self.station else { return String::new() };
+        let name = station.name.trim();
+        let url = station.url.as_str();
+        let end = url.find(['?', '#']).unwrap_or(url.len());
+        let trimmed = url[..end].trim_end_matches('/');
+        let file = trimmed.rsplit('/').next().unwrap_or("");
+        if !t.is_empty() && !name.is_empty() && !t.eq_ignore_ascii_case(name) && t != file && t != url {
+            t.to_owned()
+        } else {
+            String::new()
+        }
+    }
+
+    /// What the bar cell reads beside its icon: the stream's own track title
+    /// when it sends one, the station's name otherwise.
+    pub fn label(&self) -> String {
+        let Some(station) = &self.station else { return String::new() };
+        let t = self.track_title();
+        let text = if t.is_empty() { station.name.clone() } else { t };
+        text.chars().map(|c| if c.is_control() { ' ' } else { c }).collect::<String>().trim().to_owned()
+    }
+
+    pub fn status(&self) -> Value {
+        json!({
+            "running": self.running(),
+            "paused": self.paused(),
+            "loaded": self.loaded,
+            "station": self.station.as_ref().map_or("", |s| s.name.as_str()),
+            "title": self.title,
+            "label": self.label(),
+            "volume": self.volume,
+            "muted": self.muted,
+            "output": self.output,
+            "error": self.error,
+            "playerError": self.player_error,
+            "queue": self.queue.len(),
+            "favorites": self.favorites.len(),
+            "recent": self.recent.len(),
+        })
+    }
+}
+
+pub enum Cmd {
+    /// A saved station and the list it came from, which becomes its queue.
+    PlayFromSaved(Station, Vec<Station>),
+    Toggle,
+    Next,
+    Previous,
+    Stop,
+    Random,
+    SetVolume(f64),
+    RandomRows(Option<Vec<Station>>),
+    Refreshed(Vec<Station>),
+}
+
+static CMD: OnceLock<async_channel::Sender<Cmd>> = OnceLock::new();
+
+pub fn send(cmd: Cmd) {
+    if let Some(tx) = CMD.get() {
+        let _ = tx.try_send(cmd);
+    }
+}
+
+fn runtime_dir() -> Option<PathBuf> {
+    std::env::var("XDG_RUNTIME_DIR").ok().filter(|d| !d.is_empty()).map(PathBuf::from)
+}
+
+fn state_path() -> PathBuf {
+    let base = match std::env::var("XDG_STATE_HOME") {
+        Ok(dir) if !dir.is_empty() => PathBuf::from(dir),
+        _ => PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".local/state"),
+    };
+    base.join("formalshell").join("radio-atlas.json")
+}
+
+async fn curl(args: &[String]) -> Option<String> {
+    let out = async_process::Command::new(args.first()?)
+        .args(&args[1..])
+        .stdin(async_process::Stdio::null())
+        .stderr(async_process::Stdio::null())
+        .kill_on_drop(true)
+        .output()
+        .await
+        .ok()?;
+    out.status.success().then(|| String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+type Bases = Rc<RefCell<Vec<String>>>;
+
+async fn discover(cache: &Bases) -> Vec<String> {
+    if !cache.borrow().is_empty() {
+        return cache.borrow().clone();
+    }
+    let args: Vec<String> = [
+        "curl", "--fail", "--silent", "--connect-timeout", "4", "--max-time", "8", "--max-filesize", "65536",
+        "--proto", "=https", "--user-agent", USER_AGENT, stations::SERVERS_URL,
+    ]
+    .map(String::from)
+    .to_vec();
+    let found = match curl(&args).await {
+        Some(text) => stations::parse_servers(&text, &mut fastrand::f64),
+        None => Vec::new(),
+    };
+    // A failed discovery is not remembered, so the next request asks again.
+    if found.is_empty() {
+        return vec![stations::API_FALLBACK.to_owned()];
+    }
+    *cache.borrow_mut() = found.clone();
+    found
+}
+
+/// One request, tried against each mirror in turn; None once every mirror
+/// has failed.
+async fn request(cache: &Bases, request: &stations::Request) -> Option<Vec<Station>> {
+    for base in discover(cache).await {
+        let args = stations::curl_args(&base, request, USER_AGENT);
+        if let Some(rows) = curl(&args).await.and_then(|t| stations::parse_response(&t, request.max)) {
+            return Some(rows);
+        }
+    }
+    None
+}
+
+type Lines =futures_lite::io::Lines<BufReader<ReadHalf<Async<UnixStream>>>>;
+
+struct Mpv {
+    child: async_process::Child,
+    reader: Option<Lines>,
+    writer: Option<WriteHalf<Async<UnixStream>>>,
+    attempts: u32,
+    connect_at: Option<Instant>,
+}
+
+enum Ev {
+    Cmd(Option<Cmd>),
+    Line(Option<String>),
+    Exit,
+    Timer,
+}
+
+struct Radio {
+    ctx: Ctx,
+    st: State,
+    mpv: Option<Mpv>,
+    socket_dir: Option<PathBuf>,
+    pending: Vec<Value>,
+    stopping: bool,
+    resume: Option<(Station, Vec<Station>)>,
+    active: bool,
+    recorded: String,
+    writable: bool,
+    save_at: Option<Instant>,
+    stop_at: Option<Instant>,
+    bases: Bases,
+    last_random: String,
+    random_busy: bool,
+    follow: async_channel::Sender<Cmd>,
+}
+
+impl Radio {
+    fn publish(&self) {
+        self.ctx.publish(store::Diff::Media(super::media::Diff::Radio(self.st.clone())));
+    }
+
+    fn socket_path(&self) -> Option<PathBuf> {
+        self.socket_dir.as_ref().map(|d| d.join("mpv.sock"))
+    }
+
+    fn save_state(&mut self) {
+        if !self.writable {
+            return;
+        }
+        let doc = json!({
+            "favorites": self.st.favorites,
+            "recent": self.st.recent,
+            "volume": self.st.volume,
+            "output": self.st.output,
+        });
+        let path = state_path();
+        let write = || -> std::io::Result<()> {
+            if let Some(dir) = path.parent() {
+                std::fs::create_dir_all(dir)?;
+            }
+            let tmp = path.with_extension("json.tmp");
+            std::fs::write(&tmp, format!("{doc}\n"))?;
+            std::fs::rename(&tmp, &path)
+        };
+        if write().is_err() {
+            self.st.local_error = "Saved stations could not be written".into();
+            self.publish();
+        }
+    }
+
+    fn load_state(&mut self) {
+        match std::fs::read_to_string(state_path()) {
+            Ok(text) => match stations::parse_state(&text) {
+                Some(saved) => {
+                    self.st.favorites = saved.favorites;
+                    self.st.recent = saved.recent;
+                    self.st.volume = saved.volume;
+                    self.st.output = saved.output;
+                    self.writable = true;
+                }
+                None => self.st.local_error = "Saved stations could not be loaded".into(),
+            },
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => self.writable = true,
+            Err(_) => self.st.local_error = "Saved stations could not be loaded".into(),
+        }
+    }
+
+    fn mpv_argv(&self, socket: &std::path::Path) -> Vec<String> {
+        let mut args: Vec<String> = [
+            "mpv", "--no-config", "--no-video", "--force-window=no", "--audio-display=no", "--idle=yes",
+            "--load-scripts=no", "--ytdl=no", "--load-unsafe-playlists=no", "--cache-secs=20",
+            "--demuxer-max-bytes=8MiB", "--demuxer-max-back-bytes=2MiB", "--network-timeout=30",
+        ]
+        .map(String::from)
+        .to_vec();
+        args.push(format!("--volume={}", self.st.volume));
+        args.extend(
+            [
+                "--volume-max=100",
+                "--demuxer-lavf-o=protocol_whitelist=[http,https,tls,tcp]",
+                "--stream-lavf-o=protocol_whitelist=[http,https,tls,tcp]",
+            ]
+            .map(String::from),
+        );
+        args.push(format!("--input-ipc-server={}", socket.display()));
+        args.push("--no-terminal".into());
+        args.push(format!("--audio-client-name={CLIENT_NAME}"));
+        if !self.st.output.is_empty() {
+            args.push(format!("--audio-device=pulse/{}", self.st.output));
+        }
+        args
+    }
+
+    /// The socket's directory has to exist before mpv binds in it, and `exec`
+    /// leaves mpv itself as the child.
+    fn start_mpv(&mut self) {
+        let (Some(dir), Some(socket)) = (self.socket_dir.clone(), self.socket_path()) else {
+            self.st.player_error = "Radio Atlas needs XDG_RUNTIME_DIR".into();
+            self.pending.clear();
+            self.st.station = None;
+            return;
+        };
+        self.stopping = false;
+        let argv = self.mpv_argv(&socket);
+        let child = async_process::Command::new("sh")
+            .args(["-c", "mkdir -p -m 700 \"$1\" && shift && exec \"$@\"", "sh"])
+            .arg(dir)
+            .args(argv)
+            .stdin(async_process::Stdio::null())
+            .stdout(async_process::Stdio::null())
+            .stderr(async_process::Stdio::null())
+            .kill_on_drop(true)
+            .spawn();
+        match child {
+            Ok(child) => {
+                self.mpv = Some(Mpv { child, reader: None, writer: None, attempts: 0, connect_at: Some(Instant::now() + CONNECT_EVERY) })
+            }
+            Err(_) => {
+                self.st.player_error = "Could not start the player".into();
+                self.pending.clear();
+                self.st.station = None;
+            }
+        }
+    }
+
+    async fn write(&mut self, command: Value) {
+        let Some(writer) = self.mpv.as_mut().and_then(|m| m.writer.as_mut()) else { return };
+        let line = format!("{}\n", json!({ "command": command }));
+        let _ = writer.write_all(line.as_bytes()).await;
+        let _ = writer.flush().await;
+    }
+
+    fn ready(&self) -> bool {
+        self.mpv.as_ref().is_some_and(|m| m.writer.is_some())
+    }
+
+    async fn send_mpv(&mut self, command: Value) {
+        if self.ready() {
+            self.write(command).await;
+            return;
+        }
+        self.pending.push(command);
+        if self.mpv.is_none() {
+            self.start_mpv();
+        }
+    }
+
+    async fn try_connect(&mut self) {
+        let Some(path) = self.socket_path() else { return };
+        let Some(mpv) = self.mpv.as_mut() else { return };
+        mpv.connect_at = None;
+        match Async::<UnixStream>::connect(path).await {
+            Ok(stream) => {
+                let (r, w) = split(stream);
+                mpv.reader = Some(BufReader::new(r).lines());
+                mpv.writer = Some(w);
+                mpv.attempts = 0;
+                for (i, prop) in ["pause", "volume", "mute", "media-title", "idle-active"].iter().enumerate() {
+                    self.write(json!(["observe_property", i + 1, prop])).await;
+                }
+                for command in std::mem::take(&mut self.pending) {
+                    self.write(command).await;
+                }
+            }
+            Err(_) => {
+                mpv.attempts += 1;
+                if mpv.attempts < CONNECT_TRIES {
+                    mpv.connect_at = Some(Instant::now() + CONNECT_EVERY);
+                } else {
+                    self.st.player_error = "Could not reach the player".into();
+                    let _ = mpv.child.kill();
+                }
+            }
+        }
+    }
+
+    fn on_mpv_exited(&mut self) {
+        let unexpected = !self.stopping && self.st.station.is_some();
+        let resume = self.resume.take();
+        self.active = false;
+        self.mpv = None;
+        self.pending.clear();
+        self.stopping = false;
+        self.stop_at = None;
+        self.st.station = None;
+        self.st.queue.clear();
+        self.st.mpv_paused = false;
+        self.st.muted = false;
+        self.st.title.clear();
+        self.st.loaded = false;
+        self.st.error.clear();
+        self.recorded.clear();
+        if unexpected {
+            self.st.player_error = "The player stopped unexpectedly".into();
+        }
+        if let Some((station, list)) = resume {
+            self.follow_up(Cmd::PlayFromSaved(station, list));
+        }
+    }
+
+    fn follow_up(&self, cmd: Cmd) {
+        let _ = self.follow.try_send(cmd);
+    }
+
+    fn failure(&self) -> String {
+        if self.st.loaded { "Stream disconnected" } else { "Station could not be played" }.into()
+    }
+
+    fn record_played(&mut self, station: &Station) {
+        if station.uuid.is_empty() || !self.writable {
+            return;
+        }
+        self.st.recent.retain(|s| s.uuid != station.uuid);
+        self.st.recent.insert(0, stations::saved_record(station));
+        self.st.recent.truncate(stations::MAX_RECENT);
+        self.save_state();
+    }
+
+    fn on_line(&mut self, line: &str) {
+        let Ok(msg) = serde_json::from_str::<Value>(line) else { return };
+        let Some(event) = msg.get("event").and_then(Value::as_str) else { return };
+        match event {
+            "property-change" => {
+                let data = msg.get("data");
+                match msg.get("name").and_then(Value::as_str) {
+                    Some("pause") => self.st.mpv_paused = data == Some(&Value::Bool(true)),
+                    Some("mute") => self.st.muted = data == Some(&Value::Bool(true)),
+                    Some("media-title") => {
+                        let raw = data.and_then(Value::as_str).unwrap_or("");
+                        self.st.title = raw.chars().map(|c| if c.is_control() { ' ' } else { c }).take(512).collect();
+                    }
+                    Some("idle-active") => {
+                        let idle = data == Some(&Value::Bool(true));
+                        if !idle {
+                            self.active = true;
+                        } else if self.active && self.st.station.is_some() && self.st.error.is_empty() {
+                            self.st.error = self.failure();
+                        }
+                    }
+                    Some("volume") => {
+                        if let Some(v) = data.and_then(Value::as_f64) {
+                            let v = v.round().clamp(0.0, 100.0) as i64;
+                            if v != self.st.volume {
+                                self.st.volume = v;
+                                self.save_at = Some(Instant::now() + SAVE_DELAY);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            "start-file" => {
+                self.st.loaded = false;
+                self.st.error.clear();
+            }
+            "file-loaded" => {
+                self.st.loaded = true;
+                if let Some(station) = self.st.station.clone()
+                    && station.uuid != self.recorded
+                {
+                    self.recorded = station.uuid.clone();
+                    self.record_played(&station);
+                }
+            }
+            "end-file" => {
+                let reason = msg.get("reason").and_then(Value::as_str);
+                // A live stream has no end, so eof is a dropped connection too.
+                if matches!(reason, Some("error" | "eof")) && self.st.station.is_some() {
+                    self.st.error = self.failure();
+                }
+                self.st.loaded = false;
+            }
+            _ => {}
+        }
+    }
+
+    async fn play(&mut self, station: Station, list: Vec<Station>) {
+        if !stations::playable(&station) {
+            self.st.player_error = "Station is unavailable or has an unsafe stream URL".into();
+            return;
+        }
+        let mut rows: Vec<Station> = list.into_iter().filter(stations::playable).collect();
+        if !rows.iter().any(|s| s.uuid == station.uuid) {
+            rows.insert(0, station.clone());
+        }
+        if self.stopping {
+            self.resume = Some((station, rows));
+            return;
+        }
+        self.st.queue = rows;
+        self.st.station = Some(station.clone());
+        self.st.error.clear();
+        self.st.player_error.clear();
+        self.st.title.clear();
+        self.st.loaded = false;
+        self.send_mpv(json!(["loadfile", station.url, "replace"])).await;
+        self.send_mpv(json!(["set_property", "pause", false])).await;
+        self.count_fetch(&station.uuid);
+    }
+
+    async fn step(&mut self, delta: i64) {
+        let Some(current) = self.st.station.clone() else { return };
+        let n = self.st.queue.len() as i64;
+        if n == 0 {
+            return;
+        }
+        let at = self.st.queue.iter().position(|s| s.uuid == current.uuid).map_or(-1, |i| i as i64);
+        let index = (((at + delta) % n) + n) % n;
+        let next = self.st.queue[index as usize].clone();
+        let list = self.st.queue.clone();
+        self.play(next, list).await;
+    }
+
+    async fn stop(&mut self) {
+        if self.mpv.is_none() {
+            return;
+        }
+        self.stopping = true;
+        if self.ready() {
+            self.write(json!(["quit"])).await;
+            self.stop_at = Some(Instant::now() + STOP_GRACE);
+        } else if let Some(mpv) = self.mpv.as_mut() {
+            let _ = mpv.child.kill();
+        }
+    }
+
+    // Every Radio Browser request runs in a task of its own, so a slow mirror
+    // never holds up what mpv is saying.
+
+    fn count_fetch(&self, uuid: &str) {
+        if !stations::is_uuid(uuid) {
+            return;
+        }
+        let (bases, uuid) = (self.bases.clone(), uuid.to_owned());
+        self.ctx.spawn(async move {
+            let url = format!("{}/json/url/{uuid}", discover(&bases).await[0]);
+            let args: Vec<String> = [
+                "curl", "--fail", "--silent", "--max-time", "4", "--proto", "=https", "--user-agent", USER_AGENT,
+                "--output", "/dev/null", &url,
+            ]
+            .map(String::from)
+            .to_vec();
+            let _ = curl(&args).await;
+        });
+    }
+
+    /// radio-player's refresh of a saved list: the stored URL plays at once,
+    /// and whatever Radio Browser now says about those stations replaces the
+    /// stored records for next time.
+    fn refresh_saved(&self, list: &[Station]) {
+        let uuids: Vec<String> = list.iter().map(|s| s.uuid.clone()).filter(|u| stations::is_uuid(u)).collect();
+        if uuids.is_empty() || uuids.join(",").len() > 4096 {
+            return;
+        }
+        let (bases, follow) = (self.bases.clone(), self.follow.clone());
+        self.ctx.spawn(async move {
+            if let Some(rows) = request(&bases, &stations::resolve_request(&uuids)).await
+                && !rows.is_empty()
+            {
+                let _ = follow.try_send(Cmd::Refreshed(rows));
+            }
+        });
+    }
+
+    fn tune_random(&mut self) {
+        if self.random_busy {
+            return;
+        }
+        self.random_busy = true;
+        let (bases, follow) = (self.bases.clone(), self.follow.clone());
+        self.ctx.spawn(async move {
+            let rows = request(&bases, &stations::random_request()).await;
+            let _ = follow.try_send(Cmd::RandomRows(rows));
+        });
+    }
+
+    async fn random_rows(&mut self, rows: Option<Vec<Station>>) {
+        self.random_busy = false;
+        let Some(rows) = rows else {
+            self.st.player_error = "Radio Browser is unavailable. Try again shortly.".into();
+            return;
+        };
+        let mut excluded: Vec<String> = Vec::new();
+        let mut add = |uuid: &str| {
+            if stations::is_uuid(uuid) && !excluded.iter().any(|e| e == uuid) {
+                excluded.push(uuid.to_owned());
+            }
+        };
+        add(self.st.station.as_ref().map_or("", |s| s.uuid.as_str()));
+        add(&self.last_random);
+        for s in &self.st.recent {
+            add(&s.uuid);
+        }
+        excluded.truncate(32);
+        let picked = stations::pick_random(&rows, &excluded, &mut fastrand::f64);
+        if let Some(first) = picked.first().cloned() {
+            self.last_random = first.uuid.clone();
+            self.play(first, picked).await;
+        }
+    }
+
+    async fn handle(&mut self, cmd: Cmd) {
+        match cmd {
+            Cmd::PlayFromSaved(station, list) => {
+                self.play(station, list.clone()).await;
+                self.refresh_saved(&list);
+            }
+            Cmd::RandomRows(rows) => self.random_rows(rows).await,
+            Cmd::Refreshed(rows) => {
+                let swap = |s: &Station| rows.iter().find(|r| r.uuid == s.uuid).map_or_else(|| s.clone(), stations::saved_record);
+                self.st.favorites = self.st.favorites.iter().map(swap).collect();
+                self.st.recent = self.st.recent.iter().map(swap).collect();
+                self.save_state();
+            }
+            Cmd::Toggle => {
+                let Some(station) = self.st.station.clone() else { return };
+                if self.st.error.is_empty() {
+                    self.send_mpv(json!(["cycle", "pause"])).await;
+                } else {
+                    let list = self.st.queue.clone();
+                    self.play(station, list).await;
+                }
+            }
+            Cmd::Next => self.step(1).await,
+            Cmd::Previous => self.step(-1).await,
+            Cmd::Stop => self.stop().await,
+            Cmd::Random => self.tune_random(),
+            Cmd::SetVolume(v) => {
+                let v = v.round().clamp(0.0, 100.0) as i64;
+                if v == self.st.volume {
+                    return;
+                }
+                self.st.volume = v;
+                if self.ready() {
+                    self.write(json!(["set_property", "volume", v])).await;
+                }
+                self.save_at = Some(Instant::now() + SAVE_DELAY);
+            }
+        }
+    }
+
+    fn deadline(&self) -> Option<Instant> {
+        [self.save_at, self.stop_at, self.mpv.as_ref().and_then(|m| m.connect_at)].into_iter().flatten().min()
+    }
+
+    async fn next_event(&mut self, rx: &async_channel::Receiver<Cmd>) -> Ev {
+        let deadline = self.deadline();
+        let timer = async {
+            match deadline {
+                Some(at) => {
+                    Timer::at(at).await;
+                    Ev::Timer
+                }
+                None => std::future::pending().await,
+            }
+        };
+        let cmd = async { Ev::Cmd(rx.recv().await.ok()) };
+        match self.mpv.as_mut() {
+            Some(Mpv { child, reader, .. }) => {
+                let line = async {
+                    match reader.as_mut() {
+                        Some(r) => Ev::Line(r.next().await.and_then(Result::ok)),
+                        None => std::future::pending().await,
+                    }
+                };
+                let exit = async {
+                    let _ = child.status().await;
+                    Ev::Exit
+                };
+                cmd.or(timer).or(line).or(exit).await
+            }
+            None => cmd.or(timer).await,
+        }
+    }
+}
+
+pub async fn run(ctx: Ctx) {
+    let (tx, rx) = async_channel::unbounded();
+    if CMD.set(tx.clone()).is_err() {
+        return;
+    }
+    let mut radio = Radio {
+        ctx: ctx.clone(),
+        st: State::default(),
+        mpv: None,
+        socket_dir: runtime_dir().map(|d| d.join("formalshell-radio-atlas")),
+        pending: Vec::new(),
+        stopping: false,
+        resume: None,
+        active: false,
+        recorded: String::new(),
+        writable: false,
+        save_at: None,
+        stop_at: None,
+        bases: Bases::default(),
+        last_random: String::new(),
+        random_busy: false,
+        follow: tx,
+    };
+    radio.load_state();
+    // formalshell.service stops with KillMode=process, so a shell restart
+    // leaves the last shell's mpv playing on this socket with nothing left to
+    // control it. One connect tells it to quit; no answer means nothing was
+    // there.
+    if let Some(path) = radio.socket_path()
+        && let Ok(mut stream) = Async::<UnixStream>::connect(path).await
+    {
+        let _ = stream.write_all(b"{\"command\":[\"quit\"]}\n").await;
+        let _ = stream.flush().await;
+    }
+    radio.publish();
+    let mut last = radio.st.clone();
+    loop {
+        match radio.next_event(&rx).await {
+            Ev::Cmd(Some(cmd)) => radio.handle(cmd).await,
+            Ev::Cmd(None) => return,
+            Ev::Line(Some(line)) => radio.on_line(&line),
+            Ev::Line(None) => {
+                if let Some(m) = radio.mpv.as_mut() {
+                    m.reader = None;
+                    m.writer = None;
+                }
+            }
+            Ev::Exit => radio.on_mpv_exited(),
+            Ev::Timer => {
+                let now = Instant::now();
+                if radio.save_at.is_some_and(|t| t <= now) {
+                    radio.save_at = None;
+                    radio.save_state();
+                }
+                if radio.stop_at.is_some_and(|t| t <= now) {
+                    radio.stop_at = None;
+                    if let Some(m) = radio.mpv.as_mut() {
+                        let _ = m.child.kill();
+                    }
+                }
+                if radio.mpv.as_ref().and_then(|m| m.connect_at).is_some_and(|t| t <= now) {
+                    radio.try_connect().await;
+                }
+            }
+        }
+        if radio.st != last {
+            last = radio.st.clone();
+            radio.publish();
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tuned(title: &str) -> State {
+        State {
+            station: Some(Station { uuid: "u".into(), name: "Smoke Radio".into(), url: "http://h/live/station.mp3?x=1".into(), ..Station::default() }),
+            title: title.into(),
+            ..State::default()
+        }
+    }
+
+    #[test]
+    fn the_stream_file_name_is_not_a_track() {
+        assert_eq!(tuned("station.mp3").track_title(), "");
+        assert_eq!(tuned("smoke radio").track_title(), "");
+        assert_eq!(tuned("").track_title(), "");
+        assert_eq!(tuned("Artist - Song").track_title(), "Artist - Song");
+    }
+
+    #[test]
+    fn the_label_falls_back_to_the_station_and_strips_controls() {
+        assert_eq!(tuned("station.mp3").label(), "Smoke Radio");
+        assert_eq!(tuned("A\u{1}B").label(), "A B");
+        assert_eq!(State::default().label(), "");
+    }
+
+    #[test]
+    fn a_failed_stream_reads_as_paused() {
+        let mut st = tuned("");
+        assert!(!st.paused());
+        st.error = "Stream disconnected".into();
+        assert!(st.paused());
+        assert!(st.running());
+    }
+
+    #[test]
+    fn status_words_the_ipc_reply() {
+        let s = tuned("Artist - Song").status();
+        assert_eq!(s["running"], true);
+        assert_eq!(s["station"], "Smoke Radio");
+        assert_eq!(s["label"], "Artist - Song");
+        assert_eq!(s["volume"], 70);
+        assert_eq!(s["queue"], 0);
+    }
+}

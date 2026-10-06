@@ -16,6 +16,7 @@
 # slot out of its row rather than reserve a blank square.
 leg_media_flag="--media"
 leg_media_order=170
+leg_media_rust=1
 leg_media_needs="mpv ffmpeg convert"
 
 # Neither binary is one the scaffold resolves for itself. Same shape as its

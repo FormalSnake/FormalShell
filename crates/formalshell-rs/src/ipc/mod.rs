@@ -7,6 +7,7 @@
 //! [`registry`]; `formalshell-ipc` (`src/bin/formalshell-ipc.rs`) is the
 //! client.
 
+mod airplay;
 mod bar;
 #[cfg(test)]
 mod cli;
@@ -17,9 +18,11 @@ mod golden;
 mod media;
 mod overnight;
 mod panel;
+mod radio;
 pub mod registry;
 mod theme;
 mod tray;
+mod visualizer;
 pub mod wire;
 mod workspaces;
 
@@ -48,6 +51,9 @@ fn registry() ->&'static Registry<App> {
             bar::target(),
             panel::target(),
             media::target(),
+            radio::target(),
+            airplay::target(),
+            visualizer::target(),
             tray::target(),
             overnight::target(),
             earbuds::target(),

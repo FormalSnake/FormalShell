@@ -48,6 +48,8 @@ pub enum Action {
     Tray { id: String, click: TrayClick, offset: f64 },
     /// A write to a device service (a volume step, a mute, a radio).
     Device(crate::services::devices::Op),
+    MediaNext,
+    MediaPrevious,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -163,6 +165,9 @@ pub trait Cell {
     fn wheel(&mut self, _up: bool, _env: &Env) -> Action {
         Action::None
     }
+    /// Whether the window this cell is on is on screen, told on every paint
+    /// (a cell running a child process only while it is seen).
+    fn visible(&mut self, _on: bool) {}
     /// Whether the panel or second bar this cell opens is up; true when
     /// the view changed with it.
     fn set_open(&mut self, _open: bool) -> bool {
@@ -232,6 +237,11 @@ pub struct Look {
     pub warning: Rgba,
     pub primary: Rgba,
     pub background: Rgba,
+    /// The flat tracks' trough, its thickness and its corner (`muted`,
+    /// `trackThickness`, `radiusSm`).
+    pub muted_fill: Rgba,
+    pub track: f64,
+    pub radius_sm: f64,
     pub radius: f32,
     pub active_fill: Rgba,
     pub selected_fill: Rgba,
@@ -292,6 +302,9 @@ impl Look {
             warning: theme.colors.get("warning"),
             primary: theme.colors.get("primary"),
             background: theme.colors.get("background"),
+            muted_fill: theme.colors.get("muted"),
+            track: s.track_thickness,
+            radius_sm: theme.radii.sm,
             radius: theme.box_radius(&theme.box_style("cell", None), s.bar_cell_height) as f32,
             active_fill: cell("active").fill,
             selected_fill: cell("selected").fill,

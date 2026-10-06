@@ -2,7 +2,9 @@
 //! diff applies to it; the UI thread is the only writer, through
 //! [`Store::apply`].
 
-use crate::services::{appicon, barpaint, clock, commands, config, devices, herdr, hyprland, media, state, theme, tray, wallpaper};
+use crate::services::{
+    appicon, barpaint, clock, commands, config, devices, herdr, hyprland, media, state, theme, tray, visualizer, wallpaper,
+};
 
 #[derive(Default)]
 pub struct Store {
@@ -12,6 +14,7 @@ pub struct Store {
     pub state: state::State,
     pub theme: theme::State,
     pub media: media::State,
+    pub visualizer: visualizer::State,
     pub devices: devices::State,
     pub commands: commands::State,
     pub bar_paint: barpaint::State,
@@ -29,6 +32,7 @@ pub enum Diff {
     State(state::Diff),
     Theme(theme::Diff),
     Media(media::Diff),
+    Visualizer(visualizer::Diff),
     Devices(devices::Diff),
     Commands(commands::Diff),
     BarPaint(barpaint::Diff),
@@ -47,6 +51,7 @@ pub enum Topic {
     State,
     Theme,
     Media,
+    Visualizer,
     Devices,
     Commands,
     BarPaint,
@@ -66,6 +71,7 @@ impl Store {
             Diff::Hyprland(d) => self.hyprland.apply(d).then_some(Topic::Hyprland),
             Diff::Theme(d) => self.theme.apply(d).then_some(Topic::Theme),
             Diff::Media(d) => self.media.apply(d).then_some(Topic::Media),
+            Diff::Visualizer(d) => self.visualizer.apply(d).then_some(Topic::Visualizer),
             Diff::Devices(d) => self.devices.apply(d).then_some(Topic::Devices),
             Diff::Commands(d) => self.commands.apply(d).then_some(Topic::Commands),
             Diff::BarPaint(d) => self.bar_paint.apply(d).then_some(Topic::BarPaint),

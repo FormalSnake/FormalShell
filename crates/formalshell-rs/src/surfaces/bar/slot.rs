@@ -206,6 +206,7 @@ impl Slot {
         visible: bool,
         now: Instant,
     ) {
+        self.cell.visible(visible);
         let rect = self.rect;
         let fade = self.fade.value(now).clamp(0.0, 1.0) as f32 * alpha;
         let scroll = self.scroll(kit, visible, now);

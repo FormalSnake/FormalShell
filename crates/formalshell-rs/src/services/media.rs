@@ -1,16 +1,87 @@
-//! MPRIS players on the session bus (fs-mpris), as far as the bar reads
-//! them: who is playing what. The radio, AirPlay and iPhone sources and the
-//! controls join here with the media panel.
+//! MediaService.qml: every source the bar reads now-playing from, behind one
+//! active pick. Four kinds share the row list: an MPRIS player (fs-mpris),
+//! the radio's own mpv (`radio`), the phone's Apple Media Service (`ams`) and
+//! AirPlay's receiver (`airplay`). Apps playing with no MPRIS (`stream:`
+//! rows) arrive with the audio graph.
+//!
+//! `selected` is the one piece of state the UI owns; every source's own
+//! state is published whole by its service.
 
+use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 
-use fs_mpris::{Mpris, PlayerState};
+use fs_media::media::{self as pick, LabelledRow, PlayerRow};
+use fs_mpris::{LoopStatus, Mpris, PlayerState};
 use serde_json::{Value, json};
 
+use super::{airplay, ams, radio, visualizer};
 use crate::runtime::Ctx;
 use crate::store;
 
-#[derive(Clone, Debug, Default, PartialEq)]
+/// The settings keys the media services act on, handed over by the UI thread
+/// whenever settings.json reads differently.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Settings {
+    pub airplay_enable: bool,
+    pub airplay_name: String,
+    pub iphone_enable: bool,
+    pub motion: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self { airplay_enable: false, airplay_name: String::new(), iphone_enable: true, motion: true }
+    }
+}
+
+impl Settings {
+    fn read(settings: &Value) -> Self {
+        let at = |path: &str| {
+            let mut node = settings;
+            for part in path.split('.') {
+                node = node.get(part)?;
+            }
+            Some(node)
+        };
+        Self {
+            airplay_enable: at("airplay.enable") == Some(&Value::Bool(true)),
+            airplay_name: at("airplay.name").and_then(Value::as_str).unwrap_or("").to_owned(),
+            iphone_enable: at("iphone.enable") != Some(&Value::Bool(false)),
+            motion: at("motion.enabled") != Some(&Value::Bool(false)),
+        }
+    }
+}
+
+struct Hub {
+    last: Settings,
+    subscribers: Vec<async_channel::Sender<Settings>>,
+}
+
+static HUB: Mutex<Hub> = Mutex::new(Hub { last: Settings { airplay_enable: false, airplay_name: String::new(), iphone_enable: true, motion: true }, subscribers: Vec::new() });
+
+/// A service's stream of settings, seeded with the last ones handed over.
+pub fn subscribe() -> async_channel::Receiver<Settings> {
+    let (tx, rx) = async_channel::unbounded();
+    if let Ok(mut hub) = HUB.lock() {
+        let _ = tx.try_send(hub.last.clone());
+        hub.subscribers.push(tx);
+    }
+    rx
+}
+
+/// The UI thread's side: called with the whole settings document.
+pub fn configure(settings: &Value) {
+    let next = Settings::read(settings);
+    visualizer::set_motion(next.motion);
+    let Ok(mut hub) = HUB.lock() else { return };
+    if hub.last == next {
+        return;
+    }
+    hub.last = next.clone();
+    hub.subscribers.retain(|tx| tx.try_send(next.clone()).is_ok());
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct Player {
     pub id: String,
     pub identity: String,
@@ -19,13 +90,17 @@ pub struct Player {
     pub album: String,
     pub art_url: String,
     pub playing: bool,
-    /// Seconds, as Quickshell reports them.
+    /// Seconds at `at`; `position_now` carries it forward while playing.
     pub position: f64,
+    pub at: Instant,
     pub length: f64,
     pub can_seek: bool,
     pub can_raise: bool,
+    pub can_toggle: bool,
+    pub can_next: bool,
+    pub can_previous: bool,
     pub shuffle: Option<bool>,
-    pub loop_status: Option<&'static str>,
+    pub loop_status: Option<LoopStatus>,
     pub volume: Option<f64>,
 }
 
@@ -40,79 +115,404 @@ impl Player {
             art_url: state.metadata.art_url.clone(),
             playing: state.is_playing(),
             position: state.position(now).as_secs_f64(),
+            at: now,
             length: state.length(now).as_secs_f64(),
-            can_seek: state.can_seek_now(),
+            can_seek: state.can_seek_now() && state.position_supported,
             can_raise: state.can_raise,
+            can_toggle: state.can_toggle_playing(),
+            can_next: state.can_go_next,
+            can_previous: state.can_go_previous,
             shuffle: state.shuffle,
-            loop_status: state.loop_status.map(|l| l.as_str()),
+            loop_status: state.loop_status,
             volume: state.volume,
         }
     }
+
+    pub fn position_now(&self, now: Instant) -> f64 {
+        if !self.playing {
+            return self.position;
+        }
+        let at = self.position + now.saturating_duration_since(self.at).as_secs_f64();
+        if self.length > 0.0 { at.min(self.length) } else { at }
+    }
+
+    fn same(&self, other: &Self) -> bool {
+        Self { at: other.at, position: other.position, ..self.clone() } == *other
+    }
+}
+
+/// What every bar and IPC read of "the active source" resolves to.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Active {
+    pub id: String,
+    pub kind: &'static str,
+    pub identity: String,
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub art_url: String,
+    pub playing: bool,
+    pub position: f64,
+    pub length: f64,
+    pub can_seek: bool,
+    pub can_raise: bool,
+    pub shuffle: Option<bool>,
+    pub loop_name: Option<&'static str>,
+    pub volume: Option<f64>,
 }
 
 #[derive(Default)]
 pub struct State {
-    pub players: Vec<Player>,
-    /// MediaModel.pickPlayerId with no selection: the first playing, else
-    /// the first.
-    pub active: Option<Player>,
+    pub mpris: Vec<Player>,
+    pub radio: radio::State,
+    pub airplay: airplay::State,
+    pub ams: ams::State,
+    /// A bus name, "radio", "iphone" or "airplay"; "" is auto.
+    pub selected: String,
 }
 
-pub struct Diff(pub Vec<Player>, pub Option<Player>);
+pub enum Diff {
+    Mpris(Vec<Player>),
+    Radio(radio::State),
+    Airplay(airplay::State),
+    Ams(ams::State),
+}
+
+/// JS prints a whole number without its fraction.
+fn num(v: f64) -> Value {
+    if v.fract() == 0.0 && v.abs() < 1e15 { json!(v as i64) } else { json!(v) }
+}
+
+fn loop_name(l: LoopStatus) -> &'static str {
+    match l {
+        LoopStatus::None => "none",
+        LoopStatus::Track => "track",
+        LoopStatus::Playlist => "playlist",
+    }
+}
 
 impl State {
-    pub fn apply(&mut self, Diff(players, active): Diff) -> bool {
-        if self.players == players && self.active == active {
-            return false;
+    pub fn apply(&mut self, diff: Diff) -> bool {
+        let changed = match diff {
+            Diff::Mpris(next) => {
+                let same = self.mpris.len() == next.len() && self.mpris.iter().zip(&next).all(|(a, b)| a.same(b));
+                self.mpris = next;
+                !same
+            }
+            Diff::Radio(next) => std::mem::replace(&mut self.radio, next) != self.radio,
+            Diff::Airplay(next) => std::mem::replace(&mut self.airplay, next) != self.airplay,
+            Diff::Ams(next) => {
+                let same = ams_same(&self.ams, &next);
+                self.ams = next;
+                !same
+            }
+        };
+        if changed {
+            self.sync_gate();
         }
-        self.players = players;
-        self.active = active;
-        true
+        changed
     }
 
-    /// The title the bar shows: the track, or the player's own name.
-    pub fn title(&self) -> Option<String> {
-        let p = self.active.as_ref()?;
-        Some(if p.title.is_empty() { p.identity.clone() } else { p.title.clone() })
+    pub fn select(&mut self, id: &str) {
+        self.selected = id.to_owned();
+        self.sync_gate();
     }
 
-    /// MediaIpc.qml's `status`, for an MPRIS source.
+    fn rows(&self) -> Vec<PlayerRow> {
+        let mut rows: Vec<PlayerRow> = self
+            .mpris
+            .iter()
+            .map(|p| PlayerRow {
+                id: p.id.clone(),
+                kind: Some("mpris".into()),
+                auto: None,
+                identity: Some(p.identity.clone()),
+                is_playing: p.playing,
+            })
+            .collect();
+        let row = |id: &str, kind: &str, identity: &str, playing: bool| PlayerRow {
+            id: id.into(),
+            kind: Some(kind.into()),
+            auto: None,
+            identity: Some(identity.into()),
+            is_playing: playing,
+        };
+        if self.radio.running() {
+            rows.push(row("radio", "radio", "Radio", !self.radio.paused()));
+        }
+        if self.ams.listed() {
+            rows.push(row("iphone", "iphone", "iPhone", self.ams.playing()));
+        }
+        // isPlaying stays false: UxPlay reports no pause state at all.
+        if self.airplay.active && !self.airplay.title.is_empty() {
+            rows.push(row("airplay", "airplay", "AirPlay", false));
+        }
+        rows
+    }
+
+    pub fn players(&self) -> Vec<LabelledRow> {
+        pick::with_labels(&self.rows())
+    }
+
+    pub fn active_id(&self) -> String {
+        pick::pick_player_id(&self.rows(), &self.selected)
+    }
+
+    pub fn active(&self) -> Option<Active> {
+        self.active_at(Instant::now())
+    }
+
+    fn active_at(&self, now: Instant) -> Option<Active> {
+        let id = self.active_id();
+        if id.is_empty() {
+            return None;
+        }
+        let label = self.players().into_iter().find(|r| r.id == id).map(|r| r.label).unwrap_or_default();
+        let base = Active { id: id.clone(), ..Active::default() };
+        Some(match id.as_str() {
+            "radio" => {
+                let r = &self.radio;
+                let track = r.track_title();
+                let name = r.station.as_ref().map(|s| s.name.clone()).unwrap_or_default();
+                Active {
+                    kind: "radio",
+                    identity: label,
+                    title: if track.is_empty() { name.clone() } else { track.clone() },
+                    artist: if track.is_empty() { String::new() } else { name },
+                    playing: !r.paused(),
+                    volume: Some(r.volume as f64 / 100.0),
+                    ..base
+                }
+            }
+            "iphone" => {
+                let a = &self.ams;
+                Active {
+                    kind: "iphone",
+                    identity: label,
+                    title: a.title.clone(),
+                    artist: a.artist.clone(),
+                    album: a.album.clone(),
+                    playing: a.playing(),
+                    position: a.position(now),
+                    length: a.duration,
+                    volume: (a.volume >= 0.0).then(|| pick::clamp_volume(a.volume)),
+                    ..base
+                }
+            }
+            "airplay" => {
+                let a = &self.airplay;
+                Active { kind: "airplay", identity: label, title: a.title.clone(), artist: a.artist.clone(), album: a.album.clone(), ..base }
+            }
+            _ => {
+                let p = self.mpris.iter().find(|p| p.id == id)?;
+                Active {
+                    kind: "mpris",
+                    identity: p.identity.clone(),
+                    title: p.title.clone(),
+                    artist: p.artist.clone(),
+                    album: p.album.clone(),
+                    art_url: p.art_url.clone(),
+                    playing: p.playing,
+                    position: p.position_now(now),
+                    length: p.length,
+                    can_seek: p.can_seek,
+                    can_raise: p.can_raise,
+                    shuffle: p.shuffle,
+                    loop_name: p.loop_status.map(loop_name),
+                    volume: p.volume.map(pick::clamp_volume),
+                    ..base
+                }
+            }
+        })
+    }
+
+    /// Feeds the visualizer's run gate, which the UI thread owns the inputs of.
+    fn sync_gate(&self) {
+        let a = self.active();
+        let (playing, tempo) = a.as_ref().map_or((false, false), |a| (a.playing, a.kind == "iphone"));
+        let (artist, title) = a.map_or_else(Default::default, |a| (a.artist, a.title));
+        visualizer::set_media(playing, tempo, &artist, &title);
+    }
+
+    /// MediaIpc.qml's `status`.
     pub fn status(&self) -> Value {
-        let p = self.active.clone().unwrap_or_default();
-        let available = self.active.is_some();
+        let a = self.active().unwrap_or_default();
+        let available = !a.id.is_empty();
         json!({
             "available": available,
-            "id": p.id,
-            "kind": if available { "mpris" } else { "" },
-            "selectedId": "",
+            "id": a.id,
+            "kind": a.kind,
+            "selectedId": self.selected,
             "output": "",
             "canRoute": false,
-            "playerCount": self.players.len(),
-            "identity": p.identity,
-            "title": p.title,
-            "artist": p.artist,
-            "album": p.album,
-            "artUrl": p.art_url,
-            "isPlaying": p.playing,
-            "position": p.position,
-            "length": p.length,
-            "canSeek": p.can_seek,
-            "canRaise": p.can_raise,
-            "shuffleSupported": p.shuffle.is_some(),
-            "shuffle": p.shuffle.unwrap_or(false),
-            "loopSupported": p.loop_status.is_some(),
-            "loop": p.loop_status.unwrap_or("None"),
-            "volumeSupported": p.volume.is_some(),
-            "volume": p.volume.unwrap_or(0.0),
+            "playerCount": self.players().len(),
+            "identity": a.identity,
+            "title": a.title,
+            "artist": a.artist,
+            "album": a.album,
+            "artUrl": a.art_url,
+            "isPlaying": a.playing,
+            "position": num(a.position),
+            "length": num(a.length),
+            "canSeek": a.can_seek,
+            "canRaise": a.can_raise,
+            "shuffleSupported": a.shuffle.is_some(),
+            "shuffle": a.shuffle.unwrap_or(false),
+            "loopSupported": a.loop_name.is_some(),
+            "loop": a.loop_name.unwrap_or("none"),
+            "volumeSupported": a.volume.is_some(),
+            "volume": num(a.volume.unwrap_or(0.0)),
         })
+    }
+
+    /// MediaIpc.qml's `players`.
+    pub fn players_json(&self) -> Value {
+        Value::Array(
+            self.players()
+                .into_iter()
+                .map(|r| {
+                    let mut row = serde_json::Map::new();
+                    row.insert("id".into(), r.id.into());
+                    row.insert("kind".into(), r.kind.into());
+                    row.insert("auto".into(), r.auto.into());
+                    if let Some(identity) = r.identity {
+                        row.insert("identity".into(), identity.into());
+                    }
+                    row.insert("label".into(), r.label.into());
+                    row.insert("isPlaying".into(), r.is_playing.into());
+                    Value::Object(row)
+                })
+                .collect(),
+        )
+    }
+
+    // --- Controls, each gated on what the active source can do ----------
+
+    fn mpris_active(&self) -> Option<&Player> {
+        let id = self.active_id();
+        self.mpris.iter().find(|p| p.id == id)
+    }
+
+    pub fn play_pause(&self) {
+        match self.active_id().as_str() {
+            "radio" => radio::send(radio::Cmd::Toggle),
+            "iphone" => {
+                ams::command("toggle");
+            }
+            _ => {
+                if let Some(p) = self.mpris_active().filter(|p| p.can_toggle) {
+                    mpris_send(Cmd::PlayPause(p.id.clone()));
+                }
+            }
+        }
+    }
+
+    pub fn next(&self) {
+        match self.active_id().as_str() {
+            "radio" => radio::send(radio::Cmd::Next),
+            "iphone" => {
+                ams::command("next");
+            }
+            _ => {
+                if let Some(p) = self.mpris_active().filter(|p| p.can_next) {
+                    mpris_send(Cmd::Next(p.id.clone()));
+                }
+            }
+        }
+    }
+
+    pub fn previous(&self) {
+        match self.active_id().as_str() {
+            "radio" => radio::send(radio::Cmd::Previous),
+            "iphone" => {
+                ams::command("prev");
+            }
+            _ => {
+                if let Some(p) = self.mpris_active().filter(|p| p.can_previous) {
+                    mpris_send(Cmd::Previous(p.id.clone()));
+                }
+            }
+        }
+    }
+
+    pub fn set_shuffle(&self, on: bool) {
+        if let Some(p) = self.mpris_active().filter(|p| p.shuffle.is_some()) {
+            mpris_send(Cmd::Shuffle(p.id.clone(), on));
+        }
+    }
+
+    pub fn set_loop(&self, name: &str) {
+        let status = match name {
+            "track" => LoopStatus::Track,
+            "playlist" => LoopStatus::Playlist,
+            _ => LoopStatus::None,
+        };
+        if let Some(p) = self.mpris_active().filter(|p| p.loop_status.is_some()) {
+            mpris_send(Cmd::Loop(p.id.clone(), status));
+        }
+    }
+
+    /// 0..1, the player's own scale; the radio's mpv takes 0..100 and the
+    /// phone a step in whichever direction the request moves.
+    pub fn set_volume(&self, v: f64) {
+        let v = pick::clamp_volume(v);
+        let Some(a) = self.active() else { return };
+        match a.kind {
+            "radio" => radio::send(radio::Cmd::SetVolume(v * 100.0)),
+            "iphone" => {
+                if let Some(now) = a.volume
+                    && v != now
+                {
+                    ams::command(if v > now { "volup" } else { "voldown" });
+                }
+            }
+            "mpris" => mpris_send(Cmd::Volume(a.id, v)),
+            _ => {}
+        }
+    }
+
+    pub fn raise(&self) {
+        if let Some(p) = self.mpris_active().filter(|p| p.can_raise) {
+            mpris_send(Cmd::Raise(p.id.clone()));
+        }
+    }
+}
+
+fn ams_same(a: &ams::State, b: &ams::State) -> bool {
+    a.installed == b.installed
+        && a.available == b.available
+        && a.title == b.title
+        && a.artist == b.artist
+        && a.album == b.album
+        && a.duration == b.duration
+        && a.playback == b.playback
+        && a.volume == b.volume
+        && a.elapsed == b.elapsed
+        && a.error == b.error
+}
+
+enum Cmd {
+    PlayPause(String),
+    Next(String),
+    Previous(String),
+    Shuffle(String, bool),
+    Loop(String, LoopStatus),
+    Volume(String, f64),
+    Raise(String),
+}
+
+static CMD: OnceLock<async_channel::Sender<Cmd>> = OnceLock::new();
+
+fn mpris_send(cmd: Cmd) {
+    if let Some(tx) = CMD.get() {
+        let _ = tx.try_send(cmd);
     }
 }
 
 fn publish(ctx: &Ctx, mpris: &Mpris) {
     let now = Instant::now();
     let players: Vec<Player> = mpris.players().map(|p| Player::from(p, now)).collect();
-    let active = mpris.active(None).map(|p| Player::from(p, now));
-    ctx.publish(store::Diff::Media(Diff(players, active)));
+    ctx.publish(store::Diff::Media(Diff::Mpris(players)));
 }
 
 pub async fn run(ctx: Ctx) {
@@ -124,8 +524,117 @@ pub async fn run(ctx: Ctx) {
         Ok(mpris) => mpris,
         Err(err) => return eprintln!("media: {err}"),
     };
+    let (tx, rx) = async_channel::unbounded();
+    let _ = CMD.set(tx);
+    let controls = mpris.controls();
+    ctx.spawn(async move {
+        while let Ok(cmd) = rx.recv().await {
+            let _ = match cmd {
+                Cmd::PlayPause(id) => controls.play_pause(&id).await,
+                Cmd::Next(id) => controls.next(&id).await,
+                Cmd::Previous(id) => controls.previous(&id).await,
+                Cmd::Shuffle(id, on) => controls.set_shuffle(&id, on).await,
+                Cmd::Loop(id, status) => controls.set_loop_status(&id, status).await,
+                Cmd::Volume(id, v) => controls.set_volume(&id, v).await,
+                Cmd::Raise(id) => controls.raise(&id).await,
+            };
+        }
+    });
     publish(&ctx, &mpris);
     while mpris.next().await.is_some() {
         publish(&ctx, &mpris);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn mpris(id: &str, playing: bool) -> Player {
+        Player {
+            id: id.into(),
+            identity: "mpv".into(),
+            title: "Song".into(),
+            artist: "Band".into(),
+            album: String::new(),
+            art_url: String::new(),
+            playing,
+            position: 5.0,
+            at: Instant::now(),
+            length: 100.0,
+            can_seek: true,
+            can_raise: false,
+            can_toggle: true,
+            can_next: true,
+            can_previous: true,
+            shuffle: Some(true),
+            loop_status: Some(LoopStatus::Track),
+            volume: Some(0.3),
+        }
+    }
+
+    fn radio_on() -> radio::State {
+        radio::State {
+            station: Some(fs_media::radio::stations::Station { uuid: "r".into(), name: "Smoke Radio".into(), url: "http://h/s".into(), ..Default::default() }),
+            ..radio::State::default()
+        }
+    }
+
+    #[test]
+    fn nothing_playing_is_honestly_unavailable() {
+        let s = State::default().status();
+        assert_eq!(s["available"], false);
+        assert_eq!(s["kind"], "");
+        assert_eq!(s["loop"], "none");
+    }
+
+    #[test]
+    fn an_mpris_player_reports_its_own_capabilities_lowercase() {
+        let s = State { mpris: vec![mpris("org.mpris.MediaPlayer2.mpv", true)], ..State::default() };
+        let status = s.status();
+        assert_eq!(status["kind"], "mpris");
+        assert_eq!(status["loop"], "track");
+        assert_eq!(status["shuffle"], true);
+        assert_eq!(status["volume"], 0.3);
+        assert_eq!(status["playerCount"], 1);
+    }
+
+    #[test]
+    fn the_playing_source_wins_and_a_selection_overrides_it() {
+        let mut s = State { mpris: vec![mpris("org.mpris.MediaPlayer2.mpv", false)], radio: radio_on(), ..State::default() };
+        assert_eq!(s.active_id(), "radio");
+        let a = s.active().unwrap();
+        assert_eq!((a.kind, a.identity.as_str(), a.title.as_str()), ("radio", "Radio", "Smoke Radio"));
+        s.selected = "org.mpris.MediaPlayer2.mpv".into();
+        assert_eq!(s.active_id(), "org.mpris.MediaPlayer2.mpv");
+        s.selected = "gone".into();
+        assert_eq!(s.active_id(), "radio");
+    }
+
+    #[test]
+    fn airplay_is_listed_only_with_a_title_and_is_never_playing() {
+        let mut s = State { airplay: airplay::State { active: true, ..airplay::State::default() }, ..State::default() };
+        assert!(s.players().is_empty());
+        s.airplay.title = "Waves".into();
+        let rows = s.players();
+        assert_eq!((rows[0].id.as_str(), rows[0].label.as_str(), rows[0].is_playing), ("airplay", "AirPlay", false));
+        assert_eq!(s.status()["kind"], "airplay");
+    }
+
+    #[test]
+    fn players_keep_the_wire_keys() {
+        let s = State { radio: radio_on(), ..State::default() };
+        assert_eq!(
+            s.players_json().to_string(),
+            r#"[{"id":"radio","kind":"radio","auto":true,"identity":"Radio","label":"Radio","isPlaying":true}]"#
+        );
+    }
+
+    #[test]
+    fn settings_read_their_defaults() {
+        assert_eq!(Settings::read(&json!({})), Settings::default());
+        let s = Settings::read(&json!({"airplay": {"enable": true, "name": "Mac"}, "iphone": {"enable": false}, "motion": {"enabled": false}}));
+        assert!(s.airplay_enable && !s.iphone_enable && !s.motion);
+        assert_eq!(s.airplay_name, "Mac");
     }
 }

@@ -8,10 +8,10 @@
 # compositor is involved: what is recorded is qs's own argument parsing,
 # type conversion, error strings, output framing and exit codes. `debug`,
 # `theme` and `wallpaper` carry DebugIpc.qml's, ThemeIpc.qml's and
-# WallpaperIpc.qml's exact signatures, `bar`, `panel`, `media`, `overnight`,
-# `earbuds` and `workspaces` BarIpc.qml's, PanelIpc.qml's, MediaIpc.qml's
-# `status`, OvernightIpc.qml's, EarbudsIpc.qml's and WorkspacesIpc.qml's
-# `status` (peek and close wait for the preview); `probe` covers every type qs
+# WallpaperIpc.qml's exact signatures, `bar`, `panel`, `media`, `radio`,
+# `airplay`, `visualizer`, `overnight`, `earbuds` and `workspaces` their own
+# IPC files' (WorkspacesIpc.qml's `status` only: peek and close wait for the
+# preview); `probe` covers every type qs
 # converts and the function names that collide with qs's subcommands.
 set -euo pipefail
 
@@ -63,6 +63,33 @@ ShellRoot {
     }
     IpcHandler {
         target: "media"
+        function playPause(): string { return "playPause" }
+        function next(): string { return "next" }
+        function previous(): string { return "previous" }
+        function shuffle(mode: string): string { return "shuffle " + mode }
+        function loop(mode: string): string { return "loop " + mode }
+        function volume(percent: int): string { return "volume " + percent }
+        function raise(): string { return "raise" }
+        function select(id: string): string { return "select " + id }
+        function players(): string { return "[]" }
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "radio"
+        function status(): string { return "{}" }
+        function play(id: string): string { return "play " + id }
+        function toggle(): string { return "toggle" }
+        function random(): string { return "random" }
+        function stop(): string { return "stop" }
+    }
+    IpcHandler {
+        target: "airplay"
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "visualizer"
+        function style(name: string): string { return "style " + name }
+        function styles(): string { return "bars\nline" }
         function status(): string { return "{}" }
     }
     IpcHandler {
@@ -72,6 +99,8 @@ ShellRoot {
         function menu(id: string): string { return "menu " + id }
         function menucursor(delta: string): string { return "menucursor " + delta }
         function menuactivate(): string { return "ok" }
+    }
+    IpcHandler {
         target: "overnight"
         function toggle(): string { return "ok" }
         function enable(): string { return "ok" }
@@ -236,6 +265,30 @@ rec call probe ss '[,]'
 rec call probe ss '["a,b",c]'
 rec call probe s '[[a]]'
 rec call probe s '[ ]'
+rec call media playPause
+rec call media shuffle on
+rec call media shuffle
+rec call media loop cycle
+rec call media volume 30
+rec call media volume ' 30 '
+rec call media volume -5
+rec call media volume 1.5
+rec call media volume x
+rec call media volume
+rec call media select ''
+rec call media select 'org.mpris.MediaPlayer2.mpv'
+rec call media players
+rec call radio play smoke-radio-1
+rec call radio play
+rec call radio toggle
+rec call radio random
+rec call radio stop
+rec call radio status
+rec call airplay status
+rec call airplay start
+rec call visualizer style next
+rec call visualizer style config
+rec call visualizer styles
 rec call probe s 'x[a,b]'
 rec call probe i 'a"b'
 rec call probe i 'a\b'

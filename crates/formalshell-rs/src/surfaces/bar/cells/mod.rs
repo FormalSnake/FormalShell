@@ -22,6 +22,7 @@ mod mic;
 mod network;
 mod now_playing;
 pub mod tray;
+mod visualizer;
 mod weather;
 pub mod workspaces;
 
@@ -47,6 +48,7 @@ pub fn build(entry: &Entry, region_entries: &[Entry]) -> Box<dyn Cell> {
             Builtin::Display => Box::new(display::Display::default()),
             Builtin::Dualsense => Box::new(dualsense::Dualsense::default()),
             Builtin::Weather => Box::new(weather::Weather),
+            Builtin::Visualizer => Box::new(visualizer::Visualizer::default()),
             Builtin::Bell => Box::new(bell::Bell::default()),
             Builtin::Chevron => Box::new(chevron::Chevron::new(entry.region, region_entries)),
             _ => Box::new(absent::Absent),

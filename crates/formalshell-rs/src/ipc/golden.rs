@@ -92,7 +92,21 @@ fn stub() -> Registry<()> {
                     f("state", &[], Type::String, |_, _| s("")),
                 ],
             },
-            Target { name: "media", functions: vec![f("status", &[], Type::String, |_, _| s("{}"))] },
+            Target {
+                name: "media",
+                functions: vec![
+                    f("playPause", &[], Type::String, |_, _| s("playPause")),
+                    f("next", &[], Type::String, |_, _| s("next")),
+                    f("previous", &[], Type::String, |_, _| s("previous")),
+                    f("shuffle", &[("mode", Type::String)], Type::String, |_, a| s(format!("shuffle {}", a[0].str()))),
+                    f("loop", &[("mode", Type::String)], Type::String, |_, a| s(format!("loop {}", a[0].str()))),
+                    f("volume", &[("percent", Type::Int)], Type::String, |_, a| s(format!("volume {}", a[0].int()))),
+                    f("raise", &[], Type::String, |_, _| s("raise")),
+                    f("select", &[("id", Type::String)], Type::String, |_, a| s(format!("select {}", a[0].str()))),
+                    f("players", &[], Type::String, |_, _| s("[]")),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
             Target { name: "workspaces", functions: vec![f("status", &[], Type::String, |_, _| s("{}"))] },
             Target {
                 name: "tray",
@@ -122,6 +136,25 @@ fn stub() -> Registry<()> {
                     f("set", &[("control", Type::String), ("value", Type::String)], Type::String, |_, a| {
                         s(format!("set {} {}", a[0].str(), a[1].str()))
                     }),
+                ],
+            },
+            Target {
+                name: "radio",
+                functions: vec![
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                    f("play", &[("id", Type::String)], Type::String, |_, a| s(format!("play {}", a[0].str()))),
+                    f("toggle", &[], Type::String, |_, _| s("toggle")),
+                    f("random", &[], Type::String, |_, _| s("random")),
+                    f("stop", &[], Type::String, |_, _| s("stop")),
+                ],
+            },
+            Target { name: "airplay", functions: vec![f("status", &[], Type::String, |_, _| s("{}"))] },
+            Target {
+                name: "visualizer",
+                functions: vec![
+                    f("style", &[("name", Type::String)], Type::String, |_, a| s(format!("style {}", a[0].str()))),
+                    f("styles", &[], Type::String, |_, _| s("bars\nline")),
+                    f("status", &[], Type::String, |_, _| s("{}")),
                 ],
             },
             Target {
@@ -235,6 +268,9 @@ fn signatures_match_qml() {
         super::overnight::target(),
         super::earbuds::target(),
         super::workspaces::target(),
+        super::radio::target(),
+        super::airplay::target(),
+        super::visualizer::target(),
     ] {
         let defs: Vec<String> = real.functions.iter().map(|f| f.definition()).collect();
         let qml = stub.targets.iter().find(|t| t.name == real.name).expect("a stub target");

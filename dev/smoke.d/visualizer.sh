@@ -15,6 +15,7 @@
 # the scaffold sources on every run whether or not that leg is on.
 leg_visualizer_flag="--visualizer"
 leg_visualizer_order=220
+leg_visualizer_rust=1
 leg_visualizer_needs="mpv ffmpeg convert"
 
 visualizer_pid_path="$shot_dir/visualizer-mpv.pid"
