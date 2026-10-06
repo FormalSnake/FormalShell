@@ -130,7 +130,15 @@ Milestones, each a plan under `docs/superpowers/plans/`:
 - R4: launcher and every route, app grid, emoji, clipboard, mirror.
 - R5: notifications server, toasts, centre, OSD, reminders.
 - R6: lock, PAM, sleep inhibitor, polkit agent, greeter.
-- R7: media, lyrics (blur and glow), visualizer, radio, airplay, iphone.
+- R7: media, lyrics (blur and glow), visualizer, radio, airplay, iphone,
+  and earbuds (M77, `specs/2026-09-30-m77-earbuds.md`): one normalised
+  device shape (`shell/Earbuds/model.js`) behind the airpods, nothing,
+  soundcore and samsung adapters, the `earbuds` IPC target and bar cell,
+  `tests/tst_earbuds_*.qml` ported to Rust tests, `--earbuds` passing
+  under `FS_IMPL=rust`. The M77 safety rule carries over unchanged: the
+  shell never speaks the Nothing protocol itself, only allow-listed verbs
+  through `nothingctl`, and the soundcore and samsung polls run only
+  while acquired with a matching BlueZ device connected.
 - R8: capture, record, OCR, screensaver, switcher and Spaces thumbnails,
   everything left in `shell/`.
 - R9: cutover. Nix package and modules, PKGBUILD and Debian control point
