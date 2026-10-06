@@ -1,0 +1,12 @@
+[package]
+name = "fs-info"
+version = "0.1.1"
+edition = "2024"
+publish = false
+
+[dependencies]
+chrono = "0.4"
+percent-encoding = "2"
+regex = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
