@@ -240,10 +240,9 @@ impl Panel {
 }
 
 /// A full-output black scrim on the pose a modal drawer rides (Scrim.qml),
-/// here on its own `emerge` clock with no card in front of it.
+/// here on its own `emerge` clock with no card in front of it. It rasters
+/// nothing: its surface is one black pixel the compositor scales and fades.
 pub struct Scrim {
-    pub scene: Scene,
-    node: NodeId,
     open: bool,
     mapped: bool,
     pose: Animated,
@@ -251,14 +250,8 @@ pub struct Scrim {
 }
 
 impl Scrim {
-    pub fn new(width: i32, height: i32, scale: f64) -> Self {
-        let mut scene = Scene::new(width, height);
-        let node = scene.add(IRect::new(0, 0, width, height), Paint::Rect { fill: Rgba::hex(0).with_alpha(0.0), radius: 0.0 });
-        Self { scene, node, open: true, mapped: false, pose: Animated::new(0.0, EMERGE.1), scale }
-    }
-
-    pub fn resize(&mut self, width: i32, height: i32) {
-        self.scene.resize(width, height);
+    pub fn new(scale: f64) -> Self {
+        Self { open: true, mapped: false, pose: Animated::new(0.0, EMERGE.1), scale }
     }
 
     pub fn mapped(&mut self, now: Instant) {
@@ -272,7 +265,6 @@ impl Scrim {
         self.open = open;
         let target = if open && self.mapped { 1.0 } else { 0.0 };
         self.pose.set(now, target, EMERGE.0 * self.scale);
-        self.tick(now);
     }
 
     pub fn animating(&self, now: Instant) -> bool {
@@ -283,11 +275,9 @@ impl Scrim {
         !self.open && !self.pose.running(now)
     }
 
-    pub fn tick(&mut self, now: Instant) {
+    /// The `scrim` role's opacity on this frame.
+    pub fn alpha(&self, now: Instant) -> f64 {
         // The spatial pose overshoots both ends; an opacity may not.
-        let pose = self.pose.value(now).clamp(0.0, 1.0);
-        let size = self.scene.size;
-        let fill = Rgba::hex(0).with_alpha(theme::SCRIM_ALPHA * pose as f32);
-        self.scene.update(self.node, size, Paint::Rect { fill, radius: 0.0 }, true);
+        theme::SCRIM_ALPHA as f64 * self.pose.value(now).clamp(0.0, 1.0)
     }
 }

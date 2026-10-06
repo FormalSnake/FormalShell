@@ -19,7 +19,7 @@ use smithay_client_toolkit::{delegate_dispatch2, delegate_registry, registry_han
 
 use crate::bar::Bar;
 use crate::panel::{Panel, Scrim};
-use crate::surface::Surface;
+use crate::surface::{PixelSurface, Pixels, Surface};
 use crate::theme;
 
 /// The panel's one line of content, standing in for a real panel body.
@@ -32,11 +32,12 @@ pub struct App {
     compositor: CompositorState,
     layer_shell: LayerShell,
     shm: Shm,
+    pixels: Pixels,
     qh: QueueHandle<Self>,
     pub bar: Bar,
     bar_surface: Surface,
     panel: Option<(Panel, Surface)>,
-    scrim: Option<(Scrim, Surface)>,
+    scrim: Option<(Scrim, PixelSurface)>,
     /// `debug motionScale`: every duration multiplied by this.
     motion_scale: f64,
     /// pantheon's cast under the panel card.
@@ -56,6 +57,8 @@ impl App {
         let compositor = CompositorState::bind(globals, qh).expect("wl_compositor is not available");
         let layer_shell = LayerShell::bind(globals, qh).expect("zwlr_layer_shell_v1 is not available");
         let shm = Shm::bind(globals, qh).expect("wl_shm is not available");
+        let pixels = Pixels::bind(globals, qh)
+            .expect("wp_viewporter, wp_single_pixel_buffer_manager_v1 and wp_alpha_modifier_v1 are required");
         let started = Instant::now();
 
         let surface = compositor.create_surface(qh);
@@ -73,6 +76,7 @@ impl App {
             compositor,
             layer_shell,
             shm,
+            pixels,
             qh: qh.clone(),
             bar: Bar::new(1),
             bar_surface,
@@ -155,10 +159,9 @@ impl App {
         if !open {
             return;
         }
-        let scrim = Scrim::new(1, 1, self.motion_scale);
+        let scrim = Scrim::new(self.motion_scale);
         let layer = self.overlay("formalshell:scrim", Anchor::all(), 0);
-        let mut surface = Surface::new("scrim", layer, &self.shm, self.started);
-        surface.wait_map = true;
+        let surface = PixelSurface::new("scrim", layer, &self.pixels, &self.qh, self.started);
         self.scrim = Some((scrim, surface));
     }
 
@@ -181,8 +184,7 @@ impl App {
             surface.present(&mut panel.scene, animating, &qh);
         }
         if let Some((scrim, surface)) = &mut self.scrim {
-            let animating = scrim.animating(now);
-            surface.present(&mut scrim.scene, animating, &qh);
+            surface.present(scrim.alpha(now), scrim.animating(now), &qh);
         }
     }
 
@@ -243,13 +245,8 @@ impl CompositorHandler for App {
             }
             Some(Owner::Scrim) => {
                 let Some((scrim, s)) = &mut self.scrim else { return };
-                (s.frame_pending, s.callbacks) = (false, s.callbacks + 1);
-                if s.mapped {
-                    scrim.tick(now);
-                } else {
-                    s.mapped = true;
-                    scrim.mapped(now);
-                }
+                (s.frame_pending, s.mapped, s.callbacks) = (false, true, s.callbacks + 1);
+                scrim.mapped(now);
             }
             None => {}
         }
@@ -293,12 +290,8 @@ impl LayerShellHandler for App {
                 s.configure(size.w, size.h);
             }
             Some(Owner::Scrim) => {
-                let Some((scrim, s)) = &mut self.scrim else { return };
-                if width > 0 && height > 0 && (width, height) != (scrim.scene.size.w, scrim.scene.size.h) {
-                    scrim.resize(width, height);
-                    scrim.tick(Instant::now());
-                }
-                s.configure(width.max(1), height.max(1));
+                let Some((_, s)) = &mut self.scrim else { return };
+                s.configure(width, height);
             }
             None => {}
         }

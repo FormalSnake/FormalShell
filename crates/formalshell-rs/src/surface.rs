@@ -3,12 +3,21 @@
 //! whichever buffer the compositor has released, plus whatever that buffer
 //! missed while the other one was on screen. A frame callback is asked for
 //! only on a commit made while something on the surface animates.
+//! A flat full-output fill skips all of that: see [`PixelSurface`].
 
 use std::time::Instant;
 
 use smithay_client_toolkit::compositor::FrameCallbackData;
-use smithay_client_toolkit::reexports::client::QueueHandle;
+use smithay_client_toolkit::dispatch2::Dispatch2;
+use smithay_client_toolkit::reexports::client::globals::{BindError, GlobalList};
+use smithay_client_toolkit::reexports::client::protocol::wl_buffer::WlBuffer;
 use smithay_client_toolkit::reexports::client::protocol::wl_shm;
+use smithay_client_toolkit::reexports::client::{Connection, Proxy, QueueHandle};
+use smithay_client_toolkit::reexports::protocols::wp::alpha_modifier::v1::client::wp_alpha_modifier_surface_v1::WpAlphaModifierSurfaceV1;
+use smithay_client_toolkit::reexports::protocols::wp::alpha_modifier::v1::client::wp_alpha_modifier_v1::WpAlphaModifierV1;
+use smithay_client_toolkit::reexports::protocols::wp::single_pixel_buffer::v1::client::wp_single_pixel_buffer_manager_v1::WpSinglePixelBufferManagerV1;
+use smithay_client_toolkit::reexports::protocols::wp::viewporter::client::wp_viewport::WpViewport;
+use smithay_client_toolkit::reexports::protocols::wp::viewporter::client::wp_viewporter::WpViewporter;
 use smithay_client_toolkit::shell::WaylandSurface;
 use smithay_client_toolkit::shell::wlr_layer::LayerSurface;
 use smithay_client_toolkit::shm::Shm;
@@ -175,3 +184,143 @@ impl Surface {
         format!("{}: commits={} frame_callbacks={}", self.name, self.commits, self.callbacks)
     }
 }
+
+/// A layer surface showing one black pixel (`wp_single_pixel_buffer_v1`)
+/// stretched over its whole size by `wp_viewporter` and faded by
+/// `wp_alpha_modifier_v1`, so the compositor does all of the drawing and a
+/// step of a fade is one multiplier and one commit.
+pub struct PixelSurface {
+    pub name: &'static str,
+    pub layer: LayerSurface,
+    viewport: WpViewport,
+    fade: WpAlphaModifierSurfaceV1,
+    buffer: WlBuffer,
+    size: Option<(i32, i32)>,
+    /// A size the next commit has to carry.
+    resized: bool,
+    multiplier: Option<u32>,
+    pub frame_pending: bool,
+    pub mapped: bool,
+    started: Instant,
+    commits: u64,
+    pub callbacks: u64,
+}
+
+impl PixelSurface {
+    pub fn new(name: &'static str, layer: LayerSurface, pixels: &Pixels, qh: &QueueHandle<App>, started: Instant) -> Self {
+        let surface = layer.wl_surface();
+        let viewport = pixels.viewporter.get_viewport(surface, qh, Ignore);
+        let fade = pixels.alpha.get_surface(surface, qh, Ignore);
+        // Opaque black: the scrim's own alpha is all in the multiplier.
+        let buffer = pixels.single_pixel.create_u32_rgba_buffer(0, 0, 0, u32::MAX, qh, Ignore);
+        Self {
+            name,
+            layer,
+            viewport,
+            fade,
+            buffer,
+            size: None,
+            resized: false,
+            multiplier: None,
+            frame_pending: false,
+            mapped: false,
+            started,
+            commits: 0,
+            callbacks: 0,
+        }
+    }
+
+    pub fn configure(&mut self, width: i32, height: i32) {
+        if width > 0 && height > 0 && self.size != Some((width, height)) {
+            self.size = Some((width, height));
+            self.resized = true;
+        }
+    }
+
+    /// `alpha` is the surface's opacity, 0 to 1.
+    pub fn present(&mut self, alpha: f64, animating: bool, qh: &QueueHandle<App>) {
+        let Some((width, height)) = self.size else { return };
+        if self.frame_pending {
+            return;
+        }
+        let request = animating || !self.mapped;
+        let multiplier = (alpha.clamp(0.0, 1.0) * u32::MAX as f64).round() as u32;
+        let surface = self.layer.wl_surface();
+        if self.multiplier == Some(multiplier) && !self.resized {
+            if request && self.commits > 0 {
+                surface.frame(qh, FrameCallbackData(surface.clone()));
+                self.frame_pending = true;
+                self.layer.commit();
+            }
+            return;
+        }
+        let t0 = Instant::now();
+        if self.resized || self.commits == 0 {
+            self.viewport.set_destination(width, height);
+            surface.attach(Some(&self.buffer), 0, 0);
+            self.resized = false;
+        }
+        self.fade.set_multiplier(multiplier);
+        surface.damage_buffer(0, 0, 1, 1);
+        if request {
+            surface.frame(qh, FrameCallbackData(surface.clone()));
+            self.frame_pending = true;
+        }
+        self.layer.commit();
+        self.multiplier = Some(multiplier);
+        self.commits += 1;
+        eprintln!(
+            "commit surface={} n={} t={}ms render_us={} copy_us=0 rects=1 px=0 damage=[0,0,1x1] buffer=pixel alpha={:.3} frame_callbacks={} request={}",
+            self.name,
+            self.commits,
+            self.started.elapsed().as_millis(),
+            t0.elapsed().as_micros(),
+            alpha,
+            self.callbacks,
+            request as u8,
+        );
+    }
+
+    pub fn report(&self) -> String {
+        format!("{}: commits={} frame_callbacks={}", self.name, self.commits, self.callbacks)
+    }
+}
+
+impl Drop for PixelSurface {
+    fn drop(&mut self) {
+        self.fade.destroy();
+        self.viewport.destroy();
+        self.buffer.destroy();
+    }
+}
+
+/// The three globals a [`PixelSurface`] is made of.
+pub struct Pixels {
+    pub viewporter: WpViewporter,
+    pub single_pixel: WpSinglePixelBufferManagerV1,
+    pub alpha: WpAlphaModifierV1,
+}
+
+impl Pixels {
+    pub fn bind(globals: &GlobalList, qh: &QueueHandle<App>) -> Result<Self, BindError> {
+        Ok(Self {
+            viewporter: globals.bind(qh, 1..=1, Ignore)?,
+            single_pixel: globals.bind(qh, 1..=1, Ignore)?,
+            alpha: globals.bind(qh, 1..=1, Ignore)?,
+        })
+    }
+}
+
+/// User data for objects whose events carry nothing this shell acts on: a
+/// buffer that is never redrawn has no use for its release.
+pub struct Ignore;
+
+macro_rules! ignore_events {
+    ($($iface:ty),*) => {$(
+        impl Dispatch2<$iface, App> for Ignore {
+            fn event(&self, _: &mut App, _: &$iface, _: <$iface as Proxy>::Event, _: &Connection, _: &QueueHandle<App>) {}
+        }
+    )*};
+}
+
+ignore_events!(WpViewporter, WpViewport, WpSinglePixelBufferManagerV1, WpAlphaModifierV1, WpAlphaModifierSurfaceV1, WlBuffer);
