@@ -172,7 +172,7 @@ cmd_smoke() {
   local script="./dev/smoke.sh"
   cmd_sync
   local out status=0
-  out=$(vm_run "$script $*" 2>&1) || status=$?
+  out=$(vm_run "${FS_IMPL:+FS_IMPL=$FS_IMPL }$script $*" 2>&1) || status=$?
   echo "$out"
   if [ "$status" -ne 0 ]; then
     echo "testvm: smoke run failed (exit $status)" >&2

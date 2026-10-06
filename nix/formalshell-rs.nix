@@ -1,4 +1,4 @@
-{ lib, rustPlatform }:
+{ lib, rustPlatform, pkg-config, fontconfig }:
 
 rustPlatform.buildRustPackage {
   pname = "formalshell-rs";
@@ -10,6 +10,9 @@ rustPlatform.buildRustPackage {
   };
 
   cargoLock.lockFile = ../crates/Cargo.lock;
+
+  nativeBuildInputs = [ pkg-config ];
+  buildInputs = [ fontconfig ];
 
   meta = {
     description = "FormalShell rust rewrite";

@@ -3,3 +3,16 @@ name = "formalshell-rs"
 version = "0.1.1"
 edition = "2024"
 publish = false
+
+[dependencies]
+calloop = "0.14"
+chrono = "0.4"
+parley = "0.11"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+skrifa = "0.44"
+smithay-client-toolkit = { version = "0.21", default-features = false, features = ["calloop"] }
+vello_cpu = "0.3"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+yeslogic-fontconfig-sys = "6"

@@ -156,6 +156,23 @@ for leg_name in "${legs[@]}"; do
   if leg_on "$leg_name"; then active_legs+=("$leg_name"); fi
 done
 
+# FS_IMPL=rust runs crates/formalshell-rs in place of the QML shell. It has
+# no IPC server yet, and every leg drives the shell over IPC.
+fs_impl="${FS_IMPL:-qml}"
+case "$fs_impl" in
+  qml) ;;
+  rust)
+    if [ ${#active_legs[@]} -gt 0 ]; then
+      echo "SMOKE_FAIL: FS_IMPL=rust runs the plain bar only, legs need the IPC server the rust shell does not have yet (asked for: ${active_legs[*]})" >&2
+      exit 1
+    fi
+    # Long enough to read ten seconds of rest off the commit log after the
+    # fixture window lands.
+    screenshot_delay=14
+    ;;
+  *) echo "SMOKE_FAIL: FS_IMPL must be qml or rust, got '$fs_impl'" >&2; exit 1 ;;
+esac
+
 for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
   if declare -F "leg_${leg_name}_validate" >/dev/null; then "leg_${leg_name}_validate"; fi
 done
@@ -172,6 +189,7 @@ done
 
 git add -A >/dev/null 2>&1 || true   # flakes only see tracked files
 nix build .#formalshell
+if [ "$fs_impl" = rust ]; then nix build .#formalshell-rs --out-link result-rs; fi
 
 # Resolved once, on demand: a leg names what it needs in leg_<name>_needs
 # and the scaffold's own four are always resolved.
@@ -553,6 +571,8 @@ shell_launcher=""
 for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
   if declare -F "leg_${leg_name}_shell" >/dev/null; then shell_launcher="leg_${leg_name}_shell"; fi
 done
+shell_bin="$PWD/result/bin/formalshell"
+if [ "$fs_impl" = rust ]; then shell_bin="$PWD/result-rs/bin/formalshell-rs"; fi
 if [ -n "$shell_launcher" ]; then
   "$shell_launcher" "$shell_start_script"
 else
@@ -571,7 +591,7 @@ export LIBGL_ALWAYS_SOFTWARE=1
 # screenshot script reads for its memory sample; the wrapper execs
 # quickshell in place, so the pid stays the shell's own.
 $wayland_debug_line
-"$PWD/result/bin/formalshell" > "$shell_log_path" 2>&1 &
+"$shell_bin" > "$shell_log_path" 2>&1 &
 echo \$! > "$shot_dir/shell.pid"
 wait
 EOF
@@ -699,6 +719,12 @@ load_errors=$(grep -nE "Cannot assign to non-existent property|is not a type" "$
 if [ -n "$load_errors" ]; then
   printf "%s\n" "$load_errors" | head -5 >&2
   fail "the shell logged a QML load error (lines above)"
+fi
+
+# The rust shell logs every commit it makes, which is the evidence that a
+# strip at rest commits nothing.
+if [ "$fs_impl" = rust ]; then
+  grep -E '^(commit|exit|text:|hyprland:|event loop:) ' "$shell_log_path" 2>/dev/null || true
 fi
 
 if [ -f "$shot_path" ]; then
