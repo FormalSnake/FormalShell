@@ -25,6 +25,15 @@ These are ceilings. Lower is better, and cheap headroom is taken.
 - Idle, nothing moving: 0.0% CPU over 60 s, no frame callbacks requested.
 - One herdr spinner running: under 2% of one core.
 - Panel open/close, launcher open, workspace switch: no frame over 16 ms.
+- Power saver is the benchmark profile: every budget is measured with
+  e1504g in its low power mode, never only at full clocks.
+- Robustness: no surface ever blocks another. Super+Space to the first
+  launcher frame under 50 ms, and the bar keeps animating while the
+  launcher opens. The QML shell freezes whole for a visible moment here
+  (owner, 2026-10-06); that is the failure this rewrite exists to end.
+  Nothing slow (desktop entry scans, ranking, icon and image decode,
+  D-Bus round trips, process output) runs on the UI loop: it is done
+  ahead of time or off the loop, and a surface opens on what is ready.
 - RSS after an hour of use: under 120 MB.
 - Cold start to bar mapped: under 300 ms.
 
