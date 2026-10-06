@@ -152,6 +152,7 @@
         primitives = primitivesCheck pkgs;
         rust-tests = pkgs.callPackage ./nix/rust-tests.nix { };
         nixos-module-eval = nixosModuleEval system pkgs;
+        fs-mpris = pkgs.callPackage ./nix/fs-mpris.nix { };
 
         qmllint = pkgs.runCommand "formalshell-qmllint" {
           nativeBuildInputs = [ pkgs.qt6.qtdeclarative ];

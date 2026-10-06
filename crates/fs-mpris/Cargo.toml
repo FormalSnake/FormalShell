@@ -1,0 +1,12 @@
+[package]
+name = "fs-mpris"
+version = "0.1.1"
+edition = "2024"
+publish = false
+
+[dependencies]
+futures-util = "0.3"
+zbus = "5"
+
+[dev-dependencies]
+async-io = "2"
