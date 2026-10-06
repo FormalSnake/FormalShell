@@ -13,7 +13,7 @@ mod theme;
 mod wayland;
 
 use std::io::{Read, Write};
-use std::time::Duration;
+use std::time::{Duration, Instant, SystemTime};
 
 use calloop::generic::Generic;
 use calloop::timer::{TimeoutAction, Timer};
@@ -49,6 +49,12 @@ fn main() {
         std::process::exit(ctl::client(&args[1..]));
     }
 
+    // Every `t=` in the log counts from here; this line puts that zero on the
+    // wall clock, so a cold start reads against the launcher's own stamp.
+    let started = Instant::now();
+    let epoch = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default();
+    eprintln!("start epoch_us={}", epoch.as_micros());
+
     let conn = Connection::connect_to_env().expect("no Wayland compositor to connect to");
     let (globals, queue) = registry_queue_init::<App>(&conn).expect("wl_registry");
     let qh = queue.handle();
@@ -57,7 +63,7 @@ fn main() {
     let handle = event_loop.handle();
     WaylandSource::new(conn.clone(), queue).insert(handle.clone()).expect("wayland source");
 
-    let mut app = App::new(&globals, &qh);
+    let mut app = App::new(&globals, &qh, started);
     app.bar.set_clock(&clock_text());
     refresh_workspaces(&mut app);
 

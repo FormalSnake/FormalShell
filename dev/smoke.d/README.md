@@ -20,6 +20,9 @@ frame, teardown) and sources every file here. A leg defines:
   of the scaffold's, for a leg that runs some other build of the shell
   (`--native`). It still logs to `$shell_log_path` and may write the
   shell's pid to `$shot_dir/shell.pid` for the memory sample.
+- `leg_<n>_rust=1` lets the leg run under `FS_IMPL=rust`, which refuses
+  every other leg: it drives the spike's control socket itself
+  (`--r0-measure`).
 - `leg_<n>_takeover` runs the whole thing itself and exits, for a leg that
   cannot share the one session (`--screensaver-gif` needs one per effect).
   It runs with the build done, the binaries resolved and the bus baseline

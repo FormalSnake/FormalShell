@@ -53,13 +53,13 @@ enum Owner {
 }
 
 impl App {
-    pub fn new(globals: &GlobalList, qh: &QueueHandle<Self>) -> Self {
+    /// `started` is the clock every logged `t=` counts from.
+    pub fn new(globals: &GlobalList, qh: &QueueHandle<Self>, started: Instant) -> Self {
         let compositor = CompositorState::bind(globals, qh).expect("wl_compositor is not available");
         let layer_shell = LayerShell::bind(globals, qh).expect("zwlr_layer_shell_v1 is not available");
         let shm = Shm::bind(globals, qh).expect("wl_shm is not available");
         let pixels = Pixels::bind(globals, qh)
             .expect("wp_viewporter, wp_single_pixel_buffer_manager_v1 and wp_alpha_modifier_v1 are required");
-        let started = Instant::now();
 
         let surface = compositor.create_surface(qh);
         let layer = layer_shell.create_layer_surface(qh, surface, Layer::Top, Some("formalshell:bar"), None);

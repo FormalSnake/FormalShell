@@ -157,15 +157,20 @@ for leg_name in "${legs[@]}"; do
 done
 
 # FS_IMPL=rust runs crates/formalshell-rs in place of the QML shell. It has
-# no IPC server yet, and every leg drives the shell over IPC.
+# no IPC server yet, and every leg drives the shell over IPC, so only a leg
+# declaring leg_<n>_rust=1 (one that drives the spike's control socket
+# itself) runs under it.
 fs_impl="${FS_IMPL:-qml}"
 case "$fs_impl" in
   qml) ;;
   rust)
-    if [ ${#active_legs[@]} -gt 0 ]; then
-      echo "SMOKE_FAIL: FS_IMPL=rust runs the plain bar only, legs need the IPC server the rust shell does not have yet (asked for: ${active_legs[*]})" >&2
-      exit 1
-    fi
+    for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
+      rust_var="leg_${leg_name}_rust"
+      if [ "${!rust_var:-0}" != 1 ]; then
+        echo "SMOKE_FAIL: FS_IMPL=rust runs the plain bar only, --${leg_name//_/-} needs the IPC server the rust shell does not have yet" >&2
+        exit 1
+      fi
+    done
     # Long enough for the drive below and ten seconds of rest after it.
     screenshot_delay=52
     session_timeout=75
@@ -187,9 +192,22 @@ for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
   if [ "${!keep_var:-}" != "keep" ]; then fixture_window_mode=false; fi
 done
 
-git add -A >/dev/null 2>&1 || true   # flakes only see tracked files
-nix build .#formalshell
-if [ "$fs_impl" = rust ]; then nix build .#formalshell-rs --out-link result-rs; fi
+# FS_RESULT and FS_RS_RESULT name store paths built elsewhere and copied in,
+# for a host that must not build (e1504g): the result links point at them
+# and nothing is evaluated here.
+if [ -n "${FS_RESULT:-}" ]; then
+  ln -sfn "$FS_RESULT" result
+else
+  git add -A >/dev/null 2>&1 || true   # flakes only see tracked files
+  nix build .#formalshell
+fi
+if [ "$fs_impl" = rust ]; then
+  if [ -n "${FS_RS_RESULT:-}" ]; then
+    ln -sfn "$FS_RS_RESULT" result-rs
+  else
+    nix build .#formalshell-rs --out-link result-rs
+  fi
+fi
 
 # Resolved once, on demand: a leg names what it needs in leg_<name>_needs
 # and the scaffold's own four are always resolved.
@@ -374,15 +392,25 @@ if [ -z "$wayland_display" ]; then
   fi
 fi
 
-host_wayland_display=$(systemctl --user show-environment 2>/dev/null | sed -n 's/^WAYLAND_DISPLAY=//p')
-restore_host_wayland_display() {
-  if [ -n "$host_wayland_display" ]; then
-    systemctl --user set-environment WAYLAND_DISPLAY="$host_wayland_display" 2>/dev/null || true
-  else
-    systemctl --user unset-environment WAYLAND_DISPLAY 2>/dev/null || true
-  fi
+# The nested Hyprland imports its own environment into the systemd user
+# manager it shares with the host session (PATH, XDG_DATA_DIRS and the
+# instance signature among them), which left e1504g's live session pointing
+# its next service starts at the rig's temp dirs (2026-10-06). Every name it
+# imports is put back as it was, or unset if it was not there.
+host_env_names="DISPLAY WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE XDG_CURRENT_DESKTOP QT_QPA_PLATFORMTHEME PATH XDG_DATA_DIRS"
+host_env_before=$(systemctl --user show-environment 2>/dev/null || true)
+restore_host_env() {
+  local name line
+  for name in $host_env_names; do
+    line=$(printf '%s\n' "$host_env_before" | grep -m1 "^$name=" || true)
+    if [ -n "$line" ]; then
+      systemctl --user set-environment "$line" 2>/dev/null || true
+    else
+      systemctl --user unset-environment "$name" 2>/dev/null || true
+    fi
+  done
 }
-trap restore_host_wayland_display EXIT
+trap restore_host_env EXIT
 
 # A render node is the cheap stand-in for "this machine can nest": both
 # halves of aquamarine's wayland backend (the parent's dmabuf advertisement
@@ -629,7 +657,7 @@ done
 # The rust shell's animations over its control socket: the spinner on and
 # off, a panel and a scrim at full speed for the frame log, then the same
 # at a tenth of the speed for frames read mid-flight and at rest.
-if [ "$fs_impl" = rust ]; then
+if [ "$fs_impl" = rust ] && [ ${#active_legs[@]} -eq 0 ]; then
   rs_drive="$shot_dir/rs-drive.sh"
   write_script "$rs_drive" <<EOF
 #!/usr/bin/env bash
@@ -752,7 +780,7 @@ fi
 # The rust shell logs every commit it makes, which is the evidence that a
 # strip at rest commits nothing.
 if [ "$fs_impl" = rust ]; then
-  grep -E '^(commit|exit|ctl|text:|hyprland:|event loop:) ' "$shell_log_path" 2>/dev/null || true
+  grep -E '^(start|commit|exit|ctl|text:|hyprland:|event loop:) ' "$shell_log_path" 2>/dev/null || true
   for frame in "$shot_dir"/rs-*.png; do
     [ -f "$frame" ] || continue
     name=$(basename "$frame" .png | tr 'a-z-' 'A-Z_')

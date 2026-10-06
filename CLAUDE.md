@@ -465,6 +465,14 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   TERM, and `monitor restart` re-running the same argv under a new pid.
 - `record.sh` `--record`: `record` start to finished GIF through a real
   wf-recorder child, with the bar's recording cell mid-run.
+- `r0_measure.sh` `--r0-measure <seconds>`: R0's numbers for whichever
+  shell `FS_IMPL` picks, on one timeline: CPU off `/proc/<pid>/stat` over
+  60s idle and 60s with a herdr badge spinning, ten panel opens and ten
+  scrim fades, the launcher stall (first frame after `menu toggle`, longest
+  gap between bar frames), RSS at `<seconds>`, and the launch stamp a cold
+  start counts from. Records, never judges: the budgets are read by hand.
+  With `FS_RESULT`/`FS_RS_RESULT` naming prebuilt store paths, nothing is
+  built on the host it runs on (e1504g).
 - `radio.sh` `--radio`: Radio Atlas's mpv tuned with `radio play` to a
   favourite served on loopback, read back as a media source (`media status`
   kind, title and playing, `media players` listing it once, its own Pipewire
