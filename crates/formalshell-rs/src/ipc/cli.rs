@@ -113,10 +113,14 @@ pub fn parse(argv: &[String]) -> Result<Request, CliError> {
     let mut taken = 0;
     let mut args = Vec::new();
     let mut literal = false;
+    // CLI11 hands what follows `--` only to a positional that had nothing
+    // before it: `set eq-bass -- -2` leaves -2 unexpected.
+    let mut args_before_literal = 0;
 
     for arg in rest {
         if !literal && arg == "--" {
             literal = true;
+            args_before_literal = args.len();
             continue;
         }
         if !literal {
@@ -144,6 +148,7 @@ pub fn parse(argv: &[String]) -> Result<Request, CliError> {
                 name = arg.clone();
                 taken = 2;
             }
+            (Mode::Call, _) if literal && args_before_literal > 0 => extras.push(arg.clone()),
             (Mode::Call, _) => expand(arg, &mut args),
             _ => extras.push(arg.clone()),
         }
