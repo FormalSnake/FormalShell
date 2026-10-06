@@ -40,6 +40,24 @@ pub struct Dialog {
     dirty: bool,
 }
 
+/// Text.qml's `WordWrap` for body text: greedy lines no wider than `width`.
+fn wrap(text: &str, width: f64, theme: &fs_theme::theme::Theme, kit: &mut crate::surfaces::bar::cell::Kit) -> Vec<String> {
+    let mut lines: Vec<String> = Vec::new();
+    let mut line = String::new();
+    for word in text.split_whitespace() {
+        let candidate = if line.is_empty() { word.to_owned() } else { format!("{line} {word}") };
+        if !line.is_empty() && ui::measure(&w::text(&candidate), 1.0e6, theme, kit).0 > width {
+            lines.push(std::mem::replace(&mut line, word.to_owned()));
+        } else {
+            line = candidate;
+        }
+    }
+    if !line.is_empty() {
+        lines.push(line);
+    }
+    lines
+}
+
 impl App {
     pub(super) fn polkit_event(&mut self, event: Event) {
         match event {
@@ -150,14 +168,17 @@ impl App {
         } else {
             d.prompt.trim().to_owned()
         };
-        let mut rows: Vec<El> = vec![w::section_label(s, "Authentication required", None, false), w::text(&d.message)];
+        let mut rows: Vec<El> = vec![w::section_label(s, "Authentication required", None, false)];
+        rows.push(w::column(0.0, wrap(&d.message, inner, theme, kit).into_iter().map(w::text).collect()));
         if !d.identity.is_empty() {
             rows.push(w::column(s.row_gap, vec![w::section_label(s, "Identity", None, false), w::value(&d.identity).elide()]));
         }
         rows.push(w::input(&shown, &placeholder, enabled, d.error.then_some("Wrong password")).width(Size::Px(inner)).enabled(enabled));
         let cancel = w::button("Cancel").variant(Variant::Outline);
         let auth = w::button("Authenticate").enabled(enabled);
-        rows.push(w::row(s.control_gap, vec![w::space(0.0).fill(), cancel, auth]));
+        let buttons = w::row(s.control_gap, vec![cancel, auth]);
+        let (buttons_w, _) = ui::measure(&buttons, inner, theme, kit);
+        rows.push(w::row(0.0, vec![w::space((inner - buttons_w).max(0.0)), buttons]));
         let body = w::column(s.section_gap, rows).width(Size::Px(inner));
         let (_, body_h) = ui::measure(&body, inner, theme, kit);
         let card_w = inner + s.panel_padding * 2.0;

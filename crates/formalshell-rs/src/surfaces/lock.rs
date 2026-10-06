@@ -358,9 +358,18 @@ fn decode(path: &str) -> Option<image::RgbaImage> {
     Some(image::ImageReader::open(path).ok()?.with_guessed_format().ok()?.decode().ok()?.to_rgba8())
 }
 
-/// Cover.qml at `size`: the track's art cover-cropped square, for the pool.
-pub fn cover(path: &str, size: u32) -> Option<Bitmap> {
-    let img = decode(path)?;
+/// Cover.qml at `size`: the track's art (a file or a data URL) cover-cropped
+/// square, for the pool.
+pub fn cover(url: &str, size: u32) -> Option<Bitmap> {
+    let img = match url.strip_prefix("data:") {
+        Some(data) => {
+            use base64::Engine;
+            let (_, payload) = data.split_once(";base64,")?;
+            let bytes = base64::engine::general_purpose::STANDARD.decode(payload.trim()).ok()?;
+            image::load_from_memory(&bytes).ok()?.to_rgba8()
+        }
+        None => decode(url.strip_prefix("file://")?)?,
+    };
     let side = img.width().min(img.height());
     let crop = imageops::crop_imm(&img, (img.width() - side) / 2, (img.height() - side) / 2, side, side).to_image();
     let out = imageops::resize(&crop, size, size, FilterType::Triangle);

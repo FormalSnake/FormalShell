@@ -99,6 +99,7 @@ pub struct Lock {
     idle: bool,
     /// Set by a resume from suspend, cleared by any input on the lock.
     resume_guard: bool,
+    slept_at: Option<(f64, Instant)>,
     pub sleep: Sleep,
     /// Each output's last report, kept past the unlock until the next lock.
     reports: Map<String, Value>,
@@ -130,6 +131,7 @@ impl Lock {
             idle_watch: None,
             idle: false,
             resume_guard: false,
+            slept_at: None,
             sleep: Sleep::default(),
             reports: Map::new(),
         }
@@ -328,9 +330,15 @@ impl App {
                 self.lock.dirty = true;
             }
             LockMsg::Sleep(sleeping) => {
-                // Waking with the lock up blanks it until the next input
-                // (Lock.qml's resume guard).
-                if !sleeping && self.lock.session.is_some() {
+                // Waking from a real suspend with the lock up blanks it until
+                // the next input (Lock.qml's resume guard): CLOCK_BOOTTIME
+                // runs through a suspend and CLOCK_MONOTONIC does not.
+                if sleeping {
+                    self.lock.slept_at = Some((boottime(), Instant::now()));
+                } else if let Some((boot, mono)) = self.lock.slept_at.take()
+                    && self.lock.session.is_some()
+                    && (boottime() - boot) - mono.elapsed().as_secs_f64() > 3.0
+                {
                     self.lock.resume_guard = true;
                     self.lock.dirty = true;
                 }
@@ -460,11 +468,14 @@ impl App {
             return;
         }
         self.lock.art = Some((url.clone(), None));
-        let Some(path) = url.strip_prefix("file://").map(str::to_owned) else { return };
+        if !url.starts_with("file://") && !url.starts_with("data:") {
+            return;
+        }
         let (Some(rt), Some(tx)) = (&self.runtime, self.lock.tx.clone()) else { return };
         let size = (self.store.theme.theme.space.control_height * 2.0).round() as u32;
         rt.pool().submit(move || {
-            let _ = tx.send(LockMsg::Art(url, view::cover(&path, size.max(1))));
+            let art = view::cover(&url, size.max(1));
+            let _ = tx.send(LockMsg::Art(url, art));
         });
     }
 
@@ -673,6 +684,14 @@ impl App {
 /// leaves an unwiped copy behind.
 pub(super) fn field() -> Zeroizing<String> {
     Zeroizing::new(String::with_capacity(256))
+}
+
+/// Seconds on CLOCK_BOOTTIME.
+fn boottime() -> f64 {
+    let mut ts = libc::timespec { tv_sec: 0, tv_nsec: 0 };
+    // SAFETY: clock_gettime writes one timespec.
+    unsafe { libc::clock_gettime(libc::CLOCK_BOOTTIME, &mut ts) };
+    ts.tv_sec as f64 + ts.tv_nsec as f64 / 1e9
 }
 
 fn epoch_ms() -> u64 {
