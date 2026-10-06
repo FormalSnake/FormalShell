@@ -57,26 +57,26 @@ sleep 5
 "$processes_victim_bin" -c 'while :; do :; done' & echo \$! > "$processes_victim_pid_path"
 "$processes_restart_bin" -c 'while :; do :; done' & echo \$! > "$processes_restart_pid_path"
 $monitor_wait
-"$qs_bin" ipc -p "$shell_path" call menu summon monitor > "$processes_menu_reply_path" 2>&1
+$ipc call menu summon monitor > "$processes_menu_reply_path" 2>&1
 # Two poll ticks with the route open: the service polls only while something
 # is subscribed, and the first tick after a subscribe has nothing to
 # difference, so a measured CPU column needs the second.
 sleep 6
 "$grim_bin" "$processes_full_png" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu filter smokevictim > "$processes_filter_reply_path" 2>&1
+$ipc call menu filter smokevictim > "$processes_filter_reply_path" 2>&1
 sleep 3
 "$grim_bin" "$processes_view_png" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call monitor processes smokevictim > "$processes_filtered_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu activate 0 > /dev/null 2>&1
+$ipc call monitor processes smokevictim > "$processes_filtered_path" 2>&1
+$ipc call menu activate 0 > /dev/null 2>&1
 sleep 2
 "$grim_bin" "$processes_confirm_png" > /dev/null 2>&1
 kill -0 \$(cat "$processes_victim_pid_path") 2>/dev/null; echo \$? > "$processes_alive_arm_path"
-"$qs_bin" ipc -p "$shell_path" call menu activate 0 > /dev/null 2>&1
+$ipc call menu activate 0 > /dev/null 2>&1
 sleep 3
 kill -0 \$(cat "$processes_victim_pid_path") 2>/dev/null; echo \$? > "$processes_alive_fire_path"
-"$qs_bin" ipc -p "$shell_path" call monitor processes smokevictim > "$processes_after_path" 2>&1
+$ipc call monitor processes smokevictim > "$processes_after_path" 2>&1
 "$grim_bin" "$processes_killed_png" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call monitor restart \$(cat "$processes_restart_pid_path") > "$processes_restart_reply_path" 2>&1
+$ipc call monitor restart \$(cat "$processes_restart_pid_path") > "$processes_restart_reply_path" 2>&1
 sleep 6
 pgrep -f smokerestart > "$processes_restart_pids_path"
 EOF

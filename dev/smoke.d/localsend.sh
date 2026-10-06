@@ -62,8 +62,8 @@ leg_localsend_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call localsend status > "$localsend_status_before_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call notifications status > "$localsend_notify_before_path" 2>&1
+$ipc call localsend status > "$localsend_status_before_path" 2>&1
+$ipc call notifications status > "$localsend_notify_before_path" 2>&1
 
 # "receiving" means the child is running, not that its HTTPS server answers
 # yet (cert generation comes first); a send before that is dropped with
@@ -84,7 +84,7 @@ sha256sum "$localsend_receive_dir/$localsend_payload_name" > "$localsend_receive
 
 cp "$localsend_payload_path" "$localsend_receive_dir/browser-download-late.txt"
 sleep 5
-"$qs_bin" ipc -p "$shell_path" call notifications status > "$localsend_notify_after_path" 2>&1
+$ipc call notifications status > "$localsend_notify_after_path" 2>&1
 "$grim_bin" "$localsend_received_png" > /dev/null 2>&1
 EOF
   hypr_exec_once "bash $script"

@@ -10,7 +10,7 @@
 # sits on workspace 1 throughout; the shim answers `herdr agent list` with
 # whatever the state file says, so the QML badge spins exactly while the
 # drive writes `working` there, the way --spaces drives it. The rust shell
-# spins its badge over its control socket instead.
+# spins its badge over `debug r0Spinner` instead.
 #
 # Timeline, after the shell's pid shows up and 20s of settling:
 #   idle      60s of /proc/<pid>/stat utime+stime, all threads
@@ -102,14 +102,14 @@ leg_r0_measure_timing() {
 leg_r0_measure_drive() {
   local script="$shot_dir/r0-drive.sh" on off panel_on panel_off scrim_on scrim_off stall_on stall_off
   if [ "$fs_impl" = rust ]; then
-    on="ctl spinner on"
-    off="ctl spinner off"
-    panel_on="ctl panel open"
-    panel_off="ctl panel close"
-    scrim_on="ctl scrim on"
-    scrim_off="ctl scrim off"
-    stall_on="ctl panel open"
-    stall_off="ctl panel close"
+    on="call debug r0Spinner true"
+    off="call debug r0Spinner false"
+    panel_on="call debug r0Panel open"
+    panel_off="call debug r0Panel close"
+    scrim_on="call debug r0Scrim true"
+    scrim_off="call debug r0Scrim false"
+    stall_on="call debug r0Panel open"
+    stall_off="call debug r0Panel close"
   else
     on="echo working > '$r0_state_path'"
     off="echo idle > '$r0_state_path'"
@@ -122,8 +122,7 @@ leg_r0_measure_drive() {
   fi
   write_script "$script" <<EOF
 #!/usr/bin/env bash
-ctl() { "$shell_bin" ctl "\$@" >> "$shot_dir/r0-ctl.log" 2>&1; }
-call() { "$qs_bin" ipc -p "$shell_path" call "\$@" >> "$shot_dir/r0-ctl.log" 2>&1; }
+call() { $ipc call "\$@" >> "$shot_dir/r0-ipc.log" 2>&1; }
 mark() { echo "\$1 \$(date +%s%N)" >> "$r0_marks_path"; }
 # Fields after the comm's closing paren: utime and stime are the 12th and
 # 13th, cutime and cstime the 14th and 15th.

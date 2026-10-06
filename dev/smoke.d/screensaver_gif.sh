@@ -70,20 +70,20 @@ EOF
     write_script "$drive_script" <<EOF
 #!/usr/bin/env bash
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call screensaver start > /dev/null 2>&1
+$ipc call screensaver start > /dev/null 2>&1
 sleep 1
 # Pin frame 0 before asking for the count: a ttfx run streams, so the only
 # honest frame total is the one a completed pinned run actually produced, and
 # frameInfo answers 0 until then rather than guessing.
-"$qs_bin" ipc -p "$shell_path" call screensaver frame 0 > /dev/null 2>&1
+$ipc call screensaver frame 0 > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call screensaver frameInfo > "$info_path" 2>&1
+$ipc call screensaver frameInfo > "$info_path" 2>&1
 convergence=\$(grep -o '"convergenceFrame":[0-9]*' "$info_path" | cut -d: -f2)
 stride=\$(( (convergence + $budget - 1) / $budget ))
 [ "\$stride" -lt 1 ] && stride=1
 idx=0
 for ((i = 0; i < convergence; i += stride)); do
-  "$qs_bin" ipc -p "$shell_path" call screensaver frame "\$i" > /dev/null 2>&1
+  $ipc call screensaver frame "\$i" > /dev/null 2>&1
   # A pin regenerates the whole run to reach the frame, so the surface needs
   # that generation plus one repaint before grim reads the framebuffer.
   sleep 0.4
@@ -100,7 +100,7 @@ for ((h = 0; h < $hold; h++)); do
   printf -v padded "%04d" "\$((idx + h))"
   cp "$frames_dir/frame-\$last.png" "$frames_dir/frame-\$padded.png"
 done
-"$qs_bin" ipc -p "$shell_path" call screensaver stop > /dev/null 2>&1
+$ipc call screensaver stop > /dev/null 2>&1
 "$hyprctl_bin" dispatch "hl.dsp.exit()"
 EOF
 

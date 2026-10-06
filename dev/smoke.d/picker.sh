@@ -92,30 +92,30 @@ leg_picker_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep $t0
-"$qs_bin" ipc -p "$shell_path" call picker summon > /dev/null 2>&1
+$ipc call picker summon > /dev/null 2>&1
 sleep 2
 "$grim_bin" "$picker_grid_png" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call picker status > "$picker_flat_status_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call picker choose "$picker_dir/img-3.png" > /dev/null 2>&1
+$ipc call picker status > "$picker_flat_status_path" 2>&1
+$ipc call picker choose "$picker_dir/img-3.png" > /dev/null 2>&1
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call theme status > "$picker_theme_status_path" 2>&1
+$ipc call theme status > "$picker_theme_status_path" 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call picker select "$picker_dir" tok-picker > "$picker_select_reply_path" 2>&1
+$ipc call picker select "$picker_dir" tok-picker > "$picker_select_reply_path" 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call picker choose "$picker_dir/img-1.png" > /dev/null 2>&1
+$ipc call picker choose "$picker_dir/img-1.png" > /dev/null 2>&1
 sleep 1
 cat "$iso_home/.local/state/formalshell/picker-selection.txt" > "$picker_selection_path" 2>&1
 mv "$picker_dir/.stage/Dark" "$picker_dir/Dark"
 mv "$picker_dir/.stage/Light" "$picker_dir/Light"
-"$qs_bin" ipc -p "$shell_path" call picker summon > /dev/null 2>&1
+$ipc call picker summon > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call picker status > "$picker_dark_status_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call picker variant light > "$picker_variant_reply_path" 2>&1
+$ipc call picker status > "$picker_dark_status_path" 2>&1
+$ipc call picker variant light > "$picker_variant_reply_path" 2>&1
 sleep 2
 "$grim_bin" "$picker_variant_png" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call picker status > "$picker_light_status_path" 2>&1
+$ipc call picker status > "$picker_light_status_path" 2>&1
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call picker status > "$picker_cached_status_path" 2>&1
+$ipc call picker status > "$picker_cached_status_path" 2>&1
 ls -1 "$iso_home/.cache/formalshell/thumbnails" > "$picker_cache_listing_path" 2>&1
 touch "$picker_done_path"
 EOF

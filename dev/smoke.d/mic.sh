@@ -34,7 +34,7 @@ leg_mic_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 5
-"$qs_bin" ipc -p "$shell_path" call debug dump > "$mic_dump_path" 2>&1
+$ipc call debug dump > "$mic_dump_path" 2>&1
 "$grim_bin" "$mic_bar_png" > /dev/null 2>&1
 EOF
   hypr_exec_once "bash $script"

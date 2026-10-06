@@ -126,7 +126,7 @@ leg_join_drive() {
   fi
   write_script "$script" <<EOF
 #!/usr/bin/env bash
-call() { "$qs_bin" ipc -p "$shell_path" call "\$@" >> "$join_reply_path" 2>&1; }
+call() { $ipc call "\$@" >> "$join_reply_path" 2>&1; }
 sample() {
   local name=\$1 i
   for i in \$(seq 1 $join_frames); do
@@ -164,7 +164,7 @@ sleep 5
 call debug motionScale 1000
 # Not through call(), whose own redirect would swallow the dump into the
 # reply log.
-"$qs_bin" ipc -p "$shell_path" call debug dump > "$join_dump_path" 2>&1
+$ipc call debug dump > "$join_dump_path" 2>&1
 "$grim_bin" -g "$join_region" "$join_desktop_path" > /dev/null 2>&1
 "$grim_bin" "$join_bare_path" > /dev/null 2>&1
 call panel open network

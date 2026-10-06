@@ -46,7 +46,7 @@ sleep 3
 sudo systemctl restart wpa_supplicant-wlan0.service
 sleep 2
 
-"$qs_bin" ipc -p "$shell_path" call panel open network > /dev/null 2>&1
+$ipc call panel open network > /dev/null 2>&1
 
 # Self-heal, part two: NetworkManager's system-connections dir is not part of
 # the isolated per-run HOME, so an interrupted earlier run can leave a
@@ -54,12 +54,12 @@ sleep 2
 # never rescans up the other SSID at all. An SSID this VM has not associated
 # with returns "unknown ssid" from the IPC, which arms nothing.
 for ssid in FORMALTEST FORMALTEST-EAP; do
-  "$qs_bin" ipc -p "$shell_path" call network status > "$wifi_reset_status_path" 2>&1
+  $ipc call network status > "$wifi_reset_status_path" 2>&1
   if grep -qF "\"name\":\"\$ssid\",\"known\":true" "$wifi_reset_status_path"; then
-    "$qs_bin" ipc -p "$shell_path" call network forget "\$ssid" > /dev/null 2>&1
+    $ipc call network forget "\$ssid" > /dev/null 2>&1
     SECONDS=0
     while [ "\$SECONDS" -lt 15 ]; do
-      "$qs_bin" ipc -p "$shell_path" call network status > "$wifi_reset_status_path" 2>&1
+      $ipc call network status > "$wifi_reset_status_path" 2>&1
       if grep -qE "\"name\":\"\$ssid\",\"known\":false,\"connected\":false,\"stateChanging\":false" "$wifi_reset_status_path"; then
         break
       fi
@@ -70,21 +70,21 @@ done
 
 SECONDS=0
 while [ "\$SECONDS" -lt 25 ]; do
-  "$qs_bin" ipc -p "$shell_path" call network status > "$wifi_scan_status_path" 2>&1
+  $ipc call network status > "$wifi_scan_status_path" 2>&1
   if grep -qF '"name":"FORMALTEST"' "$wifi_scan_status_path" && grep -qF '"name":"FORMALTEST-EAP"' "$wifi_scan_status_path"; then
     break
   fi
   sleep 1
 done
 
-"$qs_bin" ipc -p "$shell_path" call network connect FORMALTEST wrong-formaltest-psk > /dev/null 2>&1
+$ipc call network connect FORMALTEST wrong-formaltest-psk > /dev/null 2>&1
 # connect() replies as soon as the IPC call returns, well before NM's own
 # ActiveConnection exists, so polling for the settled state right away would
 # see the identical pre-attempt idle snapshot and declare victory before
 # anything happened. Waiting for stateChanging:true first proves NM started.
 SECONDS=0
 while [ "\$SECONDS" -lt 10 ]; do
-  "$qs_bin" ipc -p "$shell_path" call network status > "$wifi_wrong_status_path" 2>&1
+  $ipc call network status > "$wifi_wrong_status_path" 2>&1
   if grep -qE '"name":"FORMALTEST","known":(true|false),"connected":(true|false),"stateChanging":true' "$wifi_wrong_status_path"; then
     break
   fi
@@ -92,7 +92,7 @@ while [ "\$SECONDS" -lt 10 ]; do
 done
 SECONDS=0
 while [ "\$SECONDS" -lt 45 ]; do
-  "$qs_bin" ipc -p "$shell_path" call network status > "$wifi_wrong_status_path" 2>&1
+  $ipc call network status > "$wifi_wrong_status_path" 2>&1
   if grep -qE '"name":"FORMALTEST","known":(true|false),"connected":false,"stateChanging":false' "$wifi_wrong_status_path"; then
     break
   fi
@@ -100,10 +100,10 @@ while [ "\$SECONDS" -lt 45 ]; do
 done
 "$grim_bin" "$wifi_wrong_path" > /dev/null 2>&1
 
-"$qs_bin" ipc -p "$shell_path" call network connect FORMALTEST formaltest-psk > /dev/null 2>&1
+$ipc call network connect FORMALTEST formaltest-psk > /dev/null 2>&1
 SECONDS=0
 while [ "\$SECONDS" -lt 25 ]; do
-  "$qs_bin" ipc -p "$shell_path" call network status > "$wifi_connected_status_path" 2>&1
+  $ipc call network status > "$wifi_connected_status_path" 2>&1
   if grep -qF '"name":"FORMALTEST","known":true,"connected":true' "$wifi_connected_status_path"; then
     break
   fi
@@ -111,23 +111,23 @@ while [ "\$SECONDS" -lt 25 ]; do
 done
 "$grim_bin" "$wifi_connected_path" > /dev/null 2>&1
 
-"$qs_bin" ipc -p "$shell_path" call network forget FORMALTEST > /dev/null 2>&1
+$ipc call network forget FORMALTEST > /dev/null 2>&1
 # known:false alone is not enough to move on: the panel's own action
 # bookkeeping only clears once BOTH !known and !stateChanging, and
 # connectEap below refuses to run while an action is still in flight.
 SECONDS=0
 while [ "\$SECONDS" -lt 15 ]; do
-  "$qs_bin" ipc -p "$shell_path" call network status > "$wifi_forget_status_path" 2>&1
+  $ipc call network status > "$wifi_forget_status_path" 2>&1
   if grep -qE '"name":"FORMALTEST","known":false,"connected":false,"stateChanging":false' "$wifi_forget_status_path"; then
     break
   fi
   sleep 1
 done
 
-"$qs_bin" ipc -p "$shell_path" call network connectEap FORMALTEST-EAP formaltest formaltest-eap-pw > /dev/null 2>&1
+$ipc call network connectEap FORMALTEST-EAP formaltest formaltest-eap-pw > /dev/null 2>&1
 SECONDS=0
 while [ "\$SECONDS" -lt 35 ]; do
-  "$qs_bin" ipc -p "$shell_path" call network status > "$wifi_eap_status_path" 2>&1
+  $ipc call network status > "$wifi_eap_status_path" 2>&1
   if grep -qF '"name":"FORMALTEST-EAP","known":true,"connected":true' "$wifi_eap_status_path"; then
     break
   fi
@@ -138,10 +138,10 @@ done
 # Symmetric with the FORMALTEST forget above: leaving this out is exactly how
 # an earlier run corrupted the VM's persistent NM state and broke every scan
 # after it.
-"$qs_bin" ipc -p "$shell_path" call network forget FORMALTEST-EAP > /dev/null 2>&1
+$ipc call network forget FORMALTEST-EAP > /dev/null 2>&1
 SECONDS=0
 while [ "\$SECONDS" -lt 15 ]; do
-  "$qs_bin" ipc -p "$shell_path" call network status > "$wifi_eap_forget_status_path" 2>&1
+  $ipc call network status > "$wifi_eap_forget_status_path" 2>&1
   if grep -qE '"name":"FORMALTEST-EAP","known":false,"connected":false,"stateChanging":false' "$wifi_eap_forget_status_path"; then
     break
   fi

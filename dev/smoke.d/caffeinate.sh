@@ -30,19 +30,19 @@ leg_caffeinate_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call caffeinate status > "$caffeinate_on_path" 2>&1
+$ipc call caffeinate status > "$caffeinate_on_path" 2>&1
 "$hyprctl_bin" -j layers > "$caffeinate_on_layers" 2>&1
 # Three timeouts' worth of no input at all.
 sleep 9
-"$qs_bin" ipc -p "$shell_path" call screensaver status > "$caffeinate_held_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call caffeinate disable > /dev/null 2>&1
+$ipc call screensaver status > "$caffeinate_held_path" 2>&1
+$ipc call caffeinate disable > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call caffeinate status > "$caffeinate_off_path" 2>&1
+$ipc call caffeinate status > "$caffeinate_off_path" 2>&1
 "$hyprctl_bin" -j layers > "$caffeinate_off_layers" 2>&1
 sleep 6
-"$qs_bin" ipc -p "$shell_path" call screensaver status > "$caffeinate_idle_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call screensaver stop > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call caffeinate enable > /dev/null 2>&1
+$ipc call screensaver status > "$caffeinate_idle_path" 2>&1
+$ipc call screensaver stop > /dev/null 2>&1
+$ipc call caffeinate enable > /dev/null 2>&1
 EOF
   hypr_exec_once "bash $script"
 }

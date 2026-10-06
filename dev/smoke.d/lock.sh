@@ -48,10 +48,10 @@ leg_lock_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep $t0
-"$qs_bin" ipc -p "$shell_path" call lock lock > /dev/null 2>&1
+$ipc call lock lock > /dev/null 2>&1
 echo \$? > "$lock_call_rc_path"
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call lock isLocked > "$lock_islocked1_path" 2>&1
+$ipc call lock isLocked > "$lock_islocked1_path" 2>&1
 sleep 3
 "$grim_bin" "$lock_locked_path" > /dev/null 2>&1
 sleep 2
@@ -70,8 +70,8 @@ sleep 2
 sleep 3
 "$grim_bin" "$lock_unlocked_path" > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call lock isLocked > "$lock_islocked2_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call lock status > "$lock_status_path" 2>&1
+$ipc call lock isLocked > "$lock_islocked2_path" 2>&1
+$ipc call lock status > "$lock_status_path" 2>&1
 EOF
   hypr_exec_once "bash $script"
 }

@@ -89,12 +89,12 @@ sleep 4
 # image landing in history is the whole event.
 "$wl_copy_bin" --type image/png < "$clipssh_image_fixture_path"
 sleep 6
-"$qs_bin" ipc -p "$shell_path" call menu summon clipboard > "$clipssh_image_summon_reply_path" 2>&1
+$ipc call menu summon clipboard > "$clipssh_image_summon_reply_path" 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call menu filter image > "$clipssh_image_filter_reply_path" 2>&1
+$ipc call menu filter image > "$clipssh_image_filter_reply_path" 2>&1
 sleep 2
 "$grim_bin" "$clipssh_image_route_png" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu activateAlternate 0 > "$clipssh_image_alt_reply_path" 2>&1
+$ipc call menu activateAlternate 0 > "$clipssh_image_alt_reply_path" 2>&1
 sleep 5
 EOF
   hypr_exec_once "bash $script"

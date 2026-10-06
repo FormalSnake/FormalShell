@@ -128,19 +128,19 @@ leg_panel_emerge_drive() {
 sleep 4
 # The card's resting place, and then the same output without it: between them
 # they say where the card is and what the desktop under it looks like.
-"$qs_bin" ipc -p "$shell_path" call panel open network > "$panel_emerge_open_path" 2>&1
+$ipc call panel open network > "$panel_emerge_open_path" 2>&1
 sleep 2
 "$grim_bin" "$panel_emerge_rest_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call panel toggle network > "$panel_emerge_close_path" 2>&1
+$ipc call panel toggle network > "$panel_emerge_close_path" 2>&1
 sleep 2
 "$grim_bin" "$panel_emerge_bare_path" > /dev/null 2>&1
 sleep 1
 $arm
-"$qs_bin" ipc -p "$shell_path" call panel open network > "$panel_emerge_reopen_path" 2>&1
+$ipc call panel open network > "$panel_emerge_reopen_path" 2>&1
 wait
 sleep 2
 "$grim_bin" "$panel_emerge_settled_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call panel state > "$panel_emerge_state_path" 2>&1
+$ipc call panel state > "$panel_emerge_state_path" 2>&1
 EOF
   hypr_exec_once "bash $script"
 }

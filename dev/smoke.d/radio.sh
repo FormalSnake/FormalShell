@@ -77,30 +77,30 @@ leg_radio_drive() {
 "$pactl_bin" load-module module-null-sink sink_name=$radio_sink sink_properties=device.description=SmokeAlt > "$radio_module_path"
 sleep 4
 if kill -0 "\$(cat "$radio_leftover_pid_path")" 2>/dev/null; then echo alive; else echo gone; fi > "$radio_leftover_after_path"
-"$qs_bin" ipc -p "$shell_path" call radio play "$radio_station_id" > "$radio_play_path" 2>&1
+$ipc call radio play "$radio_station_id" > "$radio_play_path" 2>&1
 SECONDS=0
 while [ "\$SECONDS" -lt 10 ]; do
-  "$qs_bin" ipc -p "$shell_path" call radio status > "$radio_status_path" 2>&1
+  $ipc call radio status > "$radio_status_path" 2>&1
   grep -q '"loaded":true' "$radio_status_path" && break
   sleep 1
 done
-"$qs_bin" ipc -p "$shell_path" call media status > "$radio_media_status_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call panel open media > /dev/null 2>&1
+$ipc call media status > "$radio_media_status_path" 2>&1
+$ipc call panel open media > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call media players > "$radio_players_path" 2>&1
+$ipc call media players > "$radio_players_path" 2>&1
 "$grim_bin" "$radio_panel_png_path" > /dev/null 2>&1
 "$wtype_bin" -k Tab -k Tab -k Return
 sleep 1.5
 "$grim_bin" "$radio_menu_png_path" > /dev/null 2>&1
 "$wtype_bin" -k Escape
-"$qs_bin" ipc -p "$shell_path" call media outputs > "$radio_outputs_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call media output $radio_sink > "$radio_output_path" 2>&1
+$ipc call media outputs > "$radio_outputs_path" 2>&1
+$ipc call media output $radio_sink > "$radio_output_path" 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call radio status > "$radio_routed_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call media status > "$radio_routed_media_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call radio stop > /dev/null 2>&1
+$ipc call radio status > "$radio_routed_path" 2>&1
+$ipc call media status > "$radio_routed_media_path" 2>&1
+$ipc call radio stop > /dev/null 2>&1
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call media status > "$radio_stopped_path" 2>&1
+$ipc call media status > "$radio_stopped_path" 2>&1
 EOF
   add_cleanup "[ -s '$radio_module_path' ] && '$pactl_bin' unload-module \"\$(cat '$radio_module_path')\" 2>/dev/null || true"
   add_cleanup "kill \"\$(cat '$radio_leftover_pid_path')\" 2>/dev/null || true"

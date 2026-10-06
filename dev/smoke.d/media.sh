@@ -125,9 +125,9 @@ EOF
   write_script "$open_script" <<EOF
 #!/usr/bin/env bash
 sleep 5
-"$qs_bin" ipc -p "$shell_path" call panel open media > /dev/null 2>&1
+$ipc call panel open media > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call media status > "$media_status_path" 2>&1
+$ipc call media status > "$media_status_path" 2>&1
 EOF
 
   # The marquee's two states off one timeline: photograph the short title
@@ -146,7 +146,7 @@ sleep 1
 echo \$! > "$media_pid_path"
 SECONDS=0
 while [ "\$SECONDS" -lt 8 ]; do
-  "$qs_bin" ipc -p "$shell_path" call media status > "$media_status_long_path" 2>&1
+  $ipc call media status > "$media_status_long_path" 2>&1
   grep -qF "\"title\":\"$media_track_title_long\"" "$media_status_long_path" && break
   sleep 1
 done
@@ -162,22 +162,22 @@ EOF
   write_script "$controls_script" <<EOF
 #!/usr/bin/env bash
 sleep 16
-"$qs_bin" ipc -p "$shell_path" call media shuffle on > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call media loop track > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call media volume 30 > /dev/null 2>&1
+$ipc call media shuffle on > /dev/null 2>&1
+$ipc call media loop track > /dev/null 2>&1
+$ipc call media volume 30 > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call media status > "$media_controls_status_path" 2>&1
+$ipc call media status > "$media_controls_status_path" 2>&1
 "$grim_bin" "$media_controls_png_path" > /dev/null 2>&1
 sleep 4
 "$mpv_bin" --no-video --really-quiet "$media_track_path" &
 echo \$! > "$media_pid2_path"
 sleep 4
-"$qs_bin" ipc -p "$shell_path" call media players > "$media_players_path" 2>&1
+$ipc call media players > "$media_players_path" 2>&1
 active=\$(grep -o '"id":"[^"]*"' "$media_controls_status_path" | head -1 | cut -d'"' -f4)
 other=\$(grep -o '"id":"[^"]*"' "$media_players_path" | cut -d'"' -f4 | grep -v "^\$active\$" | head -1)
-"$qs_bin" ipc -p "$shell_path" call media select "\$other" > /dev/null 2>&1
+$ipc call media select "\$other" > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call media status > "$media_select_status_path" 2>&1
+$ipc call media status > "$media_select_status_path" 2>&1
 "$grim_bin" "$media_players_png_path" > /dev/null 2>&1
 EOF
 

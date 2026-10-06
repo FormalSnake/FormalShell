@@ -208,28 +208,28 @@ append() { printf '%s\n' "\$1" >> "$iphone_bridge_events_path"; }
 # shims are, so it earns a longer startup margin before the first check
 # that depends on it.
 sleep 8
-"$qs_bin" ipc -p "$shell_path" call iphone status > "$iphone_status_connected_path" 2>&1
+$ipc call iphone status > "$iphone_status_connected_path" 2>&1
 cp "$iphone_status_connected_path" "$iphone_status_ams_error_path"
 
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call notifications status > "$iphone_notify_status_0_path" 2>&1
+$ipc call notifications status > "$iphone_notify_status_0_path" 2>&1
 "$grim_bin" "$iphone_bar_png" > /dev/null 2>&1
 
 # A normal arrival: a toast with an action, positive action wired to the
 # reminders app's own "Complete" label.
 append '{"type":"notification","id":1,"appId":"com.apple.reminders","appName":"Reminders","title":"Buy milk","subtitle":"","body":"Before the shops close","deviceName":"$iphone_device_name","deviceHandle":"$iphone_device_handle","positiveAction":"Complete","negativeAction":"","category":0,"categoryCount":0,"silent":false,"important":false,"preexisting":false,"session":1,"ts":0}'
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call notifications status > "$iphone_notify_status_normal_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call debug dump > "$iphone_dump_1_path" 2>&1
+$ipc call notifications status > "$iphone_notify_status_normal_path" 2>&1
+$ipc call debug dump > "$iphone_dump_1_path" 2>&1
 "$grim_bin" "$iphone_normal_toast_png" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call iphone invoke 1 positive > "$iphone_invoke_reply_path" 2>&1
+$ipc call iphone invoke 1 positive > "$iphone_invoke_reply_path" 2>&1
 
 # Silent under "respect": pending, no toast.
 sleep 1
 append '{"type":"notification","id":2,"appId":"com.apple.weather","appName":"Weather","title":"Storm Watch","subtitle":"","body":"Heavy rain tonight","deviceName":"$iphone_device_name","deviceHandle":"$iphone_device_handle","positiveAction":"","negativeAction":"","category":0,"categoryCount":0,"silent":true,"important":false,"preexisting":false,"session":1,"ts":0}'
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call notifications status > "$iphone_notify_status_respect_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call debug dump > "$iphone_dump_2_path" 2>&1
+$ipc call notifications status > "$iphone_notify_status_respect_path" 2>&1
+$ipc call debug dump > "$iphone_dump_2_path" 2>&1
 
 # Retarget iphone.notifications.focus to "hide" in place: same inode, an
 # ordinary inotify MODIFY, nothing exotic about the write itself.
@@ -241,63 +241,63 @@ sleep 8
 # Silent under "hide": dropped from the centre outright.
 append '{"type":"notification","id":3,"appId":"com.apple.news","appName":"News","title":"Breaking","subtitle":"","body":"A thing happened","deviceName":"$iphone_device_name","deviceHandle":"$iphone_device_handle","positiveAction":"","negativeAction":"","category":0,"categoryCount":0,"silent":true,"important":false,"preexisting":false,"session":1,"ts":0}'
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call notifications status > "$iphone_notify_status_hide_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call debug dump > "$iphone_dump_3_path" 2>&1
+$ipc call notifications status > "$iphone_notify_status_hide_path" 2>&1
+$ipc call debug dump > "$iphone_dump_3_path" 2>&1
 
 # Dedupe, phone first: the phone card alone, then the same message over a
 # real notify-send collapses it to one, the local one surviving.
 append '{"type":"notification","id":4,"appId":"com.apple.MobileSMS","appName":"Messages","title":"Sam","subtitle":"","body":"Running 10 late, sorry!","deviceName":"$iphone_device_name","deviceHandle":"$iphone_device_handle","positiveAction":"","negativeAction":"","category":0,"categoryCount":0,"silent":false,"important":false,"preexisting":false,"session":1,"ts":0}'
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call notifications status > "$iphone_notify_status_dedupe_p1_path" 2>&1
+$ipc call notifications status > "$iphone_notify_status_dedupe_p1_path" 2>&1
 "$notify_send_bin" -a Messages 'Sam' 'Running 10 late, sorry!'
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call notifications status > "$iphone_notify_status_dedupe_p2_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call debug dump > "$iphone_dump_4_path" 2>&1
+$ipc call notifications status > "$iphone_notify_status_dedupe_p2_path" 2>&1
+$ipc call debug dump > "$iphone_dump_4_path" 2>&1
 "$grim_bin" "$iphone_dedupe_phone_first_png" > /dev/null 2>&1
 
 # Dedupe, local first: notify-send lands, then the phone's own copy of the
 # same message never becomes a card at all.
 "$notify_send_bin" -a Messages 'Jamie' 'On my way, 5 mins'
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call notifications status > "$iphone_notify_status_dedupe_l1_path" 2>&1
+$ipc call notifications status > "$iphone_notify_status_dedupe_l1_path" 2>&1
 append '{"type":"notification","id":5,"appId":"com.apple.MobileSMS","appName":"Messages","title":"Jamie","subtitle":"","body":"On my way, 5 mins","deviceName":"$iphone_device_name","deviceHandle":"$iphone_device_handle","positiveAction":"","negativeAction":"","category":0,"categoryCount":0,"silent":false,"important":false,"preexisting":false,"session":1,"ts":0}'
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call notifications status > "$iphone_notify_status_dedupe_l2_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call debug dump > "$iphone_dump_5_path" 2>&1
+$ipc call notifications status > "$iphone_notify_status_dedupe_l2_path" 2>&1
+$ipc call debug dump > "$iphone_dump_5_path" 2>&1
 "$grim_bin" "$iphone_dedupe_local_first_png" > /dev/null 2>&1
 
-"$qs_bin" ipc -p "$shell_path" call iphone status > "$iphone_status_ams_recovered_path" 2>&1
+$ipc call iphone status > "$iphone_status_ams_recovered_path" 2>&1
 
 # The panel: Recent carrying all five phone-side entries and Now playing
 # off the ams shim's own line.
-"$qs_bin" ipc -p "$shell_path" call panel open iphone > "$iphone_panel_open_path" 2>&1
+$ipc call panel open iphone > "$iphone_panel_open_path" 2>&1
 sleep 2
 "$grim_bin" "$iphone_panel_png" > /dev/null 2>&1
 
 # The media panel on the phone as its source: no audio reaches cava, so the
 # spectrum is the tempo frame, which moves between two reads.
-"$qs_bin" ipc -p "$shell_path" call panel open media > /dev/null 2>&1
+$ipc call panel open media > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call visualizer status > "$iphone_visualizer_a_path" 2>&1
+$ipc call visualizer status > "$iphone_visualizer_a_path" 2>&1
 sleep 0.3
-"$qs_bin" ipc -p "$shell_path" call visualizer status > "$iphone_visualizer_b_path" 2>&1
+$ipc call visualizer status > "$iphone_visualizer_b_path" 2>&1
 "$grim_bin" "$iphone_media_png" > /dev/null 2>&1
 
 # The phone forgot this laptop: BlueZ still holds the bond, LE is down.
 append '{"type":"status","observer":true,"connected":false,"paired":true,"deviceName":"$iphone_device_name","address":"$iphone_device_address","battery":-1}'
 sleep 2
 cp "$iphone_ams_runs_path" "$iphone_ams_runs_stale_path"
-"$qs_bin" ipc -p "$shell_path" call iphone status > "$iphone_status_stale_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call panel open iphone > /dev/null 2>&1
+$ipc call iphone status > "$iphone_status_stale_path" 2>&1
+$ipc call panel open iphone > /dev/null 2>&1
 sleep 2
 "$grim_bin" "$iphone_stale_png" > /dev/null 2>&1
 
-"$qs_bin" ipc -p "$shell_path" call iphone pair > "$iphone_pair_reply_path" 2>&1
+$ipc call iphone pair > "$iphone_pair_reply_path" 2>&1
 sleep 1
 append '{"type":"status","observer":true,"connected":false,"paired":false,"deviceName":"","address":"","battery":-1}'
 append '{"type":"pairingCode","code":"482913"}'
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call iphone status > "$iphone_status_pairing_path" 2>&1
+$ipc call iphone status > "$iphone_status_pairing_path" 2>&1
 "$grim_bin" "$iphone_pairing_png" > /dev/null 2>&1
 EOF
   hypr_exec_once "bash $script"

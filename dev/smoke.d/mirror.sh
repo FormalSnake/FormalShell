@@ -51,7 +51,7 @@ EOF
 
   write_script "$script" <<EOF
 #!/usr/bin/env bash
-ipc() { "$qs_bin" ipc -p "$shell_path" call "\$@"; }
+ipc() { $ipc call "\$@"; }
 # Every /dev/video node the shell itself holds open.
 held() { ls -l /proc/\$(cat "$shot_dir/shell.pid")/fd 2>/dev/null | grep -o '/dev/video[0-9]*' | sort -u | tr '\n' ' '; }
 snap() {

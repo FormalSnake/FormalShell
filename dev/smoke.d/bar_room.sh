@@ -76,12 +76,12 @@ sleep 2
 echo \$! > "$bar_room_pid_path"
 SECONDS=0
 while [ "\$SECONDS" -lt 8 ]; do
-  "$qs_bin" ipc -p "$shell_path" call media status > "$bar_room_status_path" 2>&1
+  $ipc call media status > "$bar_room_status_path" 2>&1
   grep -qF "\"title\":\"$bar_room_title\"" "$bar_room_status_path" && break
   sleep 1
 done
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call bar room > "$bar_room_json_path" 2>&1
+$ipc call bar room > "$bar_room_json_path" 2>&1
 "$grim_bin" "$bar_room_png_path" > /dev/null 2>&1
 EOF
 

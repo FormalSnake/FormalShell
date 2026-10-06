@@ -91,22 +91,22 @@ sleep 3
 
 # The first press opens the card on the window before the focused one; the
 # second walks on to the third entry.
-"$qs_bin" ipc -p "$shell_path" call switcher next > /dev/null 2>&1
+$ipc call switcher next > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call switcher next > /dev/null 2>&1
+$ipc call switcher next > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call switcher state > "$switcher_second_json" 2>&1
+$ipc call switcher state > "$switcher_second_json" 2>&1
 "$hyprctl_bin" -j layers > "$switcher_layers_open" 2>&1
 "$grim_bin" "$switcher_second_png" > /dev/null 2>&1
 
-"$qs_bin" ipc -p "$shell_path" call switcher prev > /dev/null 2>&1
+$ipc call switcher prev > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call switcher state > "$switcher_first_json" 2>&1
+$ipc call switcher state > "$switcher_first_json" 2>&1
 "$grim_bin" "$switcher_first_png" > /dev/null 2>&1
 
-"$qs_bin" ipc -p "$shell_path" call switcher commit > /dev/null 2>&1
+$ipc call switcher commit > /dev/null 2>&1
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call switcher state > "$switcher_closed_json" 2>&1
+$ipc call switcher state > "$switcher_closed_json" 2>&1
 "$hyprctl_bin" -j layers > "$switcher_layers_closed" 2>&1
 "$hyprctl_bin" -j activewindow > "$switcher_active_json" 2>&1
 EOS

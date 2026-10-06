@@ -156,21 +156,21 @@ leg_panel_morph_drive() {
 [ -f "$panel_morph_pid_path" ] && kill "\$(cat "$panel_morph_pid_path")" 2>/dev/null
 # The radio goes back on however this run ended: it is NetworkManager's own
 # setting, not part of the isolated HOME, and the next run needs a list.
-"$qs_bin" ipc -p "$shell_path" call network wifi true > /dev/null 2>&1
+$ipc call network wifi true > /dev/null 2>&1
 true
 EOF
   add_cleanup "bash $kill_script"
 
   write_script "$script" <<EOF
 #!/usr/bin/env bash
-call() { "$qs_bin" ipc -p "$shell_path" call "\$@" >> "$panel_morph_replies_path" 2>&1; }
+call() { $ipc call "\$@" >> "$panel_morph_replies_path" 2>&1; }
 # Both of the rig's own hostapd SSIDs in the station's own scan list, which
 # is what gives the card the two rows this leg measures the collapse of.
 scanned() {
   local ceiling=\$1
   SECONDS=0
   while [ "\$SECONDS" -lt "\$ceiling" ]; do
-    "$qs_bin" ipc -p "$shell_path" call network status > "$panel_morph_scan_path" 2>&1
+    $ipc call network status > "$panel_morph_scan_path" 2>&1
     if grep -qF '"name":"FORMALTEST"' "$panel_morph_scan_path" \
       && grep -qF '"name":"FORMALTEST-EAP"' "$panel_morph_scan_path"; then
       return 0

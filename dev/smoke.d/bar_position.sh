@@ -89,14 +89,14 @@ leg_bar_position_drive() {
   if ! bar_position_rider; then
     own=$(cat <<EOS
 "$grim_bin" "$bar_position_collapsed_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call bar chevron status > "$bar_position_status_collapsed_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call bar chevron expand > "$bar_position_expand_reply_path" 2>&1
+$ipc call bar chevron status > "$bar_position_status_collapsed_path" 2>&1
+$ipc call bar chevron expand > "$bar_position_expand_reply_path" 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call bar chevron status > "$bar_position_status_expanded_path" 2>&1
+$ipc call bar chevron status > "$bar_position_status_expanded_path" 2>&1
 "$grim_bin" "$bar_position_expanded_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call panel open audio > "$bar_position_panel_open_path" 2>&1
+$ipc call panel open audio > "$bar_position_panel_open_path" 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call panel state > "$bar_position_panel_state_path" 2>&1
+$ipc call panel state > "$bar_position_panel_state_path" 2>&1
 EOS
 )
   fi
@@ -115,7 +115,7 @@ EOS
 # No backticks in here: this script is written through an unquoted heredoc,
 # so a quoted identifier in a comment runs as a command.
 for _ in \$(seq 1 40); do
-  "$qs_bin" ipc -p "$shell_path" call debug dump > "$bar_position_dump_path" 2>&1
+  $ipc call debug dump > "$bar_position_dump_path" 2>&1
   grep -q '"barPosition":"$(leg_arg bar_position)"' "$bar_position_dump_path" && break
   sleep 0.5
 done

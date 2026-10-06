@@ -24,11 +24,6 @@ use runtime::{Msg, Publisher, Runtime};
 use wayland::App;
 
 fn main() {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    if args.first().map(String::as_str) == Some("ctl") {
-        std::process::exit(ipc::ctl::client(&args[1..]));
-    }
-
     // Every `t=` in the log counts from here; this line puts that zero on the
     // wall clock, so a cold start reads against the launcher's own stamp.
     let started = Instant::now();

@@ -100,17 +100,17 @@ sleep $t0
 # The compositor's own view of the output, so the captured PNG's real pixel
 # dimensions can be checked against it rather than merely existing.
 "$hyprctl_bin" -j monitors > "$capture_outputs_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call screenshot pick smart default > /dev/null 2>&1
+$ipc call screenshot pick smart default > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call screenshot pickerStatus > "$capture_open_status_path" 2>&1
+$ipc call screenshot pickerStatus > "$capture_open_status_path" 2>&1
 "$grim_bin" "$capture_picker_path" > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call screenshot key tab > /dev/null 2>&1
+$ipc call screenshot key tab > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call screenshot pickerStatus > "$capture_cycled_status_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call screenshot key ctrl-return > "$capture_pick_reply_path" 2>&1
+$ipc call screenshot pickerStatus > "$capture_cycled_status_path" 2>&1
+$ipc call screenshot key ctrl-return > "$capture_pick_reply_path" 2>&1
 for _ in \$(seq 1 20); do
-  "$qs_bin" ipc -p "$shell_path" call screenshot status > "$capture_status_path" 2>&1
+  $ipc call screenshot status > "$capture_status_path" 2>&1
   if grep -q '"capturing":false' "$capture_status_path"; then
     break
   fi
@@ -121,31 +121,31 @@ done
 # wf-recorder child and this leg would fail on "already recording".
 SECONDS=0
 while [ "\$SECONDS" -lt 45 ]; do
-  "$qs_bin" ipc -p "$shell_path" call record status 2>&1 | grep -qF '"active":false' && break
+  $ipc call record status 2>&1 | grep -qF '"active":false' && break
   sleep 1
 done
-"$qs_bin" ipc -p "$shell_path" call screenshot pick smart default > /dev/null 2>&1
+$ipc call screenshot pick smart default > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call screenshot key 4 > /dev/null 2>&1
+$ipc call screenshot key 4 > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call screenshot pickerStatus > "$capture_tool_status_path" 2>&1
+$ipc call screenshot pickerStatus > "$capture_tool_status_path" 2>&1
 "$grim_bin" "$capture_toolbar_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call screenshot key return > "$capture_rec_reply_path" 2>&1
+$ipc call screenshot key return > "$capture_rec_reply_path" 2>&1
 # Long enough that the container holds real frames rather than just a header.
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call record status > "$capture_rec_status_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call record stop > /dev/null 2>&1
+$ipc call record status > "$capture_rec_status_path" 2>&1
+$ipc call record stop > /dev/null 2>&1
 SECONDS=0
 while [ "\$SECONDS" -lt 20 ]; do
-  "$qs_bin" ipc -p "$shell_path" call record status > "$capture_rec_stopped_path" 2>&1
+  $ipc call record status > "$capture_rec_stopped_path" 2>&1
   grep -qF '"active":false' "$capture_rec_stopped_path" && break
   sleep 1
 done
-"$qs_bin" ipc -p "$shell_path" call screenshot pick region default > /dev/null 2>&1
+$ipc call screenshot pick region default > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call screenshot key escape > /dev/null 2>&1
+$ipc call screenshot key escape > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call screenshot pickerStatus > "$capture_escape_status_path" 2>&1
+$ipc call screenshot pickerStatus > "$capture_escape_status_path" 2>&1
 EOF
   hypr_exec_once "bash $script"
 }

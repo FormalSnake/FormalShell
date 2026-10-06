@@ -415,7 +415,7 @@ EOF
 SECONDS=0
 players=""
 while [ "\$SECONDS" -lt 20 ]; do
-  players=\$("$qs_bin" ipc -p "$shell_path" call media players 2>&1)
+  players=\$($ipc call media players 2>&1)
   count=\$(printf '%s' "\$players" | grep -o '"id":"[^"]*"' | wc -l)
   [ "\$count" -ge 3 ] && break
   sleep 1
@@ -423,7 +423,7 @@ done
 echo "players: \$players" >> "$lyrics_seed_log_path"
 
 for id in \$(printf '%s' "\$players" | grep -o '"id":"[^"]*"' | cut -d'"' -f4); do
-  "$qs_bin" ipc -p "$shell_path" call media select "\$id" > /dev/null 2>&1
+  $ipc call media select "\$id" > /dev/null 2>&1
   status=""
   SECONDS=0
   # Waits for status's own "id" field (MediaService.activeId) to actually
@@ -433,7 +433,7 @@ for id in \$(printf '%s' "\$players" | grep -o '"id":"[^"]*"' | cut -d'"' -f4); 
   # title here belongs to one of these three fixtures, so a stale read
   # would otherwise misassign it to the wrong one.
   while [ "\$SECONDS" -lt 6 ]; do
-    status=\$("$qs_bin" ipc -p "$shell_path" call media status 2>&1)
+    status=\$($ipc call media status 2>&1)
     case "\$status" in *"\"id\":\"\$id\""*) break ;; esac
     sleep 1
   done
@@ -446,7 +446,7 @@ for id in \$(printf '%s' "\$players" | grep -o '"id":"[^"]*"' | cut -d'"' -f4); 
 done
 
 id1=\$(cat "$lyrics_id1_path" 2>/dev/null)
-"$qs_bin" ipc -p "$shell_path" call media select "\$id1" > /dev/null 2>&1
+$ipc call media select "\$id1" > /dev/null 2>&1
 touch "$lyrics_marker_seeded"
 EOF
 
@@ -465,16 +465,16 @@ lyrics_wait_marker "$lyrics_marker_seeded" 30
 "$grim_bin" "$lyrics_bare_path" > /dev/null 2>&1
 SECONDS=0
 while [ "\$SECONDS" -lt 15 ]; do
-  "$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_status_preopen_path" 2>&1
+  $ipc call media lyrics > "$lyrics_status_preopen_path" 2>&1
   grep -qF '"state":"synced"' "$lyrics_status_preopen_path" && break
   sleep 1
 done
-"$qs_bin" ipc -p "$shell_path" call panel open media > /dev/null 2>&1
+$ipc call panel open media > /dev/null 2>&1
 sleep 1
 "$grim_bin" "$lyrics_synced_png_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_status_synced_path" 2>&1
+$ipc call media lyrics > "$lyrics_status_synced_path" 2>&1
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_status_later_path" 2>&1
+$ipc call media lyrics > "$lyrics_status_later_path" 2>&1
 touch "$lyrics_marker_open1"
 EOF
 
@@ -492,7 +492,7 @@ EOF
 lyrics_wait_marker "$lyrics_marker_open1" 60
 SECONDS=0
 while [ "\$SECONDS" -lt 50 ]; do
-  "$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_status_duet_path" 2>&1
+  $ipc call media lyrics > "$lyrics_status_duet_path" 2>&1
   active=\$("$jq_bin" -r '.active' "$lyrics_status_duet_path" 2>/dev/null)
   [ "\$active" = "3" ] && break
   sleep 0.5
@@ -507,10 +507,10 @@ echo "\$target_x \$target_y \$rx \$ry \$rw \$rh" > "$lyrics_wheel_target_path"
 sleep 1
 "$wlrctl_bin" pointer move "\$target_x" "\$target_y" >> "$lyrics_wheel_dispatch_path" 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_status_prewheel_path" 2>&1
+$ipc call media lyrics > "$lyrics_status_prewheel_path" 2>&1
 "$wlrctl_bin" pointer scroll 10 0 >> "$lyrics_wheel_dispatch_path" 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_status_postwheel_path" 2>&1
+$ipc call media lyrics > "$lyrics_status_postwheel_path" 2>&1
 # The pointer leaves the pane again: a row under it keeps its own hover fill
 # and is lifted clear of the depth ramp, which is a band of light across
 # every frame the rest of this leg reads.
@@ -519,11 +519,11 @@ sleep 1
 # The reopen: the wheel has the column, the panel is shut with track1 still
 # playing, and it comes back with no track change anywhere in between, so
 # nothing but the open itself can have re-armed follow.
-"$qs_bin" ipc -p "$shell_path" call panel close > /dev/null 2>&1
+$ipc call panel close > /dev/null 2>&1
 sleep 6
-"$qs_bin" ipc -p "$shell_path" call panel open media > /dev/null 2>&1
+$ipc call panel open media > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_status_reopen_path" 2>&1
+$ipc call media lyrics > "$lyrics_status_reopen_path" 2>&1
 "$grim_bin" "$lyrics_reopen_png_path" > /dev/null 2>&1
 touch "$lyrics_marker_track1"
 EOF
@@ -540,7 +540,7 @@ EOF
 . "$lyrics_lib_path"
 lyrics_wait_marker "$lyrics_marker_track1" 120
 id2=\$(cat "$lyrics_id2_path" 2>/dev/null)
-"$qs_bin" ipc -p "$shell_path" call media select "\$id2" > /dev/null 2>&1
+$ipc call media select "\$id2" > /dev/null 2>&1
 # The anchorless open rests against the screen's far padding, so this track
 # change is the one where the width (the pane leaving while the new key
 # loads, then coming back) has to carry the card's leading edge with it.
@@ -552,7 +552,7 @@ for n in 1 2 3 4 5 6 7 8; do
 done
 SECONDS=0
 while [ "\$SECONDS" -lt 15 ]; do
-  "$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_status_estimated_path" 2>&1
+  $ipc call media lyrics > "$lyrics_status_estimated_path" 2>&1
   grep -qF '"state":"synced"' "$lyrics_status_estimated_path" && break
   sleep 1
 done
@@ -572,7 +572,7 @@ lyrics_wait_fraction() {
   local out_json="\$1" want_long="\$2" lo="\$3" hi="\$4" timeout="\$5"
   local waited=0 active span
   while [ "\$waited" -lt "\$timeout" ]; do
-    "$qs_bin" ipc -p "$shell_path" call media lyrics > "\$out_json" 2>&1
+    $ipc call media lyrics > "\$out_json" 2>&1
     active=\$("$jq_bin" -r '.active' "\$out_json" 2>/dev/null)
     if [ -n "\$active" ] && [ "\$active" != "-1" ] && [ "\$active" != "null" ]; then
       if "$jq_bin" -e ".lines[\$active].interlude != true" "\$out_json" > /dev/null 2>&1; then
@@ -611,7 +611,7 @@ cp "$lyrics_rate_short_json_path" "$lyrics_note_before_json_path"
 cp "$lyrics_rate_short_png_path" "$lyrics_note_before_png_path"
 SECONDS=0
 while [ "\$SECONDS" -lt 40 ]; do
-  "$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_note_during_json_path" 2>&1
+  $ipc call media lyrics > "$lyrics_note_during_json_path" 2>&1
   active=\$("$jq_bin" -r '.active' "$lyrics_note_during_json_path" 2>/dev/null)
   if [ -n "\$active" ] && [ "\$active" != "-1" ] && [ "\$active" != "null" ]; then
     if "$jq_bin" -e ".lines[\$active].interlude == true" \
@@ -623,7 +623,7 @@ while [ "\$SECONDS" -lt 40 ]; do
 done
 sleep 2
 "$grim_bin" "$lyrics_note_during_png_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_note_during_json_path" 2>&1
+$ipc call media lyrics > "$lyrics_note_during_json_path" 2>&1
 lyrics_wait_fraction "$lyrics_note_after_json_path" 1 0.05 0.9 60
 "$grim_bin" "$lyrics_note_after_png_path" > /dev/null 2>&1
 touch "$lyrics_marker_track2"
@@ -634,10 +634,10 @@ EOF
 . "$lyrics_lib_path"
 lyrics_wait_marker "$lyrics_marker_track2" 160
 id3=\$(cat "$lyrics_id3_path" 2>/dev/null)
-"$qs_bin" ipc -p "$shell_path" call media select "\$id3" > /dev/null 2>&1
+$ipc call media select "\$id3" > /dev/null 2>&1
 SECONDS=0
 while [ "\$SECONDS" -lt 15 ]; do
-  "$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_status_none_path" 2>&1
+  $ipc call media lyrics > "$lyrics_status_none_path" 2>&1
   grep -qF '"state":"none"' "$lyrics_status_none_path" && break
   sleep 1
 done
@@ -666,12 +666,12 @@ EOF
 . "$lyrics_lib_path"
 lyrics_wait_marker "$lyrics_marker_track3" 200
 id1=\$(cat "$lyrics_id1_path" 2>/dev/null)
-"$qs_bin" ipc -p "$shell_path" call panel close > /dev/null 2>&1
+$ipc call panel close > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call panel toggle media > /dev/null 2>&1
+$ipc call panel toggle media > /dev/null 2>&1
 sleep 1
 "$grim_bin" "$lyrics_return_narrow_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call media select "\$id1" > /dev/null 2>&1
+$ipc call media select "\$id1" > /dev/null 2>&1
 : > "$lyrics_return_rects_path"
 for delay in 0.1 0.4 0.8 1.2 1.6; do
   sleep "\$delay"
@@ -680,7 +680,7 @@ for delay in 0.1 0.4 0.8 1.2 1.6; do
   read -r rx ry rw rh _ < <(lyrics_pane_rect "$lyrics_bare_path" "\$frame" "$convert_bin")
   echo "\$delay \$rx \$ry \$rw \$rh" >> "$lyrics_return_rects_path"
 done
-"$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_status_return_path" 2>&1
+$ipc call media lyrics > "$lyrics_status_return_path" 2>&1
 
 # The two line changes, photographed. Track1's own boundaries are at 15s
 # (line0 into line1, both a row tall) and 25s (line1 into line3, the one that
@@ -711,7 +711,7 @@ done
 lyrics_wait_position() {
   local out_json="\$1" want="\$2" waited=0
   while [ "\$waited" -lt 30 ]; do
-    "$qs_bin" ipc -p "$shell_path" call media lyrics > "\$out_json" 2>&1
+    $ipc call media lyrics > "\$out_json" 2>&1
     if "$jq_bin" -e ".position > (\$want - 0.35) and .position < (\$want + 0.35)" "\$out_json" > /dev/null 2>&1; then
       return 0
     fi
@@ -740,7 +740,7 @@ lyrics_wait_position "$lyrics_wrap_late_json_path" 30.6
 lyrics_wait_exact() {
   local out_json="\$1" want="\$2" waited=0
   while [ "\$waited" -lt 30 ]; do
-    "$qs_bin" ipc -p "$shell_path" call media lyrics > "\$out_json" 2>&1
+    $ipc call media lyrics > "\$out_json" 2>&1
     if "$jq_bin" -e ".position > (\$want - 0.005) and .position < (\$want + 0.005)" "\$out_json" > /dev/null 2>&1; then
       return 0
     fi
@@ -755,7 +755,7 @@ lyrics_lat_frame() {
   lyrics_wait_exact "\$2" "\$1"
   sleep 1.5
   "$grim_bin" "\$3" > /dev/null 2>&1
-  "$qs_bin" ipc -p "$shell_path" call media lyrics > "\$2" 2>&1
+  $ipc call media lyrics > "\$2" 2>&1
 }
 
 # 14.95s on the plain sink: line1 is lit, 50ms inside the lead.
@@ -781,7 +781,7 @@ done
 lyrics_mpv "$lyrics_sock1_path" '{"command":["set_property","audio-device","pipewire/$lyrics_lat_sink"]}'
 SECONDS=0
 while [ "\$SECONDS" -lt 20 ]; do
-  "$qs_bin" ipc -p "$shell_path" call media lyrics > "$lyrics_lat_route_json_path" 2>&1
+  $ipc call media lyrics > "$lyrics_lat_route_json_path" 2>&1
   "$jq_bin" -e '.latency.ms >= 200' "$lyrics_lat_route_json_path" > /dev/null 2>&1 && break
   sleep 0.5
 done

@@ -38,12 +38,12 @@ leg_systemupdate_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 4
-"$qs_bin" ipc -p "$shell_path" call panel open systemupdate > "$systemupdate_open_reply_path" 2>&1
+$ipc call panel open systemupdate > "$systemupdate_open_reply_path" 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call panel state > "$systemupdate_state_path" 2>&1
+$ipc call panel state > "$systemupdate_state_path" 2>&1
 sleep 20
 "$grim_bin" "$systemupdate_panel_png" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call debug dump > "$systemupdate_dump_path" 2>&1
+$ipc call debug dump > "$systemupdate_dump_path" 2>&1
 EOF
   hypr_exec_once "bash $script"
 }

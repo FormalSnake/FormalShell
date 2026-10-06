@@ -90,21 +90,21 @@ leg_wheel_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep $t0
-"$qs_bin" ipc -p "$shell_path" call picker summon > /dev/null 2>&1
+$ipc call picker summon > /dev/null 2>&1
 sleep 2
 "$wlrctl_bin" pointer move -4000 -4000 > "$wheel_dispatch_path" 2>&1
 sleep 1
 "$wlrctl_bin" pointer move 893 604 >> "$wheel_dispatch_path" 2>&1
 sleep 2
 "$grim_bin" "$wheel_before_png" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu status > "$wheel_menu_before_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call picker status > "$wheel_picker_before_path" 2>&1
+$ipc call menu status > "$wheel_menu_before_path" 2>&1
+$ipc call picker status > "$wheel_picker_before_path" 2>&1
 "$wlrctl_bin" pointer scroll 10 0 >> "$wheel_dispatch_path" 2>&1
 sleep 3
 "$grim_bin" "$wheel_after_png" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu status > "$wheel_menu_after_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call picker status > "$wheel_picker_after_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
+$ipc call menu status > "$wheel_menu_after_path" 2>&1
+$ipc call picker status > "$wheel_picker_after_path" 2>&1
+$ipc call menu close > /dev/null 2>&1
 sleep 1
 "$wpctl_bin" get-volume @DEFAULT_AUDIO_SINK@ 2>&1 | grep '^Volume:' > "$wheel_volume_before_path"
 "$wlrctl_bin" pointer move -4000 -4000 >> "$wheel_dispatch_path" 2>&1

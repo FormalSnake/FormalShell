@@ -83,17 +83,17 @@ leg_shoulders_drive() {
 #!/usr/bin/env bash
 sleep 4
 # Closed: the line whole, and the desktop where the card is about to hang.
-"$qs_bin" ipc -p "$shell_path" call debug dump > "$shoulders_dump_closed_path" 2>&1
+$ipc call debug dump > "$shoulders_dump_closed_path" 2>&1
 "$grim_bin" "$shoulders_closed_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call debug join top $shoulders_join_x $shoulders_join_width > "$shoulders_join_reply_path" 2>&1
+$ipc call debug join top $shoulders_join_x $shoulders_join_width > "$shoulders_join_reply_path" 2>&1
 # A full spatial clock (500ms) and a frame's grace past it: the two ends of
 # the gap travel, and everything below reads them at rest.
 sleep 0.6
-"$qs_bin" ipc -p "$shell_path" call debug dump > "$shoulders_dump_open_path" 2>&1
+$ipc call debug dump > "$shoulders_dump_open_path" 2>&1
 "$grim_bin" "$shoulders_open_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call debug joinClear > "$shoulders_clear_reply_path" 2>&1
+$ipc call debug joinClear > "$shoulders_clear_reply_path" 2>&1
 sleep 0.6
-"$qs_bin" ipc -p "$shell_path" call debug dump > "$shoulders_dump_cleared_path" 2>&1
+$ipc call debug dump > "$shoulders_dump_cleared_path" 2>&1
 "$grim_bin" "$shoulders_cleared_path" > /dev/null 2>&1
 EOF
   hypr_exec_once "bash $script"

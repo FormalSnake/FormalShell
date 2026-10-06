@@ -152,70 +152,70 @@ leg_app_grid_drive() {
 #!/usr/bin/env bash
 sleep $t0
 cp "$app_grid_settings" "$app_grid_settings_on"
-"$qs_bin" ipc -p "$shell_path" call menu summon apps > /dev/null 2>&1
+$ipc call menu summon apps > /dev/null 2>&1
 sleep 2
 "$grim_bin" "$app_grid_png" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu status > "$app_grid_open_path" 2>&1
+$ipc call menu status > "$app_grid_open_path" 2>&1
 "$wtype_bin" -k Right
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call menu status > "$app_grid_right_path" 2>&1
+$ipc call menu status > "$app_grid_right_path" 2>&1
 "$wtype_bin" -k Down
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call menu status > "$app_grid_down_path" 2>&1
+$ipc call menu status > "$app_grid_down_path" 2>&1
 # A token only the probe entry carries, so the narrowed grid is one cell and
 # the cursor Enter lands on is unambiguous.
-"$qs_bin" ipc -p "$shell_path" call menu filter probe > /dev/null 2>&1
+$ipc call menu filter probe > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call debug query probe > "$app_grid_probe_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu status > "$app_grid_narrow_path" 2>&1
+$ipc call debug query probe > "$app_grid_probe_path" 2>&1
+$ipc call menu status > "$app_grid_narrow_path" 2>&1
 "$wtype_bin" -k Return
 sleep 2
 # A root query that ranks an app alongside routes: the grid takes the apps
 # and the rest draw as rows under it.
-"$qs_bin" ipc -p "$shell_path" call menu summon "" > /dev/null 2>&1
+$ipc call menu summon "" > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call menu filter app > /dev/null 2>&1
+$ipc call menu filter app > /dev/null 2>&1
 sleep 2
 "$grim_bin" "$app_grid_mixed_png" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu status > "$app_grid_mixed_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call debug query app > "$app_grid_mixed_query_path" 2>&1
+$ipc call menu status > "$app_grid_mixed_path" 2>&1
+$ipc call debug query app > "$app_grid_mixed_query_path" 2>&1
 # Down onto the row under the grid queues its reveal for the next tick, and a
 # new query inside that tick rebuilds the rows it was queued from. Verify reads
 # the shell's own log for what a reveal evaluated after its row was gone says.
 "$wtype_bin" -k Down
-"$qs_bin" ipc -p "$shell_path" call menu filter ap > /dev/null 2>&1
+$ipc call menu filter ap > /dev/null 2>&1
 "$wtype_bin" -k Down
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call menu status > "$app_grid_typed_path" 2>&1
+$ipc call menu status > "$app_grid_typed_path" 2>&1
 "$wtype_bin" -k BackSpace
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call menu status > "$app_grid_backspace_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu filter zzzz > /dev/null 2>&1
+$ipc call menu status > "$app_grid_backspace_path" 2>&1
+$ipc call menu filter zzzz > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call menu status > "$app_grid_empty_path" 2>&1
+$ipc call menu status > "$app_grid_empty_path" 2>&1
 "$wtype_bin" -k Escape
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call menu status > "$app_grid_escape_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu summon apps > /dev/null 2>&1
+$ipc call menu status > "$app_grid_escape_path" 2>&1
+$ipc call menu summon apps > /dev/null 2>&1
 sleep 1
 "$wtype_bin" -P BackSpace -s 1500 -p BackSpace
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call menu status > "$app_grid_hold_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
+$ipc call menu status > "$app_grid_hold_path" 2>&1
+$ipc call menu close > /dev/null 2>&1
 # The key deleted underneath the running shell. Written back through the same
 # inode rather than moved over, so the config watch sees a write and not a
 # file it is no longer holding.
 "$jq_bin" 'del(.menu.appGrid)' "$app_grid_settings" > "$app_grid_settings_off" 2>&1
 cat "$app_grid_settings_off" > "$app_grid_settings"
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call menu summon apps > /dev/null 2>&1
+$ipc call menu summon apps > /dev/null 2>&1
 sleep 2
 "$grim_bin" "$app_grid_rows_png" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu status > "$app_grid_off_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
+$ipc call menu status > "$app_grid_off_path" 2>&1
+$ipc call menu close > /dev/null 2>&1
 cat "$app_grid_settings_on" > "$app_grid_settings"
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call menu summon apps > /dev/null 2>&1
+$ipc call menu summon apps > /dev/null 2>&1
 EOF
   hypr_exec_once "bash $script"
 }

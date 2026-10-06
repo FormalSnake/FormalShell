@@ -83,39 +83,39 @@ leg_menu_drive() {
   write_script "$menu_script" <<EOF
 #!/usr/bin/env bash
 sleep $t0
-"$qs_bin" ipc -p "$shell_path" call menu summon "" > /dev/null 2>&1
+$ipc call menu summon "" > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call debug query 'e' > "$query_path" 2>&1
+$ipc call debug query 'e' > "$query_path" 2>&1
 "$grim_bin" "$menu_root_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu status > "$menu_status_root_path" 2>&1
+$ipc call menu status > "$menu_status_root_path" 2>&1
 "$wtype_bin" -k Down
 sleep 1
 "$grim_bin" "$menu_down_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu status > "$menu_status_down_path" 2>&1
+$ipc call menu status > "$menu_status_down_path" 2>&1
 for n in 2 3 4; do
   "$wtype_bin" -k Down
   sleep 0.6
-  "$qs_bin" ipc -p "$shell_path" call menu status > "$shot_dir/menu-status-down\$n.json" 2>&1
+  $ipc call menu status > "$shot_dir/menu-status-down\$n.json" 2>&1
 done
 for n in 1 2 3 4; do
   "$wtype_bin" -k Up
   sleep 0.6
-  "$qs_bin" ipc -p "$shell_path" call menu status > "$shot_dir/menu-status-up\$n.json" 2>&1
+  $ipc call menu status > "$shot_dir/menu-status-up\$n.json" 2>&1
 done
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call menu filter e > /dev/null 2>&1
+$ipc call menu filter e > /dev/null 2>&1
 sleep 1
 "$grim_bin" "$menu_search_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu status > "$menu_status_search_path" 2>&1
+$ipc call menu status > "$menu_status_search_path" 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call menu summon emoji > /dev/null 2>&1
+$ipc call menu summon emoji > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call menu filter smiling > /dev/null 2>&1
+$ipc call menu filter smiling > /dev/null 2>&1
 sleep 2
 "$grim_bin" "$menu_emoji_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu status > "$menu_status_emoji_path" 2>&1
+$ipc call menu status > "$menu_status_emoji_path" 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call menu select "Pick" ' ["a","b","c"]' tok1 > /dev/null 2>&1
+$ipc call menu select "Pick" ' ["a","b","c"]' tok1 > /dev/null 2>&1
 EOF
 
   # Runs after the screenshot, never before: closing the surface first would
@@ -125,7 +125,7 @@ EOF
   write_script "$menu_finish_script" <<EOF
 #!/usr/bin/env bash
 sleep $((t0 + 19))
-"$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
+$ipc call menu close > /dev/null 2>&1
 sleep 1
 cat "$iso_home/.local/state/formalshell/menu-selection.txt" > "$selection_path" 2>&1
 EOF

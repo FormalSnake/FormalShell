@@ -131,22 +131,22 @@ EOF
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep $((t0 + 4))
-"$qs_bin" ipc -p "$shell_path" call screensaver status > "$ss_guard_status_path" 2>&1
+$ipc call screensaver status > "$ss_guard_status_path" 2>&1
 if [ -f "$ss_pid_path" ]; then
   kill "\$(cat "$ss_pid_path")" 2>/dev/null || true
 fi
 sleep 5
 "$grim_bin" "$ss_auto_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call screensaver status > "$ss_auto_status_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call screensaver stop > /dev/null 2>&1
+$ipc call screensaver status > "$ss_auto_status_path" 2>&1
+$ipc call screensaver stop > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call screensaver status > "$ss_dismiss_status_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call screensaver start > /dev/null 2>&1
+$ipc call screensaver status > "$ss_dismiss_status_path" 2>&1
+$ipc call screensaver start > /dev/null 2>&1
 sleep 1
 "$grim_bin" "$ss_manual_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call screensaver frameInfo > "$ss_cycle_info1_path" 2>&1
+$ipc call screensaver frameInfo > "$ss_cycle_info1_path" 2>&1
 while [ "\$SECONDS" -lt $((t0 + 71)) ]; do
-  "$qs_bin" ipc -p "$shell_path" call screensaver frameInfo > "$ss_cycle_info2_path" 2>&1
+  $ipc call screensaver frameInfo > "$ss_cycle_info2_path" 2>&1
   grep -q '"cycles":0}' "$ss_cycle_info2_path" || break
   sleep 1
 done
@@ -156,19 +156,19 @@ done
 # effect is the banner itself, so this frame is the same picture whichever
 # effect the reroll happened to land on. A pin also suspends cycling, so
 # nothing rerolls out from under grim.
-"$qs_bin" ipc -p "$shell_path" call screensaver frame 0 > /dev/null 2>&1
+$ipc call screensaver frame 0 > /dev/null 2>&1
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call screensaver frameInfo > "$ss_solid_info_path" 2>&1
+$ipc call screensaver frameInfo > "$ss_solid_info_path" 2>&1
 ss_convergence=\$(grep -o '"convergenceFrame":[0-9]*' "$ss_solid_info_path" | cut -d: -f2)
 if [ -z "\$ss_convergence" ] || [ "\$ss_convergence" -lt 1 ]; then
   ss_convergence=1
 fi
-"$qs_bin" ipc -p "$shell_path" call screensaver frame \$((ss_convergence - 1)) > /dev/null 2>&1
+$ipc call screensaver frame \$((ss_convergence - 1)) > /dev/null 2>&1
 sleep 3
 "$grim_bin" "$ss_solid_path" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call screensaver stop > /dev/null 2>&1
+$ipc call screensaver stop > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call screensaver status > "$ss_final_status_path" 2>&1
+$ipc call screensaver status > "$ss_final_status_path" 2>&1
 EOF
   hypr_exec_once "bash $play_script"
   hypr_exec_once "bash $script"

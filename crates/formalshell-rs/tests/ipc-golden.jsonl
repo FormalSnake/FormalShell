@@ -1,0 +1,119 @@
+{"argv":["call","debug","dump"],"live":true,"stdout":"{}\n","stderr":"","exit":0}
+{"argv":["call","debug","joinClear"],"live":true,"stdout":"ok\n","stderr":"","exit":0}
+{"argv":["call","debug","join","top","10","20"],"live":true,"stdout":"join top 10 20\n","stderr":"","exit":0}
+{"argv":["call","debug","join","top","10"],"live":true,"stdout":"Too few arguments provided (3 required but 2 were provided.)\nFunction definition: function join(edge: string, x: int, width: int): string\n","stderr":"","exit":0}
+{"argv":["call","debug","join","top","10","20","30"],"live":true,"stdout":"Too many arguments provided (3 required but 4 were provided.)\nFunction definition: function join(edge: string, x: int, width: int): string\n","stderr":"","exit":0}
+{"argv":["call","debug","join","top","x","20"],"live":true,"stdout":"Unable to parse argument 2 as \"int\". Provided argument: \"x\"\nFunction definition: function join(edge: string, x: int, width: int): string\n","stderr":"","exit":0}
+{"argv":["call","debug","motionScale","1000"],"live":true,"stdout":"ms 1000\n","stderr":"","exit":0}
+{"argv":["call","debug","motionScale"," 12 "],"live":true,"stdout":"ms 12\n","stderr":"","exit":0}
+{"argv":["call","debug","motionScale","+12"],"live":true,"stdout":"ms 12\n","stderr":"","exit":0}
+{"argv":["call","debug","motionScale","0x10"],"live":true,"stdout":"Unable to parse argument 1 as \"int\". Provided argument: \"0x10\"\nFunction definition: function motionScale(percent: int): string\n","stderr":"","exit":0}
+{"argv":["call","debug","motionScale","1.5"],"live":true,"stdout":"Unable to parse argument 1 as \"int\". Provided argument: \"1.5\"\nFunction definition: function motionScale(percent: int): string\n","stderr":"","exit":0}
+{"argv":["call","debug","motionScale","-5"],"live":true,"stdout":"ms -5\n","stderr":"","exit":0}
+{"argv":["call","debug","motionScale","--","-5"],"live":true,"stdout":"ms -5\n","stderr":"","exit":0}
+{"argv":["call","debug","query",""],"live":true,"stdout":"[\"\"]\n","stderr":"","exit":0}
+{"argv":["call","debug","query","a b"],"live":true,"stdout":"[\"a b\"]\n","stderr":"","exit":0}
+{"argv":["call","debug","query","[1,2]"],"live":true,"stdout":"Too many arguments provided (1 required but 2 were provided.)\nFunction definition: function query(q: string): string\n","stderr":"","exit":0}
+{"argv":["call","debug","query"," [1,2]"],"live":true,"stdout":"[\" [1,2]\"]\n","stderr":"","exit":0}
+{"argv":["call","debug","query","[x]"],"live":true,"stdout":"[\"x\"]\n","stderr":"","exit":0}
+{"argv":["call","debug","query","[]"],"live":true,"stdout":"Too few arguments provided (1 required but 0 were provided.)\nFunction definition: function query(q: string): string\n","stderr":"","exit":0}
+{"argv":["call","debug","query","a,b"],"live":true,"stdout":"[\"a,b\"]\n","stderr":"","exit":0}
+{"argv":["call","debug","query","{a,b}"],"live":true,"stdout":"[\"{a,b}\"]\n","stderr":"","exit":0}
+{"argv":["call","debug","query","--x"],"live":true,"stdout":"","stderr":"The following argument was not expected: --x\nRun with --help for more information.\n","exit":109}
+{"argv":["call","debug","query","-x"],"live":true,"stdout":"","stderr":"The following argument was not expected: -x\nRun with --help for more information.\n","exit":109}
+{"argv":["call","debug","query","show"],"live":true,"stdout":"function query(q: string): string\n","stderr":"","exit":0}
+{"argv":["call","debug","query","call"],"live":true,"stdout":"[\"call\"]\n","stderr":"","exit":0}
+{"argv":["call","debug","query","prop"],"live":true,"stdout":"","stderr":"A subcommand is required\nRun with --help for more information.\n","exit":106}
+{"argv":["call","debug","query","é ✓"],"live":true,"stdout":"[\"é ✓\"]\n","stderr":"","exit":0}
+{"argv":["call","probe","ss","[a,b]"],"live":true,"stdout":"[a][b]\n","stderr":"","exit":0}
+{"argv":["call","probe","sss","[a,b]","c"],"live":true,"stdout":"[a][b][c]\n","stderr":"","exit":0}
+{"argv":["call","probe","sss","[a,b,c]"],"live":true,"stdout":"[a][b][c]\n","stderr":"","exit":0}
+{"argv":["call","probe","ss","a","[]"],"live":true,"stdout":"Too few arguments provided (2 required but 1 were provided.)\nFunction definition: function ss(a: string, b: string): string\n","stderr":"","exit":0}
+{"argv":["call","probe","s","["],"live":true,"stdout":"[[]\n","stderr":"","exit":0}
+{"argv":["call","probe","s","]"],"live":true,"stdout":"[]]\n","stderr":"","exit":0}
+{"argv":["call","probe","s","[a"],"live":true,"stdout":"[[a]\n","stderr":"","exit":0}
+{"argv":["call","probe","s","\"q\""],"live":true,"stdout":"[\"q\"]\n","stderr":"","exit":0}
+{"argv":["call","probe","s","'q'"],"live":true,"stdout":"['q']\n","stderr":"","exit":0}
+{"argv":["call","probe","s","a\\nb"],"live":true,"stdout":"[a\\nb]\n","stderr":"","exit":0}
+{"argv":["call","probe","s","a\nb"],"live":true,"stdout":"[a\nb]\n","stderr":"","exit":0}
+{"argv":["call","probe","ss","--","a"],"live":true,"stdout":"Too few arguments provided (2 required but 1 were provided.)\nFunction definition: function ss(a: string, b: string): string\n","stderr":"","exit":0}
+{"argv":["call","probe","s","--"],"live":true,"stdout":"Too few arguments provided (1 required but 0 were provided.)\nFunction definition: function s(a: string): string\n","stderr":"","exit":0}
+{"argv":["call","probe","s","-"],"live":true,"stdout":"[-]\n","stderr":"","exit":0}
+{"argv":["call","probe","show"],"live":true,"stdout":"target probe\n  function nl(): string\n  function ri(a: real): real\n  function empty(): string\n  function ss(a: string, b: string): string\n  function ii(a: int): int\n  function v(): void\n  function sss(a: string, b: string, c: string): string\n  function i(a: int): string\n  function s(a: string): string\n  function bb(a: bool): bool\n  function call(): string\n  function r(a: real): string\n  function b(a: bool): string\n  function show(): string\n","stderr":"","exit":0}
+{"argv":["call","probe","call"],"live":true,"stdout":"probe-call\n","stderr":"","exit":0}
+{"argv":["call","probe","s","show"],"live":true,"stdout":"function s(a: string): string\n","stderr":"","exit":0}
+{"argv":["call","probe","b","true"],"live":true,"stdout":"true\n","stderr":"","exit":0}
+{"argv":["call","probe","b","false"],"live":true,"stdout":"false\n","stderr":"","exit":0}
+{"argv":["call","probe","b","1"],"live":true,"stdout":"true\n","stderr":"","exit":0}
+{"argv":["call","probe","b","0"],"live":true,"stdout":"false\n","stderr":"","exit":0}
+{"argv":["call","probe","b","2"],"live":true,"stdout":"true\n","stderr":"","exit":0}
+{"argv":["call","probe","b","yes"],"live":true,"stdout":"Unable to parse argument 1 as \"bool\". Provided argument: \"yes\"\nFunction definition: function b(a: bool): string\n","stderr":"","exit":0}
+{"argv":["call","probe","b","TRUE"],"live":true,"stdout":"Unable to parse argument 1 as \"bool\". Provided argument: \"TRUE\"\nFunction definition: function b(a: bool): string\n","stderr":"","exit":0}
+{"argv":["call","probe","i","2147483648"],"live":true,"stdout":"Unable to parse argument 1 as \"int\". Provided argument: \"2147483648\"\nFunction definition: function i(a: int): string\n","stderr":"","exit":0}
+{"argv":["call","probe","i","007"],"live":true,"stdout":"7\n","stderr":"","exit":0}
+{"argv":["call","probe","i"," 7"],"live":true,"stdout":"7\n","stderr":"","exit":0}
+{"argv":["call","probe","r","1.5"],"live":true,"stdout":"1.5\n","stderr":"","exit":0}
+{"argv":["call","probe","r","1e3"],"live":true,"stdout":"1000\n","stderr":"","exit":0}
+{"argv":["call","probe","r","nan"],"live":true,"stdout":"NaN\n","stderr":"","exit":0}
+{"argv":["call","probe","r","inf"],"live":true,"stdout":"Infinity\n","stderr":"","exit":0}
+{"argv":["call","probe","r"," 2 "],"live":true,"stdout":"2\n","stderr":"","exit":0}
+{"argv":["call","probe","ri","0.1"],"live":true,"stdout":"0.1\n","stderr":"","exit":0}
+{"argv":["call","probe","ri","3"],"live":true,"stdout":"3\n","stderr":"","exit":0}
+{"argv":["call","probe","ri","1e21"],"live":true,"stdout":"1e+21\n","stderr":"","exit":0}
+{"argv":["call","probe","ri","1e-7"],"live":true,"stdout":"1e-07\n","stderr":"","exit":0}
+{"argv":["call","probe","ri","123456789"],"live":true,"stdout":"1.23457e+08\n","stderr":"","exit":0}
+{"argv":["call","probe","ii","-7"],"live":true,"stdout":"-7\n","stderr":"","exit":0}
+{"argv":["call","probe","bb","1"],"live":true,"stdout":"true\n","stderr":"","exit":0}
+{"argv":["call","probe","v"],"live":true,"stdout":"","stderr":"","exit":0}
+{"argv":["call","probe","empty"],"live":true,"stdout":"\n","stderr":"","exit":0}
+{"argv":["call","probe","nl"],"live":true,"stdout":"a\nb\n\n","stderr":"","exit":0}
+{"argv":["call","nope","dump"],"live":true,"stdout":"Target not found.\n","stderr":"","exit":0}
+{"argv":["call","debug","nope"],"live":true,"stdout":"Function not found.\n","stderr":"","exit":0}
+{"argv":["call","DEBUG","dump"],"live":true,"stdout":"Target not found.\n","stderr":"","exit":0}
+{"argv":["call","debug"],"live":true,"stdout":"Function required to send message.\n","stderr":"","exit":0}
+{"argv":["call"],"live":true,"stdout":"Target required to send message.\n","stderr":"","exit":0}
+{"argv":["call","","dump"],"live":true,"stdout":"Target required to send message.\n","stderr":"","exit":0}
+{"argv":["call","debug",""],"live":true,"stdout":"Function required to send message.\n","stderr":"","exit":0}
+{"argv":["show"],"live":true,"stdout":"target probe\n  function nl(): string\n  function ri(a: real): real\n  function empty(): string\n  function ss(a: string, b: string): string\n  function ii(a: int): int\n  function v(): void\n  function sss(a: string, b: string, c: string): string\n  function i(a: int): string\n  function s(a: string): string\n  function bb(a: bool): bool\n  function call(): string\n  function r(a: real): string\n  function b(a: bool): string\n  function show(): string\ntarget debug\n  function motionScale(percent: int): string\n  function query(q: string): string\n  function joinClear(): string\n  function join(edge: string, x: int, width: int): string\n  function dump(): string\n","stderr":"","exit":0}
+{"argv":["call","debug","dump","extra"],"live":true,"stdout":"Too many arguments provided (0 required but 1 were provided.)\nFunction definition: function dump(): string\n","stderr":"","exit":0}
+{"argv":["call","debug","dump","--any-display"],"live":true,"stdout":"","stderr":"The following argument was not expected: --any-display\nRun with --help for more information.\n","exit":109}
+{"argv":["call","debug","motionScale","-1.5"],"live":true,"stdout":"Unable to parse argument 1 as \"int\". Provided argument: \"-1.5\"\nFunction definition: function motionScale(percent: int): string\n","stderr":"","exit":0}
+{"argv":["call","debug","motionScale","-.5"],"live":true,"stdout":"Unable to parse argument 1 as \"int\". Provided argument: \"-.5\"\nFunction definition: function motionScale(percent: int): string\n","stderr":"","exit":0}
+{"argv":["call","debug","motionScale","--5"],"live":true,"stdout":"","stderr":"The following argument was not expected: --5\nRun with --help for more information.\n","exit":109}
+{"argv":["call","debug","query","---"],"live":true,"stdout":"[\"---\"]\n","stderr":"","exit":0}
+{"argv":["call","debug","query","-!"],"live":true,"stdout":"[\"-!\"]\n","stderr":"","exit":0}
+{"argv":["call","debug","query","- x"],"live":true,"stdout":"[\"- x\"]\n","stderr":"","exit":0}
+{"argv":["call","debug","query","-é"],"live":true,"stdout":"","stderr":"The following argument was not expected: -é\nRun with --help for more information.\n","exit":109}
+{"argv":["call","debug","query","--x=1"],"live":true,"stdout":"","stderr":"The following argument was not expected: --x=1\nRun with --help for more information.\n","exit":109}
+{"argv":["call","probe","s","--","--"],"live":true,"stdout":"[--]\n","stderr":"","exit":0}
+{"argv":["call","probe","s","--","-x"],"live":true,"stdout":"[-x]\n","stderr":"","exit":0}
+{"argv":["call","probe","s","--","show"],"live":true,"stdout":"[show]\n","stderr":"","exit":0}
+{"argv":["call","probe","s","--","[a]"],"live":true,"stdout":"[a]\n","stderr":"","exit":0}
+{"argv":["call","probe","ss","a","--"],"live":true,"stdout":"Too few arguments provided (2 required but 1 were provided.)\nFunction definition: function ss(a: string, b: string): string\n","stderr":"","exit":0}
+{"argv":["call","probe","ss","[a, b]"],"live":true,"stdout":"[a][b]\n","stderr":"","exit":0}
+{"argv":["call","probe","sss","[a,,b]"],"live":true,"stdout":"Too few arguments provided (3 required but 2 were provided.)\nFunction definition: function sss(a: string, b: string, c: string): string\n","stderr":"","exit":0}
+{"argv":["call","probe","ss","[,]"],"live":true,"stdout":"Too few arguments provided (2 required but 0 were provided.)\nFunction definition: function ss(a: string, b: string): string\n","stderr":"","exit":0}
+{"argv":["call","probe","ss","[\"a,b\",c]"],"live":true,"stdout":"[\"a,b\"][c]\n","stderr":"","exit":0}
+{"argv":["call","probe","s","[[a]]"],"live":true,"stdout":"[a]\n","stderr":"","exit":0}
+{"argv":["call","probe","s","[ ]"],"live":true,"stdout":"Too few arguments provided (1 required but 0 were provided.)\nFunction definition: function s(a: string): string\n","stderr":"","exit":0}
+{"argv":["call","probe","s","x[a,b]"],"live":true,"stdout":"[x[a,b]]\n","stderr":"","exit":0}
+{"argv":["call","probe","i","a\"b"],"live":true,"stdout":"Unable to parse argument 1 as \"int\". Provided argument: \"a\\\"b\"\nFunction definition: function i(a: int): string\n","stderr":"","exit":0}
+{"argv":["call","probe","i","a\\b"],"live":true,"stdout":"Unable to parse argument 1 as \"int\". Provided argument: \"a\\\\b\"\nFunction definition: function i(a: int): string\n","stderr":"","exit":0}
+{"argv":["call","probe","i","é"],"live":true,"stdout":"Unable to parse argument 1 as \"int\". Provided argument: \"é\"\nFunction definition: function i(a: int): string\n","stderr":"","exit":0}
+{"argv":["call","probe","i","a\tb"],"live":true,"stdout":"Unable to parse argument 1 as \"int\". Provided argument: \"a\\tb\"\nFunction definition: function i(a: int): string\n","stderr":"","exit":0}
+{"argv":["call","probe","i","a\nb"],"live":true,"stdout":"Unable to parse argument 1 as \"int\". Provided argument: \"a\\nb\"\nFunction definition: function i(a: int): string\n","stderr":"","exit":0}
+{"argv":["call","nope","show"],"live":true,"stdout":"Target not found.\n","stderr":"","exit":0}
+{"argv":["call","debug","nope","show"],"live":true,"stdout":"Function not found.\n","stderr":"","exit":0}
+{"argv":["call","probe","s","show","extra"],"live":true,"stdout":"","stderr":"The following argument was not expected: extra\nRun with --help for more information.\n","exit":109}
+{"argv":["call","debug","query","wait"],"live":true,"stdout":"Signal not found.\n","stderr":"","exit":0}
+{"argv":["call","debug","query","listen"],"live":true,"stdout":"Signal not found.\n","stderr":"","exit":0}
+{"argv":["call","debug","query","get"],"live":true,"stdout":"[\"get\"]\n","stderr":"","exit":0}
+{"argv":["call","debug","query","list"],"live":true,"stdout":"[\"list\"]\n","stderr":"","exit":0}
+{"argv":["call","debug","query","log"],"live":true,"stdout":"[\"log\"]\n","stderr":"","exit":0}
+{"argv":["call","debug","query","msg"],"live":true,"stdout":"[\"msg\"]\n","stderr":"","exit":0}
+{"argv":["call","debug","query","ipc"],"live":true,"stdout":"[\"ipc\"]\n","stderr":"","exit":0}
+{"argv":["call","debug","query","instances"],"live":true,"stdout":"[\"instances\"]\n","stderr":"","exit":0}
+{"argv":["show","debug"],"live":true,"stdout":"","stderr":"The following argument was not expected: debug\nRun with --help for more information.\n","exit":109}
+{"argv":["show","debug","query"],"live":true,"stdout":"","stderr":"The following arguments were not expected: debug query\nRun with --help for more information.\n","exit":109}
+{"argv":["call","debug","dump"],"live":false,"stdout":"No running instances for \"/tmp/tmp.NeZP0Xjzdg/shell/shell.qml\"\n","stderr":"","exit":255}
+{"argv":["show"],"live":false,"stdout":"No running instances for \"/tmp/tmp.NeZP0Xjzdg/shell/shell.qml\"\n","stderr":"","exit":255}

@@ -32,7 +32,7 @@ leg_switcher_off_drive() {
 mkdir -p "$switcher_off_dir"
 sleep 5
 for verb in next prev commit cancel state; do
-  "$qs_bin" ipc -p "$shell_path" call switcher "\$verb" > "$switcher_off_dir/\$verb.txt" 2>&1
+  $ipc call switcher "\$verb" > "$switcher_off_dir/\$verb.txt" 2>&1
 done
 sleep 1
 "$hyprctl_bin" -j layers > "$switcher_off_layers" 2>&1

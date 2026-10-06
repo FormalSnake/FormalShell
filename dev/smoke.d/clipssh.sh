@@ -80,15 +80,15 @@ leg_clipssh_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call menu summon clipssh > "$clipssh_summon_reply_path" 2>&1
+$ipc call menu summon clipssh > "$clipssh_summon_reply_path" 2>&1
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call menu activate 0 > "$clipssh_send_reply_path" 2>&1
+$ipc call menu activate 0 > "$clipssh_send_reply_path" 2>&1
 sleep 12
-"$qs_bin" ipc -p "$shell_path" call menu summon clipssh > "$clipssh_fail_summon_reply_path" 2>&1
+$ipc call menu summon clipssh > "$clipssh_fail_summon_reply_path" 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call menu activate 1 > "$clipssh_fail_reply_path" 2>&1
+$ipc call menu activate 1 > "$clipssh_fail_reply_path" 2>&1
 sleep 4
-"$qs_bin" ipc -p "$shell_path" call notifications status > "$clipssh_notify_status_path" 2>&1
+$ipc call notifications status > "$clipssh_notify_status_path" 2>&1
 EOF
   # Frames on their own clock rather than interleaved with the calls above:
   # each `qs ipc` spawn costs about a second on llvmpipe, and both toast

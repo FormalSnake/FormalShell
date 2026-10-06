@@ -44,11 +44,11 @@ leg_theme_auto_drive() {
 #!/usr/bin/env bash
 sleep 5
 date +%H:%M > "$theme_auto_clock_path"
-"$qs_bin" ipc -p "$shell_path" call theme status > "$theme_auto_status1_path" 2>&1
+$ipc call theme status > "$theme_auto_status1_path" 2>&1
 "$grim_bin" "$theme_auto_before_png" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call theme mode toggle > "$theme_auto_toggle_path" 2>&1
+$ipc call theme mode toggle > "$theme_auto_toggle_path" 2>&1
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call theme status > "$theme_auto_status2_path" 2>&1
+$ipc call theme status > "$theme_auto_status2_path" 2>&1
 cat "$theme_auto_state_json" > "$theme_auto_state_path" 2>&1
 "$grim_bin" "$theme_auto_after_png" > /dev/null 2>&1
 DRIVE

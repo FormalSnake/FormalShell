@@ -31,7 +31,7 @@ leg_sleep_drive() {
 sudo -n rm -f /run/formalshell-suspended-at
 sleep 5
 systemd-inhibit --list --no-pager > "$sleep_inhibit_before_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call lock status > "$sleep_status_before_path" 2>&1
+$ipc call lock status > "$sleep_status_before_path" 2>&1
 sudo -n systemctl suspend
 echo \$? > "$sleep_suspend_rc_path"
 # The stub holds suspend.target for 2s, and PrepareForSleep(false) follows it.
@@ -41,7 +41,7 @@ for _ in \$(seq 1 30); do
 done
 sleep 4
 cat /run/formalshell-suspended-at > "$sleep_suspended_at_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call lock status > "$sleep_status_after_path" 2>&1
+$ipc call lock status > "$sleep_status_after_path" 2>&1
 systemd-inhibit --list --no-pager > "$sleep_inhibit_after_path" 2>&1
 "$grim_bin" "$sleep_locked_path" > /dev/null 2>&1
 "$wtype_bin" "formalshell-test"

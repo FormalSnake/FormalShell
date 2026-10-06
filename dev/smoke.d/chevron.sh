@@ -89,21 +89,21 @@ leg_chevron_drive() {
   # nothing here to prove.
   local paint_step=""
   if leg_on pantheon; then
-    paint_step="\"$qs_bin\" ipc -p \"$shell_path\" call wallpaper set \"$chevron_bright_wp\" > /dev/null 2>&1
+    paint_step="$ipc call wallpaper set \"$chevron_bright_wp\" > /dev/null 2>&1
 sleep 8
-\"$qs_bin\" ipc -p \"$shell_path\" call bar paint > \"$chevron_paint_path\" 2>&1"
+$ipc call bar paint > \"$chevron_paint_path\" 2>&1"
   fi
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 5
 $paint_step
-"$qs_bin" ipc -p "$shell_path" call bar chevron status > "$chevron_status_shut_path" 2>&1
+$ipc call bar chevron status > "$chevron_status_shut_path" 2>&1
 sleep 1
 "$grim_bin" "$chevron_shut_path" > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call bar chevron expand > "$chevron_expand_reply_path" 2>&1
+$ipc call bar chevron expand > "$chevron_expand_reply_path" 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call bar chevron status > "$chevron_status_open_path" 2>&1
+$ipc call bar chevron status > "$chevron_status_open_path" 2>&1
 sleep 1
 "$grim_bin" "$chevron_open_path" > /dev/null 2>&1
 sleep 1
@@ -113,15 +113,15 @@ sleep 1
 sleep 1
 "$wlrctl_bin" pointer click left >> "$chevron_dispatch_path" 2>&1
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call panel state > "$chevron_panel_state_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call bar chevron status > "$chevron_status_child_path" 2>&1
+$ipc call panel state > "$chevron_panel_state_path" 2>&1
+$ipc call bar chevron status > "$chevron_status_child_path" 2>&1
 "$grim_bin" "$chevron_child_path" > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call panel close > /dev/null 2>&1
+$ipc call panel close > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call bar chevron collapse > /dev/null 2>&1
+$ipc call bar chevron collapse > /dev/null 2>&1
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call bar chevron status > "$chevron_status_closed_again_path" 2>&1
+$ipc call bar chevron status > "$chevron_status_closed_again_path" 2>&1
 EOF
   hypr_exec_once "bash $script"
 }

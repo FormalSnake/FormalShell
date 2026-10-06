@@ -92,15 +92,15 @@ leg_wallpaper_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call wallpaper set "$wp_path" > /dev/null 2>&1
+$ipc call wallpaper set "$wp_path" > /dev/null 2>&1
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call theme status > "$theme_status_path" 2>&1
+$ipc call theme status > "$theme_status_path" 2>&1
 sleep 2
 "$grim_bin" "$wallpaper_solid_path" > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call wallpaper set "$wp2_path" > /dev/null 2>&1
+$ipc call wallpaper set "$wp2_path" > /dev/null 2>&1
 sleep 4
-"$qs_bin" ipc -p "$shell_path" call wallpaper get > "$wallpaper_get_path" 2>&1
+$ipc call wallpaper get > "$wallpaper_get_path" 2>&1
 sleep 1
 "$grim_bin" "$wallpaper_gradient_path" > /dev/null 2>&1
 sleep 2

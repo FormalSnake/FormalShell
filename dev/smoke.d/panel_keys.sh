@@ -39,7 +39,7 @@ sleep 3
 # sink muted and the keystrokes would flip it the other way. Pinned unmuted
 # first, which makes the assertion below one direction every run.
 "$wpctl_bin" set-mute @DEFAULT_AUDIO_SINK@ 0 > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call panel open audio > /dev/null 2>&1
+$ipc call panel open audio > /dev/null 2>&1
 sleep 1
 "$wpctl_bin" get-volume @DEFAULT_AUDIO_SINK@ > "$panel_keys_mute_before_path" 2>&1
 "$grim_bin" "$panel_keys_baseline_path" > /dev/null 2>&1

@@ -95,8 +95,8 @@ leg_clipboard_drive() {
 #!/usr/bin/env bash
 "$wl_copy_bin" "clipboard smoke warmup"
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call clipboard list > "$clip_warmup_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call clipboard clear > /dev/null 2>&1
+$ipc call clipboard list > "$clip_warmup_path" 2>&1
+$ipc call clipboard clear > /dev/null 2>&1
 sleep 1
 "$wl_copy_bin" "clipboard smoke one"
 sleep 1
@@ -104,13 +104,13 @@ sleep 1
 sleep 1
 "$wl_copy_bin" "clipboard smoke three"
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call clipboard list > "$clip_list1_path" 2>&1
+$ipc call clipboard list > "$clip_list1_path" 2>&1
 sleep 1
 "$wl_copy_bin" "clipboard smoke three"
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call clipboard list > "$clip_list2_path" 2>&1
+$ipc call clipboard list > "$clip_list2_path" 2>&1
 copy_id=\$(grep -o '"id":"[^"]*"' "$clip_list2_path" | sed -n '2p' | cut -d'"' -f4)
-"$qs_bin" ipc -p "$shell_path" call clipboard copy "\$copy_id" > "$clip_copy_path" 2>&1
+$ipc call clipboard copy "\$copy_id" > "$clip_copy_path" 2>&1
 sleep 1
 "$wl_paste_bin" --no-newline > "$clip_paste_path" 2>&1
 sleep 1
@@ -119,39 +119,39 @@ for c in a b c d e f g h i j k l m n o p q r s t; do
   sleep 0.02
 done
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call clipboard list > "$clip_burst_path" 2>&1
+$ipc call clipboard list > "$clip_burst_path" 2>&1
 "$wl_copy_bin" "clipboard smoke sentinel"
 sleep 1
 $picker_wait
-"$qs_bin" ipc -p "$shell_path" call menu summon clipboard > /dev/null 2>&1
+$ipc call menu summon clipboard > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call menu filter "clipboard smoke one" > /dev/null 2>&1
+$ipc call menu filter "clipboard smoke one" > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call menu activate 0 > "$clip_activate_path" 2>&1
+$ipc call menu activate 0 > "$clip_activate_path" 2>&1
 sleep 2
 "$wl_paste_bin" --no-newline > "$clip_activate_paste_path" 2>&1
 sleep 1
 printf 'file://%s\r\n' "\$(printf '%s' "$clip_uri_fixture_path" | sed 's/ /%20/g')" | "$wl_copy_bin" --type text/uri-list
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call clipboard list > "$clip_uri_list_path" 2>&1
+$ipc call clipboard list > "$clip_uri_list_path" 2>&1
 "$wl_copy_bin" '<b>clipboard smoke markup</b>'
 sleep 1
 "$wl_copy_bin" --type image/png < "$clip_image_fixture_path"
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call clipboard list > "$clip_list3_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu summon clipboard > /dev/null 2>&1
+$ipc call clipboard list > "$clip_list3_path" 2>&1
+$ipc call menu summon clipboard > /dev/null 2>&1
 sleep 3
 "$grim_bin" "$clip_route_png" > /dev/null 2>&1
 ls -1 "$iso_home/.cache/formalshell/thumbnails" > "$clip_thumb_cache_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu close > /dev/null 2>&1
+$ipc call menu close > /dev/null 2>&1
 "$wl_copy_bin" 'clipboard smoke 🌹 inline'
 sleep 1
 "$wl_copy_bin" '❤️'
 sleep 1
 "$wl_copy_bin" '😂'
 sleep 2
-"$qs_bin" ipc -p "$shell_path" call clipboard list > "$clip_emoji_list_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call menu summon clipboard > /dev/null 2>&1
+$ipc call clipboard list > "$clip_emoji_list_path" 2>&1
+$ipc call menu summon clipboard > /dev/null 2>&1
 sleep 3
 "$grim_bin" "$clip_emoji_png" > /dev/null 2>&1
 EOF

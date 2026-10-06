@@ -37,15 +37,15 @@ sleep 4
 out=\$("$jq_bin" -r '.[0].name' "$hdr_monitors_path")
 SECONDS=0
 while [ "\$SECONDS" -lt 10 ]; do
-  "$qs_bin" ipc -p "$shell_path" call hdr status > "$hdr_status_path" 2>&1
+  $ipc call hdr status > "$hdr_status_path" 2>&1
   grep -qF '"reason":"Checking"' "$hdr_status_path" || grep -qF '"outputs":[]' "$hdr_status_path" || break
   sleep 1
 done
-"$qs_bin" ipc -p "$shell_path" call hdr enable > "$hdr_enable_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call hdr toggle > "$hdr_toggle_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call hdr setOutput "\$out" true > "$hdr_set_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call hdr rule "\$out" > "$hdr_rule_path" 2>&1
-"$qs_bin" ipc -p "$shell_path" call panel open display > /dev/null 2>&1
+$ipc call hdr enable > "$hdr_enable_path" 2>&1
+$ipc call hdr toggle > "$hdr_toggle_path" 2>&1
+$ipc call hdr setOutput "\$out" true > "$hdr_set_path" 2>&1
+$ipc call hdr rule "\$out" > "$hdr_rule_path" 2>&1
+$ipc call panel open display > /dev/null 2>&1
 sleep 3
 "$grim_bin" "$hdr_panel_png" > /dev/null 2>&1
 cp "$iso_home/.local/state/formalshell/state.json" "$hdr_state_path" 2>/dev/null

@@ -60,14 +60,14 @@ leg_theme_toggle_drive() {
 sleep $t0
 $dump_pre
 "$grim_bin" "$theme_dark_png" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call theme mode toggle > /dev/null 2>&1
+$ipc call theme mode toggle > /dev/null 2>&1
 sleep $gap
-"$qs_bin" ipc -p "$shell_path" call theme status > "$theme_toggle_status_path" 2>&1
+$ipc call theme status > "$theme_toggle_status_path" 2>&1
 $dump_mid
 "$grim_bin" "$theme_light_png" > /dev/null 2>&1
-"$qs_bin" ipc -p "$shell_path" call theme mode toggle > /dev/null 2>&1
+$ipc call theme mode toggle > /dev/null 2>&1
 sleep $gap
-"$qs_bin" ipc -p "$shell_path" call theme status > "$theme_toggle_status2_path" 2>&1
+$ipc call theme status > "$theme_toggle_status2_path" 2>&1
 $dump_post
 EOF
   hypr_exec_once "bash $script"

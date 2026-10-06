@@ -35,7 +35,7 @@ leg_display_drive() {
   local script="$shot_dir/display-drive.sh"
   write_script "$script" <<EOF
 #!/usr/bin/env bash
-ipc() { "$qs_bin" ipc -p "$shell_path" call "\$@"; }
+ipc() { $ipc call "\$@"; }
 mon() { "$hyprctl_bin" monitors all -j > "\$1" 2>&1; }
 sleep 5
 mon "$display_monitors_base"

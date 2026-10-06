@@ -24,12 +24,12 @@ leg_speedtest_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 3
-"$qs_bin" ipc -p "$shell_path" call panel open network > /dev/null 2>&1
+$ipc call panel open network > /dev/null 2>&1
 sleep 1
-"$qs_bin" ipc -p "$shell_path" call network speedtest > /dev/null 2>&1
+$ipc call network speedtest > /dev/null 2>&1
 SECONDS=0
 while [ "\$SECONDS" -lt 25 ]; do
-  "$qs_bin" ipc -p "$shell_path" call network speedstatus > "$speedtest_status_path" 2>&1
+  $ipc call network speedstatus > "$speedtest_status_path" 2>&1
   grep -qF '"phase":"done"' "$speedtest_status_path" && break
   sleep 1
 done
