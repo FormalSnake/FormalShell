@@ -42,6 +42,8 @@ Facts this plan rests on (checked 2026-10-06):
 
 ## Task 4: measure on e1504g
 
+- Never build on e1504g. Build both shells' closures on g815 and copy
+  them over (`nix copy --to ssh://e1504g`), then run nested.
 - In a nested session on e1504g, in power saver: CPU over 60 s idle, over 60 s with the
   spinner, per-frame times through ten panel opens and ten scrim fades,
   RSS after 10 minutes, cold start to first commit.
