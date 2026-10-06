@@ -19,6 +19,10 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   decides what a theme owns (styling, bar position, motion) and what is
   global (layout, behaviour, spacing, casing, palette source). It wins
   over both specs above.
+- Since 2026-10-06 `docs/superpowers/specs/2026-10-06-rust-rewrite.md`
+  replaces the Quickshell runtime with a Rust binary under `crates/`. It
+  wins over the "pure QML/JS" hard rule; `shell/` stays the shipped shell
+  until milestone R9 cuts over.
 
 ## Verification loop
 

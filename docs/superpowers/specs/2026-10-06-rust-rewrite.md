@@ -1,0 +1,112 @@
+# FormalShell in Rust
+
+Owner, 2026-10-06: replace the Quickshell runtime with our own Rust binary.
+It looks the same, behaves the same, and costs a fraction of what it costs
+now. This wins over the "pure QML/JS, no compiled companion binary" rule in
+`CLAUDE.md` and over the 2026-07-27 spec's runtime choice. Every other
+decision in the 2026-07-27, 2026-08-25 and 2026-09-18 specs (layout,
+behaviour, IPC contract, config and state files, theme boundary, honest
+unavailable states, Hyprland and Lua only) carries over unchanged.
+
+## Why
+
+Measured on e1504g (i3-N305, 8 GB, 1920x1080@60, power saver), 2026-10-06,
+with nothing open and no media player: quickshell at 556 MB RSS and ~30% of
+one core, 22% of it on `QSGRenderThread`. The bar redraws every vsync while
+one herdr "working" badge spins (`Workspaces.qml`'s endless
+`RotationAnimator`), because a Qt Quick window has one frame clock and no
+partial redraw. Our own renderer redraws a 16px rect at that rate instead of
+the whole strip, and runs no clock at all when nothing moves.
+
+## Budgets (acceptance, measured on e1504g in a nested session)
+
+- Idle, nothing moving: 0.0% CPU over 60 s, no frame callbacks requested.
+- One herdr spinner running: under 2% of one core.
+- Panel open/close, launcher open, workspace switch: no frame over 16 ms.
+- RSS after an hour of use: under 120 MB.
+- Cold start to bar mapped: under 300 ms.
+
+## Stack
+
+Versions as of 2026-10-06; check crates.io before bumping.
+
+- Wayland: `smithay-client-toolkit` 0.21 on `calloop` 0.14, protocols from
+  `wayland-protocols` 0.32 (layer-shell, ext-session-lock,
+  ext-image-copy-capture for thumbnails) and `wayland-protocols-wlr`.
+- Rendering: our own retained scene graph. Each node knows its bounds and
+  dirties its rect. `vello_cpu` draws into double-buffered `wl_shm` buffers
+  and only the damaged rects are drawn and sent with
+  `wl_surface.damage_buffer`. A frame callback is requested only while a
+  spring or timed animation is live. If R0 shows CPU raster cannot hold
+  16 ms on a full-output scrim, those surfaces move to `vello_gpu` (same
+  `vello_common` scene); the bar and panels stay on CPU.
+- Text: `parley` (fontique reads fontconfig, so `sans-serif`/`monospace`
+  and the Lucide and Nerd icon fonts resolve exactly as they do now).
+- Layout: `taffy` for flex rows and columns; joined shapes, springs and the
+  deform clock are our own code, ported from the QML math.
+- Async and D-Bus: one `calloop` loop owns the UI; services run on a
+  single-threaded `async-executor` fed into it over a channel. `zbus` 5 for
+  every D-Bus service.
+- Services: `system-tray` (SNI + DBusMenu), `mpris`, `pipewire` (default
+  sink through the `default` metadata object), `nmrs` (NetworkManager),
+  `bluer`, PAM through `pam-client2`, raw Hyprland sockets (`.socket.sock`,
+  `.socket2.sock`, `hyprctl eval` for writes). Written by us on zbus:
+  the `org.freedesktop.Notifications` server, the polkit
+  `AuthenticationAgent` (MIT; `zbus-polkit-agent` is GPL-3.0), and the
+  UPower proxy.
+- Child processes stay child processes (matugen, cava, grim, wf-recorder,
+  ttfx, localsend-cli, uxplay, ...), spawned and read on the loop.
+
+## Contracts that do not change
+
+- IPC: `formalshell-ipc call <target> <fn> [args...]` with the same 40
+  targets, the same function names and byte-identical output strings, over
+  a Unix socket under `$XDG_RUNTIME_DIR/formalshell/`. The 640 IPC calls in
+  `dev/smoke.d/` are the conformance suite.
+- `settings.json` (read only, symlink retarget still seen),
+  `$XDG_STATE_HOME/formalshell/state.json`, plugin directories, theme
+  tables. Theme tables move from `shell/Theme/themes/*.js` to
+  `themes/*.json` with the same keys; `tst_theme_style.qml`'s "every role
+  in every table" check becomes a Rust test.
+- Every rule in `CLAUDE.md`'s hard rules section other than "pure QML/JS".
+  The ScreencopyView ban becomes: capture only in the Spaces preview and
+  the switcher, and only while their card is open.
+
+## How we get there
+
+The QML shell stays the shipped shell until the Rust one passes everything.
+No dual runtime, no surface split across two processes: the bar and its
+panels share one joined shape and the notification bus name has one owner.
+
+- The Rust workspace lives in `crates/` beside `shell/`, built by the flake
+  as `.#formalshell-rs`.
+- `dev/smoke.sh` takes `FS_IMPL=rust`, swapping the shell binary and the IPC
+  command; every leg runs unchanged against either.
+- `dev/parity.sh` compares Rust frames against QML frames from the same
+  commit. Text is rasterised by a different engine, so glyph edges differ:
+  the gate is no difference outside glyph bounding boxes plus a small AE
+  fuzz inside them. Geometry, colour and motion timing are exact.
+- A milestone is done when its legs pass on `FS_IMPL=rust`, its parity
+  frames pass, and its budget holds on e1504g.
+
+Milestones, each a plan under `docs/superpowers/plans/`:
+
+- R0: spike. A bar strip (clock, workspaces with a spinning badge, one
+  cell opening one panel through the joined shape) on sctk + vello_cpu,
+  measured against the budgets in a nested session on e1504g. Decides CPU
+  versus GPU raster for full-output surfaces and whether `vello_cpu` covers
+  the blurred casts pantheon's `Box` draws with a shader today. If the
+  budgets fail, stop and report before R1.
+- R1: core. Config, state, theme tables, matugen palette, IPC server and
+  `formalshell-ipc`, Hyprland backend, scene, springs, `FS_IMPL` in the rig.
+- R2: the bar, every cell, chevron and tray, all three themes.
+- R3: panels and the joined shape, keyboard navigation, tooltips.
+- R4: launcher and every route, app grid, emoji, clipboard, mirror.
+- R5: notifications server, toasts, centre, OSD, reminders.
+- R6: lock, PAM, sleep inhibitor, polkit agent, greeter.
+- R7: media, lyrics (blur and glow), visualizer, radio, airplay, iphone.
+- R8: capture, record, OCR, screensaver, switcher and Spaces thumbnails,
+  everything left in `shell/`.
+- R9: cutover. Nix package and modules, PKGBUILD and Debian control point
+  at the Rust binary, `shell/` and quickshell are deleted, `CLAUDE.md`
+  rewritten for the new tree.
