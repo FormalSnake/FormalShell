@@ -3,11 +3,16 @@
 //! async task on the service thread that publishes those diffs.
 
 pub mod clock;
+pub mod config;
 pub mod hyprland;
+pub mod state;
+mod watch;
 
 use crate::runtime::Ctx;
 
 pub fn start(ctx: &Ctx) {
     ctx.spawn(clock::run(ctx.clone()));
+    ctx.spawn(config::run(ctx.clone()));
+    ctx.spawn(state::run(ctx.clone()));
     ctx.spawn(hyprland::run(ctx.clone()));
 }
