@@ -1,0 +1,10 @@
+[package]
+name = "fs-chrome"
+version = "0.1.1"
+edition = "2024"
+publish = false
+
+[dependencies]
+regex = "1"
+serde = "1"
+serde_json = "1"
