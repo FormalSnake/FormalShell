@@ -174,3 +174,8 @@ Milestones, each a plan under `docs/superpowers/plans/`:
 - R9: cutover. Nix package and modules, PKGBUILD and Debian control point
   at the Rust binary, `shell/` and quickshell are deleted, `CLAUDE.md`
   rewritten for the new tree.
+  Done means both Linux hosts run it (owner, 2026-10-06): push, bump
+  `formalshell` in `~/.config/nix`, rebuild g815 on itself and e1504g from
+  g815 (`nixos-rebuild switch --flake .#e1504g --target-host e1504g
+  --sudo`, never building on e1504g), and confirm each host's
+  `formalshell.service` runs the Rust binary.
