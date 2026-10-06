@@ -19,6 +19,11 @@ Build-Depends:
  libadwaita-1-dev,
  libepoxy-dev,
  libfontconfig-dev,
+ libdbus-1-dev,
+ libbluetooth-dev,
+ libpulse-dev,
+ libsqlite3-dev,
+ protobuf-compiler,
  qt6-shader-baker,
 Standards-Version: 4.7.2
 Homepage: https://github.com/FormalSnake/FormalShell
@@ -76,6 +81,9 @@ Recommends:
  wtype,
 Suggests:
  formalshell-ancs4linux,
+ formalshell-earbuds,
+ formalshell-nothingctl,
+ formalshell-openscq30,
  git,
  uxplay,
 Description: Hyprland desktop shell built on Quickshell
@@ -173,3 +181,24 @@ Replaces: ancs4linux
 Description: ANCS and AMS bridge exposing an iPhone as system D-Bus services
  ancs4linux pairs with an iPhone over Bluetooth LE and republishes its
  notifications and now playing state on the system bus.
+
+Package: formalshell-nothingctl
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, bluez
+Description: control Nothing and CMF audio devices over Bluetooth
+ nothingctl reads battery, noise control and EQ off Nothing and CMF
+ headsets over BlueZ and changes them, for FormalShell's earbuds panel.
+
+Package: formalshell-openscq30
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, bluez
+Description: CLI for the settings of Soundcore headphones and earbuds
+ The command line half of OpenSCQ30. FormalShell's earbuds panel drives it
+ for Soundcore devices.
+
+Package: formalshell-earbuds
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, bluez
+Description: control Samsung Galaxy Buds from the command line
+ LiveBudsCli's earbuds client and daemon. FormalShell's earbuds panel
+ drives it for Samsung Galaxy Buds.

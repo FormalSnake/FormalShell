@@ -35,6 +35,9 @@ override_dh_auto_build:
 		cargo build --frozen --release --target $(RUST_HOST)
 	cd $(TP)/tensaku && cargo build --frozen --release --features ci-release
 	cd $(TP)/matugen && cargo build --frozen --release
+	cd $(TP)/nothingctl && cargo build --frozen --release
+	cd $(TP)/openscq30 && cargo build --frozen --release --package openscq30-cli
+	cd $(TP)/earbuds && cargo build --frozen --release
 	cd $(TP)/localsend-cli && CGO_CFLAGS="$(CFLAGS)" CGO_LDFLAGS="$(LDFLAGS)" \
 		go build -buildmode=pie -buildvcs=false -o localsend-cli .
 	dh_auto_build --buildsystem=pybuild --sourcedirectory=$(ANCS)
@@ -47,6 +50,9 @@ override_dh_auto_install:
 	install -Dm755 $(TP)/eds/bin/formalshell-eds debian/formalshell-eds/usr/bin/formalshell-eds
 	install -Dm755 $(TP)/ttfx/target/$(RUST_HOST)/release/ttfx debian/formalshell-ttfx/usr/bin/ttfx
 	install -Dm755 $(TP)/matugen/target/release/matugen debian/formalshell-matugen/usr/bin/matugen
+	install -Dm755 $(TP)/nothingctl/target/release/nothingctl debian/formalshell-nothingctl/usr/bin/nothingctl
+	install -Dm755 $(TP)/openscq30/target/release/openscq30 debian/formalshell-openscq30/usr/bin/openscq30
+	install -Dm755 $(TP)/earbuds/target/release/earbuds debian/formalshell-earbuds/usr/bin/earbuds
 	cd $(TP)/tensaku && \
 		install -Dm755 target/release/tensaku $(CURDIR)/debian/formalshell-tensaku/usr/bin/tensaku && \
 		install -Dm755 assets/tensaku-edit $(CURDIR)/debian/formalshell-tensaku/usr/bin/tensaku-edit && \

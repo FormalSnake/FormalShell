@@ -46,6 +46,9 @@ sources=(
   "localsend-cli https://github.com/0w0mewo/localsend-cli/archive/7865fb1cf26e4f782c6400167a7d218d69313cff.tar.gz 0661e232dd939ad3c36c29025aac75db212fbf909f2701ded69bbc590bc96ab3 1"
   "omarchy-iphone https://github.com/kbbahaPro/omarchy-iphone/archive/586f37dce6aceef72376afb8be8bcc8a04de41fe.tar.gz b26cf068e47705ab6046b14c56e08c716afbad07f4b2d2a685785ee71c137ecb 1"
   "ancs4linux https://github.com/pzmarzly/ancs4linux/archive/b658546f08d1468f6d79aa900cc7faa9d938837d.tar.gz a3ea8bd735d6295cacbcf0dee0107f7d705b0ec156dfa7e76fc05c5db4b3de74 1"
+  "nothingctl https://github.com/FormalSnake/nothingctl/archive/refs/tags/v0.1.1.tar.gz 3e52ae1254cfc09c0b88554b887c8e3653f5df606ab9f9490abb67f88cf57cab 1"
+  "openscq30 https://github.com/Oppzippy/OpenSCQ30/archive/refs/tags/v2.12.0.tar.gz 5c2509ea0dd71ab0b6b2d81948ec2850fc4d72a1239e4cda79dac2dbad7f3860 1"
+  "earbuds https://github.com/JojiiOfficial/LiveBudsCli/archive/refs/tags/v0.2.0.tar.gz b0174d4207312bdf54f5cb586fff22984ecd5be54bd0205c4debf7927878ea70 1"
 )
 case $(dpkg --print-architecture) in
   amd64) sources+=("zig https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz 70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00 1") ;;
@@ -158,7 +161,7 @@ done
 export CARGO_HOME=$tp/cargo-home GOPATH=$tp/gopath GOFLAGS=-modcacherw PATH=/usr/lib/go-1.25/bin:$PATH
 host=$(rustc -vV | sed -n 's/^host: //p')
 rm -f "$tp/tensaku/rust-toolchain.toml"
-for crate in ttfx tensaku matugen; do
+for crate in ttfx tensaku matugen nothingctl openscq30 earbuds; do
   (cd "$tp/$crate" && cargo fetch --locked --target "$host")
 done
 

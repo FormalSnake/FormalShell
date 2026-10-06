@@ -23,6 +23,9 @@ omarchy-iphone-bridge --help
 omarchy-iphone-ams --help
 ancs4linux-ctl --help
 clipssh --help
+nothingctl --help
+openscq30 --help
+earbuds --help
 quickshell --version
 
 fc-list | grep -i lucide

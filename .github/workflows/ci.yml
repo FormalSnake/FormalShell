@@ -33,6 +33,9 @@ jobs:
           omarchy-iphone-ams --help
           ancs4linux-ctl --help
           clipssh --help
+          nothingctl --help
+          openscq30 --help
+          earbuds --help
       # The installed tree has to lint exactly like the repo's: a difference
       # is something the install step dropped or changed. Sorted, since
       # qmllint's warning order within a file is not stable between runs.

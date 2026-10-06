@@ -1,9 +1,10 @@
 # Maintainer: FormalSnake <https://github.com/FormalSnake>
 #
 # The shell plus the tools nix/ builds itself, at the versions nix/ pins, as
-# split packages. ttfx and tensaku have AUR packages, but at other versions
-# (0.5.0 and 0.29.0 against 0.4.0 and 0.26.6), so they are built here under a
-# formalshell- name and provide the upstream one. The first checksum is the
+# split packages. ttfx, tensaku, openscq30-cli and earbuds have AUR packages,
+# but at other versions (0.5.0, 0.29.0, 2.11.0 and 0.1.9 against 0.4.0,
+# 0.26.6, 2.12.0 and 0.2.0), so they are built here under a formalshell- name
+# and provide the upstream one. The first checksum is the
 # tag tarball's: build.sh fills it in, from GitHub for a tag or from the
 # working tree for a local build.
 
@@ -17,6 +18,9 @@ pkgname=(
   formalshell-localsend-cli
   formalshell-iphone-bridge
   formalshell-ancs4linux
+  formalshell-nothingctl
+  formalshell-openscq30
+  formalshell-earbuds
 )
 pkgver=0.1.1
 pkgrel=1
@@ -25,18 +29,23 @@ arch=('x86_64' 'aarch64')
 url='https://github.com/FormalSnake/FormalShell'
 license=('MIT')
 makedepends=(
+  bluez-libs
   cargo
+  dbus
   gtk4
   gtk4-layer-shell
   go
   libadwaita
   libepoxy
+  libpulse
   nasm
+  protobuf
   python
   python-build
   python-hatchling
   python-installer
   qt6-shadertools
+  sqlite
   systemd
   zig
 )
@@ -49,6 +58,9 @@ _clipssh=c7f4e8ddcf102302c6375ba51534c7505ddc2616
 _localsend=7865fb1cf26e4f782c6400167a7d218d69313cff
 _iphone=586f37dce6aceef72376afb8be8bcc8a04de41fe
 _ancs=b658546f08d1468f6d79aa900cc7faa9d938837d
+_nothingctlver=0.1.1
+_openscq30ver=2.12.0
+_earbudsver=0.2.0
 
 source=(
   "FormalShell-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz"
@@ -59,6 +71,9 @@ source=(
   "localsend-cli-$_localsend.tar.gz::https://github.com/0w0mewo/localsend-cli/archive/$_localsend.tar.gz"
   "omarchy-iphone-$_iphone.tar.gz::https://github.com/kbbahaPro/omarchy-iphone/archive/$_iphone.tar.gz"
   "ancs4linux-$_ancs.tar.gz::https://github.com/pzmarzly/ancs4linux/archive/$_ancs.tar.gz"
+  "nothingctl-$_nothingctlver.tar.gz::https://github.com/FormalSnake/nothingctl/archive/refs/tags/v$_nothingctlver.tar.gz"
+  "OpenSCQ30-$_openscq30ver.tar.gz::https://github.com/Oppzippy/OpenSCQ30/archive/refs/tags/v$_openscq30ver.tar.gz"
+  "LiveBudsCli-$_earbudsver.tar.gz::https://github.com/JojiiOfficial/LiveBudsCli/archive/refs/tags/v$_earbudsver.tar.gz"
 )
 sha256sums=('SKIP'
             '1606dba9b2abe06168ee818bea7e66e3c5b881b56ee73e6331cee1cb4e096756'
@@ -67,7 +82,10 @@ sha256sums=('SKIP'
             'f4c388645830e3afd9adeae2b71173441ce3b3b97a852915457c043e9cc99afd'
             '0661e232dd939ad3c36c29025aac75db212fbf909f2701ded69bbc590bc96ab3'
             'b26cf068e47705ab6046b14c56e08c716afbad07f4b2d2a685785ee71c137ecb'
-            'a3ea8bd735d6295cacbcf0dee0107f7d705b0ec156dfa7e76fc05c5db4b3de74')
+            'a3ea8bd735d6295cacbcf0dee0107f7d705b0ec156dfa7e76fc05c5db4b3de74'
+            '3e52ae1254cfc09c0b88554b887c8e3653f5df606ab9f9490abb67f88cf57cab'
+            '5c2509ea0dd71ab0b6b2d81948ec2850fc4d72a1239e4cda79dac2dbad7f3860'
+            'b0174d4207312bdf54f5cb586fff22984ecd5be54bd0205c4debf7927878ea70')
 
 prepare() {
   local fs="$srcdir/FormalShell-$pkgver"
@@ -79,6 +97,12 @@ prepare() {
   cd "$srcdir/tensaku-$_tensakuver"
   rm -f rust-toolchain.toml
   cargo fetch --locked --target "$(rustc --print host-tuple)"
+
+  local crate
+  for crate in nothingctl-$_nothingctlver OpenSCQ30-$_openscq30ver LiveBudsCli-$_earbudsver; do
+    cd "$srcdir/$crate"
+    cargo fetch --locked --target "$(rustc --print host-tuple)"
+  done
 
   # Same fix as nix/localsend-cli.nix: without a Content-Type every send is
   # rejected by a fiber receiver, this CLI's own `recv` included.
@@ -114,6 +138,15 @@ build() {
 
   cd "$srcdir/tensaku-$_tensakuver"
   cargo build --frozen --release --features ci-release
+
+  cd "$srcdir/nothingctl-$_nothingctlver"
+  cargo build --frozen --release
+
+  cd "$srcdir/OpenSCQ30-$_openscq30ver"
+  cargo build --frozen --release --package openscq30-cli
+
+  cd "$srcdir/LiveBudsCli-$_earbudsver"
+  cargo build --frozen --release
 
   cd "$srcdir/localsend-cli-$_localsend"
   export GOPATH="$srcdir/gopath"
@@ -174,7 +207,10 @@ package_formalshell() {
     'evolution-data-server: calendar events'
     'formalshell-ancs4linux: iPhone notifications and now playing'
     'formalshell-clipssh: send clipboard images over ssh'
+    'formalshell-earbuds: Samsung Galaxy Buds in the earbuds panel'
     'formalshell-localsend-cli: LocalSend sharing'
+    'formalshell-nothingctl: Nothing and CMF headsets in the earbuds panel'
+    'formalshell-openscq30: Soundcore earbuds in the earbuds panel'
     'formalshell-ttfx: animated screensaver banner'
     'geoclue: location without a network lookup'
     'git: flake input update checks'
@@ -286,4 +322,38 @@ package_formalshell-ancs4linux() {
   done
   echo 'g ancs4linux - -' | install -Dm644 /dev/stdin "$pkgdir/usr/lib/sysusers.d/ancs4linux.conf"
   install -Dm644 LICENSE.txt "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
+
+package_formalshell-nothingctl() {
+  pkgdesc='Control Nothing and CMF audio devices over Bluetooth'
+  url='https://github.com/FormalSnake/nothingctl'
+  depends=(bluez dbus glibc libgcc)
+
+  cd "$srcdir/nothingctl-$_nothingctlver"
+  install -Dm755 target/release/nothingctl "$pkgdir/usr/bin/nothingctl"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
+
+package_formalshell-openscq30() {
+  pkgdesc='CLI for the settings of Soundcore headphones and earbuds'
+  url='https://github.com/Oppzippy/OpenSCQ30'
+  license=('GPL-3.0-or-later')
+  depends=(bluez dbus glibc libgcc sqlite)
+  provides=("openscq30-cli=$_openscq30ver")
+  conflicts=(openscq30-cli)
+
+  cd "$srcdir/OpenSCQ30-$_openscq30ver"
+  install -Dm755 target/release/openscq30 "$pkgdir/usr/bin/openscq30"
+}
+
+package_formalshell-earbuds() {
+  pkgdesc='Control Samsung Galaxy Buds from the command line'
+  url='https://github.com/JojiiOfficial/LiveBudsCli'
+  license=('GPL-3.0-only')
+  depends=(bluez bluez-libs dbus glibc libgcc libpulse)
+  provides=("earbuds=$_earbudsver")
+  conflicts=(earbuds)
+
+  cd "$srcdir/LiveBudsCli-$_earbudsver"
+  install -Dm755 target/release/earbuds "$pkgdir/usr/bin/earbuds"
 }

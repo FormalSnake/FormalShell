@@ -50,11 +50,14 @@ build_cmd() {
 }
 
 build_pkgs() {
-  local release=$1 image=$2 out=$repo/artifacts/native/pkgs/$1
+  local release=$1 image=$2 out=$repo/artifacts/native/pkgs/$1 common
   mkdir -p "$out"
   find "$out" -maxdepth 1 \( -name '*.deb' -o -name '*.pkg.tar.*' \) -delete
+  # A linked worktree's .git names the main checkout's git dir by absolute
+  # path, so that directory is mounted where the file says it is.
+  common=$(git rev-parse --path-format=absolute --git-common-dir)
   docker run --rm --platform linux/arm64 \
-    -v "$repo:/src:ro" -v "$out:/out" \
+    -v "$repo:/src:ro" -v "$common:$common:ro" -v "$out:/out" \
     -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
     "$image" bash -c "$(build_cmd "$release")"
 }
