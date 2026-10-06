@@ -18,6 +18,7 @@
 # bar-cell click and that rig had no pointer to supply one. Hyprland hands the
 # surface keyboard focus on its own, so the route works here.
 leg_panel_keys_flag="--panel-keys"
+leg_panel_keys_rust=1
 leg_panel_keys_order=250
 leg_panel_keys_needs="wtype wpctl"
 

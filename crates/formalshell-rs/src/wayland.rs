@@ -1,8 +1,8 @@
 //! The Wayland side: the bar's layer surface (gone while a fullscreen window
 //! covers its output), the frame's four exclusion zones, the cards hanging
-//! off the bar (the chevron's second bar, a panel), the scrim, the pointer,
-//! and which owner a configure, a frame callback or a pointer event belongs
-//! to.
+//! off the bar (the chevron's second bar, a panel), the tooltip, the scrim,
+//! the pointer and the keyboard, and which owner a configure, a frame
+//! callback or an input event belongs to.
 
 use std::time::Instant;
 
@@ -13,11 +13,12 @@ use fs_chrome::types::{Edge, Region as BarRegion};
 use smithay_client_toolkit::compositor::{CompositorHandler, CompositorState, Region};
 use smithay_client_toolkit::output::{OutputHandler, OutputState};
 use smithay_client_toolkit::reexports::client::globals::GlobalList;
-use smithay_client_toolkit::reexports::client::protocol::{wl_output, wl_pointer, wl_seat, wl_surface};
+use smithay_client_toolkit::reexports::client::protocol::{wl_keyboard, wl_output, wl_pointer, wl_seat, wl_surface};
 use smithay_client_toolkit::reexports::client::{Connection, QueueHandle};
 use smithay_client_toolkit::registry::{ProvidesRegistryState, RegistryState};
 use smithay_client_toolkit::reexports::protocols::wp::cursor_shape::v1::client::wp_cursor_shape_device_v1::{Shape, WpCursorShapeDeviceV1};
 use smithay_client_toolkit::seat::pointer::cursor_shape::CursorShapeManager;
+use smithay_client_toolkit::seat::keyboard::{KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers};
 use smithay_client_toolkit::seat::pointer::{PointerEvent, PointerEventKind, PointerHandler};
 use smithay_client_toolkit::seat::{Capability, SeatHandler, SeatState};
 use smithay_client_toolkit::shell::WaylandSurface;
@@ -35,37 +36,11 @@ use crate::store::{Store, Topic};
 use crate::surface::{Backdrop, PixelSurface, Pixels, Surface};
 use crate::surfaces;
 use crate::surfaces::bar::Bar;
-use crate::surfaces::bar::cell::{Action, Button, Env, Painter};
+use crate::surfaces::bar::cell::{Action, Button, Env};
 use crate::surfaces::bar::slot::Slot;
-use crate::surfaces::card::{Card, Scrim};
-use crate::text::ShapedText;
-
-/// The panels `panel` can open (PanelIpc.qml's registry), and the title the
-/// card carries until each one's body lands with its own milestone.
-pub const PANELS: [(&str, &str); 19] = [
-    ("appmenu", "App menu"),
-    ("audio", "Audio"),
-    ("calendar", "Calendar"),
-    ("network", "Network"),
-    ("bluetooth", "Bluetooth"),
-    ("earbuds", "Earbuds"),
-    ("iphone", "iPhone"),
-    ("dualsense", "DualSense"),
-    ("power", "Power"),
-    ("weather", "Weather"),
-    ("media", "Media"),
-    ("github", "GitHub"),
-    ("usage", "Usage"),
-    ("tailscale", "Tailscale"),
-    ("systemupdate", "System update"),
-    ("display", "Display"),
-    ("monitor", "Monitor"),
-    ("trayoverflow", "Tray"),
-    ("radio", "Radio"),
-];
-
-/// The stand-in panel's depth until panels carry their own bodies.
-const PANEL_HEIGHT: f64 = 200.0;
+use crate::surfaces::card::{Card, Ends, Scrim, Target};
+use crate::surfaces::panel::{self, host::{Host, Key, Out, Place}};
+use crate::surfaces::tooltip;
 
 fn edge_anchor(edge: Edge) -> Anchor {
     match edge {
@@ -76,16 +51,13 @@ fn edge_anchor(edge: Edge) -> Anchor {
     }
 }
 
-/// A card off the bar and what it holds: the chevron's governed cells, or
-/// a panel's title.
+/// The chevron's second bar: a card holding the governed cells.
 pub struct Popout {
     pub name: String,
     pub region: Option<BarRegion>,
     pub card: Card,
     surface: Surface,
     pub slots: Vec<Slot>,
-    title: Option<ShapedText>,
-    title_nodes: Vec<NodeId>,
     pub hover: Option<usize>,
 }
 
@@ -117,13 +89,6 @@ impl Popout {
             let hovered = self.hover == Some(i);
             slot.paint(&mut bar.kit, &mut self.card.scene, self.card.edge, hovered, None, alpha, true, now);
         }
-        if let Some(title) = &self.title {
-            let mut p = Painter::new(&mut self.card.scene, &mut self.title_nodes, Some(clip));
-            let x = rect.x + padding as i32;
-            let y = rect.y + padding as i32;
-            p.text(title, (x, y), look.foreground.with_alpha(look.foreground.a * alpha), &[]);
-            p.finish();
-        }
     }
 
     fn hit(&self, x: f64, y: f64) -> Option<usize> {
@@ -140,6 +105,9 @@ enum Owner {
     Bar,
     Overflow,
     Panel,
+    Outgoing,
+    Tooltip,
+    Preview,
     Scrim,
     Zone(usize),
     Backdrop,
@@ -162,7 +130,15 @@ pub struct App {
     backdrop: Option<Backdrop>,
     zones: Vec<(Edge, PixelSurface)>,
     pub overflow: Option<Popout>,
-    pub panel: Option<Popout>,
+    pub panel: Option<Host>,
+    /// A handoff's outgoing card, until the incoming one starts moving.
+    outgoing: Option<Host>,
+    panel_dirty: bool,
+    keyboard: Option<wl_keyboard::WlKeyboard>,
+    tips: tooltip::Group,
+    tip_card: Option<tooltip::Card>,
+    /// `debug join`'s card, hung in the gap it opens.
+    preview: Option<(Surface, crate::scene::Scene, Vec<NodeId>)>,
     scrim: Option<(Scrim, PixelSurface)>,
     pointer: Option<wl_pointer::WlPointer>,
     /// The pointing hand over a cell that answers a click (Cell.qml's
@@ -212,6 +188,12 @@ impl App {
             zones: Vec::new(),
             overflow: None,
             panel: None,
+            outgoing: None,
+            panel_dirty: false,
+            keyboard: None,
+            tips: tooltip::Group::default(),
+            tip_card: None,
+            preview: None,
             scrim: None,
             pointer: None,
             cursor_shapes: CursorShapeManager::bind(globals, qh).ok(),
@@ -288,6 +270,8 @@ impl App {
             self.zones.clear();
             self.overflow = None;
             self.panel = None;
+            self.outgoing = None;
+            self.tip_card = None;
             self.sync_join();
             return;
         }
@@ -358,6 +342,7 @@ impl App {
         if moved || relaid {
             self.overflow = None;
             self.panel = None;
+            self.outgoing = None;
         }
         if moved {
             self.place_chrome();
@@ -387,13 +372,16 @@ impl App {
         self.request_paint();
         self.bar.read(&self.store, topic, now);
         let env_edge = self.bar.edge();
-        for p in [&mut self.overflow, &mut self.panel].into_iter().flatten() {
+        if let Some(p) = &mut self.overflow {
             let env = Env { store: &self.store, edge: env_edge, output: &self.bar.output };
             for s in &mut p.slots {
                 if topic.is_none_or(|t| s.cell.reads().contains(&t)) {
                     s.refresh(&mut self.bar.kit, &env, false, false, 0.0, now);
                 }
             }
+        }
+        if self.panel.as_ref().is_some_and(|p| topic.is_none_or(|t| p.module.reads().contains(&t) || t == Topic::Theme)) {
+            self.panel_dirty = true;
         }
         self.sync_open(now);
         self.update_backdrop();
@@ -430,8 +418,13 @@ impl App {
         self.outputs.outputs().next().and_then(|o| self.outputs.info(&o)).and_then(|i| i.name).unwrap_or_default()
     }
 
+    /// The open panel by its `panel` name; the gallery is no panel's.
     pub fn panel_open(&self) -> Option<&str> {
-        self.panel.as_ref().filter(|p| p.card.is_open()).map(|p| p.name.as_str())
+        self.panel.as_ref().filter(|p| p.is_open()).map(|p| p.id()).and_then(panel::known)
+    }
+
+    pub fn gallery_open(&self) -> bool {
+        self.panel.as_ref().is_some_and(|p| p.is_open() && p.id() == "gallery")
     }
 
     pub fn overflow_open(&self) -> Option<BarRegion> {
@@ -457,13 +450,50 @@ impl App {
     pub fn set_debug_join(&mut self, join: Option<(i32, i32)>) {
         self.debug_join = join;
         self.sync_join();
+        if join.is_none() {
+            self.preview = None;
+            return;
+        }
+        if self.preview.is_none() {
+            let (w, h) = self.output_size();
+            let layer = self.overlay("formalshell:debug-join", Layer::Overlay, Anchor::all(), (0, 0), -1);
+            let surface = Surface::new("debug-join", layer, &self.shm, self.started);
+            self.preview = Some((surface, crate::scene::Scene::clear(w as i32, h as i32), Vec::new()));
+        }
+        let edge = self.bar.edge();
+        let line = self.bar.thickness() as f64;
+        if let Some((_, scene, nodes)) = &mut self.preview {
+            let join = join.map(|(x, w)| (x as f64, w as f64));
+            crate::surfaces::shoulders::preview(scene, nodes, &self.store.theme.theme, edge, line, join);
+        }
     }
 
-    /// A card's own join wins over `debug join`'s while the card is up.
+    /// A card's own join wins over `debug join`'s while the card is up. A
+    /// panel hanging off the second bar opens its gap in that card's far
+    /// edge rather than in the bar's line.
     fn sync_join(&mut self) {
-        let card = |p: &Option<Popout>| p.as_ref().and_then(|p| p.card.join);
-        let debug = self.debug_join.map(|(x, width)| (x as f64, width as f64, self.store.theme.theme.radii.xl));
-        self.bar.set_join(card(&self.panel).or(card(&self.overflow)).or(debug));
+        let nested = self.panel.as_ref().is_some_and(|p| p.place.target.is_some());
+        let mut joins: Vec<(Edge, f64, f64, f64)> = Vec::new();
+        let child = if nested { self.panel.as_ref().and_then(|p| p.card.join()) } else { None };
+        if let Some(o) = &mut self.overflow {
+            o.card.far_gap = child.map(|(x, w, r)| (x - r, x + w + r));
+        }
+        for h in [&self.panel, &self.outgoing].into_iter().flatten().filter(|h| h.place.target.is_none()) {
+            joins.extend(h.card.joins.iter().map(|j| (j.edge, j.x, j.width, j.reach)));
+        }
+        if let Some(o) = &self.overflow {
+            joins.extend(o.card.joins.iter().map(|j| (j.edge, j.x, j.width, j.reach)));
+        }
+        let edge = self.bar.edge();
+        if !joins.iter().any(|j| j.0 == edge)
+            && let Some((x, width)) = self.debug_join
+        {
+            joins.push((edge, x as f64, width as f64, self.store.theme.theme.radii.xl));
+        }
+        // One gap per edge: the strip's own goes to the first card on it.
+        let mut seen = Vec::new();
+        joins.retain(|j| if seen.contains(&j.0) { false } else { seen.push(j.0); true });
+        self.bar.set_joins(&joins);
         self.bar_dirty = true;
     }
 
@@ -530,7 +560,8 @@ impl App {
             .iter()
             .position(|s| s.name == "chevron" && s.region == region)
             .map_or(self.bar.length() as f64, |i| self.bar.slot_anchor(i));
-        let card = self.new_card(anchor, size);
+        let mut card = self.new_card(anchor, size);
+        card.ends = self.panel_place(None, false).ends;
         let surface = self.popout_surface(&card, Layer::Top);
         self.overflow = Some(Popout {
             name: format!("overflow:{}", region.as_str()),
@@ -538,58 +569,109 @@ impl App {
             card,
             surface,
             slots,
-            title: None,
-            title_nodes: Vec::new(),
             hover: None,
         });
         self.sync_open(now);
         self.log("overflow mapped");
     }
 
+    /// Where a panel hangs: off the bar's line, or off the second bar's far
+    /// edge for a cell inside it, centred on `anchor` or at the line's end.
+    fn panel_place(&self, anchor: Option<f64>, nested: bool) -> Place {
+        let edge = self.bar.edge();
+        let output = self.output_size();
+        let vertical = edge.is_vertical();
+        let framed = self.bar.framed();
+        let ft = if framed { self.bar.frame_thickness() } else { 0.0 };
+        let ends = Ends {
+            along: if vertical { output.1 } else { output.0 },
+            inset_start: ft,
+            inset_end: ft,
+            radius: if framed { self.store.theme.theme.frame_radius } else { 0.0 },
+        };
+        let owner = self.overflow.as_ref().filter(|o| nested && o.card.is_open()).map(|o| {
+            let live = o.card.live();
+            (Target { along: live.x0, length: live.width(), radius: o.card.radius() }, live.y1)
+        });
+        Place {
+            edge,
+            output,
+            line_at: owner.map_or(self.bar.thickness() as f64, |(_, far)| far),
+            ends,
+            far_inset: ft,
+            anchor,
+            target: owner.map(|(t, _)| t),
+        }
+    }
+
     /// A panel by name, hung at `anchor` along the line (its own cell's
-    /// centre), or under its cell on the strip, or at the strip's end. A
-    /// panel opened over another replaces it.
+    /// centre) or at the line's end. A panel opened over another hands the
+    /// card over.
     pub fn set_panel(&mut self, name: &str, open: bool, anchor: Option<f64>) {
+        self.set_panel_from(name, open, anchor, false);
+    }
+
+    fn set_panel_from(&mut self, name: &str, open: bool, anchor: Option<f64>, nested: bool) {
         let now = Instant::now();
         if !open {
-            if let Some(p) = self.panel.as_mut().filter(|p| p.name == name && p.card.is_open()) {
-                p.card.set_open(now, false);
+            if self.panel.as_ref().is_some_and(|p| p.id() == name && p.is_open()) {
+                self.close_panels();
             }
-            self.sync_open(now);
             return;
         }
-        if self.panel.as_ref().is_some_and(|p| p.name == name && p.card.is_open()) {
+        let Some(module) = panel::build(name) else { return };
+        self.open_host(module, anchor, nested, now);
+    }
+
+    pub fn set_gallery(&mut self, open: bool) {
+        let now = Instant::now();
+        if !open {
+            if self.gallery_open() {
+                self.close_panels();
+            }
             return;
         }
-        let title_text = PANELS.iter().find(|(n, _)| *n == name).map_or(name, |(_, t)| t);
-        let look = self.bar.kit.look.clone();
-        let title = self.bar.kit.shape(title_text, look.sans(fs_theme::tokens::WEIGHTS.medium as f32));
-        let anchor = anchor.or_else(|| self.bar.panel_anchor(name)).unwrap_or(self.bar.length() as f64);
-        let width = self.store.theme.theme.space.popup_width_default;
-        // A card's width runs along a top or bottom line and away from a
-        // left or right one.
-        let size = if self.bar.edge().is_vertical() { (PANEL_HEIGHT, width) } else { (width, PANEL_HEIGHT) };
-        let card = self.new_card(anchor, size);
-        let surface = self.popout_surface(&card, Layer::Overlay);
-        self.panel = Some(Popout {
-            name: name.to_owned(),
-            region: None,
-            card,
-            surface,
-            slots: Vec::new(),
-            title: Some(title),
-            title_nodes: Vec::new(),
-            hover: None,
-        });
+        if !self.gallery_open() {
+            self.open_host(Box::new(panel::gallery::Gallery::new()), None, false, now);
+        }
+    }
+
+    fn open_host(&mut self, module: Box<dyn panel::Panel>, anchor: Option<f64>, nested: bool, now: Instant) {
+        let id = module.id();
+        if self.panel.as_ref().is_some_and(|p| p.id() == id && p.is_open()) {
+            return;
+        }
+        let place = self.panel_place(anchor, nested);
+        let layer = self.overlay("formalshell:panel", Layer::Overlay, Anchor::all(), (0, 0), -1);
+        layer.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
+        layer.commit();
+        let mut surface = Surface::new("panel", layer, &self.shm, self.started);
+        surface.wait_map = true;
+        let mut host = Host::new(module, place, &self.store.theme.theme, surface, self.motion_scale, self.cast);
+        match self.panel.take() {
+            Some(mut old) if old.is_open() => {
+                host.take_over(old.card.live(), now);
+                old.hand_over();
+                self.outgoing = Some(old);
+            }
+            Some(old) => self.outgoing = Some(old),
+            None => {}
+        }
+        host.card.set_open(now, true);
+        self.panel = Some(host);
+        self.panel_dirty = true;
+        self.tips.hide(None, now);
         self.sync_open(now);
-        self.log(&format!("panel {name} mapped"));
+        self.log(&format!("panel {id} mapped"));
     }
 
     pub fn close_panels(&mut self) {
         let now = Instant::now();
         if let Some(p) = &mut self.panel {
-            p.card.set_open(now, false);
+            p.close(now);
         }
+        self.panel_dirty = true;
+        self.tips.hide(None, now);
         self.sync_open(now);
     }
 
@@ -663,7 +745,12 @@ impl App {
         if self.panel.as_ref().is_some_and(|p| p.finished(now)) {
             self.panel = None;
             self.sync_join();
+            self.sync_open(now);
             self.log("panel unmapped");
+        }
+        if self.outgoing.as_ref().is_some_and(|p| p.finished(now)) {
+            self.outgoing = None;
+            self.sync_join();
         }
         if self.overflow.as_ref().is_some_and(|p| p.finished(now)) {
             self.overflow = None;
@@ -683,12 +770,30 @@ impl App {
         if let Some(s) = &mut self.bar_surface {
             s.present(&mut self.bar.scene, animating, &qh);
         }
-        for p in [&mut self.overflow, &mut self.panel].into_iter().flatten() {
+        if let Some(p) = &mut self.overflow {
             p.layout(&mut self.bar, now);
             let kit = &self.bar.kit;
             let content = p.slots.iter_mut().any(|s| s.animating(kit, true, now));
             let animating = p.card.animating(now) || content;
             p.surface.present(&mut p.card.scene, animating, &qh);
+        }
+        let theme = &self.store.theme.theme;
+        for h in [&mut self.outgoing, &mut self.panel].into_iter().flatten() {
+            if h.prime_until.is_some_and(|t| t <= now) {
+                h.primed();
+            }
+            let animating = h.animating(now) || h.content_animating(now);
+            if self.panel_dirty || animating {
+                h.sync_region(&self.compositor);
+                h.layout(&self.store, theme, &mut self.bar.kit, now);
+            }
+            let animating = h.animating(now) || h.content_animating(now);
+            h.surface.present(&mut h.card.scene, animating, &qh);
+        }
+        self.panel_dirty = false;
+        self.present_tooltip(now);
+        if let Some((surface, scene, _)) = &mut self.preview {
+            surface.present(scene, false, &qh);
         }
         for (_, z) in &mut self.zones {
             z.present(0.0, false, &qh);
@@ -699,10 +804,54 @@ impl App {
         self.arm_wake(now);
     }
 
-    /// A timer for the next thing that starts moving on its own (a marquee
-    /// leaving its hold), so nothing asks for frames while it waits.
+    /// The tooltip group's answer on screen: a card created for a show,
+    /// travelling for a hand-off, and gone once its exit has run.
+    fn present_tooltip(&mut self, now: Instant) {
+        self.tips.tick(now);
+        self.tips.drawn = self.tip_card.is_some();
+        let theme = &self.store.theme.theme;
+        match self.tips.shown.clone() {
+            Some(ask) => {
+                if self.tip_card.is_none() {
+                    let size = self.output_size();
+                    let layer = self.overlay("formalshell:tooltip", Layer::Overlay, Anchor::all(), (0, 0), -1);
+                    let mut surface = Surface::new("tooltip", layer, &self.shm, self.started);
+                    surface.wait_map = true;
+                    self.tip_card = Some(tooltip::Card::new(surface, (size.0 as i32, size.1 as i32), self.motion_scale));
+                }
+                let travel = self.tips.travel;
+                let card = self.tip_card.as_mut().expect("tooltip card");
+                card.take(theme, &mut self.bar.kit, &ask, travel, now);
+                card.set_open(theme, true, now);
+            }
+            None => {
+                if let Some(c) = &mut self.tip_card {
+                    c.set_open(theme, false, now);
+                }
+            }
+        }
+        if self.tip_card.as_ref().is_some_and(|c| c.surface.mapped && c.finished(now)) {
+            self.tip_card = None;
+        }
+        let qh = self.qh.clone();
+        if let Some(c) = &mut self.tip_card {
+            c.draw(theme, &mut self.bar.kit, now);
+            let animating = c.animating(now);
+            c.surface.present(&mut c.scene, animating, &qh);
+        }
+    }
+
+    /// A timer for the next thing that starts on its own (a marquee
+    /// leaving its hold, a tooltip's delay, a panel's keyboard prime), so
+    /// nothing asks for frames while it waits.
     fn arm_wake(&mut self, now: Instant) {
-        let Some(at) = self.bar.wake(now) else { return };
+        let hosts = [&self.panel, &self.outgoing];
+        let at = [self.bar.wake(now), self.tips.wake()]
+            .into_iter()
+            .chain(hosts.iter().filter_map(|h| h.as_ref()).flat_map(|h| [h.prime_until, h.wake.filter(|w| *w > now)]))
+            .flatten()
+            .min();
+        let Some(at) = at else { return };
         if self.wake.is_some_and(|w| w <= at && w > now) {
             return;
         }
@@ -711,6 +860,7 @@ impl App {
         let _ = handle.insert_source(Timer::from_deadline(at), |_, _, app: &mut App| {
             app.wake = None;
             app.bar_dirty = true;
+            app.panel_dirty = true;
             TimeoutAction::Drop
         });
     }
@@ -725,6 +875,15 @@ impl App {
         if self.panel.as_ref().is_some_and(|p| p.surface.layer.wl_surface() == surface) {
             return Some(Owner::Panel);
         }
+        if self.outgoing.as_ref().is_some_and(|p| p.surface.layer.wl_surface() == surface) {
+            return Some(Owner::Outgoing);
+        }
+        if self.tip_card.as_ref().is_some_and(|c| c.surface.layer.wl_surface() == surface) {
+            return Some(Owner::Tooltip);
+        }
+        if self.preview.as_ref().is_some_and(|(s, _, _)| s.layer.wl_surface() == surface) {
+            return Some(Owner::Preview);
+        }
         if self.scrim.as_ref().is_some_and(|(_, s)| s.layer.wl_surface() == surface) {
             return Some(Owner::Scrim);
         }
@@ -737,12 +896,26 @@ impl App {
     pub fn report_exit(&self) {
         let mut parts: Vec<String> = self.bar_surface.iter().map(|s| s.report()).collect();
         parts.extend(self.panel.as_ref().map(|p| p.surface.report()));
+        parts.extend(self.outgoing.as_ref().map(|p| p.surface.report()));
         parts.extend(self.overflow.as_ref().map(|p| p.surface.report()));
+        parts.extend(self.tip_card.as_ref().map(|c| c.surface.report()));
         parts.extend(self.scrim.as_ref().map(|(_, s)| s.report()));
         eprintln!("exit t={}ms {}", self.started.elapsed().as_millis(), parts.join(" "));
     }
 
+    /// Where a surface hugging the bar's edge `depth` deep sits on the
+    /// output, for a rect on it in the output's coordinates.
+    fn edge_origin(&self, depth: i32) -> (i32, i32) {
+        let (w, h) = self.output_size();
+        match self.bar.edge() {
+            Edge::Bottom => (0, h as i32 - depth),
+            Edge::Right => (w as i32 - depth, 0),
+            _ => (0, 0),
+        }
+    }
+
     fn hover(&mut self, owner: Option<Owner>, at: (f64, f64)) {
+        let now = Instant::now();
         let bar_hover = (owner == Some(Owner::Bar)).then(|| self.bar.hit(at.0, at.1)).flatten();
         if bar_hover != self.bar.hover {
             self.bar.hover = bar_hover;
@@ -751,10 +924,45 @@ impl App {
             }
             self.bar_dirty = true;
         }
-        for (o, p) in [(Owner::Overflow, &mut self.overflow), (Owner::Panel, &mut self.panel)] {
-            if let Some(p) = p {
-                p.hover = (owner == Some(o)).then(|| p.hit(at.0, at.1)).flatten();
+        if let Some(p) = &mut self.overflow {
+            p.hover = (owner == Some(Owner::Overflow)).then(|| p.hit(at.0, at.1)).flatten();
+        }
+        if let Some(h) = &mut self.panel {
+            let point = (owner == Some(Owner::Panel)).then_some(at);
+            if h.pointer(point, &self.store, self.runtime.as_ref()) {
+                self.panel_dirty = true;
             }
+        }
+        // The tooltip the item under the pointer carries, in the output's
+        // coordinates.
+        let ask = match owner {
+            Some(Owner::Bar) => self.bar.tooltip().map(|(text, r, edge)| {
+                let (ox, oy) = if self.bar.framed() { (0, 0) } else { self.edge_origin(self.bar.thickness()) };
+                let rect = IRect::new(r.x + ox, r.y + oy, r.w, r.h);
+                tooltip::Ask { owner: format!("bar:{}:{}", rect.x, rect.y), text, rect, bar: Some(edge) }
+            }),
+            Some(Owner::Overflow) => self.overflow.as_ref().and_then(|p| {
+                let s = p.slots.get(p.hover?)?;
+                let (ox, oy) = self.edge_origin(p.card.depth());
+                let rect = IRect::new(s.rect.x + ox, s.rect.y + oy, s.rect.w, s.rect.h);
+                (!s.view.tooltip.is_empty()).then(|| tooltip::Ask {
+                    owner: format!("overflow:{}", s.name),
+                    text: s.view.tooltip.clone(),
+                    rect,
+                    bar: Some(self.bar.edge()),
+                })
+            }),
+            Some(Owner::Panel) => self.panel.as_ref().and_then(|h| h.tooltip()).map(|(text, rect)| tooltip::Ask {
+                owner: format!("panel:{}:{}", rect.x, rect.y),
+                text,
+                rect,
+                bar: None,
+            }),
+            _ => None,
+        };
+        match ask {
+            Some(ask) => self.tips.show(ask, now),
+            None => self.tips.hide(None, now),
         }
     }
 
@@ -778,18 +986,32 @@ impl App {
                     self.pointer_on = None;
                     self.hover(None, (x, y));
                 }
-                PointerEventKind::Press { button, .. } => {
+                PointerEventKind::Press { .. } => {
+                    if owner == Some(Owner::Panel) {
+                        if let Some(h) = &mut self.panel {
+                            h.press(x, y, &self.store, self.runtime.as_ref());
+                        }
+                        self.pressed = Some((Owner::Panel, 0));
+                        self.panel_dirty = true;
+                        continue;
+                    }
                     let hit = match owner {
                         Some(Owner::Bar) => self.bar.hit(x, y),
                         Some(Owner::Overflow) => self.overflow.as_ref().and_then(|p| p.hit(x, y)),
-                        Some(Owner::Panel) => self.panel.as_ref().and_then(|p| p.hit(x, y)),
                         _ => None,
                     };
                     self.pressed = owner.zip(hit);
-                    let _ = button;
                 }
                 PointerEventKind::Release { button, .. } => {
                     let Some((o, i)) = self.pressed.take() else { continue };
+                    if o == Owner::Panel {
+                        let out = self.panel.as_mut().map_or(Out::None, |h| h.release(x, y, &self.store, self.runtime.as_ref()));
+                        if out == Out::Close {
+                            self.close_panels();
+                        }
+                        self.panel_dirty = true;
+                        continue;
+                    }
                     let button = match button {
                         0x111 => Button::Right,
                         0x112 => Button::Middle,
@@ -803,6 +1025,13 @@ impl App {
                         continue;
                     }
                     let up = v < 0.0;
+                    if owner == Some(Owner::Panel) {
+                        if let Some(h) = &mut self.panel {
+                            h.wheel(x, y, up, &self.store, self.runtime.as_ref());
+                        }
+                        self.panel_dirty = true;
+                        continue;
+                    }
                     if let Some(i) = self.bar.hit(x, y).filter(|_| owner == Some(Owner::Bar)) {
                         let action = self.bar.wheel(i, up, &self.store);
                         let anchor = self.bar.slot_anchor(i);
@@ -821,6 +1050,7 @@ impl App {
         let hand = match self.pointer_on {
             Some(Owner::Bar) => interactive(&self.bar.slots, self.bar.hover),
             Some(Owner::Overflow) => self.overflow.as_ref().is_some_and(|p| interactive(&p.slots, p.hover)),
+            Some(Owner::Panel) => self.panel.as_ref().is_some_and(|h| h.hand()),
             _ => false,
         };
         let shape = if hand { Shape::Pointer } else { Shape::Default };
@@ -832,10 +1062,11 @@ impl App {
 
     fn click(&mut self, owner: Owner, i: usize, button: Button, at: (f64, f64)) {
         let edge = self.bar.edge();
-        let (action, anchor) = match owner {
+        match owner {
             Owner::Bar if i < self.bar.slots.len() => {
                 let a = self.bar.click(i, button, at.0, at.1, &self.store);
-                (a, self.bar.slot_anchor(i))
+                let anchor = self.bar.slot_anchor(i);
+                self.act(a, anchor);
             }
             Owner::Overflow => {
                 let Some(p) = &mut self.overflow else { return };
@@ -844,11 +1075,41 @@ impl App {
                 let r = s.rect;
                 let a = s.cell.click(button, (at.0 - r.x as f64, at.1 - r.y as f64), &env);
                 let anchor = if edge.is_vertical() { r.y as f64 + r.h as f64 / 2.0 } else { r.x as f64 + r.w as f64 / 2.0 };
-                (a, anchor)
+                // A cell in the second bar opens its panel off that card.
+                if let Action::Panel(name) = a {
+                    let open = self.panel_open() != Some(name);
+                    self.set_panel_from(name, open, Some(anchor), true);
+                } else {
+                    self.act(a, anchor);
+                }
             }
-            _ => return,
+            _ => {}
+        }
+    }
+
+    /// One key on the keyboard: the open panel's, as KeyCatcher.qml binds
+    /// them.
+    fn key_event(&mut self, event: KeyEvent) {
+        let key = match event.keysym {
+            Keysym::Escape => Key::Escape,
+            Keysym::Tab => Key::Tab(1),
+            Keysym::ISO_Left_Tab => Key::Tab(-1),
+            Keysym::Down => Key::Move(0, 1),
+            Keysym::Up => Key::Move(0, -1),
+            Keysym::Right => Key::Move(1, 0),
+            Keysym::Left => Key::Move(-1, 0),
+            Keysym::Return | Keysym::KP_Enter | Keysym::space => Key::Activate,
+            _ => match event.utf8 {
+                Some(t) if t.chars().count() == 1 && t.chars().all(|c| c as u32 >= 0x20) => Key::Text(t),
+                _ => return,
+            },
         };
-        self.act(action, anchor);
+        let Some(h) = &mut self.panel else { return };
+        let out = h.key(key, &self.store, self.runtime.as_ref());
+        self.panel_dirty = true;
+        if out == Out::Close {
+            self.close_panels();
+        }
     }
 }
 
@@ -867,9 +1128,8 @@ impl CompositorHandler for App {
                 (s.frame_pending, s.mapped, s.callbacks) = (false, true, s.callbacks + 1);
                 self.bar_dirty = true;
             }
-            Some(o @ (Owner::Overflow | Owner::Panel)) => {
-                let p = if o == Owner::Overflow { &mut self.overflow } else { &mut self.panel };
-                let Some(p) = p else { return };
+            Some(Owner::Overflow) => {
+                let Some(p) = &mut self.overflow else { return };
                 let s = &mut p.surface;
                 (s.frame_pending, s.callbacks) = (false, s.callbacks + 1);
                 if s.mapped {
@@ -880,10 +1140,46 @@ impl CompositorHandler for App {
                 }
                 self.sync_join();
             }
+            Some(o @ (Owner::Panel | Owner::Outgoing)) => {
+                let theme = &self.store.theme.theme;
+                let h = if o == Owner::Panel { &mut self.panel } else { &mut self.outgoing };
+                let Some(h) = h else { return };
+                let s = &mut h.surface;
+                (s.frame_pending, s.callbacks) = (false, s.callbacks + 1);
+                let mut cut = false;
+                if s.mapped {
+                    h.card.tick(now);
+                } else {
+                    s.mapped = true;
+                    cut = h.mapped(theme, now);
+                }
+                // The card that took this one's place is moving: the
+                // outgoing window goes on this tick, while the two still
+                // stand exactly on top of each other.
+                if cut && let Some(old) = &mut self.outgoing {
+                    old.handed = true;
+                }
+                self.panel_dirty = true;
+                self.sync_join();
+            }
+            Some(Owner::Tooltip) => {
+                let theme = &self.store.theme.theme;
+                let Some(c) = &mut self.tip_card else { return };
+                let s = &mut c.surface;
+                (s.frame_pending, s.callbacks) = (false, s.callbacks + 1);
+                if !s.mapped {
+                    s.mapped = true;
+                    c.mapped(theme, now);
+                }
+            }
             Some(Owner::Scrim) => {
                 let Some((scrim, s)) = &mut self.scrim else { return };
                 (s.frame_pending, s.mapped, s.callbacks) = (false, true, s.callbacks + 1);
                 scrim.mapped(now);
+            }
+            Some(Owner::Preview) => {
+                let Some((s, _, _)) = &mut self.preview else { return };
+                (s.frame_pending, s.mapped, s.callbacks) = (false, true, s.callbacks + 1);
             }
             Some(Owner::Zone(i)) => {
                 let z = &mut self.zones[i].1;
@@ -906,6 +1202,12 @@ impl LayerShellHandler for App {
                 self.panel = None;
                 self.sync_join();
             }
+            Some(Owner::Outgoing) => {
+                self.outgoing = None;
+                self.sync_join();
+            }
+            Some(Owner::Tooltip) => self.tip_card = None,
+            Some(Owner::Preview) => self.preview = None,
             Some(Owner::Overflow) => {
                 self.overflow = None;
                 self.sync_join();
@@ -931,11 +1233,26 @@ impl LayerShellHandler for App {
                 self.set_input_region();
                 self.refresh_bar(None);
             }
-            Some(o @ (Owner::Overflow | Owner::Panel)) => {
-                let p = if o == Owner::Overflow { &mut self.overflow } else { &mut self.panel };
-                let Some(p) = p else { return };
+            Some(Owner::Overflow) => {
+                let Some(p) = &mut self.overflow else { return };
                 let size = p.card.scene.size;
                 p.surface.configure(size.w, size.h);
+            }
+            Some(o @ (Owner::Panel | Owner::Outgoing)) => {
+                let h = if o == Owner::Panel { &mut self.panel } else { &mut self.outgoing };
+                let Some(h) = h else { return };
+                let size = h.card.scene.size;
+                h.surface.configure(size.w, size.h);
+                self.panel_dirty = true;
+            }
+            Some(Owner::Tooltip) => {
+                let Some(c) = &mut self.tip_card else { return };
+                let size = c.scene.size;
+                c.surface.configure(size.w, size.h);
+            }
+            Some(Owner::Preview) => {
+                let Some((s, scene, _)) = &mut self.preview else { return };
+                s.configure(scene.size.w, scene.size.h);
             }
             Some(Owner::Scrim) => {
                 let Some((_, s)) = &mut self.scrim else { return };
@@ -968,11 +1285,22 @@ impl SeatHandler for App {
                 _ => None,
             };
         }
+        if capability == Capability::Keyboard && self.keyboard.is_none() {
+            // Repeats come off the loop, so a held arrow glides the cursor.
+            let repeat: smithay_client_toolkit::seat::keyboard::repeat::RepeatCallback<App> = Box::new(|app, _, event| app.key_event(event));
+            self.keyboard = match self.handle.clone() {
+                Some(handle) => self.seats.get_keyboard_with_repeat(qh, &seat, None, handle, repeat).ok(),
+                None => self.seats.get_keyboard(qh, &seat, None).ok(),
+            };
+        }
     }
 
     fn remove_capability(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat, capability: Capability) {
         if let Some(p) = self.pointer.take().filter(|_| capability == Capability::Pointer) {
             p.release();
+        }
+        if let Some(k) = self.keyboard.take().filter(|_| capability == Capability::Keyboard) {
+            k.release();
         }
     }
 
@@ -983,6 +1311,24 @@ impl PointerHandler for App {
     fn pointer_frame(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_pointer::WlPointer, events: &[PointerEvent]) {
         self.pointer_events(events);
     }
+}
+
+impl KeyboardHandler for App {
+    fn enter(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: &wl_surface::WlSurface, _: u32, _: &[u32], _: &[Keysym]) {}
+
+    fn leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: &wl_surface::WlSurface, _: u32) {}
+
+    fn press_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, event: KeyEvent) {
+        self.key_event(event);
+    }
+
+    fn repeat_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, event: KeyEvent) {
+        self.key_event(event);
+    }
+
+    fn release_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, _: KeyEvent) {}
+
+    fn update_modifiers(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, _: Modifiers, _: RawModifiers, _: u32) {}
 }
 
 impl OutputHandler for App {

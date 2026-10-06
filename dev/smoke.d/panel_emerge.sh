@@ -46,6 +46,7 @@
 # panel_handoff.sh's finding). Arming first spends that start-up during the
 # round trip instead.
 leg_panel_emerge_flag="--panel-emerge"
+leg_panel_emerge_rust=1
 leg_panel_emerge_order=79
 leg_panel_emerge_needs="convert"
 

@@ -8,6 +8,7 @@
 # look identical here without it. Its own grim frame, since the run's
 # smoke.png is timestamped by the time dev/vm.sh has pulled it.
 leg_panel_at_flag="--panel-at <n>"
+leg_panel_at_rust=1
 leg_panel_at_order=70
 
 panel_at_toggle_path="$shot_dir/panel-at-toggle.txt"

@@ -1,23 +1,30 @@
-//! A card hanging off the bar's line (Panel.qml over Drawer.qml), on any of
-//! the four edges. Under the `join` emerge habit it is DrawerJoin.qml's
-//! shape: Presence's emerge on the theme's `emerge` clock, Joint's let-go on
-//! `spatialFast`, Deform's springs and Shoulders' outline cut at the line.
-//! Under `popover` it is DrawerPopover.qml's: a plain card on its casts,
-//! fading on `effects` while it grows out of 0.97 on `spatialFast`.
+//! A card hanging off a line (Drawer.qml), on any of the four edges. Under
+//! the `join` emerge habit it is DrawerJoin.qml with Joint.qml's arithmetic:
+//! Presence's emerge on the theme's `emerge` clock, the let-go on
+//! `spatialFast`, Deform's springs, Shoulders' outline cut at the line, the
+//! walls a side too close to the line's end runs out to (M57 D2) and the
+//! bud a card hanging off another card's far edge is clamped into (M57 D3).
+//! Under `popover` it is DrawerPopover.qml: a plain card on its casts,
+//! fading on the table's `emerge` clock over an `md` drop out of its cell.
 //!
-//! The motion is worked out for a top edge, in the card's own coordinates:
-//! `u` along the line, `v` away from the output's edge. [`Card::edge_map`]
-//! turns those into the surface's, so every edge shares one implementation.
-//! Content is never mirrored: it is placed at the mapped card rect.
+//! Worked out for a top edge in the card's own coordinates, `u` along the
+//! line and `v` away from the output's edge; [`Card::edge_map`] turns those
+//! into the surface's, so every edge shares one implementation. Content is
+//! never mirrored: it is placed at the mapped content rect.
+//!
+//! Two rects drive it, as on Drawer: `rest`, where the card settles (walls
+//! and depth are decided off it, so a card mid-travel never walls and
+//! unwalls itself), and `live`, where the frame is drawn this frame (the
+//! handoff's travel, the size morph).
 
 use std::time::Instant;
 
 use fs_chrome::types::Edge;
 use vello_cpu::kurbo::{Affine, Rect};
 
-use crate::motion::{Animated, Deform, EMERGE, SPATIAL_FAST, SPATIAL_FAST_MS};
+use crate::motion::{Animated, Curve, Deform, EMERGE, SPATIAL_FAST, SPATIAL_FAST_MS};
 use crate::scene::{Cast, IRect, NodeId, Paint, Scene};
-use crate::surfaces::shoulders;
+use crate::surfaces::shoulders::{self, Walls};
 use fs_theme::color::Rgba;
 use fs_theme::style::Radius;
 use fs_theme::theme::Theme;
@@ -28,13 +35,12 @@ use crate::services::theme::getter;
 /// Drawer.qml's `deformAmount` for a popout.
 const DEFORM_AMOUNT: f64 = 0.15;
 /// Room past the card's resting rect for the overshoot, the deform's
-/// stretch and the cast.
+/// stretch and the cast, on a surface sized to one card.
 pub const SLACK: i32 = 48;
 /// Past any output's edge, for the half-plane beyond the line.
 const FAR: f64 = 1.0e5;
 
-/// What the card takes off the theme: the `card` role, and pantheon's card
-/// casts for the spike's `cast` switch.
+/// What the card takes off the theme.
 struct Look {
     fill: Rgba,
     border: Rgba,
@@ -42,12 +48,14 @@ struct Look {
     radius: f64,
     casts: Vec<fs_theme::style::Cast<Rgba>>,
     popover: bool,
-    effects_ms: f64,
+    emerge_ms: f64,
+    emerge_curve: Curve,
+    drop: f64,
 }
 
 impl Look {
-    fn new(theme: &Theme, cast: bool) -> Self {
-        let card = theme.box_style("card", None);
+    fn new(theme: &Theme, role: &str, cast: bool) -> Self {
+        let card = theme.box_style(role, None);
         let border = card.border.clone().unwrap_or(fs_theme::style::Line { color: Rgba::TRANSPARENT, width: 0.0 });
         let popover = theme.habit("emerge").and_then(|v| v.as_str()) == Some("popover");
         let casts = if popover {
@@ -61,6 +69,7 @@ impl Look {
         } else {
             Vec::new()
         };
+        let motion = theme.motion();
         Self {
             fill: card.fill,
             border: border.color,
@@ -71,76 +80,140 @@ impl Look {
             },
             casts,
             popover,
-            effects_ms: theme.motion().families.effects,
+            emerge_ms: if theme.motion_enabled { motion.emerge } else { 0.0 },
+            emerge_curve: Curve::from_table(&motion.emerge_curve),
+            drop: theme.space.md,
         }
     }
+}
+
+/// The card this one hangs off (a tray item's menu off the second bar):
+/// its span along the shared line and its corner.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Target {
+    pub along: f64,
+    pub length: f64,
+    pub radius: f64,
+}
+
+/// The line's ends, for the walls: the output's length along the line and
+/// what each end gives up to a frame ring (0 on a bare edge), and the corner
+/// the ring's two lines meet in.
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub struct Ends {
+    pub along: f64,
+    pub inset_start: f64,
+    pub inset_end: f64,
+    pub radius: f64,
+}
+
+/// A gap one card opens in a line: the edge it lies on, its start and
+/// width along that line and the fillets' reach.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Join {
+    pub edge: Edge,
+    pub x: f64,
+    pub width: f64,
+    pub reach: f64,
 }
 
 pub struct Card {
     pub scene: Scene,
     look: Look,
     pub edge: Edge,
-    /// The resting rect, `u` along and `v` away from the output's edge.
     rest: Rect,
+    live: Rect,
     line_at: f64,
     open: bool,
     mapped: bool,
+    /// The pose lands at once (Presence's `bypass`, a handoff's halves).
+    bypass: bool,
+    /// Off for a card being handed over: it publishes no gap.
+    joined: bool,
     progress: Animated,
     attach: Animated,
-    morph: Animated,
     deform: Deform,
     deform_running: bool,
     last_tick: Option<Instant>,
     scale: f64,
+    pub target: Option<Target>,
+    pub ends: Ends,
+    /// A child's gap in this card's far edge, `(start, end)` along the line.
+    pub far_gap: Option<(f64, f64)>,
+    /// The frame's whole opacity: 0 cuts a handed-over card outright.
+    pub frame_alpha: f32,
     casts: NodeId,
     shape: NodeId,
-    /// The join a joined card publishes: along, width, reach.
-    pub join: Option<(f64, f64, f64)>,
+    /// Every gap this card opens this frame: the line's, and a walled side's.
+    pub joins: Vec<Join>,
     /// Where content goes this frame, in surface pixels, and how opaque.
     pub content: (IRect, f32),
+    /// The band content may draw in, held to the bud while it is clamped.
+    pub clip: IRect,
 }
 
 impl Card {
     /// A card `size` (along, depth) centred along the line on `anchor`,
     /// clamped a `screenPadding` in from either end, a `barMargin` off the
-    /// line at `line_at`; `length` is the output's length along the edge.
+    /// line at `line_at`, on a surface sized to it; `length` is the
+    /// output's length along the edge.
     #[allow(clippy::too_many_arguments)]
     pub fn new(theme: &Theme, edge: Edge, length: i32, line_at: f64, anchor: f64, size: (f64, f64), scale: f64, cast: bool) -> Self {
-        let look = Look::new(theme, cast);
         let (w, h) = size;
         let pad = theme.space.screen_padding;
         let u = (anchor - w / 2.0).clamp(pad, (length as f64 - w - pad).max(pad)).round();
         let v = line_at + theme.space.bar_margin;
         let rest = Rect::new(u, v, u + w, v + h);
         let depth = rest.y1 as i32 + SLACK;
-        let (sw, sh) = if edge.is_vertical() { (depth, length) } else { (length, depth) };
-        let mut scene = Scene::new(sw, sh);
+        Self::build(theme, "card", edge, (length, depth), line_at, rest, scale, cast, false)
+    }
+
+    /// A card on a surface `size` (along, across) at `rest`, all in the
+    /// card's own coordinates.
+    #[allow(clippy::too_many_arguments)]
+    pub fn build(theme: &Theme, role: &str, edge: Edge, size: (i32, i32), line_at: f64, rest: Rect, scale: f64, cast: bool, clear: bool) -> Self {
+        let look = Look::new(theme, role, cast);
+        let (sw, sh) = if edge.is_vertical() { (size.1, size.0) } else { size };
+        let mut scene = if clear { Scene::clear(sw, sh) } else { Scene::new(sw, sh) };
         let empty = || Paint::Shape { fill: None, strokes: Vec::new() };
         let casts = scene.add(IRect::default(), empty());
         let shape = scene.add(IRect::default(), empty());
         for id in [casts, shape] {
             scene.set_visible(id, false);
         }
+        let curve = look.emerge_curve;
         Self {
             scene,
             look,
             edge,
             rest,
+            live: rest,
             line_at,
             open: true,
             mapped: false,
-            progress: Animated::new(0.0, EMERGE.1),
+            bypass: false,
+            joined: true,
+            progress: Animated::new(0.0, curve),
             attach: Animated::new(1.0, SPATIAL_FAST),
-            morph: Animated::new(0.0, SPATIAL_FAST),
             deform: Deform::new(),
             deform_running: false,
             last_tick: None,
             scale,
+            target: None,
+            ends: Ends::default(),
+            far_gap: None,
+            frame_alpha: 1.0,
             casts,
             shape,
-            join: None,
+            joins: Vec::new(),
             content: (IRect::default(), 0.0),
+            clip: IRect::default(),
         }
+    }
+
+    /// The node every other node on this surface paints above.
+    pub fn top_node(&self) -> NodeId {
+        self.shape
     }
 
     /// The surface's extent away from its edge.
@@ -148,10 +221,22 @@ impl Card {
         if self.edge.is_vertical() { self.scene.size.w } else { self.scene.size.h }
     }
 
-    /// The card's resting rect in surface pixels: its input region, and
-    /// where its content sits once it has landed.
+    /// The card's resting rect in surface pixels.
     pub fn rest_rect(&self) -> IRect {
         Scene::cover(self.rest, self.edge_map(), 0.0)
+    }
+
+    /// The frame's rect this frame, in surface pixels, before its slide.
+    pub fn live_rect(&self) -> IRect {
+        Scene::cover(self.live, self.edge_map(), 0.0)
+    }
+
+    pub fn rest(&self) -> Rect {
+        self.rest
+    }
+
+    pub fn live(&self) -> Rect {
+        self.live
     }
 
     /// From the card's own (u, v) to surface pixels.
@@ -163,6 +248,25 @@ impl Card {
             Edge::Left => Affine::new([0.0, 1.0, 1.0, 0.0, 0.0, 0.0]),
             Edge::Right => Affine::new([0.0, 1.0, -1.0, 0.0, d, 0.0]),
         }
+    }
+
+    /// Moves where the card settles and where it is drawn now.
+    pub fn set_rect(&mut self, rest: Rect, live: Rect) {
+        self.rest = rest;
+        self.live = live;
+    }
+
+    pub fn set_bypass(&mut self, now: Instant, bypass: bool) {
+        self.bypass = bypass;
+        if bypass {
+            self.progress.jump(if self.open { 1.0 } else { 0.0 });
+            self.deform = Deform::new();
+        }
+        let _ = now;
+    }
+
+    pub fn set_joined(&mut self, joined: bool) {
+        self.joined = joined;
     }
 
     /// Presence's `mapped`: the enter starts once the window is on screen.
@@ -177,9 +281,11 @@ impl Card {
         self.open = open;
         let held = open && !self.mapped;
         let target = if open && !held { 1.0 } else { 0.0 };
-        let clock = if self.look.popover { self.look.effects_ms } else { EMERGE.0 };
-        self.progress.set(now, target, clock * self.scale);
-        self.morph.set(now, target, SPATIAL_FAST_MS * self.scale);
+        if self.bypass {
+            self.progress.jump(target);
+        } else {
+            self.progress.set(now, target, self.look.emerge_ms * self.scale);
+        }
         self.tick(now);
     }
 
@@ -196,12 +302,18 @@ impl Card {
         !self.shown(now) || (!self.open && !self.progress.running(now))
     }
 
+    /// Presence's `settled`: open (or closed) and standing still.
+    pub fn settled(&self, now: Instant) -> bool {
+        self.bypass || (self.mapped && !self.progress.running(now))
+    }
+
     pub fn animating(&self, now: Instant) -> bool {
-        !self.mapped
-            || self.progress.running(now)
-            || self.attach.running(now)
-            || self.morph.running(now)
-            || !self.deform.at_rest
+        !self.mapped || self.progress.running(now) || self.attach.running(now) || !self.deform.at_rest
+    }
+
+    /// Presence's `contentOpacity`: the card lands before its text.
+    fn content_alpha(&self, pose: f64) -> f32 {
+        if self.look.popover { pose.clamp(0.0, 1.0) as f32 } else { ((pose - 0.3) / 0.7).clamp(0.0, 1.0) as f32 }
     }
 
     pub fn tick(&mut self, now: Instant) {
@@ -213,17 +325,15 @@ impl Card {
     }
 
     fn tick_popover(&mut self, now: Instant) {
-        let pose = self.progress.value(now).clamp(0.0, 1.0);
-        let zoom = 0.97 + 0.03 * self.morph.value(now);
-        let shown = self.shown(now) && pose > 0.0;
-        let (w, h) = (self.rest.width(), self.rest.height());
-        // Grown out of the edge it hangs off.
-        let origin = (self.rest.x0 + w / 2.0, self.rest.y0);
-        let local = Affine::translate(origin) * Affine::scale(zoom) * Affine::translate((-origin.0, -origin.1));
+        let pose = if self.bypass { if self.open { 1.0 } else { 0.0 } } else { self.progress.value(now) };
+        let alpha = pose.clamp(0.0, 1.0) as f32 * self.frame_alpha;
+        let shown = self.shown(now) && alpha > 0.0;
+        // Toward the line it dropped out of.
+        let drop = (1.0 - pose) * self.look.drop;
         let map = self.edge_map();
-        let device = Scene::cover(self.rest, map, 0.0);
+        let at = self.live + vello_cpu::kurbo::Vec2::new(0.0, -drop);
+        let device = Scene::cover(at, map, 0.0);
         let radius = self.look.radius;
-        let alpha = pose as f32;
         let layers: Vec<Cast> = self
             .look
             .casts
@@ -232,130 +342,162 @@ impl Card {
             .collect();
         let reach = layers.iter().map(|c| c.blur + c.spread.max(0.0) + c.x.abs().max(c.y.abs())).fold(0.0, f64::max);
         let card = Rect::new(device.x as f64, device.y as f64, device.right() as f64, device.bottom() as f64);
-        let scale_at = map * local * map.inverse();
-        let cutout = vello_cpu::kurbo::RoundedRect::from_rect(card, radius);
-        let cutout = vello_cpu::kurbo::Shape::to_path(&cutout, 0.1);
+        let rr = |r: Rect, radius: f64| vello_cpu::kurbo::Shape::to_path(&vello_cpu::kurbo::RoundedRect::from_rect(r, radius.max(0.0)), 0.1);
         self.scene.update_with(
             self.casts,
-            Scene::cover(card, scale_at, reach * 1.25 + 2.0).intersect(&self.scene.size),
-            Paint::Casts { rect: card, radius, layers, cutout },
+            Scene::cover(card, Affine::IDENTITY, reach * 1.25 + 2.0).intersect(&self.scene.size),
+            Paint::Casts { rect: card, radius, layers, cutout: rr(card, radius) },
             shown && !self.look.casts.is_empty(),
-            scale_at,
+            Affine::IDENTITY,
             None,
         );
         let fill = self.look.fill.with_alpha(self.look.fill.a * alpha);
         let border = self.look.border.with_alpha(self.look.border.a * alpha);
-        let mut path = vello_cpu::kurbo::BezPath::new();
-        let rr = vello_cpu::kurbo::RoundedRect::from_rect(card, radius);
-        path.extend(vello_cpu::kurbo::Shape::path_elements(&rr, 0.1));
         let half = self.look.border_width / 2.0;
-        let line = vello_cpu::kurbo::Shape::to_path(
-            &vello_cpu::kurbo::RoundedRect::from_rect(card.inflate(-half, -half), (radius - half).max(0.0)),
-            0.1,
-        );
-        let mut closed = line.clone();
-        closed.close_path();
+        let mut line = rr(card.inflate(-half, -half), radius - half);
+        line.close_path();
         self.scene.update_with(
             self.shape,
-            Scene::cover(card, scale_at, 2.0),
-            Paint::Shape { fill: Some((path, fill)), strokes: vec![(closed, border, self.look.border_width)] },
+            Scene::cover(card, Affine::IDENTITY, 2.0),
+            Paint::Shape { fill: Some((rr(card, radius), fill)), strokes: vec![(line, border, self.look.border_width)] },
             shown,
-            scale_at,
+            Affine::IDENTITY,
             None,
         );
-        self.content = (device, alpha);
-        self.join = None;
-        let _ = (w, h);
+        self.content = (device, if shown { self.content_alpha(pose) * self.frame_alpha } else { 0.0 });
+        self.clip = self.scene.size;
+        self.joins.clear();
     }
 
     fn tick_join(&mut self, now: Instant) {
         let dt = self.last_tick.map(|t| now.saturating_duration_since(t).as_secs_f64()).unwrap_or(0.0);
         self.last_tick = Some(now);
 
-        let (w, h) = (self.rest.width(), self.rest.height());
         let border = self.look.border_width;
         let radius = self.look.radius;
-        let depth = (self.rest.y0 - self.line_at).max(0.0) + border;
-        let travel = h + depth;
-        let release_at = 0.85 - 0.35 * (depth / h.max(1.0)).clamp(0.0, 1.0);
-        let amount = DEFORM_AMOUNT * h / (h + depth).max(1.0);
-        let cut = self.rest.y0 - depth;
+        let (rest, live) = (self.rest, self.live);
+        let rest_extent = rest.height();
+        let extent = live.height();
+        let (along, length) = (live.x0, live.width());
+        let depth = (rest.y0 - self.line_at).max(0.0) + border;
+        let travel = rest_extent + depth;
+        let release_at = 0.85 - 0.35 * (depth / rest_extent.max(1.0)).clamp(0.0, 1.0);
+        let amount = DEFORM_AMOUNT * rest_extent / (rest_extent + depth).max(1.0);
 
-        let pose = self.progress.value(now);
+        let pose = if self.bypass { if self.open { 1.0 } else { 0.0 } } else { self.progress.value(now) };
         let shown = self.shown(now);
-        let attach_target = if self.open && pose >= release_at { 0.0 } else { 1.0 };
-        if shown {
+        let slide = (1.0 - pose) * travel;
+        let shape_depth = (extent + depth - slide).max(0.0);
+        let neck = (depth - slide).max(0.0);
+
+        // Joint.qml: the span the card may bud in, and whether it is too
+        // tight to bud at all.
+        let spanned = self.target.is_some_and(|t| t.length > 0.0);
+        let ends = self.ends;
+        let (span_start, span_end) = match self.target {
+            Some(t) if spanned => (t.along + t.radius, t.along + t.length - t.radius),
+            _ => (ends.inset_start, ends.along - ends.inset_end),
+        };
+        let span_length = (span_end - span_start).max(0.0);
+        let span_tight = spanned && span_length < 4.0 * radius;
+        let joinable = self.joined && !span_tight;
+
+        let attach_target = if joinable && !(self.open && pose >= release_at) { 1.0 } else { 0.0 };
+        if shown && !self.bypass {
             self.attach.set(now, attach_target, SPATIAL_FAST_MS * self.scale);
         } else {
             self.attach.jump(attach_target);
         }
         let a = self.attach.value(now).clamp(0.0, 1.0);
-
-        let slide = (1.0 - pose) * travel;
-        let shape_depth = (h + depth - slide).max(0.0);
-        let neck = (depth - slide).max(0.0);
         let near_inset = neck * (1.0 - a);
         let reach = shoulders::fillet_radius(radius * (2.0 * a - 1.0), shape_depth - near_inset);
+
+        let can_wall = joinable && self.target.is_none() && radius > 0.0 && ends.along > 0.0 && rest.width() > 0.0;
+        let room_start = rest.x0 - ends.inset_start;
+        let room_end = ends.along - ends.inset_end - rest.x1;
+        let wall = |room: f64, inset: f64| {
+            if can_wall && room < radius { room.max(0.0) + if inset > 0.0 { border } else { radius } } else { -1.0 }
+        };
+        let (wall_start, wall_end) = (wall(room_start, ends.inset_start), wall(room_end, ends.inset_end));
+        let clampable = joinable && (spanned || ends.along > 0.0);
+        let bud_start = if clampable && wall_start < 0.0 { (along + length).min(along.max(span_start + radius)) } else { along };
+        let bud_end = if clampable && wall_end < 0.0 { bud_start.max((along + length).min(span_end - radius)) } else { along + length };
+        let clamped = bud_start > along || bud_end < along + length;
+        let clamped_along = along + (bud_start - along) * a;
+        let clamped_length = (along + length + (bud_end - along - length) * a - clamped_along).max(0.0);
+        let span_clip = (shown && span_tight && slide > 0.0).then_some((span_start, span_length));
+        let bud_clip = (shown && !span_tight && a > 0.0 && clamped).then_some((clamped_along - reach, clamped_length + reach * 2.0));
+        let along_pivot = if clamped && a > 0.0 {
+            clamped_along + clamped_length / 2.0 - along
+        } else if (wall_start >= 0.0) == (wall_end >= 0.0) {
+            length / 2.0
+        } else if wall_start >= 0.0 {
+            -wall_start
+        } else {
+            length + wall_end
+        };
         let pivot_inset = (depth - slide) * a;
 
-        let frame_y = self.rest.y0 - slide;
-        let settled = self.mapped && !self.progress.running(now);
+        let frame_y = live.y0 - slide;
+        let settled = self.settled(now);
         let running = !settled || !self.deform.at_rest;
-        if running {
+        if running && !self.bypass {
             if !self.deform_running {
                 self.deform.unsample();
             }
-            self.deform.step(dt, self.rest.x0, frame_y, h, amount);
+            self.deform.step(dt, live.x0, frame_y, extent, amount);
         }
         self.deform_running = running;
 
         let d = &self.deform;
-        let (cx, cy) = (w / 2.0, -pivot_inset);
+        let (cx, cy) = (along_pivot, -pivot_inset);
         let matrix = Affine::new([d.m00, d.m01, d.m01, d.m11, 0.0, 0.0]);
-        let frame = Affine::translate((self.rest.x0, frame_y))
-            * Affine::translate((cx, cy))
-            * matrix
-            * Affine::translate((-cx, -cy));
+        let frame = Affine::translate((live.x0, frame_y)) * Affine::translate((cx, cy)) * matrix * Affine::translate((-cx, -cy));
 
         let map = self.edge_map();
-        let band = Scene::cover(Rect::new(-FAR, cut.floor(), FAR, FAR), map, 0.0).intersect(&self.scene.size);
+        let cut = rest.y0 - depth;
+        let mut band_local = Rect::new(-FAR, cut.floor(), FAR, FAR);
+        if let Some((s, l)) = span_clip {
+            band_local.x0 = s;
+            band_local.x1 = s + l;
+        }
+        let band = Scene::cover(band_local, map, 0.0).intersect(&self.scene.size);
 
-        let item = map * frame * Affine::translate((-radius, slide - depth));
-        let item_rect = Rect::new(0.0, 0.0, w + radius * 2.0, shape_depth);
+        let walls = Walls { start: wall_start, end: wall_end, attach: a, radius: ends.radius };
+        let over = shoulders::overhang(radius, wall_start, wall_end);
+        let lift = shoulders::far_overhang(radius, wall_start, wall_end);
+        let origin = clamped_along - over;
+        let item_w = clamped_length + over * 2.0;
+        let item_h = shape_depth + lift;
+        let item = map * frame * Affine::translate((origin - along, slide - depth));
+        let item_rect = Rect::new(0.0, 0.0, item_w, item_h);
         let visible = shown && shape_depth > 0.0;
-        let paths = shoulders::paths(item_rect.width(), shape_depth, radius, border, a, near_inset);
-        let fill = self.look.fill;
-        let line = self.look.border;
+        let far_gap = self.far_gap.map(|(s, e)| (s - origin, e - origin));
+        let paths = shoulders::paths_with(item_w, item_h, radius, border, a, near_inset, walls, far_gap);
+        let fa = self.frame_alpha;
+        let fill = self.look.fill.with_alpha(self.look.fill.a * fa);
+        let line = self.look.border.with_alpha(self.look.border.a * fa);
         let near = line.with_alpha(line.a * (1.0 - a) as f32);
         let bounds = Scene::cover(item_rect, item, 2.0).intersect(&band);
         let cutout = paths.fill.clone();
         self.scene.update_with(
             self.shape,
             bounds,
-            Paint::Shape {
-                fill: Some((paths.fill, fill)),
-                strokes: vec![(paths.outer, line, border), (paths.near, near, border)],
-            },
-            visible,
+            Paint::Shape { fill: Some((paths.fill, fill)), strokes: vec![(paths.outer, line, border), (paths.near, near, border)] },
+            visible && fa > 0.0,
             item,
             Some(band),
         );
 
-        let cast_alpha = 1.0 - a;
+        let cast_alpha = (1.0 - a) as f32 * fa;
         let layers: Vec<Cast> = self
             .look
             .casts
             .iter()
-            .map(|c| Cast {
-                x: c.x,
-                y: c.y,
-                blur: c.blur,
-                spread: c.spread,
-                color: c.color.with_alpha(c.color.a * cast_alpha as f32),
-            })
+            .map(|c| Cast { x: c.x, y: c.y, blur: c.blur, spread: c.spread, color: c.color.with_alpha(c.color.a * cast_alpha) })
             .collect();
         let reach_out = layers.iter().map(|c| c.blur + c.spread.max(0.0) + c.y.abs()).fold(0.0, f64::max);
-        let card = Rect::new(radius, near_inset, radius + w, shape_depth);
+        let card = Rect::new(along - origin, near_inset, along - origin + length, shape_depth);
         self.scene.update_with(
             self.casts,
             Scene::cover(card, item, reach_out * 1.25 + 2.0).intersect(&band),
@@ -366,17 +508,52 @@ impl Card {
         );
 
         // Content rides the card's slide, unmirrored and undeformed.
-        let content = ((pose - 0.3) / 0.7).clamp(0.0, 1.0);
-        let at = Rect::new(self.rest.x0, frame_y, self.rest.x1, frame_y + h);
-        self.content = (Scene::cover(at, map, 0.0), if visible { content as f32 } else { 0.0 });
+        let at = Rect::new(live.x0, frame_y, live.x1, frame_y + extent);
+        self.content = (Scene::cover(at, map, 0.0), if visible { self.content_alpha(pose) * fa } else { 0.0 });
+        let content_cut = Rect::new(-FAR, self.line_at + border, FAR, FAR);
+        let mut clip = Scene::cover(content_cut, map, 0.0).intersect(&self.scene.size).intersect(&band);
+        if let Some((s, l)) = bud_clip {
+            clip = clip.intersect(&Scene::cover(Rect::new(s, -FAR, s + l, FAR), map, 0.0));
+        }
+        self.clip = clip;
 
-        self.join = (shown && a > 0.0).then(|| (self.rest.x0 + w * (1.0 - a) / 2.0, w * a, reach));
+        self.joins.clear();
+        if joinable && shown && a > 0.0 {
+            let out_start = if wall_start >= 0.0 { wall_start * a } else { 0.0 };
+            let out_end = if wall_end >= 0.0 { wall_end * a } else { 0.0 };
+            let start = clamped_along - out_start;
+            let len = clamped_length + out_start + out_end;
+            self.joins.push(Join { edge: self.edge, x: start + len * (1.0 - a) / 2.0, width: len * a, reach });
+            let (first, last) = if self.edge.is_vertical() { (Edge::Top, Edge::Bottom) } else { (Edge::Left, Edge::Right) };
+            // A walled side's own line runs across the output; the gap sits
+            // on it from the line down to the shape's far edge, in the
+            // output's coordinates along that wall.
+            let from = Scene::cover(Rect::new(0.0, cut, 0.0, cut + shape_depth), map, 0.0);
+            let (wx, ww) = if self.edge.is_vertical() { (from.x as f64, from.w as f64) } else { (from.y as f64, from.h as f64) };
+            for (k, w) in [(first, wall_start), (last, wall_end)] {
+                if w >= 0.0 {
+                    self.joins.push(Join { edge: k, x: wx, width: ww, reach });
+                }
+            }
+        }
     }
 
     /// The band past the line, where content may draw.
     pub fn content_clip(&self) -> IRect {
-        let cut = self.line_at + self.look.border_width;
-        Scene::cover(Rect::new(-FAR, cut, FAR, FAR), self.edge_map(), 0.0).intersect(&self.scene.size)
+        if self.clip.is_empty() {
+            let cut = self.line_at + self.look.border_width;
+            return Scene::cover(Rect::new(-FAR, cut, FAR, FAR), self.edge_map(), 0.0).intersect(&self.scene.size);
+        }
+        self.clip
+    }
+
+    /// The card's own join along its line, as the bar takes it.
+    pub fn join(&self) -> Option<(f64, f64, f64)> {
+        self.joins.first().map(|j| (j.x, j.width, j.reach))
+    }
+
+    pub fn radius(&self) -> f64 {
+        self.look.radius
     }
 }
 
@@ -395,7 +572,7 @@ pub struct Scrim {
 impl Scrim {
     pub fn new(theme: &Theme, scale: f64) -> Self {
         let alpha = f64::from(theme.box_style("scrim", None).fill.a);
-        Self { open: true, mapped: false, pose: Animated::new(0.0, EMERGE.1), scale, alpha }
+        Self { open: true, mapped: false, pose: Animated::new(0.0, crate::motion::SPATIAL), scale, alpha }
     }
 
     pub fn mapped(&mut self, now: Instant) {

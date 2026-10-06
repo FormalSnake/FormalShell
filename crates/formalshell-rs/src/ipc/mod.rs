@@ -11,6 +11,7 @@ mod bar;
 #[cfg(test)]
 mod cli;
 mod debug;
+mod gallery;
 #[cfg(test)]
 mod golden;
 mod media;
@@ -37,7 +38,7 @@ const MAX_REQUEST: u64 = 1 << 20;
 fn registry() ->&'static Registry<App> {
     static REGISTRY: OnceLock<Registry<App>> = OnceLock::new();
     REGISTRY.get_or_init(|| Registry {
-        targets: vec![debug::target(), theme::target(), theme::wallpaper(), bar::target(), panel::target(), media::target()],
+        targets: vec![debug::target(), theme::target(), theme::wallpaper(), bar::target(), panel::target(), media::target(), gallery::target()],
     })
 }
 

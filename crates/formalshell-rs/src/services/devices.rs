@@ -33,6 +33,8 @@ pub struct Audio {
     /// None until a sink has answered.
     pub volume: Option<f64>,
     pub muted: bool,
+    /// The default sink's description, or its node name.
+    pub name: String,
 }
 
 #[derive(Default)]
@@ -155,12 +157,61 @@ async fn network(ctx: Ctx) {
 fn parse_wpctl(out: &str) -> Option<Audio> {
     let rest = out.trim().strip_prefix("Volume:")?.trim();
     let volume = rest.split_whitespace().next()?.parse::<f64>().ok()?;
-    Some(Audio { volume: Some(volume), muted: rest.contains("[MUTED]") })
+    Some(Audio { volume: Some(volume), muted: rest.contains("[MUTED]"), name: String::new() })
+}
+
+/// `wpctl inspect`'s `node.description`, else `node.name`.
+fn parse_inspect(out: &str) -> String {
+    let prop = |key: &str| {
+        out.lines().find_map(|l| {
+            let l = l.trim_start_matches(['*', ' ']);
+            let rest = l.strip_prefix(key)?.trim_start().strip_prefix('=')?;
+            Some(rest.trim().trim_matches('"').to_owned())
+        })
+    };
+    prop("node.description").or_else(|| prop("node.name")).unwrap_or_default()
 }
 
 async fn read_volume() -> Audio {
     let out = async_process::Command::new("wpctl").args(["get-volume", "@DEFAULT_AUDIO_SINK@"]).output().await;
-    out.ok().and_then(|o| parse_wpctl(&String::from_utf8_lossy(&o.stdout))).unwrap_or_default()
+    let mut audio = out.ok().and_then(|o| parse_wpctl(&String::from_utf8_lossy(&o.stdout))).unwrap_or_default();
+    if audio.volume.is_some() {
+        let out = async_process::Command::new("wpctl").args(["inspect", "@DEFAULT_AUDIO_SINK@"]).output().await;
+        audio.name = out.map(|o| parse_inspect(&String::from_utf8_lossy(&o.stdout))).unwrap_or_default();
+    }
+    audio
+}
+
+/// NetworkManager's radio switch.
+pub fn set_wifi(ctx: &Ctx, on: bool) {
+    let ctx2 = ctx.clone();
+    ctx.spawn(async move {
+        if let Ok(conn) = zbus::Connection::system().await
+            && let Ok(proxy) = zbus::Proxy::new(&conn, NM, NM_PATH, NM).await
+        {
+            let _ = proxy.set_property("WirelessEnabled", on).await;
+            ctx2.publish(store::Diff::Devices(Diff::Network(nm_snapshot(&conn).await)));
+        }
+    });
+}
+
+/// `RequestScan` on every Wi-Fi device NetworkManager has.
+pub fn rescan(ctx: &Ctx) {
+    ctx.spawn(async move {
+        let Ok(conn) = zbus::Connection::system().await else { return };
+        let Some(devices) = nm_prop::<Vec<OwnedObjectPath>>(&conn, NM_PATH, NM, "Devices").await else { return };
+        for path in devices {
+            let iface = "org.freedesktop.NetworkManager.Device";
+            if nm_prop::<u32>(&conn, path.as_str(), iface, "DeviceType").await != Some(TYPE_WIFI) {
+                continue;
+            }
+            let wireless = "org.freedesktop.NetworkManager.Device.Wireless";
+            if let Ok(proxy) = zbus::Proxy::new(&conn, NM, path.as_str(), wireless).await {
+                let options: std::collections::HashMap<&str, zbus::zvariant::Value> = Default::default();
+                let _: zbus::Result<()> = proxy.call("RequestScan", &(options,)).await;
+            }
+        }
+    });
 }
 
 /// Polled until the PipeWire client lands with the audio panel.
@@ -194,8 +245,11 @@ mod tests {
 
     #[test]
     fn wpctl_lines() {
-        assert_eq!(parse_wpctl("Volume: 0.40\n"), Some(Audio { volume: Some(0.4), muted: false }));
-        assert_eq!(parse_wpctl("Volume: 1.00 [MUTED]\n"), Some(Audio { volume: Some(1.0), muted: true }));
+        assert_eq!(parse_wpctl("Volume: 0.40\n"), Some(Audio { volume: Some(0.4), muted: false, name: String::new() }));
+        assert_eq!(parse_wpctl("Volume: 1.00 [MUTED]\n"), Some(Audio { volume: Some(1.0), muted: true, name: String::new() }));
         assert_eq!(parse_wpctl("error"), None);
+        let inspect = "id 52, type PipeWire:Interface:Node\n  * node.description = \"Virtual Sink\"\n    node.name = \"auto_null\"\n";
+        assert_eq!(parse_inspect(inspect), "Virtual Sink");
+        assert_eq!(parse_inspect("    node.name = \"auto_null\"\n"), "auto_null");
     }
 }

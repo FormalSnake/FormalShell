@@ -1,4 +1,4 @@
-{ lib, rustPlatform, pkg-config, makeWrapper, fontconfig, lucide-font, nerd-fonts, matugen, wireplumber }:
+{ lib, rustPlatform, pkg-config, makeWrapper, fontconfig, libxkbcommon, lucide-font, nerd-fonts, matugen, wireplumber }:
 
 rustPlatform.buildRustPackage {
   pname = "formalshell-rs";
@@ -29,7 +29,7 @@ rustPlatform.buildRustPackage {
   cargoTestFlags = [ "--package" "formalshell-rs" ];
 
   nativeBuildInputs = [ pkg-config makeWrapper ];
-  buildInputs = [ fontconfig ];
+  buildInputs = [ fontconfig libxkbcommon ];
 
   # The icon fonts by path, registered with parley at startup: the same
   # lucide and font-logos builds nix/package.nix hands Qt through
