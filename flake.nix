@@ -155,6 +155,7 @@
         fs-notifd = pkgs.callPackage ./nix/fs-notifd-check.nix { };
         fs-bluez = pkgs.callPackage ./nix/fs-bluez-test.nix { };
         fs-auth = pkgs.callPackage ./nix/fs-auth-test.nix { };
+        fs-audio = pkgs.callPackage ./nix/fs-audio.nix { };
         nixos-module-eval = nixosModuleEval system pkgs;
         fs-mpris = pkgs.callPackage ./nix/fs-mpris.nix { };
 
