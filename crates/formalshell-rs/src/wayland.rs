@@ -17,6 +17,8 @@ use smithay_client_toolkit::shell::wlr_layer::{
 use smithay_client_toolkit::shm::{Shm, ShmHandler};
 use smithay_client_toolkit::{delegate_dispatch2, delegate_registry, registry_handlers};
 
+use fs_chrome::types::Edge;
+
 use crate::surfaces::bar::Bar;
 use crate::surfaces::panel::{Panel, Scrim};
 use crate::ipc;
@@ -24,6 +26,21 @@ use crate::runtime::Msg;
 use crate::store::Store;
 use crate::surface::{PixelSurface, Pixels, Surface};
 use crate::surfaces;
+
+/// Anchors the bar's layer on `edge`, across the whole of it, reserving
+/// its own thickness.
+fn place_bar(layer: &LayerSurface, edge: Edge, t: i32) {
+    let (anchor, w, h) = match edge {
+        Edge::Top => (Anchor::TOP | Anchor::LEFT | Anchor::RIGHT, 0, t),
+        Edge::Bottom => (Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT, 0, t),
+        Edge::Left => (Anchor::LEFT | Anchor::TOP | Anchor::BOTTOM, t, 0),
+        Edge::Right => (Anchor::RIGHT | Anchor::TOP | Anchor::BOTTOM, t, 0),
+    };
+    layer.set_anchor(anchor);
+    layer.set_size(w as u32, h as u32);
+    layer.set_exclusive_zone(t);
+    layer.commit();
+}
 
 /// The panel's one line of content, standing in for a real panel body.
 const PANEL_LABEL: &str = "Calendar";
@@ -68,14 +85,11 @@ impl App {
             .expect("wp_viewporter, wp_single_pixel_buffer_manager_v1 and wp_alpha_modifier_v1 are required");
 
         let store = Store::default();
-        let bar = Bar::new(1, &store.theme.theme);
+        let bar = Bar::new(Edge::Top, &store.theme.theme);
         let surface = compositor.create_surface(qh);
         let layer = layer_shell.create_layer_surface(qh, surface, Layer::Top, Some("formalshell:bar"), None);
-        layer.set_anchor(Anchor::TOP | Anchor::LEFT | Anchor::RIGHT);
-        layer.set_size(0, bar.thickness() as u32);
-        layer.set_exclusive_zone(bar.thickness());
         layer.set_keyboard_interactivity(KeyboardInteractivity::None);
-        layer.commit();
+        place_bar(&layer, Edge::Top, bar.thickness());
         let bar_surface = Surface::new("bar", layer, &shm, started);
 
         Self {
@@ -117,6 +131,33 @@ impl App {
 
     fn log(&self, what: &str) {
         eprintln!("ipc t={}ms {what}", self.started.elapsed().as_millis());
+    }
+
+    /// `bar.position`: the strip re-anchored on its new edge, laid out
+    /// again once the compositor configures the new size.
+    pub fn set_bar_edge(&mut self, edge: Edge) {
+        if edge == self.bar.edge() {
+            return;
+        }
+        self.bar.set_edge(edge);
+        place_bar(&self.bar_surface.layer, edge, self.bar.thickness());
+        self.sync_join();
+    }
+
+    /// The bar repainted off the store's theme, re-placed when its
+    /// thickness moved with it.
+    pub fn set_bar_theme(&mut self) {
+        let before = self.bar.thickness();
+        self.bar.set_theme(&self.store.theme.theme);
+        if self.bar.thickness() != before {
+            place_bar(&self.bar_surface.layer, self.bar.edge(), self.bar.thickness());
+        }
+    }
+
+    /// The output the bar's workspace slots belong to: the first one the
+    /// registry announced, the one a layer surface with no output lands on.
+    pub fn bar_output_name(&self) -> String {
+        self.outputs.outputs().next().and_then(|o| self.outputs.info(&o)).and_then(|i| i.name).unwrap_or_default()
     }
 
     pub fn panel_open(&self) -> bool {
@@ -315,8 +356,11 @@ impl LayerShellHandler for App {
         let (width, height) = (configure.new_size.0 as i32, configure.new_size.1 as i32);
         match self.owner(layer.wl_surface()) {
             Some(Owner::Bar) => {
-                if width > 0 && width != self.bar.scene.size.w {
-                    self.bar.resize(width);
+                let current = self.bar.scene.size;
+                let w = if width > 0 { width } else { current.w };
+                let h = if height > 0 { height } else { current.h };
+                if (w, h) != (current.w, current.h) {
+                    self.bar.resize(w, h);
                 }
                 let size = self.bar.scene.size;
                 self.bar_surface.configure(size.w, size.h);

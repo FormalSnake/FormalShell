@@ -50,6 +50,10 @@ impl State {
         changed
     }
 
+    pub fn settings(&self) -> &Value {
+        &self.settings
+    }
+
     /// Dotted-path lookup. Walks objects and arrays (an index is a path
     /// segment); `None` where the path leaves the document, `Some(Null)`
     /// where it ends on a null.

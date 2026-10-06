@@ -17,4 +17,5 @@ pub fn start(ctx: &Ctx) {
     ctx.spawn(state::run(ctx.clone()));
     ctx.spawn(hyprland::run(ctx.clone()));
     ctx.spawn(theme::watch(ctx.clone()));
+    theme::start(ctx);
 }

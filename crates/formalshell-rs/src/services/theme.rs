@@ -43,6 +43,7 @@ use std::ffi::OsString;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use async_io::Timer;
@@ -57,6 +58,7 @@ use serde_json::{Map, Value};
 
 use crate::runtime::Ctx;
 use crate::store;
+use super::state;
 
 /// What surfaces read: the resolved theme, the palette under it and the
 /// two facts `theme status` reports.
@@ -315,9 +317,56 @@ struct Engine {
     reloading: Rc<Cell<bool>>,
 }
 
+static RETHEME: OnceLock<async_channel::Sender<()>> = OnceLock::new();
+static INPUTS: OnceLock<async_channel::Sender<Inputs>> = OnceLock::new();
+
+/// `theme retheme`: one more run, queued behind any in flight. Callable from
+/// any thread; dropped before the engine has started.
+pub fn retheme() {
+    if let Some(tx) = RETHEME.get() {
+        let _ = tx.try_send(());
+    }
+}
+
+/// Hands the engine what it reacts to, from any thread.
+pub fn send_inputs(inputs: Inputs) {
+    if let Some(tx) = INPUTS.get() {
+        let _ = tx.try_send(inputs);
+    }
+}
+
+/// The engine wired to the shell: inputs from the store, its mode writes
+/// into state.json.
+pub fn start(ctx: &Ctx) {
+    let (inputs_tx, inputs_rx) = async_channel::unbounded();
+    let (requests_tx, requests_rx) = async_channel::unbounded::<Request>();
+    let _ = INPUTS.set(inputs_tx);
+    ctx.spawn(run(ctx.clone(), Env::from_process(), inputs_rx, requests_tx));
+    ctx.spawn(async move {
+        while let Ok(request) = requests_rx.recv().await {
+            let field = match request {
+                Request::SetMode(mode) => state::Field::Mode(mode),
+                Request::SetModeOverride(None) => state::Field::ModeOverride(Value::Null),
+                Request::SetModeOverride(Some(o)) => {
+                    state::Field::ModeOverride(serde_json::json!({"mode": o.mode, "untilMs": o.until_ms}))
+                }
+            };
+            state::set(vec![field]);
+        }
+    });
+}
+
+/// `State.modeOverride` as state.json holds it.
+pub fn parse_override(value: &Value) -> Option<Override> {
+    let mode = value.get("mode")?.as_str()?.to_owned();
+    let until_ms = value.get("untilMs")?.as_f64()? as i64;
+    Some(Override { mode, until_ms })
+}
+
 /// The engine. Returns when `inputs` closes.
 pub async fn run(ctx: Ctx, env: Env, inputs: async_channel::Receiver<Inputs>, requests: async_channel::Sender<Request>) {
     let (retheme, queued) = async_channel::unbounded();
+    let _ = RETHEME.set(retheme.clone());
     let engine = Rc::new(Engine {
         ctx: ctx.clone(),
         env,
@@ -962,13 +1011,18 @@ printf '%s' 'return {{}}' > '{state}/formalshell-colors.lua.tmp'"##,
     fn no_wallpaper_publishes_the_fallback_for_the_mode() {
         let (env, log) = rig("static");
         let theme_json = env.theme_json();
+        // The dconf pair and the reload are children that outlive the
+        // publish, and dropping the runtime drops them, so the run is held
+        // until they have logged.
         let (seen, _) = drive(env.clone(), vec![(Duration::ZERO, inputs(json!({}), "", "light"))], |s, _| {
-            s.present.contains(&true) && !s.palettes.is_empty()
+            s.present.contains(&true)
+                && !s.palettes.is_empty()
+                && log_lines(&log, "dconf").len() >= 2
+                && !log_lines(&log, "hyprctl reload").is_empty()
         });
         let light = palette::fallback("light");
         assert_eq!(std::fs::read_to_string(&theme_json).unwrap(), serde_json::to_string_pretty(&light).unwrap());
         assert_eq!(seen.palettes.last().unwrap()["mode"], "light");
-        std::thread::sleep(Duration::from_millis(300));
         assert_eq!(std::fs::read_to_string(env.hypr_colors()).unwrap(), matugen::hyprland_colors(&light));
         let chrome = std::fs::read_to_string(env.hypr_chrome()).unwrap();
         assert!(chrome.contains("rounding = 10,"));

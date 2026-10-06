@@ -19,6 +19,7 @@
 # boundary rather than at some arbitrary time.
 leg_theme_auto_flag="--theme-auto"
 leg_theme_auto_order=221
+leg_theme_auto_rust=1
 leg_theme_auto_needs="jq"
 
 theme_auto_before_png="$shot_dir/theme-auto-before.png"

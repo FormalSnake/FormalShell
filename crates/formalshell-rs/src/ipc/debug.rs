@@ -2,7 +2,11 @@
 //! the R0 spike's animation switches (`r0*`) until real targets replace
 //! them.
 
+use fs_chrome::types::Edge;
+use serde_json::json;
+
 use super::registry::{Function, Target, Type, Value};
+use crate::scene::IRect;
 use crate::wayland::App;
 
 fn text(s: impl Into<String>) -> Value {
@@ -36,23 +40,55 @@ pub fn target() -> Target<App> {
     }
 }
 
-/// Only what this shell holds: the join on its one top strip and the
-/// chrome numbers it draws with, keyed and ordered as DebugIpc.qml's dump.
-/// Every other key waits for the service behind it.
+/// Only what this shell holds, keyed and ordered as DebugIpc.qml's dump:
+/// the compositor block, the settings, the strip, its join and the chrome
+/// numbers. Every other key waits for the service behind it.
 fn dump(app: &mut App, _: &[Value]) -> Value {
-    let theme = app.theme();
-    let reach = theme.radii.xl;
-    let (radius, border, inset) = (theme.radius, theme.border_width, theme.space.bar_cell_height + theme.space.bar_margin * 2.0);
+    let h = &app.store.hyprland;
+    let c = &h.compositor;
+    let edge = app.bar.edge();
+    let thickness = app.bar.thickness();
+    let inset = |e: Edge| if e == edge { thickness } else { 0 };
+    let rect = |r: IRect| json!({"x": r.x, "y": r.y, "width": r.w, "height": r.h});
+    let theme = &app.store.theme.theme;
+    let reach = number(theme.radii.xl);
+    let screen = app.bar_output_name();
     let join = match app.debug_join() {
-        Some((x, width)) => format!(r#"{{"edge":"top","x":{x},"width":{width},"reach":{reach}}}"#),
-        None => "null".into(),
+        Some((x, width)) => json!({"edge": edge.as_str(), "x": x, "width": width, "reach": reach, "screen": screen}),
+        None => serde_json::Value::Null,
     };
-    text(format!(
-        r#"{{"join":{join},"theme":{{"radius":{},"radiusXl":{reach},"borderWidth":{},"barPosition":"top","edgeInset":{}}}}}"#,
-        radius,
-        border,
-        inset,
-    ))
+    let [first, second] = app.bar.line_rects();
+    let dump = json!({
+        "compositor": "hyprland",
+        "available": c.available,
+        "workspaces": c.workspaces,
+        "windows": c.windows,
+        "focusedWindowId": c.focused_window_id,
+        "heldFocusedWindowId": h.held_focused_window_id(),
+        "focusedWorkspaceId": c.focused_workspace_id,
+        "fullscreenOutputs": c.fullscreen_outputs,
+        "configLoaded": app.store.config.settings(),
+        "bar": [{"screen": screen, "edge": edge.as_str(), "line": [rect(first), rect(second)], "paint": null}],
+        "join": join,
+        "theme": {
+            "radius": number(theme.radius),
+            "radiusXl": reach,
+            "borderWidth": number(theme.border_width),
+            "barPosition": edge.as_str(),
+            "edgeInset": {
+                "top": inset(Edge::Top),
+                "bottom": inset(Edge::Bottom),
+                "left": inset(Edge::Left),
+                "right": inset(Edge::Right),
+            },
+        },
+    });
+    text(dump.to_string())
+}
+
+/// A number as JSON.stringify prints it: no `.0` on a whole one.
+fn number(n: f64) -> serde_json::Value {
+    if n.fract() == 0.0 && n.abs() < 1e15 { json!(n as i64) } else { json!(n) }
 }
 
 fn join(app: &mut App, args: &[Value]) -> Value {
@@ -63,9 +99,9 @@ fn join(app: &mut App, args: &[Value]) -> Value {
     if width <= 0 {
         return text("error: width must be positive");
     }
-    // The strip only exists on the top edge, so a join on any other has
-    // no line to open, as under QML with no bar on that edge.
-    app.set_debug_join((edge == "top").then_some((x, width)));
+    // A join on an edge the strip is not on has no line to open, as under
+    // QML with no bar on that edge.
+    app.set_debug_join((edge == app.bar.edge().as_str()).then_some((x, width)));
     ok()
 }
 
@@ -80,6 +116,7 @@ fn motion_scale(app: &mut App, args: &[Value]) -> Value {
         return text("error: percent must be 1..5000");
     }
     app.motion_scale = percent as f64 / 100.0;
+    app.bar.motion_scale = app.motion_scale;
     ok()
 }
 

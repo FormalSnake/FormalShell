@@ -13,6 +13,7 @@
 # rely on is proven to reach a running shell.
 leg_dump_flag="--dump"
 leg_dump_order=10
+leg_dump_rust=1
 
 dump_path="$shot_dir/dump.json"
 

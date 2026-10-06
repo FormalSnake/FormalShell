@@ -25,6 +25,7 @@
 # --chevron or --bar-layout, which write the same key.
 leg_config_reload_flag="--config-reload"
 leg_config_reload_order=186
+leg_config_reload_rust=1
 leg_config_reload_needs="jq"
 
 config_reload_before_path="$shot_dir/config-reload-before.txt"

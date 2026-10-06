@@ -39,7 +39,7 @@
 {"argv":["call","probe","ss","--","a"],"live":true,"stdout":"Too few arguments provided (2 required but 1 were provided.)\nFunction definition: function ss(a: string, b: string): string\n","stderr":"","exit":0}
 {"argv":["call","probe","s","--"],"live":true,"stdout":"Too few arguments provided (1 required but 0 were provided.)\nFunction definition: function s(a: string): string\n","stderr":"","exit":0}
 {"argv":["call","probe","s","-"],"live":true,"stdout":"[-]\n","stderr":"","exit":0}
-{"argv":["call","probe","show"],"live":true,"stdout":"target probe\n  function nl(): string\n  function ri(a: real): real\n  function empty(): string\n  function ss(a: string, b: string): string\n  function ii(a: int): int\n  function v(): void\n  function sss(a: string, b: string, c: string): string\n  function i(a: int): string\n  function s(a: string): string\n  function bb(a: bool): bool\n  function call(): string\n  function r(a: real): string\n  function b(a: bool): string\n  function show(): string\n","stderr":"","exit":0}
+{"argv":["call","probe","show"],"live":true,"stdout":"target probe\n  function ss(a: string, b: string): string\n  function call(): string\n  function ii(a: int): int\n  function bb(a: bool): bool\n  function nl(): string\n  function r(a: real): string\n  function sss(a: string, b: string, c: string): string\n  function empty(): string\n  function ri(a: real): real\n  function i(a: int): string\n  function show(): string\n  function b(a: bool): string\n  function s(a: string): string\n  function v(): void\n","stderr":"","exit":0}
 {"argv":["call","probe","call"],"live":true,"stdout":"probe-call\n","stderr":"","exit":0}
 {"argv":["call","probe","s","show"],"live":true,"stdout":"function s(a: string): string\n","stderr":"","exit":0}
 {"argv":["call","probe","b","true"],"live":true,"stdout":"true\n","stderr":"","exit":0}
@@ -74,7 +74,7 @@
 {"argv":["call"],"live":true,"stdout":"Target required to send message.\n","stderr":"","exit":0}
 {"argv":["call","","dump"],"live":true,"stdout":"Target required to send message.\n","stderr":"","exit":0}
 {"argv":["call","debug",""],"live":true,"stdout":"Function required to send message.\n","stderr":"","exit":0}
-{"argv":["show"],"live":true,"stdout":"target probe\n  function nl(): string\n  function ri(a: real): real\n  function empty(): string\n  function ss(a: string, b: string): string\n  function ii(a: int): int\n  function v(): void\n  function sss(a: string, b: string, c: string): string\n  function i(a: int): string\n  function s(a: string): string\n  function bb(a: bool): bool\n  function call(): string\n  function r(a: real): string\n  function b(a: bool): string\n  function show(): string\ntarget debug\n  function motionScale(percent: int): string\n  function query(q: string): string\n  function joinClear(): string\n  function join(edge: string, x: int, width: int): string\n  function dump(): string\n","stderr":"","exit":0}
+{"argv":["show"],"live":true,"stdout":"target debug\n  function join(edge: string, x: int, width: int): string\n  function joinClear(): string\n  function motionScale(percent: int): string\n  function query(q: string): string\n  function dump(): string\ntarget probe\n  function ss(a: string, b: string): string\n  function call(): string\n  function ii(a: int): int\n  function bb(a: bool): bool\n  function nl(): string\n  function r(a: real): string\n  function sss(a: string, b: string, c: string): string\n  function empty(): string\n  function ri(a: real): real\n  function i(a: int): string\n  function show(): string\n  function b(a: bool): string\n  function s(a: string): string\n  function v(): void\ntarget wallpaper\n  function set(path: string): string\n  function get(): string\ntarget theme\n  function retheme(): string\n  function status(): string\n  function mode(m: string): string\n","stderr":"","exit":0}
 {"argv":["call","debug","dump","extra"],"live":true,"stdout":"Too many arguments provided (0 required but 1 were provided.)\nFunction definition: function dump(): string\n","stderr":"","exit":0}
 {"argv":["call","debug","dump","--any-display"],"live":true,"stdout":"","stderr":"The following argument was not expected: --any-display\nRun with --help for more information.\n","exit":109}
 {"argv":["call","debug","motionScale","-1.5"],"live":true,"stdout":"Unable to parse argument 1 as \"int\". Provided argument: \"-1.5\"\nFunction definition: function motionScale(percent: int): string\n","stderr":"","exit":0}
@@ -115,5 +115,19 @@
 {"argv":["call","debug","query","instances"],"live":true,"stdout":"[\"instances\"]\n","stderr":"","exit":0}
 {"argv":["show","debug"],"live":true,"stdout":"","stderr":"The following argument was not expected: debug\nRun with --help for more information.\n","exit":109}
 {"argv":["show","debug","query"],"live":true,"stdout":"","stderr":"The following arguments were not expected: debug query\nRun with --help for more information.\n","exit":109}
-{"argv":["call","debug","dump"],"live":false,"stdout":"No running instances for \"/tmp/tmp.NeZP0Xjzdg/shell/shell.qml\"\n","stderr":"","exit":255}
-{"argv":["show"],"live":false,"stdout":"No running instances for \"/tmp/tmp.NeZP0Xjzdg/shell/shell.qml\"\n","stderr":"","exit":255}
+{"argv":["call","theme","retheme"],"live":true,"stdout":"ok\n","stderr":"","exit":0}
+{"argv":["call","theme","mode","toggle"],"live":true,"stdout":"mode toggle\n","stderr":"","exit":0}
+{"argv":["call","theme","mode"],"live":true,"stdout":"Too few arguments provided (1 required but 0 were provided.)\nFunction definition: function mode(m: string): string\n","stderr":"","exit":0}
+{"argv":["call","theme","mode","dark","light"],"live":true,"stdout":"Too many arguments provided (1 required but 2 were provided.)\nFunction definition: function mode(m: string): string\n","stderr":"","exit":0}
+{"argv":["call","theme","status"],"live":true,"stdout":"{}\n","stderr":"","exit":0}
+{"argv":["call","theme","status","x"],"live":true,"stdout":"Too many arguments provided (0 required but 1 were provided.)\nFunction definition: function status(): string\n","stderr":"","exit":0}
+{"argv":["call","wallpaper","set","/tmp/a.png"],"live":true,"stdout":"set /tmp/a.png\n","stderr":"","exit":0}
+{"argv":["call","wallpaper","set","a b"],"live":true,"stdout":"set a b\n","stderr":"","exit":0}
+{"argv":["call","wallpaper","set"],"live":true,"stdout":"Too few arguments provided (1 required but 0 were provided.)\nFunction definition: function set(path: string): string\n","stderr":"","exit":0}
+{"argv":["call","wallpaper","get"],"live":true,"stdout":"\n","stderr":"","exit":0}
+{"argv":["call","wallpaper","get","x"],"live":true,"stdout":"Too many arguments provided (0 required but 1 were provided.)\nFunction definition: function get(): string\n","stderr":"","exit":0}
+{"argv":["show","theme"],"live":true,"stdout":"","stderr":"The following argument was not expected: theme\nRun with --help for more information.\n","exit":109}
+{"argv":["show","wallpaper"],"live":true,"stdout":"","stderr":"The following argument was not expected: wallpaper\nRun with --help for more information.\n","exit":109}
+{"argv":["show","wallpaper","set"],"live":true,"stdout":"","stderr":"The following arguments were not expected: wallpaper set\nRun with --help for more information.\n","exit":109}
+{"argv":["call","debug","dump"],"live":false,"stdout":"No running instances for \"/tmp/tmp.bg9itzTpFW/shell/shell.qml\"\n","stderr":"","exit":255}
+{"argv":["show"],"live":false,"stdout":"No running instances for \"/tmp/tmp.bg9itzTpFW/shell/shell.qml\"\n","stderr":"","exit":255}

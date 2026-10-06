@@ -507,6 +507,8 @@ dependencies = [
  "async-process",
  "calloop",
  "chrono",
+ "fs-chrome",
+ "fs-system",
  "fs-theme",
  "futures-lite",
  "inotify",
