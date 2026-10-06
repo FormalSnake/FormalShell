@@ -82,9 +82,9 @@ nixpkgs.lib.nixosSystem {
           writableStore = true;
           writableStoreUseTmpfs = false;
           useHostCerts = true;
-          forwardPorts = [
-            { from = "host"; host.address = "127.0.0.1"; host.port = 2222; guest.port = 22; }
-          ];
+          # No forwardPorts: dev/vm.sh hands each slot its own ssh host port
+          # through QEMU_NET_OPTS, and a baked-in 2222 would collide with
+          # slot 0's on a second VM.
           additionalPaths = [ nixpkgs.outPath quickshell.outPath ];
 
           # Populated at boot from the $KEYS env var, same mechanism
