@@ -2,7 +2,10 @@
 //! it covers. Every change marks the old and the new bounds dirty, and the
 //! renderer redraws only the dirty rects.
 
+use std::sync::Arc;
+
 use vello_cpu::kurbo::{Affine, BezPath, Rect};
+use vello_cpu::{PixelMetadata, Pixmap};
 
 use crate::text::ShapedText;
 use fs_theme::color::Rgba;
@@ -64,8 +67,34 @@ pub struct Cast {
     pub color: Rgba,
 }
 
+/// A decoded picture ready to draw at its own size (a tray icon, a menu row's
+/// icon): premultiplied, shared between the nodes that show it.
+#[derive(Clone)]
+pub struct Bitmap {
+    pub pixmap: Arc<Pixmap>,
+}
+
+impl Bitmap {
+    /// `rgba` is straight alpha, `width * height * 4` bytes.
+    pub fn from_rgba(width: u16, height: u16, mut rgba: Vec<u8>) -> Self {
+        for px in rgba.chunks_exact_mut(4) {
+            let a = px[3] as u32;
+            for c in &mut px[..3] {
+                *c = ((*c as u32 * a + 127) / 255) as u8;
+            }
+        }
+        Self { pixmap: Arc::new(Pixmap::from_parts(rgba, width, height, PixelMetadata::default())) }
+    }
+
+    pub fn same_as(&self, other: &Bitmap) -> bool {
+        Arc::ptr_eq(&self.pixmap, &other.pixmap)
+    }
+}
+
 pub enum Paint {
     Rect { fill: Rgba, radius: f32 },
+    /// A bitmap drawn at the node's bounds origin, one pixel to a pixel.
+    Image { image: Bitmap, alpha: f32 },
     /// A rounded rect's fill under a border drawn inside its edge.
     Framed { fill: Rgba, radius: f32, border: Rgba, width: f32 },
     Text { text: ShapedText, color: Rgba },
@@ -208,6 +237,7 @@ fn paint_eq(a: &Paint, b: &Paint) -> bool {
         (Paint::Glow { text: t1, color: c1, x: x1, y: y1, blur: b1 }, Paint::Glow { text: t2, color: c2, x: x2, y: y2, blur: b2 }) => {
             c1 == c2 && t1.same_as(t2) && x1 == x2 && y1 == y2 && b1 == b2
         }
+        (Paint::Image { image: i1, alpha: a1 }, Paint::Image { image: i2, alpha: a2 }) => a1 == a2 && i1.same_as(i2),
         // Shapes and casts are rebuilt only by an animation tick, which has
         // already moved them.
         _ => false,

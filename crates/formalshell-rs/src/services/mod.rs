@@ -8,10 +8,12 @@ pub mod commands;
 pub mod config;
 pub mod devices;
 pub mod hyprland;
+pub mod icons;
 pub mod media;
 pub mod state;
 mod watch;
 pub mod theme;
+pub mod tray;
 pub mod wallpaper;
 
 use crate::runtime::Ctx;
@@ -28,4 +30,5 @@ pub fn start(ctx: &Ctx) {
     ctx.spawn(barpaint::run(ctx.clone()));
     ctx.spawn(wallpaper::run(ctx.clone()));
     devices::start(ctx);
+    ctx.spawn(tray::run(ctx.clone()));
 }
