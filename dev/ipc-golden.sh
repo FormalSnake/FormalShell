@@ -64,6 +64,24 @@ ShellRoot {
         function status(): string { return "{}" }
     }
     IpcHandler {
+        target: "monitor"
+        function status(): string { return "{}" }
+        function gpu(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "plugins"
+        function list(): string { return "[]" }
+        function status(): string { return "{}" }
+        function reload(): string { return "ok" }
+    }
+    IpcHandler {
+        target: "caffeinate"
+        function toggle(): string { return "ok" }
+        function enable(): string { return "ok" }
+        function disable(): string { return "ok" }
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
         target: "probe"
         function s(a: string): string { return "[" + a + "]" }
         function ss(a: string, b: string): string { return "[" + a + "][" + b + "]" }
@@ -253,6 +271,23 @@ rec show panel
 rec call media status
 rec call media status x
 rec show media
+rec call monitor status
+rec call monitor status x
+rec call monitor gpu
+rec call monitor nope
+rec show monitor
+rec call plugins list
+rec call plugins list x
+rec call plugins status
+rec call plugins reload
+rec call plugins nope
+rec show plugins
+rec call caffeinate toggle
+rec call caffeinate enable
+rec call caffeinate disable
+rec call caffeinate status
+rec call caffeinate status x
+rec show caffeinate
 
 kill "$qs_pid"
 wait "$qs_pid" 2>/dev/null || true

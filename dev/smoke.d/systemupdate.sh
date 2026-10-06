@@ -11,6 +11,7 @@
 # CURRENT, NO NETWORK or CHECKING. Nothing here asserts a count: that would
 # be asserting the state of github, not the state of this panel.
 leg_systemupdate_flag="--systemupdate"
+leg_systemupdate_rust=1
 leg_systemupdate_order=270
 
 systemupdate_open_reply_path="$shot_dir/systemupdate-open-reply.txt"
@@ -18,6 +19,13 @@ systemupdate_state_path="$shot_dir/systemupdate-panel-state.txt"
 systemupdate_panel_png="$shot_dir/systemupdate-panel.png"
 # The same file --dump's own leg writes.
 systemupdate_dump_path="$shot_dir/dump.json"
+systemupdate_room_path="$shot_dir/systemupdate-room.json"
+
+leg_systemupdate_validate() {
+  if [ "$fs_impl" = rust ]; then
+    leg_systemupdate_needs="jq"
+  fi
+}
 
 leg_systemupdate_fixture() {
   # --panel systemupdate writes the identical key, so only one of the two
@@ -44,6 +52,7 @@ $ipc call panel state > "$systemupdate_state_path" 2>&1
 sleep 20
 "$grim_bin" "$systemupdate_panel_png" > /dev/null 2>&1
 $ipc call debug dump > "$systemupdate_dump_path" 2>&1
+$ipc call bar room > "$systemupdate_room_path" 2>&1
 EOF
   hypr_exec_once "bash $script"
 }
@@ -63,6 +72,11 @@ leg_systemupdate_assert() {
   fi
   if ! grep -qF '"right":["systemUpdate"' "$systemupdate_dump_path"; then
     fail "the resolved settings do not lead bar.layout's right region with systemUpdate, the opt-in cell was never placed, so nothing flipped the panel's pollEnabled"
+  fi
+  if [ "$fs_impl" = rust ]; then
+    # One shared poll behind the cell: the cell has to be on the strip, whole.
+    jq -e '.[].cells[] | select(.name == "systemUpdate" and .whole == true and .width > 0)' "$systemupdate_room_path" > /dev/null \
+      || fail "the systemUpdate cell is not whole on the strip: $(cat "$systemupdate_room_path" 2>/dev/null)"
   fi
   [ -f "$systemupdate_panel_png" ] || fail "no systemupdate screenshot produced at $systemupdate_panel_png"
   echo "SMOKE_SYSTEMUPDATE $systemupdate_panel_png (against $PWD/flake.lock; whatever the real probes answered is what rendered)"

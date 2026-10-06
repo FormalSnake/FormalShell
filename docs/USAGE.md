@@ -3739,6 +3739,86 @@ outright. Nothing contains what a running plugin does. `plugins status` is
 the only place a load outcome is readable from outside the process, since
 plugin QML lives outside the repo and `qmllint` never sees it.
 
+### Command plugins (the Rust shell)
+
+The Rust shell cannot host QML, so there a plugin is an executable
+(`docs/superpowers/specs/2026-10-06-rust-rewrite.md`, "User code"). The
+directory, the manifest, its eight keys and its failure contract are the
+ones above, with one difference: `entry` names an executable file inside the
+plugin directory instead of a QML file. `kind` `bar` and `service` plugins
+start with the shell; a `panel` or `overlay` plugin starts with the shell
+only when `keepLoaded` is true, and otherwise when its card opens. Any
+language works, the process is the plugin's own, and nothing of it runs
+inside the shell.
+
+```
+~/.config/formalshell/plugins/
+  cpu-temp/
+    manifest.json     {"apiVersion": 1, "id": "cpu-temp", "kind": "bar", "entry": "run.sh"}
+    run.sh            chmod +x
+```
+
+The shell starts `entry` with the plugin directory as its working directory.
+It talks JSON, one object per line, both ways.
+
+**stdout, what the plugin shows.** Each line replaces everything the last
+one said, and a key a line leaves out is empty. Lines that are not JSON
+objects are skipped and logged.
+
+| Key | Type | Meaning |
+| --- | --- | --- |
+| `text` | string | the cell's label |
+| `icon` | string | an icon name from the active set (`lucide` by default) |
+| `tooltip` | string | the hover text |
+| `class` | string | `warning` tints the cell, `critical` and `urgent` mark it destructive |
+| `rows` | array | for a panel: `{"id", "text", "icon", "detail"}` objects, rows with no `id` are dropped |
+
+A bar cell with neither `text` nor `icon` is hidden, and one that has not
+printed anything yet takes no room.
+
+**stdin, what the shell tells the plugin.**
+
+```json
+{"event": "click", "button": "left"}
+{"event": "scroll", "direction": "up"}
+{"event": "activate", "row": "r1"}
+```
+
+`button` is `left`, `right` or `middle`, `direction` is `up` or `down`, and
+`activate` carries the `id` of the panel row that was activated. A plugin that
+does not read stdin simply never hears about them.
+
+**Failure.** A plugin that exits, for any reason, or cannot be started
+renders as the dim `PLUGIN ERROR` cell, its exit status in the tooltip and in
+`plugins status`'s `errors`, and is started again after one second, then two,
+doubling to thirty. A run that stayed up thirty seconds starts the next
+backoff over. The first line it prints clears the error. Events sent while it
+is down are dropped. The plugin's stderr goes to the shell's own log.
+
+**Cost.** While a plugin prints nothing the shell does nothing for it: no
+timer, no polling, one read parked on its stdout. A plugin that wants a
+cadence keeps its own `sleep` loop.
+
+```sh
+#!/usr/bin/env bash
+# run.sh: a clock that flips format on a right click
+fmt='%H:%M'
+while true; do
+  printf '{"text": "%s", "icon": "clock"}\n' "$(date +"$fmt")"
+  if read -r -t 30 line && [ "$(jq -r .button <<<"$line")" = right ]; then
+    fmt='%a %H:%M'
+  fi
+done
+```
+
+`fs plugins list`, `status` and `reload` answer as above. `bar.modules`
+entries of type `qml` and QML plugins are not loaded by the Rust shell: the
+first renders `MODULE ERROR` with its reason in the tooltip, and a plugin
+whose `entry` is a `.qml` file cannot be executed, so it renders `PLUGIN
+ERROR`. A `command` module
+(`bar.modules`) is unchanged and is the lighter choice for a cell that only
+polls.
+
 ## Instance lock
 
 Launching `formalshell` replaces any instance already running, so there is
