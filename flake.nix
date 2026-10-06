@@ -17,10 +17,13 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    crane.url = "github:ipetkov/crane";
   };
 
-  outputs = { self, nixpkgs, quickshell, home-manager }:
+  outputs = { self, nixpkgs, quickshell, home-manager, crane }:
     let
+      # One dependency build per system, shared by every Rust derivation.
+      rustCommonFor = pkgs: pkgs.callPackage ./nix/rust-common.nix { inherit crane; };
       systems = [ "x86_64-linux" "aarch64-linux" ];
       # darwin gets no packages (quickshell is linux-only) but runs the pure
       # QML/JS unit tests and hosts the dev loop driving a linux VM for e2e —
@@ -123,7 +126,7 @@
           localsend-cli = pkgs.callPackage ./nix/localsend-cli.nix { };
           openscq30 = pkgs.callPackage ./nix/openscq30.nix { };
           nothingctl = pkgs.callPackage ./nix/nothingctl.nix { };
-          formalshell-rs = pkgs.callPackage ./nix/formalshell-rs.nix { inherit lucide-font openscq30 nothingctl; inherit (pkgs) earbuds; };
+          formalshell-rs = pkgs.callPackage ./nix/formalshell-rs.nix { rustCommon = rustCommonFor pkgs; inherit lucide-font openscq30 nothingctl; inherit (pkgs) earbuds; };
           formalshell = pkgs.callPackage ./nix/package.nix {
             quickshell = qsFor system;
             inherit formalshell-eds tensaku ttfx clipssh lucide-font iphone-bridge localsend-cli openscq30 nothingctl;
@@ -146,20 +149,20 @@
       };
 
       checks = nixpkgs.lib.recursiveUpdate
-        (forDarwin (system: pkgs: { qml-tests = qmlTests pkgs; primitives = primitivesCheck pkgs; rust-tests = pkgs.callPackage ./nix/rust-tests.nix { }; fs-auth = pkgs.callPackage ./nix/fs-auth-test.nix { }; }))
+        (forDarwin (system: pkgs: { qml-tests = qmlTests pkgs; primitives = primitivesCheck pkgs; rust-tests = pkgs.callPackage ./nix/rust-tests.nix { rustCommon = rustCommonFor pkgs; }; fs-auth = pkgs.callPackage ./nix/fs-auth-test.nix { inherit crane; }; }))
         (forAllSystems (system: pkgs: {
         qml-tests = qmlTests pkgs;
         primitives = primitivesCheck pkgs;
-        rust-tests = pkgs.callPackage ./nix/rust-tests.nix { };
-        fs-tray = pkgs.callPackage ./nix/fs-tray.nix { };
-        fs-notifd = pkgs.callPackage ./nix/fs-notifd-check.nix { };
-        fs-bluez = pkgs.callPackage ./nix/fs-bluez-test.nix { };
-        fs-auth = pkgs.callPackage ./nix/fs-auth-test.nix { };
-        fs-audio = pkgs.callPackage ./nix/fs-audio.nix { };
-        fs-upower = pkgs.callPackage ./nix/fs-upower.nix { };
-        fs-network = pkgs.callPackage ./nix/fs-network.nix { };
+        rust-tests = pkgs.callPackage ./nix/rust-tests.nix { rustCommon = rustCommonFor pkgs; };
+        fs-tray = pkgs.callPackage ./nix/fs-tray.nix { rustCommon = rustCommonFor pkgs; };
+        fs-notifd = pkgs.callPackage ./nix/fs-notifd-check.nix { rustCommon = rustCommonFor pkgs; };
+        fs-bluez = pkgs.callPackage ./nix/fs-bluez-test.nix { rustCommon = rustCommonFor pkgs; };
+        fs-auth = pkgs.callPackage ./nix/fs-auth-test.nix { inherit crane; };
+        fs-audio = pkgs.callPackage ./nix/fs-audio.nix { rustCommon = rustCommonFor pkgs; };
+        fs-upower = pkgs.callPackage ./nix/fs-upower.nix { rustCommon = rustCommonFor pkgs; };
+        fs-network = pkgs.callPackage ./nix/fs-network.nix { rustCommon = rustCommonFor pkgs; };
         nixos-module-eval = nixosModuleEval system pkgs;
-        fs-mpris = pkgs.callPackage ./nix/fs-mpris.nix { };
+        fs-mpris = pkgs.callPackage ./nix/fs-mpris.nix { rustCommon = rustCommonFor pkgs; };
 
         qmllint = pkgs.runCommand "formalshell-qmllint" {
           nativeBuildInputs = [ pkgs.qt6.qtdeclarative ];

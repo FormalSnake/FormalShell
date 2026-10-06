@@ -1,4 +1,4 @@
-{ testers }:
+{ testers, crane }:
 
 # Runs on a Linux host, or on the mac with the guest on aarch64-linux.
 testers.runNixOSTest {
@@ -25,7 +25,7 @@ testers.runNixOSTest {
     # pkexec routes to the agent registered for the caller's logind session,
     # so the polkit probe runs from this login shell.
     services.getty.autologinUser = "alice";
-    environment.systemPackages = [ (pkgs.callPackage ./fs-auth-probes.nix { }) ];
+    environment.systemPackages = [ (pkgs.callPackage ./fs-auth-probes.nix { rustCommon = pkgs.callPackage ./rust-common.nix { inherit crane; }; }) ];
   };
 
   testScript = ''

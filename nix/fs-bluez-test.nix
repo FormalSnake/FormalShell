@@ -1,4 +1,4 @@
-{ lib, stdenv, rustPlatform, cargo, rustc, jq, dbus, bluez, testers }:
+{ rustCommon, jq, dbus, bluez, testers }:
 
 # crates/fs-bluez against real bluetoothd in a NixOS VM. The VM has no
 # controller, so hci_vhci provides one: btvirt (bluez's emulator, built here
@@ -15,33 +15,20 @@ let
   });
 
   # The test binaries without running them: cargo's own JSON names them.
-  tests = stdenv.mkDerivation {
-    name = "fs-bluez-tests";
-
-    src = lib.fileset.toSource {
-      root = ../.;
-      fileset = ../crates;
-    };
-    sourceRoot = "source/crates";
-
-    cargoDeps = rustPlatform.importCargoLock { lockFile = ../crates/Cargo.lock; };
-
-    nativeBuildInputs = [ rustPlatform.cargoSetupHook cargo rustc jq ];
-
-    buildPhase = ''
-      runHook preBuild
-      cargo test --offline -p fs-bluez --no-run --message-format=json > build.json
-      runHook postBuild
+  tests = rustCommon.craneLib.mkCargoDerivation (rustCommon.checkArgs // {
+    pname = "fs-bluez-tests";
+    nativeBuildInputs = rustCommon.checkArgs.nativeBuildInputs ++ [ jq ];
+    buildPhaseCargoCommand = ''
+      cargo test --release -p fs-bluez --no-run --message-format=json > build.json
     '';
-
-    installPhase = ''
+    installPhaseCommand = ''
       mkdir -p $out/bin
       jq -r 'select(.profile.test == true and .executable != null) | .executable' build.json | while read -r exe; do
         name=$(basename "$exe")
         cp "$exe" "$out/bin/''${name%-*}"
       done
     '';
-  };
+  });
 in
 # The mac's linux-builder advertises kvm but not nixos-test (dev/linux-builder.sh
 # machines_line), so the test derivation asks for kvm alone.
