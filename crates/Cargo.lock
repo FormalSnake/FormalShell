@@ -611,6 +611,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs-tray"
+version = "0.1.1"
+dependencies = [
+ "async-io",
+ "futures-util",
+ "serde",
+ "zbus",
+]
+
+[[package]]
 name = "futures-core"
 version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
