@@ -6,8 +6,9 @@
 #
 # The shell is a stub of IpcHandlers on Qt's offscreen platform, so no
 # compositor is involved: what is recorded is qs's own argument parsing,
-# type conversion, error strings, output framing and exit codes. `debug`
-# carries DebugIpc.qml's exact signatures; `probe` covers every type qs
+# type conversion, error strings, output framing and exit codes. `debug`,
+# `theme` and `wallpaper` carry DebugIpc.qml's, ThemeIpc.qml's and
+# WallpaperIpc.qml's exact signatures; `probe` covers every type qs
 # converts and the function names that collide with qs's subcommands.
 set -euo pipefail
 
@@ -30,6 +31,17 @@ ShellRoot {
         function joinClear(): string { return "ok" }
         function motionScale(percent: int): string { return "ms " + percent }
         function query(q: string): string { return JSON.stringify([q]) }
+    }
+    IpcHandler {
+        target: "theme"
+        function retheme(): string { return "ok" }
+        function mode(m: string): string { return "mode " + m }
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "wallpaper"
+        function set(path: string): string { return "set " + path }
+        function get(): string { return "" }
     }
     IpcHandler {
         target: "probe"
@@ -185,6 +197,20 @@ rec call debug query ipc
 rec call debug query instances
 rec show debug
 rec show debug query
+rec call theme retheme
+rec call theme mode toggle
+rec call theme mode
+rec call theme mode dark light
+rec call theme status
+rec call theme status x
+rec call wallpaper set /tmp/a.png
+rec call wallpaper set 'a b'
+rec call wallpaper set
+rec call wallpaper get
+rec call wallpaper get x
+rec show theme
+rec show wallpaper
+rec show wallpaper set
 
 kill "$qs_pid"
 wait "$qs_pid" 2>/dev/null || true

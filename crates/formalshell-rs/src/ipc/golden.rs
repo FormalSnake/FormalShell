@@ -57,6 +57,21 @@ fn stub() -> Registry<()> {
                 ],
             },
             Target {
+                name: "theme",
+                functions: vec![
+                    f("retheme", &[], Type::String, |_, _| s("ok")),
+                    f("mode", &[("m", Type::String)], Type::String, |_, a| s(format!("mode {}", a[0].str()))),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
+                name: "wallpaper",
+                functions: vec![
+                    f("set", &[("path", Type::String)], Type::String, |_, a| s(format!("set {}", a[0].str()))),
+                    f("get", &[], Type::String, |_, _| s("")),
+                ],
+            },
+            Target {
                 name: "probe",
                 functions: vec![
                     f("s", &[STR], Type::String, |_, a| s(format!("[{}]", a[0].str()))),
@@ -135,12 +150,16 @@ fn matches_qs_ipc() {
     }
 }
 
-/// The real `debug` target declares every one of DebugIpc.qml's functions
+/// Each real target declares every one of its QML handler's functions
 /// exactly as the stub above does.
 #[test]
-fn debug_signatures_match_qml() {
-    let real: Vec<String> = super::debug::target().functions.iter().map(|f| f.definition()).collect();
-    for function in &stub().targets[0].functions {
-        assert!(real.contains(&function.definition()), "debug lacks {}", function.definition());
+fn signatures_match_qml() {
+    let stub = stub();
+    for real in [super::debug::target(), super::theme::target(), super::theme::wallpaper()] {
+        let defs: Vec<String> = real.functions.iter().map(|f| f.definition()).collect();
+        let qml = stub.targets.iter().find(|t| t.name == real.name).expect("a stub target");
+        for function in &qml.functions {
+            assert!(defs.contains(&function.definition()), "{} lacks {}", real.name, function.definition());
+        }
     }
 }

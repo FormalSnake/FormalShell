@@ -157,8 +157,8 @@ for leg_name in "${legs[@]}"; do
 done
 
 # FS_IMPL=rust runs crates/formalshell-rs in place of the QML shell, driven
-# over formalshell-ipc. It serves the `debug` target alone so far, so only a
-# leg declaring leg_<n>_rust=1 runs under it.
+# over formalshell-ipc. Only a leg declaring leg_<n>_rust=1, whose targets
+# the rust shell serves, runs under it.
 fs_impl="${FS_IMPL:-qml}"
 case "$fs_impl" in
   qml) ;;
@@ -166,7 +166,7 @@ case "$fs_impl" in
     for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
       rust_var="leg_${leg_name}_rust"
       if [ "${!rust_var:-0}" != 1 ]; then
-        echo "SMOKE_FAIL: FS_IMPL=rust serves only the debug target, --${leg_name//_/-} needs targets the rust shell does not have yet" >&2
+        echo "SMOKE_FAIL: FS_IMPL=rust does not serve --${leg_name//_/-} yet (no leg_${leg_name}_rust=1)" >&2
         exit 1
       fi
     done

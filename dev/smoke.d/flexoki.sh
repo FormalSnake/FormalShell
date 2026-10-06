@@ -16,6 +16,7 @@
 # config carries would otherwise fire with a blue argument.
 leg_flexoki_flag="--flexoki"
 leg_flexoki_order=105
+leg_flexoki_rust=1
 leg_flexoki_needs="convert"
 
 flexoki_wall_dir="$shot_dir/flexoki"
