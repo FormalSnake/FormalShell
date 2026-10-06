@@ -364,6 +364,11 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   staged apps: one Down from a fresh open scrolls nothing, and four Downs
   into the rows under the grid and four Ups back each leave the cursor's
   item whole inside the viewport (`viewCursor.top`/`bottom`).
+- `menu_budget.sh` `--menu-budget`: the rust spec's launcher budget off the
+  shell's own commit log, the bar's badge spinning throughout five `menu
+  toggle` opens: toggle to the launcher's first commit under 50 ms, no gap
+  between bar commits over 33 ms across an open, and no launcher commit in
+  five seconds open at rest. Rust only; QML prints it as skipped.
 - `menu_emerge.sh` `--menu-emerge`: the launcher budding off the top line,
   sampled frame by frame under `debug motionScale`: card fill under the line
   with nothing at its resting floor, the bar's own band undimmed while it is

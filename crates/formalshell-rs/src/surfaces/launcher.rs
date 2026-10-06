@@ -1195,6 +1195,9 @@ fn footer(m: &Model, store: &Store, theme: &Theme) -> El {
     }
     parts.push(w::row(s.xxl, actions));
     parts.push(w::space(s.control_padding_x));
+    // A band a `controlHeight` tall whether or not a button is in it, so
+    // the level's name sits on one line on every level.
+    parts.push(El::new(ui::el::Kind::Swatch { color: fs_theme::color::Rgba::TRANSPARENT, w: 0.0, h: s.control_height, radius: 0.0, border: false }));
     w::row(0.0, parts).fill()
 }
 
