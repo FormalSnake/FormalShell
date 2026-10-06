@@ -56,6 +56,7 @@
 # edge or with the frame on photographs the same cases over the whole output
 # and prints each claim as skipped instead; those layouts are read by eye.
 leg_join_flag="--join"
+leg_join_rust=1
 leg_join_order=182
 leg_join_needs="wlrctl convert jq"
 
