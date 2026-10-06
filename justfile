@@ -43,4 +43,4 @@ vm-greeter:
     ./dev/vm.sh sync
     ./dev/vm.sh run './dev/smoke-greeter.sh'
     mkdir -p artifacts/greeter
-    scp -P 2222 -i dev/.testvm/keys/test_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes -r test@localhost:formalshell/artifacts/greeter/. artifacts/greeter/
+    ./dev/vm.sh pull artifacts/greeter artifacts/greeter

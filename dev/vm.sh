@@ -21,14 +21,25 @@ repo_root="$(pwd)"
 # One VM per repository, not per checkout: a git worktree resolves its
 # common dir to the main checkout's .git, so every worktree shares that
 # checkout's dev/.testvm instead of building and booting a second VM.
-work_dir="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/dev/.testvm"
-keys_dir="$work_dir/keys"
+testvm_dir="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/dev/.testvm"
+
+# FS_VM_SLOT picks one of the VMs dev/vm-lock.sh hands out. Slot 0 is the
+# original layout (port 2222, disk, log and pid straight in dev/.testvm);
+# slot N has its own VM, disk and pid under dev/.testvm/slotN and ssh on
+# 2222+N. The keypair is shared.
+slot="${FS_VM_SLOT:-0}"
+case "$slot" in
+  0) work_dir="$testvm_dir" ;;
+  [1-9]) work_dir="$testvm_dir/slot$slot" ;;
+  *) echo "FS_VM_SLOT must be a digit, got '$slot'" >&2; exit 1 ;;
+esac
+keys_dir="$testvm_dir/keys"
 disk_image="$work_dir/formalshell-testvm.qcow2"
 log_file="$work_dir/vm.log"
 pid_file="$work_dir/vm.pid"
 priv_key="$keys_dir/test_ed25519"
 
-ssh_port=2222
+ssh_port=$((2222 + slot))
 ssh_opts=(-p "$ssh_port" -i "$priv_key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -o BatchMode=yes)
 scp_opts=(-P "$ssh_port" -i "$priv_key" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -o BatchMode=yes)
 
@@ -62,7 +73,7 @@ cmd_start() {
     echo "testvm already running (pid $(cat "$pid_file"))"
     return 0
   fi
-  mkdir -p "$keys_dir"
+  mkdir -p "$keys_dir" "$work_dir"
   if [ ! -f "$priv_key" ]; then
     ssh-keygen -t ed25519 -N "" -C "formalshell-testvm" -f "$priv_key" >/dev/null
     echo "generated ssh keypair: $priv_key"
@@ -77,7 +88,7 @@ cmd_start() {
   # store — `nix-store --add` on $keys_dir would put the private key
   # (sshd never reads it; only the guest's authorized_keys .pub does)
   # into the world-readable store too.
-  local pub_keys_dir="$work_dir/keys-pub"
+  local pub_keys_dir="$testvm_dir/keys-pub"
   mkdir -p "$pub_keys_dir"
   cp "$priv_key.pub" "$pub_keys_dir/"
   local keys_store_path
@@ -86,11 +97,12 @@ cmd_start() {
   (
     cd "$work_dir"
     set -m
-    KEYS="$keys_store_path" NIX_DISK_IMAGE="$disk_image" \
+    QEMU_NET_OPTS="hostfwd=tcp:127.0.0.1:${ssh_port}-:22" \
+      KEYS="$keys_store_path" NIX_DISK_IMAGE="$disk_image" \
       nohup "$vm_pkg/bin/run-formalshell-testvm-vm" >vm.log 2>&1 &
     echo $! >vm.pid
   )
-  echo "booting testvm (pid $(cat "$pid_file")), log: $log_file"
+  echo "booting testvm slot $slot (pid $(cat "$pid_file")), log: $log_file"
 
   if ! wait_for_ssh 60; then
     echo "testvm: ssh did not come up after 5 minutes; see $log_file" >&2
@@ -247,6 +259,13 @@ cmd_smoke() {
   esac
 }
 
+# Copies a directory out of the VM's checkout (relative to ~/formalshell)
+# into a local one.
+cmd_pull() {
+  mkdir -p "$2"
+  scp -r "${scp_opts[@]}" "test@localhost:formalshell/$1/." "$2/"
+}
+
 cmd_shell() {
   exec ssh -t "${ssh_opts[@]}" test@localhost \
     "cd formalshell && export XDG_RUNTIME_DIR=/run/user/1000 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus WAYLAND_DISPLAY=\$(systemctl --user show-environment | sed -n 's/^WAYLAND_DISPLAY=//p') && exec \$SHELL -l"
@@ -259,9 +278,10 @@ case "${1:-}" in
   sync) cmd_sync ;;
   run) shift; cmd_run "$@" ;;
   smoke) shift; cmd_smoke "$@" ;;
+  pull) shift; cmd_pull "$@" ;;
   shell) cmd_shell ;;
   *)
-    echo "usage: $0 {start|stop|status|sync|run <cmd...>|smoke [flags...]|shell}" >&2
+    echo "usage: $0 {start|stop|status|sync|run <cmd...>|smoke [flags...]|pull <vm-dir> <local-dir>|shell}" >&2
     exit 1
     ;;
 esac
