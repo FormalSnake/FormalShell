@@ -15,8 +15,6 @@
 leg_tray_flag="--tray"
 leg_tray_order=170
 leg_tray_needs="python3"
-# Under FS_IMPL=rust the launcher's tray route and `debug query` do not exist
-# yet (R4), so the last steps and their asserts run for the QML shell only.
 leg_tray_rust=1
 
 # nix/testvm.nix stages a PyGObject-capable interpreter into
@@ -66,9 +64,8 @@ leg_tray_drive() {
   local script="$shot_dir/tray-drive.sh"
   local kill_script="$shot_dir/tray-kill.sh"
   local stub="$PWD/dev/sni-stub.py"
-  local route_steps=""
-  if [ "$fs_impl" != rust ]; then
-    route_steps=$(cat <<STEPS
+  local route_steps
+  route_steps=$(cat <<STEPS
 $ipc call debug query "Tray Fixture 2" > "$tray_query_root_path" 2>&1
 sleep 1
 $ipc call menu summon tray > /dev/null 2>&1
@@ -78,7 +75,6 @@ sleep 1
 $ipc call menu close > /dev/null 2>&1
 STEPS
 )
-  fi
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 1
@@ -179,9 +175,6 @@ leg_tray_assert() {
   # The query runs twice against the same shell, once from the root and once
   # standing inside the route, because "invisible" on its own is equally
   # consistent with a row that stopped existing.
-  if [ "$fs_impl" = rust ]; then
-    return 0
-  fi
   if [ ! -s "$tray_query_root_path" ]; then
     fail "no root debug query produced"
   fi
