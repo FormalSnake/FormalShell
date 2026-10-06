@@ -11,6 +11,12 @@ rustPlatform.buildRustPackage {
 
   cargoLock.lockFile = ../crates/Cargo.lock;
 
+  # The pure library crates read repo fixtures (shell/, tests/) that this
+  # crates-only source does not carry, so the runtime package builds and tests
+  # itself alone; `cargo test` at the workspace root covers the rest.
+  cargoBuildFlags = [ "--package" "formalshell-rs" ];
+  cargoTestFlags = [ "--package" "formalshell-rs" ];
+
   nativeBuildInputs = [ pkg-config makeWrapper ];
   buildInputs = [ fontconfig ];
 
