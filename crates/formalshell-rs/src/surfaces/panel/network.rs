@@ -316,7 +316,8 @@ impl Panel for Network {
                 Some(_) if !mac.is_empty() => mac.clone(),
                 Some(_) => "Connected".to_owned(),
             };
-            parts.push(w::hero(
+            let mono = connected.is_some() && !mac.is_empty();
+            parts.push(w::hero_with(
                 s,
                 w::Hero {
                     glyph: if connected.is_some() { "wifi" } else { "wifi-off" }.into(),
@@ -327,6 +328,7 @@ impl Panel for Network {
                     rail: None,
                     rail_on: None,
                 },
+                mono,
             ));
         }
         parts.push(self.throughput(v));

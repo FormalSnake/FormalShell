@@ -14,6 +14,7 @@
 leg_hdr_flag="--hdr"
 leg_hdr_order=215
 leg_hdr_needs="jq"
+leg_hdr_rust=1
 
 hdr_status_path="$shot_dir/hdr-status.json"
 hdr_enable_path="$shot_dir/hdr-enable.txt"

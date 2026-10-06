@@ -3,7 +3,7 @@
 //! [`Store::apply`].
 
 use crate::services::{
-    appicon, barpaint, caffeinate, clock, commands, config, devices, herdr, hyprland, info, media, plugins, recording, state,
+    appicon, barpaint, caffeinate, clock, commands, config, devices, display, herdr, hyprland, info, media, plugins, recording, state,
     theme, tray, visualizer, wallpaper,
 };
 
@@ -17,6 +17,7 @@ pub struct Store {
     pub media: media::State,
     pub visualizer: visualizer::State,
     pub devices: devices::State,
+    pub display: display::State,
     pub commands: commands::State,
     pub bar_paint: barpaint::State,
     pub wallpaper: wallpaper::State,
@@ -39,6 +40,7 @@ pub enum Diff {
     Media(media::Diff),
     Visualizer(visualizer::Diff),
     Devices(devices::Diff),
+    Display(display::Diff),
     Commands(commands::Diff),
     BarPaint(barpaint::Diff),
     Wallpaper(wallpaper::Diff),
@@ -63,6 +65,7 @@ pub enum Topic {
     Media,
     Visualizer,
     Devices,
+    Display,
     Commands,
     BarPaint,
     Wallpaper,
@@ -90,6 +93,7 @@ impl Store {
             Diff::Media(d) => self.media.apply(d).then_some(Topic::Media),
             Diff::Visualizer(d) => self.visualizer.apply(d).then_some(Topic::Visualizer),
             Diff::Devices(d) => self.devices.apply(d).then_some(Topic::Devices),
+            Diff::Display(d) => self.display.apply(d).then_some(Topic::Display),
             Diff::Commands(d) => self.commands.apply(d).then_some(Topic::Commands),
             Diff::BarPaint(d) => self.bar_paint.apply(d).then_some(Topic::BarPaint),
             Diff::Wallpaper(d) => self.wallpaper.apply(d).then_some(Topic::Wallpaper),
