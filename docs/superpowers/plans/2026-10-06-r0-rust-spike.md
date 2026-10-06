@@ -53,3 +53,43 @@ Facts this plan rests on (checked 2026-10-06):
   herdr spinner runs across that open. R4 is held to beating both.
 - Write the table into this file. If a budget fails, say which and stop
   before R1.
+
+### Results, e1504g, 2026-10-06
+
+Both shells built on g815 against e1504g's own nixpkgs (`55ba7f49`; the
+repo's lock links glibc 2.42, the host's mesa needs 2.44, and Qt then finds
+no EGL), copied over, and run back to back through `--r0-measure 600`,
+nested visibly in the live session. Power profile `performance` for both
+runs, not power saver. The nested Hyprland rendered on the iGPU (`Mesa
+Intel(R) Graphics (ADL-N)`), at 946x1024 (the host tiled its window).
+
+The host withheld frame events from the nested window for most of both
+runs (the rust bar got 39 frame callbacks in ten minutes), so the nested
+Hyprland barely presented and every number driven by a frame clock is void:
+the spinner, the panel and scrim frames, the launcher stall. Those rows are
+not measured.
+
+| | Budget | Rust | QML | Verdict |
+|---|---|---|---|---|
+| CPU, 60 s idle | 0.0% | 0.00% | 0.32% | pass |
+| CPU, 60 s spinner | < 2% | void | void | not measured |
+| Frames, ten panel opens | none over 16 ms | void | void | not measured |
+| Frames, ten scrim fades | none over 16 ms | void | void | not measured |
+| RSS at 600 s | < 120 MB | 16 MB | 279 MB | pass |
+| Cold start to first commit | < 300 ms | 160 ms | 1750 ms | pass |
+| Launcher first frame | < 50 ms | no launcher yet | void | not measured |
+| Bar gap across a launcher open | bar keeps animating | no launcher yet | void | not measured |
+
+For the frame-driven rows, the VM (aarch64, llvmpipe, `--r0-measure 300`)
+is the only reading so far: spinner 0.63% (rust) against 11.4% (QML),
+worst panel frame 8.8 ms against 83 ms, scrim step 0.04 ms against a 72 ms
+launcher frame, launcher first frame 128 ms median and a 144 ms bar gap on
+QML.
+
+Raster: the scrim is a `wp_single_pixel_buffer_v1` pixel scaled by
+`wp_viewporter` and faded by `wp_alpha_modifier_v1`, so a flat full-output
+surface costs no raster on either path. CPU versus GPU for a full-output
+surface that is not flat stays open until the frame rows are measured.
+
+Not decided: R1 waits on the four void rows, measured with the nested
+window on screen, and on a power-saver run.
