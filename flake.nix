@@ -153,6 +153,7 @@
         rust-tests = pkgs.callPackage ./nix/rust-tests.nix { };
         fs-tray = pkgs.callPackage ./nix/fs-tray.nix { };
         fs-notifd = pkgs.callPackage ./nix/fs-notifd-check.nix { };
+        fs-bluez = pkgs.callPackage ./nix/fs-bluez-test.nix { };
         nixos-module-eval = nixosModuleEval system pkgs;
         fs-mpris = pkgs.callPackage ./nix/fs-mpris.nix { };
 
