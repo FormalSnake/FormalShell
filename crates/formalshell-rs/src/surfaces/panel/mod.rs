@@ -17,6 +17,7 @@
 //! printable key reaches [`Panel::key`].
 
 pub mod audio;
+pub mod center;
 pub mod gallery;
 pub mod host;
 pub mod standin;

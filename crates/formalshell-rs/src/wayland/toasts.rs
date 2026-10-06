@@ -12,31 +12,69 @@ use crate::services::notifications::now_ms;
 use crate::store::Topic;
 use crate::surface::Surface;
 use crate::surfaces;
+use crate::surfaces::card::Ends;
+use crate::surfaces::panel::center;
+use crate::surfaces::panel::host::Place;
 use crate::surfaces::toasts::{Act, Insets, Toasts};
 
 impl App {
     pub(crate) fn tick_notifications(&mut self) {
+        let open = self.center_open();
         let n = &mut self.store.notifications;
         let dnd = n.model.dnd;
+        let mut moved = false;
+        // Center.qml's close() files everything pending as seen, however
+        // the card was closed (Escape, a click outside, showHistory).
+        if n.center_open != open {
+            n.center_open = open;
+            if !open {
+                n.mark_all_seen();
+            }
+            moved = true;
+        }
         n.sync(&self.store.state.data);
-        if n.tick(now_ms()) || dnd != self.store.notifications.model.dnd {
+        n.sync_config(self.store.config.get("iphone.notifications.dedupe"));
+        if n.tick(now_ms()) || moved || dnd != self.store.notifications.model.dnd {
             surfaces::changed(self, Topic::Notifications);
         }
+    }
+
+    fn center_open(&self) -> bool {
+        self.panel.as_ref().is_some_and(|p| p.is_open() && p.id() == center::ID)
     }
 
     /// The centre's height, the most the output leaves it, and whether it
     /// is capped: what `notifications status` reports.
     pub fn center_numbers(&self) -> (f64, f64, bool) {
-        (0.0, 0.0, false)
+        match &self.panel {
+            Some(p) if p.id() == center::ID && p.is_open() => p.fit.get(),
+            _ => (0.0, 0.0, false),
+        }
     }
 
+    /// The centre hangs off the output's right edge, clear of a bar on any
+    /// edge, at the top of the room it leaves.
     pub fn set_center(&mut self, open: bool) -> &'static str {
-        let n = &mut self.store.notifications;
-        n.center_open = open;
-        if open {
-            n.mark_all_seen();
+        let now = Instant::now();
+        if !open {
+            if self.center_open() {
+                self.close_panels();
+            }
+        } else if !self.center_open() {
+            let insets = self.toast_insets();
+            let output = self.output_size();
+            let place = Place {
+                edge: Edge::Right,
+                output,
+                line_at: insets.right,
+                ends: Ends { along: output.1, inset_start: insets.top, inset_end: insets.bottom, radius: 0.0 },
+                far_inset: insets.left,
+                anchor: Some(0.0),
+                target: None,
+            };
+            self.open_host_at(Box::new(center::Center), place, now);
         }
-        surfaces::changed(self, Topic::Notifications);
+        self.tick_notifications();
         "ok"
     }
 
@@ -79,8 +117,8 @@ impl App {
         let qh = self.qh.clone();
         let theme = &self.store.theme.theme;
         let Some(t) = &mut self.toasts else { return };
-        if self.toasts_dirty && t.surface.mapped {
-            t.draw(&self.store, theme, &mut self.bar.kit, &insets, now);
+        if (self.toasts_dirty || t.animating(now)) && t.surface.mapped {
+            t.draw(&self.store, theme, &mut self.bar.kit, &insets, self.motion_scale, now);
             t.sync_region(&self.compositor);
             self.toasts_dirty = false;
         }

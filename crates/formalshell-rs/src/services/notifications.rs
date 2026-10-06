@@ -14,9 +14,11 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use fs_info::notifications::{self as model, Action, AddOpts, Notif, Patch, Urgency};
 use fs_info::reminders;
 use fs_js as js;
+use fs_devices::iphone;
 use fs_notifd::{CloseReason, Config, Event, Image, ImageData, Server};
 use serde_json::{Value, json};
 
+use super::icons;
 use super::state::{self, Field};
 use crate::runtime::Ctx;
 use crate::store;
@@ -42,7 +44,8 @@ fn timeout_for(urgency: Urgency, expire_timeout: i32) -> i64 {
 pub struct Arrival {
     pub notif: Notif,
     pub timeout_ms: i64,
-    pub pixels: Option<Arc<ImageData>>,
+    /// The picture icon.js picks, decoded on the pool.
+    pub icon: Option<icons::Raw>,
     pub replaced: bool,
 }
 
@@ -52,6 +55,21 @@ pub enum Diff {
     Closed(String),
     /// The bus name could not be had: another daemon owns it.
     Unavailable(String),
+    /// A change a surface without write access to the store asked for.
+    Op(Op),
+    /// A notification mirrored off the iPhone; `quiet` is Focus's "history,
+    /// no toast".
+    Phone { record: iphone::Notification, quiet: bool },
+    /// The phone withdrew one: its card goes without telling it back.
+    DropPhone(i64),
+}
+
+pub enum Op {
+    SetDnd(bool),
+    DismissGroup(Vec<String>),
+    /// Center.qml's "Clear all": pending and seen both go.
+    ClearHistory,
+    Invoke(String, String),
 }
 
 #[derive(Default)]
@@ -64,8 +82,8 @@ pub struct State {
     pub stack_expanded: bool,
     /// Popup ids under the pointer: their countdown holds.
     pub hovered: HashSet<String>,
-    /// Decoded `image-data` hints, keyed by the entry's `image` token.
-    pub pixels: HashMap<String, Arc<ImageData>>,
+    /// Each entry's picture, keyed by its id; none means the bell.
+    pub icons: HashMap<String, icons::Raw>,
     local_serial: u64,
     /// state.json's dnd as last seen, so a setDnd answered here before its
     /// write lands is not rolled back by the old value.
@@ -73,6 +91,9 @@ pub struct State {
     pub reminders: Vec<reminders::Entry>,
     reminders_seen: Option<Value>,
     reminder_serial: u64,
+    /// `iphone.notifications.dedupe`, as last read.
+    rules: Vec<iphone::DedupeRule>,
+    rules_seen: Option<Value>,
 }
 
 impl State {
@@ -80,10 +101,11 @@ impl State {
         let now = now_ms();
         match diff {
             Diff::Arrived(a) => {
-                let Arrival { notif, timeout_ms, pixels, replaced } = *a;
-                if let Some(p) = pixels {
-                    self.pixels.insert(notif.image.clone(), p);
-                }
+                let Arrival { notif, timeout_ms, icon, replaced } = *a;
+                match icon {
+                    Some(raw) => self.icons.insert(notif.id.clone(), raw),
+                    None => self.icons.remove(&notif.id),
+                };
                 let known = self.find(&notif.id).is_some();
                 if replaced && known {
                     let patch = Patch {
@@ -101,6 +123,15 @@ impl State {
                 } else {
                     let opts = AddOpts { quiet: false, timeout_ms: Some(timeout_ms) };
                     self.model = model::add(&self.model, &notif, now, &opts);
+                    // The local client wins: a phone card already up for the
+                    // same message goes, and the phone keeps its own copy.
+                    if let Some(entry) = self.find(&notif.id).map(centre_entry) {
+                        let all: Vec<iphone::CentreEntry> = self.all().map(centre_entry).collect();
+                        let stale = iphone::superseded(&self.rules, &entry, &all, now as f64);
+                        if !stale.is_empty() {
+                            self.model = model::dismiss_many(&self.model, &stale);
+                        }
+                    }
                 }
                 self.after_change();
                 true
@@ -114,24 +145,109 @@ impl State {
                 self.unavailable = Some(why);
                 true
             }
+            Diff::Phone { record, quiet } => {
+                self.notify_phone(&record, quiet);
+                true
+            }
+            Diff::DropPhone(id) => {
+                let ids: Vec<String> = self.all().filter(|e| phone_id(e) == Some(id)).map(|e| e.id.clone()).collect();
+                self.model = model::dismiss_many(&self.model, &ids);
+                self.after_change();
+                !ids.is_empty()
+            }
+            Diff::Op(op) => {
+                match op {
+                    Op::SetDnd(on) => self.set_dnd(on),
+                    Op::DismissGroup(ids) => self.dismiss_group(&ids),
+                    Op::ClearHistory => {
+                        self.clear_pending();
+                        let past: Vec<String> = self.model.past.iter().map(|e| e.id.clone()).collect();
+                        self.dismiss_group(&past);
+                    }
+                    Op::Invoke(id, key) => self.invoke_action(&id, &key),
+                }
+                true
+            }
         }
     }
 
     pub fn find(&self, id: &str) -> Option<&model::Entry> {
-        let m = &self.model;
-        m.popups.iter().chain(&m.pending).chain(&m.past).find(|e| e.id == id)
+        self.all().find(|e| e.id == id)
     }
 
-    /// Drops decoded pixels nothing points at any more.
+    fn all(&self) -> impl Iterator<Item = &model::Entry> {
+        let m = &self.model;
+        m.popups.iter().chain(&m.pending).chain(&m.past)
+    }
+
+    /// NotificationService.notifyPhone(). ANCS resends an id when the phone
+    /// modifies a notification, which updates its card in place.
+    fn notify_phone(&mut self, record: &iphone::Notification, quiet: bool) {
+        let now = now_ms();
+        let m = iphone::to_notification(record);
+        let id = format!("iphone-{}-{}", record.session, record.id);
+        let phone = json!({
+            "id": record.id,
+            "bundleId": record.bundle_id,
+            "title": record.title,
+            "subtitle": record.subtitle,
+            "body": record.body,
+            "session": record.session,
+            "deviceHandle": record.device_handle,
+            "negativeAction": record.negative_action,
+        });
+        if self.find(&id).is_some() {
+            let patch = Patch { summary: Some(m.summary), body: Some(m.body), phone: Some(phone), ..Patch::default() };
+            self.model = model::update(&self.model, &id, &patch, now);
+            return;
+        }
+        let all: Vec<iphone::CentreEntry> = self.all().map(centre_entry).collect();
+        if !self.rules.is_empty() && iphone::dedupe(&self.rules, record, &all, now as f64).is_some() {
+            return;
+        }
+        let notif = Notif {
+            id,
+            app_name: m.app_name,
+            summary: m.summary,
+            body: m.body,
+            urgency: Urgency::try_from(m.urgency).unwrap_or_default(),
+            actions: m.actions.iter().map(|a| Action { key: a.key.into(), label: a.label.clone() }).collect(),
+            source: "iphone".into(),
+            phone: Some(phone),
+            ..Default::default()
+        };
+        self.model = model::add(&self.model, &notif, now, &AddOpts { quiet, timeout_ms: None });
+    }
+
+    /// The owner closed a card mirrored off the phone, so the phone clears
+    /// it too, through its own negative action when it offers one.
+    fn phone_dismissed(&self, id: &str) {
+        let Some(phone) = self.find(id).filter(|e| e.source == "iphone").and_then(|e| e.phone.as_ref()) else { return };
+        if phone["negativeAction"].as_str().is_some_and(|a| !a.is_empty()) {
+            phone_invoke(phone, false);
+        }
+    }
+
+    /// Drops pictures no entry holds any more.
     fn after_change(&mut self) {
-        if self.pixels.is_empty() {
+        if self.icons.is_empty() {
             return;
         }
         let live: HashSet<&str> = {
             let m = &self.model;
-            m.popups.iter().chain(&m.pending).chain(&m.past).map(|e| e.image.as_str()).collect()
+            m.popups.iter().chain(&m.pending).chain(&m.past).map(|e| e.id.as_str()).collect()
         };
-        self.pixels.retain(|k, _| live.contains(k.as_str()));
+        self.icons.retain(|k, _| live.contains(k.as_str()));
+    }
+
+    /// Reads `iphone.notifications.dedupe` whenever settings.json moved.
+    pub fn sync_config(&mut self, raw: Option<&Value>) {
+        if self.rules_seen.as_ref() == raw && self.rules_seen.is_some() {
+            return;
+        }
+        let raw = raw.cloned().unwrap_or_else(iphone::default_dedupe);
+        self.rules = iphone::dedupe_rules(&raw);
+        self.rules_seen = Some(raw);
     }
 
     /// Mirrors state.json's dnd and reminders whenever the file moved.
@@ -169,6 +285,9 @@ impl State {
 
     pub fn dismiss_popup(&mut self, id: &str) {
         self.hovered.remove(id);
+        if self.model.popups.iter().any(|p| p.id == id) {
+            self.phone_dismissed(id);
+        }
         self.model = model::dismiss_popup(&self.model, id, now_ms());
         close(id, CloseReason::Dismissed);
     }
@@ -180,6 +299,7 @@ impl State {
     }
 
     pub fn dismiss_one(&mut self, id: &str) {
+        self.phone_dismissed(id);
         self.model = model::dismiss_one(&self.model, id);
         self.after_change();
     }
@@ -215,7 +335,10 @@ impl State {
     }
 
     pub fn invoke_action(&mut self, id: &str, key: &str) {
-        invoke(id, key);
+        match self.find(id).filter(|e| e.source == "iphone").and_then(|e| e.phone.as_ref()) {
+            Some(phone) => phone_invoke(phone, key == "positive"),
+            None => invoke(id, key),
+        }
     }
 
     /// The front toast's whole group, the one its close button closes:
@@ -358,6 +481,52 @@ pub fn instant_at(at: i64, now: Instant) -> Instant {
 enum Cmd {
     Close(u32, CloseReason),
     Invoke(u32, String),
+    /// `omarchy-iphone-bridge invoke`, one at a time.
+    Phone(Vec<String>),
+}
+
+fn phone_id(e: &model::Entry) -> Option<i64> {
+    (e.source == "iphone").then(|| e.phone.as_ref()?["id"].as_i64()).flatten()
+}
+
+/// The centre entry dedupe reads.
+fn centre_entry(e: &model::Entry) -> iphone::CentreEntry {
+    let field = |k: &str| e.phone.as_ref().and_then(|p| p[k].as_str()).unwrap_or("").to_owned();
+    iphone::CentreEntry {
+        id: e.id.clone(),
+        app_name: e.app_name.clone(),
+        desktop_entry: e.desktop_entry.clone(),
+        summary: e.summary.clone(),
+        body: e.body.clone(),
+        source: e.source.clone(),
+        local: e.local,
+        phone: e.phone.as_ref().map(|_| iphone::PhoneFields {
+            bundle_id: field("bundleId"),
+            title: field("title"),
+            subtitle: field("subtitle"),
+            body: field("body"),
+        }),
+        arrived_at: e.arrived_at as f64,
+    }
+}
+
+fn phone_invoke(phone: &Value, positive: bool) {
+    let handle = phone["deviceHandle"].as_str().unwrap_or("");
+    if handle.is_empty() {
+        return;
+    }
+    let args = vec![
+        "invoke".into(),
+        "--handle".into(),
+        handle.to_owned(),
+        "--id".into(),
+        phone["id"].as_i64().unwrap_or(0).to_string(),
+        "--kind".into(),
+        if positive { "positive" } else { "negative" }.into(),
+    ];
+    if let Some(tx) = CMD.get() {
+        let _ = tx.try_send(Cmd::Phone(args));
+    }
 }
 
 static CMD: OnceLock<async_channel::Sender<Cmd>> = OnceLock::new();
@@ -390,13 +559,38 @@ fn image_of(n: &fs_notifd::Notification) -> (String, Option<Arc<ImageData>>) {
     }
 }
 
+/// icon.js's order, resolved to pixels: the notification's own image, its
+/// app icon, then nothing (the card's bell). A themed name no theme
+/// carries resolves to nothing rather than to a broken picture.
+fn resolve_icon(image: &str, app_icon: &str, desktop_entry: &str, app_name: &str, pixels: Option<&ImageData>) -> Option<icons::Raw> {
+    let source = fs_info::notification_icon::resolve(
+        &fs_info::notification_icon::IconSource {
+            image: image.into(),
+            app_icon: app_icon.into(),
+            desktop_entry: desktop_entry.into(),
+            app_name: app_name.into(),
+        },
+        |name| if icons::lookup(name, "").is_some() { format!("image://icon/{name}") } else { String::new() },
+        |_, _| None,
+    );
+    if source.starts_with("image://notification/") {
+        let d = pixels?;
+        return icons::from_rgba(d.width as i32, d.height as i32, &d.rgba);
+    }
+    if let Some(name) = source.strip_prefix("image://icon/") {
+        return icons::named(name, "");
+    }
+    let path = source.strip_prefix("file://")?;
+    icons::load(std::path::Path::new(path))
+}
+
 fn arrival(n: &fs_notifd::Notification, replaced: bool) -> Arrival {
     let urgency = match n.urgency {
         fs_notifd::Urgency::Low => Urgency::Low,
         fs_notifd::Urgency::Normal => Urgency::Normal,
         fs_notifd::Urgency::Critical => Urgency::Critical,
     };
-    let (image, pixels) = image_of(n);
+    let (image, _) = image_of(n);
     Arrival {
         notif: Notif {
             id: n.id.to_string(),
@@ -414,19 +608,17 @@ fn arrival(n: &fs_notifd::Notification, replaced: bool) -> Arrival {
             ..Default::default()
         },
         timeout_ms: timeout_for(urgency, n.expire_timeout),
-        pixels,
+        icon: None,
         replaced,
     }
 }
 
-/// The identity Quickshell's NotificationServer gives the QML shell, which
-/// senders may key on: its name and version, and the capabilities its
-/// flags in NotificationService.qml turn on.
+/// What the QML shell's server answers over the bus, which senders may key
+/// on: Quickshell's name, an empty version (its build carries none), and the
+/// capabilities NotificationService.qml's flags turn on.
 fn config() -> Config {
-    Config { version: QUICKSHELL_VERSION.into(), ..Config::default() }
+    Config { version: String::new(), ..Config::default() }
 }
-
-const QUICKSHELL_VERSION: &str = "0.2.1";
 
 pub async fn run(ctx: Ctx) {
     let (server, events) = match Server::start(config()).await {
@@ -453,16 +645,32 @@ pub async fn run(ctx: Ctx) {
                         c.publish(store::Diff::Notifications(Diff::Closed(id.to_string())));
                     }
                 }
+                Cmd::Phone(args) => {
+                    let _ = async_process::Command::new("omarchy-iphone-bridge")
+                        .args(&args)
+                        .stdin(async_process::Stdio::null())
+                        .stdout(async_process::Stdio::null())
+                        .stderr(async_process::Stdio::null())
+                        .status()
+                        .await;
+                }
             }
         }
     });
     while let Ok(event) = events.recv().await {
-        let diff = match event {
-            Event::Notified(n) => Diff::Arrived(Box::new(arrival(&n, false))),
-            Event::Replaced(n) => Diff::Arrived(Box::new(arrival(&n, true))),
-            Event::Closed { id } => Diff::Closed(id.to_string()),
+        let (n, replaced) = match event {
+            Event::Notified(n) => (n, false),
+            Event::Replaced(n) => (n, true),
+            Event::Closed { id } => {
+                ctx.publish(store::Diff::Notifications(Diff::Closed(id.to_string())));
+                continue;
+            }
         };
-        ctx.publish(store::Diff::Notifications(diff));
+        let mut a = arrival(&n, replaced);
+        let (image, pixels) = image_of(&n);
+        let (app_icon, entry, name) = (n.app_icon.clone(), n.desktop_entry.clone(), n.app_name.clone());
+        a.icon = ctx.pool().run(move || resolve_icon(&image, &app_icon, &entry, &name, pixels.as_deref())).await.flatten();
+        ctx.publish(store::Diff::Notifications(Diff::Arrived(Box::new(a))));
     }
 }
 
@@ -511,6 +719,75 @@ mod tests {
         assert!(s.reminders.is_empty());
         assert_eq!(s.model.popups.len(), 1);
         assert_eq!(s.model.popups[0].summary, "Reminder");
+    }
+
+    fn sms(id: i64) -> iphone::Notification {
+        iphone::Notification {
+            id,
+            bundle_id: "com.apple.MobileSMS".into(),
+            app_name: "Messages".into(),
+            title: "Alex".into(),
+            body: "Still on for Friday?".into(),
+            session: 77,
+            ..Default::default()
+        }
+    }
+
+    fn local(id: &str) -> Diff {
+        Diff::Arrived(Box::new(Arrival {
+            notif: Notif {
+                id: id.into(),
+                app_name: "Messages".into(),
+                summary: "Alex".into(),
+                body: "Still on for Friday?".into(),
+                ..Default::default()
+            },
+            timeout_ms: NORMAL_MS,
+            icon: None,
+            replaced: false,
+        }))
+    }
+
+    fn mirrored() -> State {
+        let mut s = State::default();
+        s.sync_config(None);
+        s
+    }
+
+    #[test]
+    fn a_local_arrival_replaces_the_phone_card() {
+        let mut s = mirrored();
+        s.apply(Diff::Phone { record: sms(4012), quiet: false });
+        assert_eq!(s.model.popups.len(), 1);
+        s.apply(local("9"));
+        assert_eq!(s.model.popups.iter().map(|p| p.id.as_str()).collect::<Vec<_>>(), ["9"]);
+    }
+
+    #[test]
+    fn the_phone_copy_of_a_local_message_is_dropped() {
+        let mut s = mirrored();
+        s.apply(local("9"));
+        s.apply(Diff::Phone { record: sms(4012), quiet: false });
+        assert_eq!(s.model.popups.len(), 1);
+    }
+
+    #[test]
+    fn a_quiet_phone_arrival_files_into_pending_and_the_phone_can_withdraw_it() {
+        let mut s = mirrored();
+        s.apply(Diff::Phone { record: sms(4012), quiet: true });
+        assert_eq!((s.model.popups.len(), s.model.pending.len()), (0, 1));
+        assert_eq!(s.model.pending[0].source, "iphone");
+        s.apply(Diff::DropPhone(4012));
+        assert!(s.model.pending.is_empty());
+    }
+
+    #[test]
+    fn a_resent_phone_id_updates_its_card() {
+        let mut s = mirrored();
+        s.apply(Diff::Phone { record: sms(4012), quiet: false });
+        s.apply(Diff::Phone { record: iphone::Notification { body: "Moved to Saturday".into(), ..sms(4012) }, quiet: false });
+        assert_eq!(s.model.popups.len(), 1);
+        assert_eq!(s.model.popups[0].body, "Moved to Saturday");
     }
 
     #[test]

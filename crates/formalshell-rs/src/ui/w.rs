@@ -47,6 +47,11 @@ pub fn caption(s: impl Into<String>) -> El {
     text_el(s, Type::Caption, Weight::Normal, false, Ink::Muted)
 }
 
+/// A decoded picture drawn at its own `size`.
+pub fn picture(image: crate::scene::Bitmap, size: f64) -> El {
+    El::new(Kind::Picture { image: super::el::Pic(image), size })
+}
+
 pub fn icon(name: impl Into<String>) -> El {
     El::new(Kind::Icon { name: name.into(), size: Type::Body, ink: Ink::Fg })
 }

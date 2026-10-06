@@ -145,6 +145,19 @@ pub enum Kind {
     /// A shape budding off a line on `edge`, for the gallery.
     Shoulders { edge: fs_chrome::types::Edge, span: f64, depth: f64, run: f64 },
     Marquee { text: String, ink: Ink, max: f64 },
+    /// A decoded picture, already fitted to `size` square.
+    Picture { image: Pic, size: f64 },
+}
+
+/// A bitmap compared by identity, so an element tree holding one still
+/// compares.
+#[derive(Clone, Debug)]
+pub struct Pic(pub crate::scene::Bitmap);
+
+impl PartialEq for Pic {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.same_as(&other.0)
+    }
 }
 
 /// One element: what it is, how wide it sits, and how it is addressed.

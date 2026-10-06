@@ -18,6 +18,7 @@ use futures_lite::{AsyncBufReadExt, StreamExt};
 
 use super::settings;
 use crate::runtime::Ctx;
+use crate::services::notifications;
 use crate::services::proc::MISSING;
 use crate::store;
 
@@ -41,6 +42,8 @@ pub struct State {
 struct Session {
     state: State,
     known: HashSet<i64>,
+    /// What the notification mirror is handed, drained after each line.
+    mirror: Vec<notifications::Diff>,
 }
 
 impl Session {
@@ -62,15 +65,25 @@ impl Session {
                     .and_then(|b| b.as_array())
                     .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_owned)).collect())
                     .unwrap_or_default();
+                let mode = cfg.str("iphone.notifications.focus").unwrap_or("respect").to_owned();
                 if !iphone::is_blocked(&entry, &block) && self.known.insert(entry.id) {
-                    let mode = cfg.str("iphone.notifications.focus").unwrap_or("respect");
-                    if iphone::focus_verdict(Some(&entry), mode) != Verdict::Drop {
+                    if iphone::focus_verdict(Some(&entry), &mode) != Verdict::Drop {
                         self.state.unread += 1;
                     }
+                }
+                let route = iphone::RouteConfig {
+                    enable: cfg.flag("iphone.notifications.enable", true),
+                    block,
+                    focus: mode,
+                };
+                match iphone::route(&entry, &route) {
+                    Verdict::Drop => {}
+                    v => self.mirror.push(notifications::Diff::Phone { record: entry, quiet: v == Verdict::Quiet }),
                 }
             }
             Event::Dismiss { id } => {
                 self.known.remove(&id);
+                self.mirror.push(notifications::Diff::DropPhone(id));
             }
             _ => {}
         }
@@ -102,6 +115,9 @@ async fn listen(ctx: &Ctx, session: &mut Session) -> i32 {
             session.state.installed = true;
             session.event(event);
             publish(ctx, &session.state);
+            for d in session.mirror.drain(..) {
+                ctx.publish(store::Diff::Notifications(d));
+            }
         }
     }
     child.status().await.ok().and_then(|s| s.code()).unwrap_or(-1)

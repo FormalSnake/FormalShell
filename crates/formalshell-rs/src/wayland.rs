@@ -697,11 +697,15 @@ impl App {
     }
 
     fn open_host(&mut self, module: Box<dyn panel::Panel>, anchor: Option<f64>, nested: bool, now: Instant) {
+        let place = self.panel_place(anchor, nested);
+        self.open_host_at(module, place, now);
+    }
+
+    fn open_host_at(&mut self, module: Box<dyn panel::Panel>, place: Place, now: Instant) {
         let id = module.id();
         if self.panel.as_ref().is_some_and(|p| p.id() == id && p.is_open()) {
             return;
         }
-        let place = self.panel_place(anchor, nested);
         let layer = self.overlay("formalshell:panel", Layer::Overlay, Anchor::all(), (0, 0), -1);
         layer.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
         layer.commit();
@@ -1028,6 +1032,14 @@ impl App {
             Action::Caffeinate(on) => self.set_caffeinated(on),
             Action::MediaNext => self.store.media.next(),
             Action::MediaPrevious => self.store.media.previous(),
+            Action::Center => {
+                let open = !self.store.notifications.center_open;
+                self.set_center(open);
+            }
+            Action::Dnd(on) => {
+                self.store.notifications.set_dnd(on);
+                surfaces::changed(self, Topic::Notifications);
+            }
         }
     }
 
