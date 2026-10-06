@@ -6,6 +6,7 @@ pub mod airplay;
 pub mod ams;
 pub mod appicon;
 pub mod barpaint;
+pub mod caffeinate;
 pub mod clock;
 pub mod commands;
 pub mod config;
@@ -15,13 +16,18 @@ pub mod hyprland;
 pub mod icons;
 pub mod media;
 pub mod overnight;
+pub mod info;
+pub mod plugins;
+pub mod proc;
 pub mod radio;
+pub mod recording;
 pub mod state;
 mod watch;
 pub mod theme;
 pub mod tray;
 pub mod visualizer;
 pub mod wallpaper;
+pub mod wants;
 
 use crate::runtime::Ctx;
 
@@ -42,6 +48,8 @@ pub fn start(ctx: &Ctx) {
     ctx.spawn(wallpaper::run(ctx.clone()));
     ctx.spawn(herdr::run(ctx.clone()));
     ctx.spawn(appicon::run(ctx.clone()));
+    ctx.spawn(wants::run(ctx.clone()));
+    ctx.spawn(plugins::run(ctx.clone()));
     devices::start(ctx);
     ctx.spawn(tray::run(ctx.clone()));
 }

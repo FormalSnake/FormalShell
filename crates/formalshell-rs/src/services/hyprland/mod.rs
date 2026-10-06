@@ -60,6 +60,9 @@ pub struct State {
     pub outputs: Vec<Output>,
     pub outputs_state: OutputsState,
     pub keyboard: Layout,
+    /// False until the first answer (or failure) of the layout query, so a
+    /// cell can tell "not asked yet" from "cannot be asked".
+    pub keyboard_answered: bool,
     /// Counts `configreloaded`, the contract's `configReloaded` signal.
     pub config_reloads: u64,
 }
@@ -72,6 +75,7 @@ impl Default for State {
             outputs: Vec::new(),
             outputs_state: OutputsState::Unknown,
             keyboard: keyboard::unavailable(),
+            keyboard_answered: false,
             config_reloads: 0,
         }
     }
@@ -103,7 +107,8 @@ impl State {
                 (self.outputs, self.outputs_state) = (rows, state);
             }
             Diff::Keyboard(layout) => {
-                if self.keyboard == layout {
+                let first = !std::mem::replace(&mut self.keyboard_answered, true);
+                if self.keyboard == layout && !first {
                     return false;
                 }
                 self.keyboard = layout;

@@ -9,6 +9,7 @@
 
 mod airplay;
 mod bar;
+mod caffeinate;
 #[cfg(test)]
 mod cli;
 mod debug;
@@ -17,7 +18,9 @@ mod earbuds;
 mod golden;
 mod media;
 mod overnight;
+mod monitor;
 mod panel;
+mod plugins;
 mod radio;
 pub mod registry;
 mod theme;
@@ -58,6 +61,9 @@ fn registry() ->&'static Registry<App> {
             overnight::target(),
             earbuds::target(),
             workspaces::target(),
+            monitor::target(),
+            plugins::target(),
+            caffeinate::target(),
         ],
     })
 }

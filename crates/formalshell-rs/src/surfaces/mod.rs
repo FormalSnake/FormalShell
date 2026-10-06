@@ -24,6 +24,7 @@ pub fn changed(app: &mut App, topic: Topic) {
             theme_inputs(app);
             app.refresh_bar(Some(topic));
         }
+        Topic::Plugins => app.apply_config(),
         Topic::Theme => app.set_bar_theme(),
         Topic::Tray => {
             app.tray_changed();

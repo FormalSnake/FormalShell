@@ -17,11 +17,20 @@ mod display;
 mod dualsense;
 mod earbuds;
 mod command;
+mod github;
+mod indicators;
+mod iphone;
+mod keyboard_layout;
 mod launcher;
 mod mic;
 mod network;
 mod now_playing;
 pub mod tray;
+mod monitor;
+mod plugin;
+mod system_update;
+mod tailscale;
+mod usage;
 mod visualizer;
 mod weather;
 pub mod workspaces;
@@ -47,8 +56,16 @@ pub fn build(entry: &Entry, region_entries: &[Entry]) -> Box<dyn Cell> {
             Builtin::Earbuds => Box::new(earbuds::Earbuds::new()),
             Builtin::Display => Box::new(display::Display::default()),
             Builtin::Dualsense => Box::new(dualsense::Dualsense::default()),
-            Builtin::Weather => Box::new(weather::Weather),
             Builtin::Visualizer => Box::new(visualizer::Visualizer::default()),
+            Builtin::Weather => Box::new(weather::Weather::default()),
+            Builtin::Github => Box::new(github::Github::default()),
+            Builtin::Usage => Box::new(usage::Usage::default()),
+            Builtin::SystemUpdate => Box::new(system_update::SystemUpdate::default()),
+            Builtin::Tailscale => Box::new(tailscale::Tailscale::default()),
+            Builtin::KeyboardLayout => Box::new(keyboard_layout::KeyboardLayout::default()),
+            Builtin::Monitor => Box::new(monitor::Monitor::default()),
+            Builtin::Indicators => Box::new(indicators::Indicators::default()),
+            Builtin::Iphone => Box::new(iphone::Iphone::default()),
             Builtin::Bell => Box::new(bell::Bell::default()),
             Builtin::Chevron => Box::new(chevron::Chevron::new(entry.region, region_entries)),
             _ => Box::new(absent::Absent),
@@ -57,6 +74,6 @@ pub fn build(entry: &Entry, region_entries: &[Entry]) -> Box<dyn Cell> {
             Some("command") => Box::new(command::Command::new(id)),
             _ => Box::new(command::Command::qml(id)),
         },
-        EntryKind::Plugin { .. } => Box::new(absent::Absent),
+        EntryKind::Plugin { id, .. } => Box::new(plugin::Plugin::new(id)),
     }
 }

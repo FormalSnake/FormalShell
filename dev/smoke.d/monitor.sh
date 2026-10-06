@@ -9,10 +9,16 @@
 # status`, taken in the same breath, carries real CPU and memory numbers off
 # the VM's own /proc.
 #
+# Under FS_IMPL=rust this is the bar half: the cell, `monitor status` and
+# `monitor gpu`, and the panel (a stand-in card until the panels land). The
+# launcher's monitor route is the launcher milestone's, so the menu summon
+# and its asserts are skipped there.
+#
 # monitor_done_path is this leg's own finish marker: --processes types into
 # the same launcher route and waits on it rather than summoning over this
 # leg's frames.
 leg_monitor_flag="--monitor"
+leg_monitor_rust=1
 leg_monitor_order=140
 
 monitor_done_path="$shot_dir/monitor-drive.done"
@@ -28,6 +34,13 @@ monitor_view_png="$shot_dir/monitor-view.png"
 # The same file --dump's own leg writes, and deliberately so: this leg reads
 # the resolved settings back to prove the opt-in cell was placed at all.
 monitor_dump_path="$shot_dir/dump.json"
+monitor_room_path="$shot_dir/monitor-room.json"
+
+leg_monitor_validate() {
+  if [ "$fs_impl" = rust ]; then
+    leg_monitor_needs="jq"
+  fi
+}
 
 leg_monitor_fixture() {
   # `monitor` is an opt-in builtin (absent from DEFAULT_LAYOUT), so naming
@@ -42,12 +55,22 @@ leg_monitor_timing() {
 }
 
 leg_monitor_drive() {
-  local script="$shot_dir/monitor-drive.sh"
+  local script="$shot_dir/monitor-drive.sh" menu_lines="" room_line=""
+  if [ "$fs_impl" != rust ]; then
+    menu_lines="sleep 1
+$ipc call menu summon monitor > \"$monitor_menu_reply_path\" 2>&1
+sleep 3
+$ipc call menu status > \"$monitor_menu_status_path\" 2>&1
+\"$grim_bin\" \"$monitor_view_png\" > /dev/null 2>&1"
+  else
+    room_line="$ipc call bar room > \"$monitor_room_path\" 2>&1"
+  fi
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 6
 $ipc call monitor status > "$monitor_status_path" 2>&1
 $ipc call monitor gpu > "$monitor_gpu_path" 2>&1
+$room_line
 $ipc call debug dump > "$monitor_dump_path" 2>&1
 "$grim_bin" "$monitor_bar_png" > /dev/null 2>&1
 sleep 1
@@ -57,11 +80,7 @@ $ipc call panel state > "$monitor_panel_state_path" 2>&1
 "$grim_bin" "$monitor_panel_png" > /dev/null 2>&1
 sleep 1
 $ipc call panel close > /dev/null 2>&1
-sleep 1
-$ipc call menu summon monitor > "$monitor_menu_reply_path" 2>&1
-sleep 3
-$ipc call menu status > "$monitor_menu_status_path" 2>&1
-"$grim_bin" "$monitor_view_png" > /dev/null 2>&1
+$menu_lines
 touch "$monitor_done_path"
 EOF
   hypr_exec_once "bash $script"
@@ -121,6 +140,11 @@ leg_monitor_assert() {
     fail "no monitor-panel screenshot produced"
   fi
   echo "SMOKE_MONITOR_PANEL $monitor_panel_png"
+  if [ "$fs_impl" = rust ]; then
+    jq -e '.[].cells[] | select(.name == "monitor" and .whole == true and .width > 0)' "$monitor_room_path" > /dev/null \
+      || fail "the monitor cell is not whole on the strip: $(cat "$monitor_room_path" 2>/dev/null)"
+    return
+  fi
   if ! grep -q '^ok$' "$monitor_menu_reply_path" 2>/dev/null; then
     fail "menu summon monitor did not answer ok, got: $(cat "$monitor_menu_reply_path" 2>/dev/null)"
   fi

@@ -12,6 +12,15 @@ pub struct Command {
     out: crate::services::commands::Output,
 }
 
+/// A module's or plugin's `class` as the cell's tone.
+pub(super) fn tone(class: &str) -> Tone {
+    match class {
+        "warning" => Tone::Warning,
+        "critical" | "urgent" => Tone::Destructive,
+        _ => Tone::Rest,
+    }
+}
+
 impl Command {
     pub fn new(id: &str) -> Self {
         Self { id: id.to_owned(), qml: false, out: Default::default() }
@@ -46,13 +55,8 @@ impl Cell for Command {
         if self.out.text.is_empty() {
             return View::hidden();
         }
-        let tone = match self.out.class.as_str() {
-            "warning" => Tone::Warning,
-            "critical" | "urgent" => Tone::Destructive,
-            _ => Tone::Rest,
-        };
         let mut view = View::new(vec![Part::Label { text: self.out.text.clone(), weight: Some(400.0) }], look.xxs)
-            .tone(tone)
+            .tone(tone(&self.out.class))
             .tooltip(self.out.tooltip.clone());
         view.interactive = false;
         view

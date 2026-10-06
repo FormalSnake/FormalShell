@@ -3,14 +3,22 @@
 use std::time::Duration;
 
 use async_io::Timer;
-use chrono::{Local, Timelike};
+use chrono::{Local, NaiveDateTime, Timelike};
 
 use crate::runtime::Ctx;
 use crate::store;
 
-#[derive(Default)]
 pub struct State {
     pub text: String,
+    /// The wall clock when the minute last changed, for the formats a cell
+    /// renders itself.
+    pub now: NaiveDateTime,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self { text: String::new(), now: Local::now().naive_local() }
+    }
 }
 
 pub enum Diff {
@@ -24,6 +32,7 @@ impl State {
             return false;
         }
         self.text = text;
+        self.now = Local::now().naive_local();
         true
     }
 }

@@ -3,7 +3,8 @@
 //! [`Store::apply`].
 
 use crate::services::{
-    appicon, barpaint, clock, commands, config, devices, herdr, hyprland, media, state, theme, tray, visualizer, wallpaper,
+    appicon, barpaint, caffeinate, clock, commands, config, devices, herdr, hyprland, info, media, plugins, recording, state,
+    theme, tray, visualizer, wallpaper,
 };
 
 #[derive(Default)]
@@ -22,6 +23,10 @@ pub struct Store {
     pub tray: tray::State,
     pub herdr: herdr::State,
     pub appicon: appicon::State,
+    pub info: info::State,
+    pub caffeinate: caffeinate::State,
+    pub plugins: plugins::State,
+    pub recording: recording::State,
 }
 
 /// One service's change, tagged with the slice it applies to.
@@ -40,6 +45,11 @@ pub enum Diff {
     Tray(tray::Diff),
     Herdr(herdr::Diff),
     AppIcon(appicon::Diff),
+    Info(info::Diff),
+    Caffeinate(caffeinate::Diff),
+    Plugins(plugins::Diff),
+    #[allow(dead_code)]
+    Recording(recording::Diff),
 }
 
 /// The slice a diff changed, for the surfaces that read it.
@@ -59,6 +69,13 @@ pub enum Topic {
     Tray,
     Herdr,
     AppIcon,
+    Info,
+    Caffeinate,
+    /// The plugin list changed: the layout resolves again.
+    Plugins,
+    /// What a plugin shows changed.
+    PluginOutput,
+    Recording,
 }
 
 impl Store {
@@ -79,6 +96,13 @@ impl Store {
             Diff::Tray(d) => self.tray.apply(d).then_some(Topic::Tray),
             Diff::Herdr(d) => self.herdr.apply(d).then_some(Topic::Herdr),
             Diff::AppIcon(d) => self.appicon.apply(d).then_some(Topic::AppIcon),
+            Diff::Info(d) => self.info.apply(d).then_some(Topic::Info),
+            Diff::Plugins(d) => self.plugins.apply(d).map(|c| match c {
+                plugins::Change::List => Topic::Plugins,
+                plugins::Change::Output => Topic::PluginOutput,
+            }),
+            Diff::Recording(d) => self.recording.apply(d).then_some(Topic::Recording),
+            Diff::Caffeinate(d) => self.caffeinate.apply(d).then_some(Topic::Caffeinate),
         }
     }
 }

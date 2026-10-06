@@ -1581,6 +1581,16 @@ shell-side, because a permanently-`Exclusive` surface makes Hyprland route
 every pointer event on every output to it (`Panel.qml`'s own documented
 finding), and a third-party file getting that wrong would brick the session.
 
+The Rust shell loads plugins as processes instead
+(`crates/formalshell-rs/src/services/plugins.rs`). The scan, `fs-chrome`'s
+manifest port and the id-sorted result are the same; `entry` is an
+executable, and each plugin that starts with the shell gets one host task on
+the service thread that owns the child, reads its stdout lines into the
+store's `plugins` slice and writes queued click and scroll events to its
+stdin. An exit restarts it on a doubling backoff and shows `PLUGIN ERROR`
+meanwhile. The contract a plugin author reads is in `docs/USAGE.md`
+("Command plugins").
+
 ## Greeter / greetd flow
 
 ```

@@ -158,6 +158,27 @@ fn stub() -> Registry<()> {
                 ],
             },
             Target {
+                name: "monitor",
+                functions: vec![f("status", &[], Type::String, |_, _| s("{}")), f("gpu", &[], Type::String, |_, _| s("{}"))],
+            },
+            Target {
+                name: "plugins",
+                functions: vec![
+                    f("list", &[], Type::String, |_, _| s("[]")),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                    f("reload", &[], Type::String, |_, _| s("ok")),
+                ],
+            },
+            Target {
+                name: "caffeinate",
+                functions: vec![
+                    f("toggle", &[], Type::String, |_, _| s("ok")),
+                    f("enable", &[], Type::String, |_, _| s("ok")),
+                    f("disable", &[], Type::String, |_, _| s("ok")),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
                 name: "probe",
                 functions: vec![
                     f("s", &[STR], Type::String, |_, a| s(format!("[{}]", a[0].str()))),
@@ -271,6 +292,9 @@ fn signatures_match_qml() {
         super::radio::target(),
         super::airplay::target(),
         super::visualizer::target(),
+        super::monitor::target(),
+        super::plugins::target(),
+        super::caffeinate::target(),
     ] {
         let defs: Vec<String> = real.functions.iter().map(|f| f.definition()).collect();
         let qml = stub.targets.iter().find(|t| t.name == real.name).expect("a stub target");

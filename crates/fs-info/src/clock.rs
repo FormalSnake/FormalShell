@@ -70,3 +70,118 @@ pub fn next_format(current: &str) -> &'static str {
         .map_or(0, |i| (i + 1) % CLOCK_FORMATS.len());
     CLOCK_FORMATS[next]
 }
+
+/// `Qt.formatDateTime` for the tokens the ring and a hand-written format
+/// use: d dd ddd dddd, M MM MMM MMMM, yy yyyy, h hh H HH (h and hh run on
+/// 12 hours once an AP or ap is in the format), m mm, s ss, AP ap, and
+/// single-quoted literals with `''` for a quote. Names are English; any
+/// other character stands for itself.
+pub fn format_qt(at: chrono::NaiveDateTime, format: &str) -> String {
+    use chrono::{Datelike, Timelike};
+
+    const DAYS: [&str; 7] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    const MONTHS: [&str; 12] = [
+        "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December",
+    ];
+    let meridiem = uses_meridiem(format);
+    let chars: Vec<char> = format.chars().collect();
+    let mut out = String::new();
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        if c == '\'' {
+            i += 1;
+            while i < chars.len() {
+                if chars[i] == '\'' {
+                    if chars.get(i + 1) == Some(&'\'') {
+                        out.push('\'');
+                        i += 2;
+                        continue;
+                    }
+                    break;
+                }
+                out.push(chars[i]);
+                i += 1;
+            }
+            i += 1;
+            continue;
+        }
+        if matches!(c, 'A' | 'a') && matches!(chars.get(i + 1), Some('P' | 'p')) {
+            let pm = at.hour() >= 12;
+            out.push_str(match (c, pm) {
+                ('A', false) => "AM",
+                ('A', true) => "PM",
+                (_, false) => "am",
+                (_, true) => "pm",
+            });
+            i += 2;
+            continue;
+        }
+        if !matches!(c, 'd' | 'M' | 'y' | 'h' | 'H' | 'm' | 's') {
+            out.push(c);
+            i += 1;
+            continue;
+        }
+        let run = chars[i..].iter().take_while(|x| **x == c).count();
+        i += run;
+        let hour12 = match at.hour() % 12 {
+            0 => 12,
+            h => h,
+        };
+        let hour = if meridiem { hour12 } else { at.hour() };
+        let name = |full: &str, n: usize| full.chars().take(n).collect::<String>();
+        let weekday = DAYS[at.weekday().num_days_from_monday() as usize];
+        match (c, run) {
+            ('d', 1) => out.push_str(&at.day().to_string()),
+            ('d', 2) => out.push_str(&pad2(i64::from(at.day()))),
+            ('d', 3) => out.push_str(&name(weekday, 3)),
+            ('d', _) => out.push_str(weekday),
+            ('M', 1) => out.push_str(&at.month().to_string()),
+            ('M', 2) => out.push_str(&pad2(i64::from(at.month()))),
+            ('M', 3) => out.push_str(&name(MONTHS[at.month0() as usize], 3)),
+            ('M', _) => out.push_str(MONTHS[at.month0() as usize]),
+            ('y', 2) => out.push_str(&pad2(i64::from(at.year().rem_euclid(100)))),
+            ('y', _) => out.push_str(&format!("{:04}", at.year())),
+            ('h', 1) => out.push_str(&hour.to_string()),
+            ('h', _) => out.push_str(&pad2(i64::from(hour))),
+            ('H', 1) => out.push_str(&at.hour().to_string()),
+            ('H', _) => out.push_str(&pad2(i64::from(at.hour()))),
+            ('m', 1) => out.push_str(&at.minute().to_string()),
+            ('m', _) => out.push_str(&pad2(i64::from(at.minute()))),
+            ('s', 1) => out.push_str(&at.second().to_string()),
+            _ => out.push_str(&pad2(i64::from(at.second()))),
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod format_tests {
+    use chrono::NaiveDate;
+
+    use super::*;
+
+    fn at(h: u32, m: u32) -> chrono::NaiveDateTime {
+        NaiveDate::from_ymd_opt(2026, 1, 5).unwrap().and_hms_opt(h, m, 0).unwrap()
+    }
+
+    #[test]
+    fn every_ring_entry_renders() {
+        let d = at(9, 41);
+        let render = |f: &str| format_qt(d, &substitute_iso_week(f, d.date()));
+        assert_eq!(render("hh:mm"), "09:41");
+        assert_eq!(render("h:mm AP"), "9:41 AM");
+        assert_eq!(render("ddd hh:mm"), "Mon 09:41");
+        assert_eq!(render("ddd d MMM hh:mm"), "Mon 5 Jan 09:41");
+        assert_eq!(render("yyyy-MM-dd hh:mm"), "2026-01-05 09:41");
+        assert_eq!(render("d MMM 'W'ww"), "5 Jan W02");
+    }
+
+    #[test]
+    fn twelve_hour_clock_and_quotes() {
+        assert_eq!(format_qt(at(0, 5), "h:mm ap"), "12:05 am");
+        assert_eq!(format_qt(at(15, 0), "hh AP"), "03 PM");
+        assert_eq!(format_qt(at(15, 0), "HH 'o''clock'"), "15 o'clock");
+        assert_eq!(format_qt(at(15, 0), "dddd MMMM yy"), "Monday January 26");
+    }
+}
