@@ -151,6 +151,7 @@
         qml-tests = qmlTests pkgs;
         primitives = primitivesCheck pkgs;
         rust-tests = pkgs.callPackage ./nix/rust-tests.nix { };
+        fs-upower = pkgs.callPackage ./nix/fs-upower.nix { };
         nixos-module-eval = nixosModuleEval system pkgs;
 
         qmllint = pkgs.runCommand "formalshell-qmllint" {
