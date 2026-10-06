@@ -414,7 +414,7 @@ pub fn paint(cx: &mut Cx, el: &El, rect: Rect, path: &str) {
         Kind::Button { variant, text, icon, enabled, square } => {
             button(cx, el, inner, *variant, text, icon, *enabled, *square, path, None, stop_key, None)
         }
-        Kind::Switch { checked } => switch(cx, el, inner, *checked, path, stop_key),
+        Kind::Switch { checked, enabled } => switch(cx, el, inner, *checked, *enabled, path, stop_key),
         Kind::Track { value, notch, interactive } => track(cx, el, inner, *value, *notch, *interactive, path, stop_key),
         Kind::Group { options, index, exclusive, cursor_index, wrap } => {
             group(cx, el, inner, options, *index, *exclusive, *cursor_index, *wrap, path, stop_key)
@@ -653,7 +653,7 @@ fn button(
     }
 }
 
-fn switch(cx: &mut Cx, el: &El, r: Rect, checked: bool, path: &str, stop: Option<String>) {
+fn switch(cx: &mut Cx, el: &El, r: Rect, checked: bool, enabled: bool, path: &str, stop: Option<String>) {
     let t = cx.theme;
     let s = t.space.clone();
     let inset = t.border_width * 2.0;
@@ -676,14 +676,17 @@ fn switch(cx: &mut Cx, el: &El, r: Rect, checked: bool, path: &str, stop: Option
     let tri = irect(tr);
     let tr_radius = t.box_radius(&track, tri.h as f64);
     let kn_radius = t.box_radius(&knob, size);
-    let alpha = cx.alpha;
+    // Switch.qml dims a disabled switch the way Button does.
+    let alpha = if enabled { cx.alpha } else { cx.alpha * 0.5 };
     let mut p = cx.painter(path);
     boxes::paint(&mut p, tri, &track, tr_radius, alpha, 0.0);
     boxes::paint(&mut p, kr, &knob, kn_radius, alpha, 0.0);
     let last = p.last();
     p.finish();
     cx.done(last);
-    cx.hit(Hit { rect: irect(r), path: path.into(), on: el.on.clone(), tip: el.tip.clone(), stop, what: HitWhat::Switch(checked) });
+    if enabled {
+        cx.hit(Hit { rect: irect(r), path: path.into(), on: el.on.clone(), tip: el.tip.clone(), stop, what: HitWhat::Switch(checked) });
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

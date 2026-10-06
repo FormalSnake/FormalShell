@@ -133,7 +133,7 @@ pub enum Kind {
     Icon { name: String, size: Type, ink: Ink },
     Cell { state: CellState, interactive: bool, child: Box<El> },
     Button { variant: Variant, text: String, icon: String, enabled: bool, square: bool },
-    Switch { checked: bool },
+    Switch { checked: bool, enabled: bool },
     Track { value: f64, notch: Option<f64>, interactive: bool },
     /// `wrap`: rows of equal buttons when every whole label cannot fit one.
     Group { options: Vec<Opt>, index: usize, exclusive: bool, cursor_index: usize, wrap: bool },
@@ -290,7 +290,7 @@ impl El {
     }
 
     pub fn enabled(mut self, on: bool) -> Self {
-        if let Kind::Button { enabled, .. } = &mut self.kind {
+        if let Kind::Button { enabled, .. } | Kind::Switch { enabled, .. } = &mut self.kind {
             *enabled = on;
         }
         self

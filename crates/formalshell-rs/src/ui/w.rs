@@ -98,7 +98,7 @@ pub fn icon_button(glyph: impl Into<String>) -> El {
 }
 
 pub fn switch(checked: bool) -> El {
-    El::new(Kind::Switch { checked })
+    El::new(Kind::Switch { checked, enabled: true })
 }
 
 pub fn track(value: f64) -> El {
