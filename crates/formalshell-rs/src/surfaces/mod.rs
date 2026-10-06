@@ -4,6 +4,7 @@
 pub mod bar;
 pub mod card;
 pub mod shoulders;
+pub mod tray_menu;
 
 use crate::services::theme;
 use crate::store::Topic;
@@ -24,6 +25,10 @@ pub fn changed(app: &mut App, topic: Topic) {
             app.refresh_bar(Some(topic));
         }
         Topic::Theme => app.set_bar_theme(),
+        Topic::Tray => {
+            app.tray_changed();
+            app.refresh_bar(Some(topic));
+        }
         _ => app.refresh_bar(Some(topic)),
     }
 }

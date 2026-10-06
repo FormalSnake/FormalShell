@@ -392,6 +392,9 @@ impl Bar {
         let band = self.band();
         self.refit(store, now);
         self.place(now);
+        if self.fit_rooms(store, now) {
+            self.place(now);
+        }
         self.paint_strip();
         let visible = !self.hidden;
         let edge = self.edge;
@@ -403,6 +406,29 @@ impl Bar {
             }
             slot.paint(&mut self.kit, &mut self.scene, edge, self.hover == Some(i), band_ref, 1.0, visible, now);
         }
+    }
+
+    /// Tells each self-drawn cell the room it has (its own extent plus the
+    /// strip's slack, which the cell's own change cannot move); true when
+    /// one measured again.
+    fn fit_rooms(&mut self, store: &Store, now: Instant) -> bool {
+        if self.length() <= 1 {
+            return false;
+        }
+        let slack = self.room.slack;
+        let env = Env { store, edge: self.edge, output: &self.output };
+        let band = self.band_box.is_some();
+        let animate = self.animate(now);
+        let along = self.length() as f64;
+        let mut moved = false;
+        for slot in &mut self.slots {
+            let own = slot.extent(now);
+            if slot.cell.custom().is_some_and(|c| c.room(own + slack)) {
+                slot.refresh(&mut self.kit, &env, band, animate, along, now);
+                moved = true;
+            }
+        }
+        moved
     }
 
     /// The two free labels share the room the cells leave

@@ -28,6 +28,7 @@ leg_tray_overflow_order=172
 # need_python3 is tray.sh's (sourced first, alphabetically), the same shared
 # `need_<bin>` resolution every leg uses.
 leg_tray_overflow_needs="python3 jq"
+leg_tray_overflow_rust=1
 
 tray_overflow_pids_path="$shot_dir/tray-overflow-pids.txt"
 tray_overflow_status_path="$shot_dir/tray-overflow-status.json"

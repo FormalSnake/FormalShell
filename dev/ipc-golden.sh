@@ -64,6 +64,14 @@ ShellRoot {
         function status(): string { return "{}" }
     }
     IpcHandler {
+        target: "tray"
+        function status(): string { return "{}" }
+        function activate(id: string): string { return "activate " + id }
+        function menu(id: string): string { return "menu " + id }
+        function menucursor(delta: string): string { return "menucursor " + delta }
+        function menuactivate(): string { return "ok" }
+    }
+    IpcHandler {
         target: "probe"
         function s(a: string): string { return "[" + a + "]" }
         function ss(a: string, b: string): string { return "[" + a + "][" + b + "]" }
@@ -101,6 +109,18 @@ rec() {
 }
 
 rec call debug dump
+rec call tray status
+rec call tray activate fixture-1
+rec call tray activate
+rec call tray activate a b
+rec call tray menu 'Tray Fixture 2'
+rec call tray menucursor 1
+rec call tray menucursor -1
+rec call tray menucursor abc
+rec call tray menucursor
+rec call tray menuactivate
+rec call tray menuactivate x
+rec call tray nope
 rec call debug joinClear
 rec call debug join top 10 20
 rec call debug join top 10

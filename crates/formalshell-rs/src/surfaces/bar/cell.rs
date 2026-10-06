@@ -42,6 +42,16 @@ pub enum Action {
     Workspace(String),
     Volume(f64),
     ToggleMute,
+    /// A click on one tray item; `offset` is that item's centre along the
+    /// strip from the cell's own centre, for a menu to hang under it.
+    Tray { id: String, click: TrayClick, offset: f64 },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TrayClick {
+    Activate,
+    Secondary,
+    Menu,
 }
 
 /// What a cell reads when it re-reads.
@@ -167,6 +177,22 @@ pub trait Custom {
     fn animating(&self, now: Instant) -> bool;
     /// `debug r0Spinner`: the herdr badge on the first chip.
     fn spinner(&mut self, _on: bool, _now: Instant) {}
+    /// The cell washes its own children under the pointer, so the kit keeps
+    /// its whole-box wash off.
+    fn own_hover(&self) -> bool {
+        false
+    }
+    /// The pointer's place in the cell's box, or none once it left; true
+    /// when what the cell draws moved with it.
+    fn pointer(&mut self, _at: Option<(f64, f64)>) -> bool {
+        false
+    }
+    /// The room the strip has for this cell (its own extent plus what the
+    /// strip has left over); true when the cell's answer to it changed, which
+    /// measures it again.
+    fn room(&mut self, _budget: f64) -> bool {
+        false
+    }
 }
 
 /// What the theme hands every cell: tokens, inks and the `cell` role's
