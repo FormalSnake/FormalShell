@@ -60,9 +60,19 @@ Versions as of 2026-10-06; check crates.io before bumping.
   device pixels.
 - Layout: `taffy` for flex rows and columns; joined shapes, springs and the
   deform clock are our own code, ported from the QML math.
-- Async and D-Bus: one `calloop` loop owns the UI; services run on a
-  single-threaded `async-executor` fed into it over a channel. `zbus` 5 for
-  every D-Bus service.
+- Threads, few and fixed (quickshell runs 41 on e1504g):
+  - UI thread: one `calloop` loop owning Wayland, the scene, input and
+    rendering. It never waits on anything; it applies state diffs that
+    arrive over a channel and draws.
+  - Service thread: one single-threaded async executor running every
+    D-Bus client and server (`zbus` 5), the Hyprland sockets, child
+    processes and timers, and keeping derived state warm (the launcher
+    index, rankings) so the UI only reads it.
+  - Blocking work (desktop entry scans, icon and image decode, file IO)
+    goes to a pool of at most two threads that exits when idle, and its
+    results land as diffs like everything else.
+  - `vello_cpu` renders single-threaded for damage rects and uses its own
+    threads only for a full-output frame, if R0 shows that pays.
 - Services: `system-tray` (SNI + DBusMenu), `mpris`, `pipewire` (default
   sink through the `default` metadata object), `nmrs` (NetworkManager),
   `bluer`, PAM through `pam-client2`, raw Hyprland sockets (`.socket.sock`,
