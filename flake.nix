@@ -151,6 +151,7 @@
         qml-tests = qmlTests pkgs;
         primitives = primitivesCheck pkgs;
         nixos-module-eval = nixosModuleEval system pkgs;
+        fs-mpris = pkgs.callPackage ./nix/fs-mpris.nix { };
 
         qmllint = pkgs.runCommand "formalshell-qmllint" {
           nativeBuildInputs = [ pkgs.qt6.qtdeclarative ];
