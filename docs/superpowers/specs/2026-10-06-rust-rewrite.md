@@ -98,6 +98,19 @@ Versions as of 2026-10-06; check crates.io before bumping.
   The ScreencopyView ban becomes: capture only in the Spaces preview and
   the switcher, and only while their card is open.
 
+## User code: command plugins
+
+Owner, 2026-10-06: Rust cannot host QML, so `bar.modules` entries of type
+`qml` and QML plugins under `~/.config/formalshell/plugins/` give way to
+command plugins. A plugin is an executable named by its manifest: it
+prints JSON lines (text, icon name, tooltip, class, and for panel plugins
+rows) on stdout and reads click, scroll and row-activate events as JSON
+lines on stdin. Any language, its own process, nothing running in the
+shell's address space, no cost while it prints nothing. The manifest keeps
+its eight keys and its failure contract (`fs-chrome`'s manifest port);
+`entry` names the executable. A crashed plugin renders the dim PLUGIN
+ERROR cell and is restarted on a backoff. `CommandModule` stays as it is.
+
 ## How we get there
 
 The QML shell stays the shipped shell until the Rust one passes everything.
