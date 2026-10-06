@@ -3,7 +3,6 @@
 //! them.
 
 use super::registry::{Function, Target, Type, Value};
-use crate::theme;
 use crate::wayland::App;
 
 fn text(s: impl Into<String>) -> Value {
@@ -41,16 +40,18 @@ pub fn target() -> Target<App> {
 /// chrome numbers it draws with, keyed and ordered as DebugIpc.qml's dump.
 /// Every other key waits for the service behind it.
 fn dump(app: &mut App, _: &[Value]) -> Value {
-    let reach = theme::radius_xl();
+    let theme = app.theme();
+    let reach = theme.radii.xl;
+    let (radius, border, inset) = (theme.radius, theme.border_width, theme.space.bar_cell_height + theme.space.bar_margin * 2.0);
     let join = match app.debug_join() {
         Some((x, width)) => format!(r#"{{"edge":"top","x":{x},"width":{width},"reach":{reach}}}"#),
         None => "null".into(),
     };
     text(format!(
         r#"{{"join":{join},"theme":{{"radius":{},"radiusXl":{reach},"borderWidth":{},"barPosition":"top","edgeInset":{}}}}}"#,
-        theme::RADIUS_BASE,
-        theme::EDGE_WIDTH,
-        theme::BAR_THICKNESS,
+        radius,
+        border,
+        inset,
     ))
 }
 

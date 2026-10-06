@@ -127,6 +127,10 @@ impl App {
         self.debug_join
     }
 
+    pub fn theme(&self) -> &fs_theme::theme::Theme {
+        &self.store.theme.theme
+    }
+
     pub fn set_debug_join(&mut self, join: Option<(i32, i32)>) {
         self.debug_join = join;
         self.sync_join();
@@ -135,7 +139,7 @@ impl App {
     /// A panel's own join wins over `debug join`'s while the panel is up.
     fn sync_join(&mut self) {
         let panel = self.panel.as_ref().and_then(|(p, _)| p.join);
-        let debug = self.debug_join.map(|(x, width)| (x as f64, width as f64, theme::radius_xl() as f64));
+        let debug = self.debug_join.map(|(x, width)| (x as f64, width as f64, self.store.theme.theme.radii.xl));
         self.bar.set_join(panel.or(debug));
     }
 

@@ -172,25 +172,27 @@ impl Data {
 
     /// Four-space indent and sorted keys, the shape `JsonAdapter` writes.
     fn to_text(&self) -> String {
-        let mut map = Map::new();
-        map.insert("wallpaper".into(), self.wallpaper.clone().into());
-        map.insert("mode".into(), self.mode.clone().into());
-        map.insert("modeOverride".into(), self.mode_override.clone());
-        map.insert("dnd".into(), self.dnd.into());
-        map.insert("calendarBirthYear".into(), self.calendar_birth_year.into());
-        map.insert("calendarLifeExpectancy".into(), self.calendar_life_expectancy.into());
-        map.insert("clockFormat".into(), self.clock_format.clone().into());
-        map.insert("appLaunches".into(), self.app_launches.clone());
-        map.insert("emojiUses".into(), self.emoji_uses.clone());
-        map.insert("reminders".into(), self.reminders.clone());
-        map.insert("batteryShowPercent".into(), self.battery_show_percent.clone());
-        map.insert("overnight".into(), self.overnight.clone());
-        map.insert("lights".into(), self.lights.clone());
-        map.insert("hdr".into(), self.hdr.clone());
+        // A BTreeMap, not serde_json's Map: another crate in the workspace
+        // turns on `preserve_order`, which would write insertion order.
+        let mut map: std::collections::BTreeMap<&str, Value> = std::collections::BTreeMap::new();
+        map.insert("wallpaper", self.wallpaper.clone().into());
+        map.insert("mode", self.mode.clone().into());
+        map.insert("modeOverride", self.mode_override.clone());
+        map.insert("dnd", self.dnd.into());
+        map.insert("calendarBirthYear", self.calendar_birth_year.into());
+        map.insert("calendarLifeExpectancy", self.calendar_life_expectancy.into());
+        map.insert("clockFormat", self.clock_format.clone().into());
+        map.insert("appLaunches", self.app_launches.clone());
+        map.insert("emojiUses", self.emoji_uses.clone());
+        map.insert("reminders", self.reminders.clone());
+        map.insert("batteryShowPercent", self.battery_show_percent.clone());
+        map.insert("overnight", self.overnight.clone());
+        map.insert("lights", self.lights.clone());
+        map.insert("hdr", self.hdr.clone());
         let mut out = Vec::new();
         let format = serde_json::ser::PrettyFormatter::with_indent(b"    ");
         let mut ser = serde_json::Serializer::with_formatter(&mut out, format);
-        serde::Serialize::serialize(&Value::Object(map), &mut ser).expect("a Value serializes");
+        serde::Serialize::serialize(&map, &mut ser).expect("a Value serializes");
         out.push(b'\n');
         String::from_utf8(out).expect("serde_json writes UTF-8")
     }

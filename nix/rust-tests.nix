@@ -2,7 +2,8 @@
 
 # The pure crates' tests, which nix/formalshell-rs.nix leaves out: some read
 # files under shell/ and tests/ relative to the repo root, so the source keeps
-# the repo layout and cargo runs from crates/.
+# the repo layout and cargo runs from crates/. Service crates (fs-mpris,
+# fs-tray, ...) need a bus or a VM and carry checks of their own.
 stdenv.mkDerivation {
   name = "formalshell-rs-tests";
 
@@ -18,7 +19,7 @@ stdenv.mkDerivation {
 
   buildPhase = ''
     runHook preBuild
-    cargo test --offline --workspace --exclude formalshell-rs
+    cargo test --offline -p fs-js -p fs-chrome -p fs-info -p fs-system -p fs-devices -p fs-media -p fs-menu -p fs-screensaver -p fs-theme
     runHook postBuild
   '';
 
