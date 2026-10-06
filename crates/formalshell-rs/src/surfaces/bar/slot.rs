@@ -201,7 +201,7 @@ impl Slot {
         now: Instant,
     ) {
         let rect = self.rect;
-        let fade = self.fade.value(now).clamp(0.0, 1.0) as f32 * alpha;
+        let fade = self.fade.value(now).clamp(0.0, 1.0) as f32 * alpha * self.view.opacity;
         let scroll = self.scroll(kit, visible, now);
         let mut p = Painter::new(scene, &mut self.nodes, Some(self.clip.intersect(&rect)));
         if rect.is_empty() || fade <= 0.0 {

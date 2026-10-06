@@ -13,9 +13,18 @@ mod bluetooth;
 mod chevron;
 mod clock;
 mod command;
+mod github;
+mod indicators;
+mod iphone;
+mod keyboard_layout;
 mod launcher;
+mod monitor;
 mod network;
 mod now_playing;
+mod plugin;
+mod system_update;
+mod tailscale;
+mod usage;
 mod weather;
 pub mod workspaces;
 
@@ -34,7 +43,15 @@ pub fn build(entry: &Entry, region_entries: &[Entry]) -> Box<dyn Cell> {
             Builtin::Audio => Box::new(audio::Audio::default()),
             Builtin::Network => Box::new(network::Network::default()),
             Builtin::Bluetooth => Box::new(bluetooth::Bluetooth::default()),
-            Builtin::Weather => Box::new(weather::Weather),
+            Builtin::Weather => Box::new(weather::Weather::default()),
+            Builtin::Github => Box::new(github::Github::default()),
+            Builtin::Usage => Box::new(usage::Usage::default()),
+            Builtin::SystemUpdate => Box::new(system_update::SystemUpdate::default()),
+            Builtin::Tailscale => Box::new(tailscale::Tailscale::default()),
+            Builtin::KeyboardLayout => Box::new(keyboard_layout::KeyboardLayout::default()),
+            Builtin::Monitor => Box::new(monitor::Monitor::default()),
+            Builtin::Indicators => Box::new(indicators::Indicators::default()),
+            Builtin::Iphone => Box::new(iphone::Iphone::default()),
             Builtin::Bell => Box::new(bell::Bell::default()),
             Builtin::Chevron => Box::new(chevron::Chevron::new(entry.region, region_entries)),
             _ => Box::new(absent::Absent),
@@ -43,6 +60,6 @@ pub fn build(entry: &Entry, region_entries: &[Entry]) -> Box<dyn Cell> {
             Some("command") => Box::new(command::Command::new(id)),
             _ => Box::new(command::Command::qml(id)),
         },
-        EntryKind::Plugin { .. } => Box::new(absent::Absent),
+        EntryKind::Plugin { id, .. } => Box::new(plugin::Plugin::new(id)),
     }
 }

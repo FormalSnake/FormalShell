@@ -42,6 +42,8 @@ pub enum Action {
     Workspace(String),
     Volume(f64),
     ToggleMute,
+    /// Caffeinate on or off (the indicator's click).
+    Caffeinate(bool),
 }
 
 /// What a cell reads when it re-reads.
@@ -72,6 +74,12 @@ pub enum Part {
     Glyph { text: String, family: &'static str },
     /// CellLabel.qml: mono, body, medium unless `weight` says otherwise.
     Label { text: String, weight: Option<f32> },
+    /// A `Label` in the dim ink (`color: dimForeground`).
+    DimLabel { text: String },
+    /// CellLabel.qml's `meta` label: the caption size in sans, in the meta
+    /// ink, for the honest words (NO AUTH, NO LAYOUT). The text arrives
+    /// already upper case.
+    Meta { text: String },
     /// A sans name elided at `max`, hidden on a vertical bar.
     Name { text: String, max: f64, dim: bool },
     /// MarqueeText.qml: free text drawn at the budget the bar hands this
@@ -92,11 +100,13 @@ pub struct View {
     pub panel: Option<&'static str>,
     pub tooltip: String,
     pub interactive: bool,
+    /// Whole-cell opacity (the iPhone out of range).
+    pub opacity: f32,
 }
 
 impl View {
     pub fn new(parts: Vec<Part>, gap: f64) -> Self {
-        Self { shown: true, parts, gap, tone: Tone::Rest, panel: None, tooltip: String::new(), interactive: true }
+        Self { shown: true, parts, gap, tone: Tone::Rest, panel: None, tooltip: String::new(), interactive: true, opacity: 1.0 }
     }
 
     pub fn hidden() -> Self {
@@ -493,6 +503,14 @@ impl Kit {
                 let w = if band { WEIGHTS.semibold } else { weight.unwrap_or(WEIGHTS.medium as f32) as f64 };
                 self.shape(text, look.label(w as f32))
             }
+            Part::DimLabel { text } => {
+                let w = if band { WEIGHTS.semibold } else { WEIGHTS.medium };
+                self.shape(text, look.label(w as f32))
+            }
+            Part::Meta { text } => {
+                let w = if band { WEIGHTS.semibold } else { WEIGHTS.medium };
+                self.shape(text, TextStyle { family: look.sans, size: look.caption, weight: w as f32 })
+            }
             Part::Name { text, .. } => self.shape(text, look.sans(WEIGHTS.medium as f32)),
             Part::Free { text, .. } => {
                 let w = if band { WEIGHTS.semibold } else { WEIGHTS.normal };
@@ -516,7 +534,7 @@ impl Kit {
                 Part::Icon { .. } | Part::Glyph { .. } => {
                     if vertical { (icon_h, look.body as f64) } else { (look.body as f64, icon_h) }
                 }
-                Part::Label { .. } => {
+                Part::Label { .. } | Part::DimLabel { .. } | Part::Meta { .. } => {
                     if vertical && w > look.content_across() + 0.5 {
                         (0.0, 0.0)
                     } else if vertical {
@@ -626,8 +644,8 @@ impl Kit {
                         p.rect(dot_r, ink.of(look.primary), d as f32 / 2.0);
                     }
                 }
-                Part::Label { .. } => {
-                    let color = ink.of(ink.fg);
+                Part::Label { .. } | Part::DimLabel { .. } | Part::Meta { .. } => {
+                    let color = ink.of(if matches!(part, Part::Label { .. }) { ink.fg } else { ink.dim });
                     let (x, y) = if vertical {
                         ((across_mid - shaped.width / 2), at.round() as i32)
                     } else {

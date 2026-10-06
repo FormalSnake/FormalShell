@@ -4,6 +4,8 @@
 //! and which owner a configure, a frame callback or a pointer event belongs
 //! to.
 
+mod caffeinate;
+
 use std::time::Instant;
 
 use calloop::LoopHandle;
@@ -30,7 +32,7 @@ use smithay_client_toolkit::{delegate_dispatch2, delegate_registry, registry_han
 use crate::ipc;
 use crate::runtime::{Msg, Runtime};
 use crate::scene::{IRect, NodeId};
-use crate::services::{barpaint, commands, devices, hyprland, theme, wallpaper};
+use crate::services::{barpaint, commands, devices, hyprland, info, theme, wallpaper};
 use crate::store::{Store, Topic};
 use crate::surface::{Backdrop, PixelSurface, Pixels, Surface};
 use crate::surfaces;
@@ -157,6 +159,7 @@ pub struct App {
     handle: Option<LoopHandle<'static, App>>,
     pub runtime: Option<Runtime>,
     pub store: Store,
+    caffeinate: caffeinate::Caffeinate,
     pub bar: Bar,
     bar_surface: Option<Surface>,
     backdrop: Option<Backdrop>,
@@ -206,6 +209,7 @@ impl App {
             handle: None,
             runtime: None,
             store,
+            caffeinate: caffeinate::Caffeinate::bind(globals, qh),
             bar,
             bar_surface: None,
             backdrop: None,
@@ -340,7 +344,7 @@ impl App {
     /// modules. Anything structural re-creates the window.
     pub fn apply_config(&mut self) {
         let bar_cfg = self.store.config.get("bar").cloned();
-        let resolved = layout::resolve(bar_cfg.as_ref(), &[]);
+        let resolved = layout::resolve(bar_cfg.as_ref(), &self.store.plugins.bar_plugins());
         let modules: Vec<commands::Module> = BarRegion::ALL
             .iter()
             .flat_map(|r| resolved.regions.get(*r).to_vec())
@@ -352,6 +356,8 @@ impl App {
             })
             .collect();
         commands::configure(modules);
+        info::configure(self.store.config.settings());
+        self.arm_caffeinate();
         let edge = layout::position(self.store.config.str("bar.position"));
         let moved = self.bar.set_edge(edge);
         let relaid = self.bar.set_layout(resolved);
@@ -650,6 +656,7 @@ impl App {
                     rt.service(move |ctx| devices::set_volume(ctx, v));
                 }
             }
+            Action::Caffeinate(on) => self.set_caffeinated(on),
             Action::ToggleMute => {
                 if let Some(rt) = &self.runtime {
                     rt.service(devices::toggle_mute);
@@ -948,6 +955,7 @@ impl LayerShellHandler for App {
                 }
                 self.update_backdrop();
             }
+            None if self.caffeinate_owns(layer) => self.caffeinate_configure(),
             None => {}
         }
     }
@@ -958,7 +966,9 @@ impl SeatHandler for App {
         &mut self.seats
     }
 
-    fn new_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
+    fn new_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {
+        self.arm_idle();
+    }
 
     fn new_capability(&mut self, _: &Connection, qh: &QueueHandle<Self>, seat: wl_seat::WlSeat, capability: Capability) {
         if capability == Capability::Pointer && self.pointer.is_none() {

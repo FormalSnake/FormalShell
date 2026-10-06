@@ -1,0 +1,61 @@
+//! IphoneWidget.qml: a phone icon with a primary dot while messages are
+//! unread, the battery beside it, the cell at 60% while the phone is out of
+//! range. Absent unless `omarchy-iphone-bridge` is installed.
+
+use crate::services::info::iphone::State;
+use crate::services::wants::{Source, Want};
+use crate::store::Topic;
+use crate::surfaces::bar::cell::{Action, Button, Cell, Env, Look, Part, View};
+
+pub struct Iphone {
+    _want: Want,
+    state: State,
+    label: bool,
+}
+
+impl Default for Iphone {
+    fn default() -> Self {
+        Self { _want: Want::new(Source::Iphone), state: State::default(), label: true }
+    }
+}
+
+impl Cell for Iphone {
+    fn reads(&self) -> &'static [Topic] {
+        &[Topic::Info]
+    }
+
+    fn read(&mut self, env: &Env) -> bool {
+        let state = env.store.info.iphone.clone();
+        let label = env.store.config.bool("bar.widgets.iphone.showLabel").unwrap_or(true);
+        let changed = state != self.state || label != self.label;
+        (self.state, self.label) = (state, label);
+        changed
+    }
+
+    fn view(&self, look: &Look) -> View {
+        let s = &self.state;
+        if !s.installed {
+            return View::hidden();
+        }
+        let percent = s.battery.map(|b| (b * 100.0 + 0.5).floor());
+        let mut parts = vec![Part::Icon { name: "smartphone".into(), dim: false, dot: s.unread > 0 }];
+        if let (true, Some(p)) = (self.label, percent) {
+            parts.push(Part::Label { text: format!("{p}%"), weight: None });
+        }
+        let mut tooltip = vec![if s.device_name.is_empty() { "IPHONE".to_owned() } else { s.device_name.clone() }];
+        tooltip.push(if s.connected { "CONNECTED" } else { "OUT OF RANGE" }.to_owned());
+        if let Some(p) = percent {
+            tooltip.push(format!("{p}%"));
+        }
+        if s.unread > 0 {
+            tooltip.push(format!("{} UNREAD", s.unread));
+        }
+        let mut view = View::new(parts, look.xs).panel("iphone").tooltip(tooltip.join(" / "));
+        view.opacity = if s.connected { 1.0 } else { 0.6 };
+        view
+    }
+
+    fn click(&mut self, _: Button, _: (f64, f64), _: &Env) -> Action {
+        Action::Panel("iphone")
+    }
+}

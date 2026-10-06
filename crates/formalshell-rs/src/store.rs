@@ -2,7 +2,7 @@
 //! diff applies to it; the UI thread is the only writer, through
 //! [`Store::apply`].
 
-use crate::services::{barpaint, clock, commands, config, devices, hyprland, media, state, theme, wallpaper};
+use crate::services::{barpaint, caffeinate, clock, commands, config, devices, hyprland, info, media, plugins, recording, state, theme, wallpaper};
 
 #[derive(Default)]
 pub struct Store {
@@ -16,6 +16,10 @@ pub struct Store {
     pub commands: commands::State,
     pub bar_paint: barpaint::State,
     pub wallpaper: wallpaper::State,
+    pub info: info::State,
+    pub caffeinate: caffeinate::State,
+    pub plugins: plugins::State,
+    pub recording: recording::State,
 }
 
 /// One service's change, tagged with the slice it applies to.
@@ -30,6 +34,11 @@ pub enum Diff {
     Commands(commands::Diff),
     BarPaint(barpaint::Diff),
     Wallpaper(wallpaper::Diff),
+    Info(info::Diff),
+    Caffeinate(caffeinate::Diff),
+    Plugins(plugins::Diff),
+    #[allow(dead_code)]
+    Recording(recording::Diff),
 }
 
 /// The slice a diff changed, for the surfaces that read it.
@@ -45,6 +54,13 @@ pub enum Topic {
     Commands,
     BarPaint,
     Wallpaper,
+    Info,
+    Caffeinate,
+    /// The plugin list changed: the layout resolves again.
+    Plugins,
+    /// What a plugin shows changed.
+    PluginOutput,
+    Recording,
 }
 
 impl Store {
@@ -61,6 +77,13 @@ impl Store {
             Diff::Commands(d) => self.commands.apply(d).then_some(Topic::Commands),
             Diff::BarPaint(d) => self.bar_paint.apply(d).then_some(Topic::BarPaint),
             Diff::Wallpaper(d) => self.wallpaper.apply(d).then_some(Topic::Wallpaper),
+            Diff::Info(d) => self.info.apply(d).then_some(Topic::Info),
+            Diff::Plugins(d) => self.plugins.apply(d).map(|c| match c {
+                plugins::Change::List => Topic::Plugins,
+                plugins::Change::Output => Topic::PluginOutput,
+            }),
+            Diff::Recording(d) => self.recording.apply(d).then_some(Topic::Recording),
+            Diff::Caffeinate(d) => self.caffeinate.apply(d).then_some(Topic::Caffeinate),
         }
     }
 }

@@ -3,16 +3,22 @@
 //! async task on the service thread that publishes those diffs.
 
 pub mod barpaint;
+pub mod caffeinate;
 pub mod clock;
 pub mod commands;
 pub mod config;
 pub mod devices;
 pub mod hyprland;
+pub mod info;
 pub mod media;
+pub mod plugins;
+pub mod recording;
+pub mod proc;
 pub mod state;
 mod watch;
 pub mod theme;
 pub mod wallpaper;
+pub mod wants;
 
 use crate::runtime::Ctx;
 
@@ -27,5 +33,7 @@ pub fn start(ctx: &Ctx) {
     ctx.spawn(commands::run(ctx.clone()));
     ctx.spawn(barpaint::run(ctx.clone()));
     ctx.spawn(wallpaper::run(ctx.clone()));
+    ctx.spawn(wants::run(ctx.clone()));
+    ctx.spawn(plugins::run(ctx.clone()));
     devices::start(ctx);
 }

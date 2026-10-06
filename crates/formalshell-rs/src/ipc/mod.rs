@@ -8,13 +8,16 @@
 //! client.
 
 mod bar;
+mod caffeinate;
 #[cfg(test)]
 mod cli;
 mod debug;
 #[cfg(test)]
 mod golden;
 mod media;
+mod monitor;
 mod panel;
+mod plugins;
 pub mod registry;
 mod theme;
 pub mod wire;
@@ -37,7 +40,7 @@ const MAX_REQUEST: u64 = 1 << 20;
 fn registry() ->&'static Registry<App> {
     static REGISTRY: OnceLock<Registry<App>> = OnceLock::new();
     REGISTRY.get_or_init(|| Registry {
-        targets: vec![debug::target(), theme::target(), theme::wallpaper(), bar::target(), panel::target(), media::target()],
+        targets: vec![debug::target(), theme::target(), theme::wallpaper(), bar::target(), panel::target(), media::target(), monitor::target(), plugins::target(), caffeinate::target()],
     })
 }
 
