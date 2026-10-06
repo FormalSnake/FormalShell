@@ -1,4 +1,4 @@
-{ lib, rustPlatform, pkg-config, makeWrapper, fontconfig, lucide-font, matugen }:
+{ lib, rustPlatform, pkg-config, makeWrapper, fontconfig, lucide-font, nerd-fonts, matugen, wireplumber }:
 
 rustPlatform.buildRustPackage {
   pname = "formalshell-rs";
@@ -12,6 +12,7 @@ rustPlatform.buildRustPackage {
     fileset = lib.fileset.unions [
       ../crates
       ../shell/Theme/themes
+      ../shell/Theme/icons
       ../shell/Theme/templates
       ../shell/Core/Theme.qml
     ];
@@ -30,15 +31,17 @@ rustPlatform.buildRustPackage {
   nativeBuildInputs = [ pkg-config makeWrapper ];
   buildInputs = [ fontconfig ];
 
-  # The icon font by path, registered with parley at startup: the same
-  # lucide build nix/package.nix hands Qt through XDG_DATA_DIRS.
+  # The icon fonts by path, registered with parley at startup: the same
+  # lucide and font-logos builds nix/package.nix hands Qt through
+  # XDG_DATA_DIRS.
   postInstall = ''
     mkdir -p $out/share/formalshell-rs
     cp -r ${../shell/Theme/templates} $out/share/formalshell-rs/templates
     wrapProgram $out/bin/formalshell-rs \
       --set-default FS_RS_ICON_FONT ${lucide-font}/share/fonts/truetype/lucide.ttf \
+      --set-default FS_RS_FONT_DIRS ${nerd-fonts.symbols-only}/share/fonts \
       --set-default FS_TEMPLATE_DIR $out/share/formalshell-rs/templates \
-      --prefix PATH : ${lib.makeBinPath [ matugen ]}
+      --prefix PATH : ${lib.makeBinPath [ matugen wireplumber ]}
   '';
 
   meta = {

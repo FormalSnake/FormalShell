@@ -7,6 +7,7 @@ use serde_json::json;
 
 use super::registry::{Function, Target, Type, Value};
 use crate::scene::IRect;
+use crate::surfaces::bar::number;
 use crate::wayland::App;
 
 fn text(s: impl Into<String>) -> Value {
@@ -40,16 +41,21 @@ pub fn target() -> Target<App> {
     }
 }
 
+pub fn rect(r: &IRect) -> serde_json::Value {
+    json!({"x": r.x, "y": r.y, "width": r.w, "height": r.h})
+}
+
 /// Only what this shell holds, keyed and ordered as DebugIpc.qml's dump:
-/// the compositor block, the settings, the strip, its join and the chrome
-/// numbers. Every other key waits for the service behind it.
+/// the compositor block, the settings, the bar, its join, the frame and the
+/// chrome numbers. Every other key waits for the service behind it.
 fn dump(app: &mut App, _: &[Value]) -> Value {
     let h = &app.store.hyprland;
     let c = &h.compositor;
     let edge = app.bar.edge();
     let thickness = app.bar.thickness();
-    let inset = |e: Edge| if e == edge { thickness } else { 0 };
-    let rect = |r: IRect| json!({"x": r.x, "y": r.y, "width": r.w, "height": r.h});
+    let frame = app.bar.frame_thickness() as i32;
+    let framed = app.bar.framed();
+    let inset = |e: Edge| if e == edge { thickness } else if framed { frame } else { 0 };
     let theme = &app.store.theme.theme;
     let reach = number(theme.radii.xl);
     let screen = app.bar_output_name();
@@ -57,7 +63,7 @@ fn dump(app: &mut App, _: &[Value]) -> Value {
         Some((x, width)) => json!({"edge": edge.as_str(), "x": x, "width": width, "reach": reach, "screen": screen}),
         None => serde_json::Value::Null,
     };
-    let [first, second] = app.bar.line_rects();
+    let line: Vec<serde_json::Value> = app.bar.line_rects().iter().map(rect).collect();
     let dump = json!({
         "compositor": "hyprland",
         "available": c.available,
@@ -68,8 +74,9 @@ fn dump(app: &mut App, _: &[Value]) -> Value {
         "focusedWorkspaceId": c.focused_workspace_id,
         "fullscreenOutputs": c.fullscreen_outputs,
         "configLoaded": app.store.config.settings(),
-        "bar": [{"screen": screen, "edge": edge.as_str(), "line": [rect(first), rect(second)], "paint": null}],
+        "bar": [{"screen": screen, "edge": edge.as_str(), "line": line, "paint": app.bar.paint_state(&app.store)}],
         "join": join,
+        "frame": app.bar.frame_state(),
         "theme": {
             "radius": number(theme.radius),
             "radiusXl": reach,
@@ -84,11 +91,6 @@ fn dump(app: &mut App, _: &[Value]) -> Value {
         },
     });
     text(dump.to_string())
-}
-
-/// A number as JSON.stringify prints it: no `.0` on a whole one.
-fn number(n: f64) -> serde_json::Value {
-    if n.fract() == 0.0 && n.abs() < 1e15 { json!(n as i64) } else { json!(n) }
 }
 
 fn join(app: &mut App, args: &[Value]) -> Value {
@@ -116,12 +118,12 @@ fn motion_scale(app: &mut App, args: &[Value]) -> Value {
         return text("error: percent must be 1..5000");
     }
     app.motion_scale = percent as f64 / 100.0;
-    app.bar.motion_scale = app.motion_scale;
+    app.bar.kit.motion_scale = app.motion_scale;
     ok()
 }
 
 fn r0_spinner(app: &mut App, args: &[Value]) -> Value {
-    app.bar.set_spinner(std::time::Instant::now(), args[0].bool());
+    app.set_spinner(args[0].bool());
     ok()
 }
 
@@ -129,10 +131,10 @@ fn r0_panel(app: &mut App, args: &[Value]) -> Value {
     let open = match args[0].str() {
         "open" => true,
         "close" => false,
-        "toggle" => !app.panel_open(),
+        "toggle" => app.panel_open() != Some("calendar"),
         other => return text(format!("error: unknown action '{other}' (open|close|toggle)")),
     };
-    app.set_panel(std::time::Instant::now(), open);
+    app.set_panel("calendar", open, None);
     ok()
 }
 

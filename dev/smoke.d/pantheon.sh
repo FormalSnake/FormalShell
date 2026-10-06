@@ -8,6 +8,7 @@
 # is why it is a fixture and not an IPC call, and why there is nothing to
 # assert here beyond the frame the other leg takes.
 leg_pantheon_flag="--pantheon"
+leg_pantheon_rust=1
 leg_pantheon_order=6
 # A rider with no drive or assert of its own must never vote the base
 # fixture window off: dev/smoke.sh's fixture_window_mode is an AND over every

@@ -24,6 +24,7 @@
 # reports why in the dump. The owner had 6px of nothing between every window
 # and the screen edge under this preset.
 leg_frame_flag="--frame"
+leg_frame_rust=1
 leg_frame_order=190
 leg_frame_needs="jq"
 leg_frame_wayland_debug=1
@@ -101,11 +102,13 @@ leg_frame_assert() {
   # The bar's own layer surface, by the namespace it was created under, and
   # the last zone it sent on it. The last one, not the first: it maps as an
   # unframed strip reserving its own thickness and only turns into the whole
-  # output once settings.json lands.
+  # output once settings.json lands. libwayland writes an object as
+  # `interface#id` and a new one as `new id interface#id`; the rust shell's
+  # wayland-backend writes both as `interface@id`.
   surface=$(grep 'get_layer_surface' "$shell_log_path" 2>/dev/null | grep '"formalshell:bar"' | tail -1 \
-    | sed -n 's/.*new id zwlr_layer_surface_v1#\([0-9][0-9]*\).*/\1/p')
+    | sed -n 's/.*(\(new id \)\{0,1\}zwlr_layer_surface_v1[#@]\([0-9][0-9]*\).*/\2/p')
   [ -n "$surface" ] || fail "no formalshell:bar layer surface in the shell's wire log"
-  zone=$(grep -o "zwlr_layer_surface_v1#$surface\.set_exclusive_zone([-0-9]*)" "$shell_log_path" \
+  zone=$(grep -o "zwlr_layer_surface_v1[#@]$surface\.set_exclusive_zone([-0-9]*)" "$shell_log_path" \
     | tail -1 | sed -n 's/.*(\(-\{0,1\}[0-9][0-9]*\)).*/\1/p')
   echo "framed bar exclusive zone: $zone"
   if [ "$zone" != "-1" ]; then

@@ -22,6 +22,7 @@
 # (Hyprland draws a fullscreen window over the top level) and its card is in
 # the frame, read as the frame differing from the bare fullscreen one.
 leg_fullscreen_flag="--fullscreen"
+leg_fullscreen_rust=1
 leg_fullscreen_order=200
 leg_fullscreen_needs="convert jq"
 leg_fullscreen_fixture_window=keep
@@ -108,18 +109,23 @@ leg_fullscreen_assert() {
   [ "$corner_on" -eq 0 ] || fail "hot corners stayed mapped under fullscreen ($corner_on)"
 
   # The launcher over the fullscreen window: on the overlay level, the one
-  # Hyprland still draws above it, and actually in the frame.
-  [ -s "$fullscreen_menu_layers" ] || fail "no dump produced at $fullscreen_menu_layers"
-  local menu_overlay
-  menu_overlay=$("$jq_bin" -r '[.[] | .levels["3"][]? | select(.namespace == "formalshell:menu")] | length' "$fullscreen_menu_layers" 2>/dev/null)
-  echo "launcher over fullscreen: overlay surfaces=$menu_overlay"
-  [ "${menu_overlay:-0}" -ge 1 ] || fail "the launcher is not on the overlay level over a fullscreen window"
-  [ -s "$fullscreen_menu_path" ] || fail "no launcher frame at $fullscreen_menu_path"
-  local menu_diff
-  menu_diff=$($convert_bin "$fullscreen_on_path" "$fullscreen_menu_path" -compose difference -composite \
-    -colorspace Gray -threshold 5% -format '%[fx:mean*w*h]' info: 2>/dev/null | awk '{printf "%d", $1}')
-  echo "launcher over fullscreen: pixels differing from the bare frame=$menu_diff"
-  [ "${menu_diff:-0}" -gt 10000 ] || fail "the launcher did not draw over the fullscreen window ($menu_diff pixels differ)"
+  # Hyprland still draws above it, and actually in the frame. The rust shell
+  # has no launcher until R4, so that half is skipped there.
+  if [ "$fs_impl" = rust ]; then
+    echo "SMOKE_SKIP the launcher over a fullscreen window waits for the rust launcher (R4)"
+  else
+    [ -s "$fullscreen_menu_layers" ] || fail "no dump produced at $fullscreen_menu_layers"
+    local menu_overlay
+    menu_overlay=$("$jq_bin" -r '[.[] | .levels["3"][]? | select(.namespace == "formalshell:menu")] | length' "$fullscreen_menu_layers" 2>/dev/null)
+    echo "launcher over fullscreen: overlay surfaces=$menu_overlay"
+    [ "${menu_overlay:-0}" -ge 1 ] || fail "the launcher is not on the overlay level over a fullscreen window"
+    [ -s "$fullscreen_menu_path" ] || fail "no launcher frame at $fullscreen_menu_path"
+    local menu_diff
+    menu_diff=$($convert_bin "$fullscreen_on_path" "$fullscreen_menu_path" -compose difference -composite \
+      -colorspace Gray -threshold 5% -format '%[fx:mean*w*h]' info: 2>/dev/null | awk '{printf "%d", $1}')
+    echo "launcher over fullscreen: pixels differing from the bare frame=$menu_diff"
+    [ "${menu_diff:-0}" -gt 10000 ] || fail "the launcher did not draw over the fullscreen window ($menu_diff pixels differ)"
+  fi
 
   local bar_after frame_after corner_after
   bar_after=$(_fullscreen_count "$fullscreen_after_layers" "formalshell:bar")

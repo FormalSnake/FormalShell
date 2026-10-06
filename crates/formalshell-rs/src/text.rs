@@ -30,8 +30,6 @@ pub enum Family {
     Named(&'static str),
 }
 
-/// The family Icon.qml's `lucide` set draws in.
-pub const ICONS: Family = Family::Named("lucide");
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TextStyle {
@@ -116,6 +114,25 @@ impl Text {
             }
             Ok(Err(err)) => eprintln!("text: icon font unreadable: {err}"),
             Err(_) => eprintln!("text: FS_RS_ICON_FONT unset, no icons"),
+        }
+        // font-logos and the Nerd set, by directory: the package does not
+        // name one file of it.
+        for dir in std::env::var("FS_RS_FONT_DIRS").unwrap_or_default().split(':').filter(|d| !d.is_empty()) {
+            let mut stack = vec![std::path::PathBuf::from(dir)];
+            while let Some(path) = stack.pop() {
+                let Ok(entries) = std::fs::read_dir(&path) else { continue };
+                for entry in entries.flatten() {
+                    let p = entry.path();
+                    if p.is_dir() {
+                        stack.push(p);
+                    } else if let Some(data) =
+                        p.extension().filter(|e| *e == "ttf" || *e == "otf").and_then(|_| std::fs::read(&p).ok())
+                    {
+                        fcx.collection.register_fonts(Blob::new(Arc::new(data)), None);
+                        eprintln!("text: registered {}", p.display());
+                    }
+                }
+            }
         }
         Self {
             fcx,

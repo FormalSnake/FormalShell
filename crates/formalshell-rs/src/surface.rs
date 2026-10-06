@@ -329,3 +329,59 @@ macro_rules! ignore_events {
 }
 
 ignore_events!(WpViewporter, WpViewport, WpSinglePixelBufferManagerV1, WpAlphaModifierV1, WpAlphaModifierSurfaceV1, WlBuffer);
+
+/// The desktop's own layer (Background.qml): the theme's background colour,
+/// or the wallpaper's ready pixels over the whole output. Drawn once per
+/// change, never on a clock.
+pub struct Backdrop {
+    pub layer: LayerSurface,
+    pool: SlotPool,
+    buffer: Option<Buffer>,
+    size: Option<(i32, i32)>,
+    drawn: Option<(String, i32, i32, [u8; 4])>,
+}
+
+impl Backdrop {
+    pub fn new(layer: LayerSurface, shm: &Shm) -> Self {
+        Self { layer, pool: SlotPool::new(4096, shm).expect("wl_shm pool"), buffer: None, size: None, drawn: None }
+    }
+
+    pub fn configure(&mut self, width: i32, height: i32) {
+        if width > 0 && height > 0 {
+            self.size = Some((width, height));
+        }
+    }
+
+    pub fn size(&self) -> Option<(i32, i32)> {
+        self.size
+    }
+
+    /// `picture` when it was made for this size, else the plain colour.
+    pub fn draw(&mut self, picture: Option<&crate::services::wallpaper::Picture>, background: fs_theme::color::Rgba) {
+        let Some((w, h)) = self.size else { return };
+        let picture = picture.filter(|p| (p.width as i32, p.height as i32) == (w, h));
+        let [r, g, b, _] = background.to_u8();
+        let key = (picture.map(|p| p.path.clone()).unwrap_or_default(), w, h, [b, g, r, 255]);
+        if self.drawn.as_ref() == Some(&key) {
+            return;
+        }
+        let Ok((buffer, canvas)) = self.pool.create_buffer(w, h, w * 4, wl_shm::Format::Argb8888) else { return };
+        match picture {
+            Some(p) => canvas.copy_from_slice(&p.bgra),
+            None => {
+                for px in canvas.chunks_exact_mut(4) {
+                    px.copy_from_slice(&key.3);
+                }
+            }
+        }
+        let surface = self.layer.wl_surface();
+        if buffer.attach_to(surface).is_err() {
+            return;
+        }
+        surface.damage_buffer(0, 0, w, h);
+        self.layer.commit();
+        self.buffer = Some(buffer);
+        eprintln!("commit surface=wallpaper {}x{} picture={}", w, h, !key.0.is_empty());
+        self.drawn = Some(key);
+    }
+}

@@ -8,6 +8,7 @@ pub mod chrome;
 pub mod color;
 pub mod flexoki;
 pub mod gtk;
+pub mod icons;
 pub mod matugen;
 pub mod palette;
 pub mod presets;

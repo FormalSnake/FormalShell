@@ -66,7 +66,12 @@ pub struct Cast {
 
 pub enum Paint {
     Rect { fill: Rgba, radius: f32 },
+    /// A rounded rect's fill under a border drawn inside its edge.
+    Framed { fill: Rgba, radius: f32, border: Rgba, width: f32 },
     Text { text: ShapedText, color: Rgba },
+    /// A blurred copy of a line under its crisp one (Components/InkGlow.qml):
+    /// the glyphs offset by `x`, `y` and smeared over `blur` pixels.
+    Glow { text: ShapedText, color: Rgba, x: f32, y: f32, blur: f32 },
     /// A filled outline and its strokes, in the node's own coordinates.
     Shape { fill: Option<(BezPath, Rgba)>, strokes: Vec<(BezPath, Rgba, f64)> },
     /// Casts under a rounded rect, cut out of the rect's own shape so a
@@ -116,11 +121,6 @@ impl Scene {
 
     /// Replaces a node's bounds and paint, damaging both rects only when
     /// something actually changed.
-    pub fn update(&mut self, id: NodeId, bounds: IRect, paint: Paint, visible: bool) {
-        let (transform, clip) = (self.nodes[id.0].transform, self.nodes[id.0].clip);
-        self.update_with(id, bounds, paint, visible, transform, clip);
-    }
-
     pub fn update_with(
         &mut self,
         id: NodeId,
@@ -201,6 +201,13 @@ fn paint_eq(a: &Paint, b: &Paint) -> bool {
     match (a, b) {
         (Paint::Rect { fill: f1, radius: r1 }, Paint::Rect { fill: f2, radius: r2 }) => f1 == f2 && r1 == r2,
         (Paint::Text { text: t1, color: c1 }, Paint::Text { text: t2, color: c2 }) => c1 == c2 && t1.same_as(t2),
+        (
+            Paint::Framed { fill: f1, radius: r1, border: b1, width: w1 },
+            Paint::Framed { fill: f2, radius: r2, border: b2, width: w2 },
+        ) => f1 == f2 && r1 == r2 && b1 == b2 && w1 == w2,
+        (Paint::Glow { text: t1, color: c1, x: x1, y: y1, blur: b1 }, Paint::Glow { text: t2, color: c2, x: x2, y: y2, blur: b2 }) => {
+            c1 == c2 && t1.same_as(t2) && x1 == x2 && y1 == y2 && b1 == b2
+        }
         // Shapes and casts are rebuilt only by an animation tick, which has
         // already moved them.
         _ => false,
