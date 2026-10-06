@@ -1,0 +1,14 @@
+[package]
+name = "fs-auth"
+version = "0.1.1"
+edition = "2024"
+publish = false
+
+[dependencies]
+async-channel = "2.5"
+async-io = "2.6"
+futures-lite = "2.6"
+libc = "0.2"
+pam-client2 = { version = "0.5", default-features = false }
+zbus = { version = "5", default-features = false, features = ["async-io"] }
+zeroize = "1.8"

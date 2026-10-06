@@ -146,7 +146,7 @@
       };
 
       checks = nixpkgs.lib.recursiveUpdate
-        (forDarwin (system: pkgs: { qml-tests = qmlTests pkgs; primitives = primitivesCheck pkgs; rust-tests = pkgs.callPackage ./nix/rust-tests.nix { }; }))
+        (forDarwin (system: pkgs: { qml-tests = qmlTests pkgs; primitives = primitivesCheck pkgs; rust-tests = pkgs.callPackage ./nix/rust-tests.nix { }; fs-auth = pkgs.callPackage ./nix/fs-auth-test.nix { }; }))
         (forAllSystems (system: pkgs: {
         qml-tests = qmlTests pkgs;
         primitives = primitivesCheck pkgs;
@@ -154,6 +154,7 @@
         fs-tray = pkgs.callPackage ./nix/fs-tray.nix { };
         fs-notifd = pkgs.callPackage ./nix/fs-notifd-check.nix { };
         fs-bluez = pkgs.callPackage ./nix/fs-bluez-test.nix { };
+        fs-auth = pkgs.callPackage ./nix/fs-auth-test.nix { };
         nixos-module-eval = nixosModuleEval system pkgs;
         fs-mpris = pkgs.callPackage ./nix/fs-mpris.nix { };
 
