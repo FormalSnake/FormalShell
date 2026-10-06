@@ -9,7 +9,7 @@
 # type conversion, error strings, output framing and exit codes. `debug`,
 # `theme` and `wallpaper` carry DebugIpc.qml's, ThemeIpc.qml's and
 # WallpaperIpc.qml's exact signatures, `bar`, `panel`, `media`, `radio`,
-# `airplay`, `visualizer`, `overnight`, `earbuds` and `workspaces` their own
+# `airplay`, `visualizer`, `overnight`, `earbuds`, `display`, `hdr` and `workspaces` their own
 # IPC files' (WorkspacesIpc.qml's `status` only: peek and close wait for the
 # preview); `probe` covers every type qs
 # converts and the function names that collide with qs's subcommands.
@@ -142,6 +142,21 @@ ShellRoot {
         function close(): string { return "ok" }
         function toggle(): string { return "ok" }
         function status(): string { return JSON.stringify({ isOpen: false }) }
+    }
+    IpcHandler {
+        target: "display"
+        function scale(output: string, scale: real): string { return "scale " + output + " " + scale }
+        function mirror(output: string, source: string): string { return "mirror " + output + " " + source }
+        function enable(output: string, enabled: bool): string { return "enable " + output + " " + enabled }
+    }
+    IpcHandler {
+        target: "hdr"
+        function toggle(): string { return "ok" }
+        function enable(): string { return "ok" }
+        function disable(): string { return "ok" }
+        function setOutput(output: string, enabled: bool): string { return "setOutput " + output + " " + enabled }
+        function rule(output: string): string { return "rule " + output }
+        function status(): string { return "{}" }
     }
     IpcHandler {
         target: "probe"
@@ -408,6 +423,23 @@ rec call gallery status x
 rec call gallery toggle
 rec call gallery close
 rec show gallery
+rec call display scale DP-1 1.5
+rec call display scale DP-1 x
+rec call display scale DP-1
+rec call display mirror DP-1 ''
+rec call display mirror DP-1 eDP-1
+rec call display enable DP-1 false
+rec call display enable DP-1 1
+rec show display
+rec call hdr toggle
+rec call hdr enable
+rec call hdr disable
+rec call hdr setOutput DP-1 true
+rec call hdr setOutput DP-1
+rec call hdr rule DP-1
+rec call hdr status
+rec call hdr status x
+rec show hdr
 
 kill "$qs_pid"
 wait "$qs_pid" 2>/dev/null || true
