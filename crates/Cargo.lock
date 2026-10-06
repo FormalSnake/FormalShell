@@ -616,6 +616,7 @@ dependencies = [
  "chrono",
  "fastrand",
  "fs-audio",
+ "fs-auth",
  "fs-bluez",
  "fs-chrome",
  "fs-devices",
@@ -640,6 +641,7 @@ dependencies = [
  "vello_cpu",
  "yeslogic-fontconfig-sys",
  "zbus",
+ "zeroize",
 ]
 
 [[package]]

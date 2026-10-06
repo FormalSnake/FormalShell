@@ -18,6 +18,8 @@ use smithay_client_toolkit::reexports::protocols::wp::alpha_modifier::v1::client
 use smithay_client_toolkit::reexports::protocols::wp::single_pixel_buffer::v1::client::wp_single_pixel_buffer_manager_v1::WpSinglePixelBufferManagerV1;
 use smithay_client_toolkit::reexports::protocols::wp::viewporter::client::wp_viewport::WpViewport;
 use smithay_client_toolkit::reexports::protocols::wp::viewporter::client::wp_viewporter::WpViewporter;
+use smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface;
+use smithay_client_toolkit::session_lock::SessionLockSurface;
 use smithay_client_toolkit::shell::WaylandSurface;
 use smithay_client_toolkit::shell::wlr_layer::LayerSurface;
 use smithay_client_toolkit::shm::Shm;
@@ -35,9 +37,36 @@ struct ShmBuffer {
     stale: Vec<IRect>,
 }
 
-pub struct Surface {
+/// What a [`Surface`] is to the compositor: a layer surface, or a lock
+/// surface on one output.
+pub trait Role {
+    fn role_surface(&self) -> &WlSurface;
+    fn role_commit(&self);
+}
+
+impl Role for LayerSurface {
+    fn role_surface(&self) -> &WlSurface {
+        WaylandSurface::wl_surface(self)
+    }
+
+    fn role_commit(&self) {
+        WaylandSurface::commit(self);
+    }
+}
+
+impl Role for SessionLockSurface {
+    fn role_surface(&self) -> &WlSurface {
+        SessionLockSurface::wl_surface(self)
+    }
+
+    fn role_commit(&self) {
+        SessionLockSurface::wl_surface(self).commit();
+    }
+}
+
+pub struct Surface<R: Role = LayerSurface> {
     pub name: &'static str,
-    pub layer: LayerSurface,
+    pub layer: R,
     pool: SlotPool,
     buffers: Vec<ShmBuffer>,
     renderer: Renderer,
@@ -54,8 +83,8 @@ pub struct Surface {
     pub callbacks: u64,
 }
 
-impl Surface {
-    pub fn new(name: &'static str, layer: LayerSurface, shm: &Shm, started: Instant) -> Self {
+impl<R: Role> Surface<R> {
+    pub fn new(name: &'static str, layer: R, shm: &Shm, started: Instant) -> Self {
         Self {
             name,
             layer,
@@ -100,10 +129,10 @@ impl Surface {
         }
         if !scene.has_damage() {
             if request && self.commits > 0 {
-                let surface = self.layer.wl_surface();
+                let surface = self.layer.role_surface();
                 surface.frame(qh, FrameCallbackData(surface.clone()));
                 self.frame_pending = true;
-                self.layer.commit();
+                self.layer.role_commit();
             }
             return;
         }
@@ -158,7 +187,7 @@ impl Surface {
         }
         let copy_us = t1.elapsed().as_micros();
 
-        let surface = self.layer.wl_surface();
+        let surface = self.layer.role_surface();
         for rect in &damage {
             surface.damage_buffer(rect.x, rect.y, rect.w, rect.h);
         }
@@ -169,7 +198,7 @@ impl Surface {
             self.frame_pending = true;
         }
         target.buffer.attach_to(surface).expect("attach released buffer");
-        self.layer.commit();
+        self.layer.role_commit();
 
         self.commits += 1;
         let area: i64 = damage.iter().map(IRect::area).sum();

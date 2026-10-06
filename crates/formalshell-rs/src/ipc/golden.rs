@@ -179,6 +179,14 @@ fn stub() -> Registry<()> {
                 ],
             },
             Target {
+                name: "lock",
+                functions: vec![
+                    f("lock", &[], Type::String, |_, _| s("ok")),
+                    f("isLocked", &[], Type::String, |_, _| s("false")),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
                 name: "gallery",
                 functions: vec![
                     f("open", &[], Type::String, |_, _| s("ok")),

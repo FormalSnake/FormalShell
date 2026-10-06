@@ -137,6 +137,12 @@ ShellRoot {
         function status(): string { return "{}" }
     }
     IpcHandler {
+        target: "lock"
+        function lock(): string { return "ok" }
+        function isLocked(): string { return "false" }
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
         target: "gallery"
         function open(): string { return "ok" }
         function close(): string { return "ok" }
@@ -402,6 +408,10 @@ rec call caffeinate disable
 rec call caffeinate status
 rec call caffeinate status x
 rec show caffeinate
+rec call lock isLocked
+rec call lock status
+rec call lock status x
+rec call lock unlock
 rec call gallery open
 rec call gallery status
 rec call gallery status x
