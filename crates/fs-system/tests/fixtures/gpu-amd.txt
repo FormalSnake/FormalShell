@@ -1,0 +1,10 @@
+@drm
+card|card2|amdgpu|0x1002|0x73df|0|0000:03:00.0|
+conn|card2|DP-1|connected
+metric|card2|gpu_busy_percent|37
+metric|card2|mem_info_vram_used|4294967296
+metric|card2|mem_info_vram_total|17179869184
+metric|card2|temp1_input|58000
+metric|card2|power1_average|145000000
+@nvidia
+@gfx
