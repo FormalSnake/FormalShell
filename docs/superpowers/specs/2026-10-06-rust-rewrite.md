@@ -71,6 +71,10 @@ Versions as of 2026-10-06; check crates.io before bumping.
   - Blocking work (desktop entry scans, icon and image decode, file IO)
     goes to a pool of at most two threads that exits when idle, and its
     results land as diffs like everything else.
+  - PipeWire: one `fs-pipewire` thread runs PipeWire's own main loop
+    (pipewire-rs cannot live on another executor) and posts events to the
+    service thread over a channel; writes go back over a pipewire
+    channel. It reconnects on a drop.
   - `vello_cpu` renders single-threaded for damage rects and uses its own
     threads only for a full-output frame, if R0 shows that pays.
 - Services: `system-tray` (SNI + DBusMenu), `mpris`, `pipewire` (default
