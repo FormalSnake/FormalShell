@@ -1,5 +1,6 @@
-//! NowPlaying.qml: the music glyph and the active player's track as the
-//! strip's first free label, which keeps its room longest.
+//! NowPlaying.qml: the music glyph and the active source's track as the
+//! strip's first free label, which keeps its room longest. Right click skips
+//! ahead and the wheel steps previous and next.
 
 use crate::store::Topic;
 use crate::surfaces::bar::cell::{Action, Button, Cell, Env, Limits, Look, Part, View};
@@ -18,8 +19,7 @@ impl Cell for NowPlaying {
     }
 
     fn read(&mut self, env: &Env) -> bool {
-        let media = &env.store.media;
-        let track = media.title().map(|t| (t, media.active.as_ref().map(|p| p.artist.clone()).unwrap_or_default()));
+        let track = env.store.media.active().map(|a| (if a.title.is_empty() { a.identity } else { a.title }, a.artist));
         let changed = track != self.track;
         self.track = track;
         changed
@@ -49,7 +49,12 @@ impl Cell for NowPlaying {
     fn click(&mut self, button: Button, _: (f64, f64), _: &Env) -> Action {
         match button {
             Button::Left => Action::Panel("media"),
-            _ => Action::None,
+            Button::Right => Action::MediaNext,
+            Button::Middle => Action::None,
         }
+    }
+
+    fn wheel(&mut self, up: bool, _: &Env) -> Action {
+        if up { Action::MediaNext } else { Action::MediaPrevious }
     }
 }

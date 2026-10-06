@@ -16,6 +16,7 @@ mod command;
 mod launcher;
 mod network;
 mod now_playing;
+mod visualizer;
 mod weather;
 pub mod workspaces;
 
@@ -35,6 +36,7 @@ pub fn build(entry: &Entry, region_entries: &[Entry]) -> Box<dyn Cell> {
             Builtin::Network => Box::new(network::Network::default()),
             Builtin::Bluetooth => Box::new(bluetooth::Bluetooth::default()),
             Builtin::Weather => Box::new(weather::Weather),
+            Builtin::Visualizer => Box::new(visualizer::Visualizer::default()),
             Builtin::Bell => Box::new(bell::Bell::default()),
             Builtin::Chevron => Box::new(chevron::Chevron::new(entry.region, region_entries)),
             _ => Box::new(absent::Absent),
