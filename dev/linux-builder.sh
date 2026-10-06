@@ -33,7 +33,7 @@ pid_file="$work_dir/vm.pid"
 priv_key="$keys_dir/builder_ed25519"
 
 ssh_port=31022
-machines_line="ssh-ng://builder@linux-builder aarch64-linux /etc/nix/builder_ed25519 1 1 kvm,benchmark,big-parallel - c3NoLWVkMjU1MTkgQUFBQUMzTnphQzFsWkRJMU5URTVBQUFBSUpCV2N4Yi9CbGFxdDFhdU90RStGOFFVV3JVb3RpQzVxQkorVXVFV2RWQ2Igcm9vdEBuaXhvcwo="
+machines_line="ssh-ng://builder@linux-builder aarch64-linux /etc/nix/builder_ed25519 1 1 kvm,benchmark,big-parallel,nixos-test - c3NoLWVkMjU1MTkgQUFBQUMzTnphQzFsWkRJMU5URTVBQUFBSUpCV2N4Yi9CbGFxdDFhdU90RStGOFFVV3JVb3RpQzVxQkorVXVFV2RWQ2Igcm9vdEBuaXhvcwo="
 ssh_client_conf="Host linux-builder
   User builder
   Hostname localhost
