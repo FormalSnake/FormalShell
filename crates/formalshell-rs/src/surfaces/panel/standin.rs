@@ -3,10 +3,9 @@
 //! empty body that holds the card at a working depth. Each one is replaced
 //! by its own module in R3 Tasks 2 to 5, R7 and R8.
 
-use super::{Effect, Panel, View};
-use crate::services::devices;
+use super::{Panel, View};
 use crate::store::Topic;
-use crate::ui::{El, Event, What, w};
+use crate::ui::{El, w};
 
 pub struct StandIn {
     id: &'static str,
@@ -23,7 +22,6 @@ fn header(id: &str) -> (&'static str, &'static str) {
     match id {
         "appmenu" => ("App menu", "menu"),
         "calendar" => ("Calendar", "calendar"),
-        "network" => ("Wi-Fi", "wifi"),
         "bluetooth" => ("Bluetooth", "bluetooth"),
         "earbuds" => ("Earbuds", "headphones"),
         "iphone" => ("iPhone", "smartphone"),
@@ -57,7 +55,7 @@ impl Panel for StandIn {
     }
 
     fn reads(&self) -> &'static [Topic] {
-        if self.id == "network" { &[Topic::Devices] } else { &[] }
+        &[]
     }
 
     fn width(&self, v: &View) -> f64 {
@@ -68,13 +66,8 @@ impl Panel for StandIn {
         }
     }
 
-    fn actions(&self, v: &View) -> Vec<El> {
+    fn actions(&self, _: &View) -> Vec<El> {
         match self.id {
-            // NetworkPanel.qml's: the radio is a state, rescan an action.
-            "network" => {
-                let n = &v.store.devices.network;
-                vec![w::switch(n.wifi_enabled).on("radio"), w::icon_button("refresh-cw").tip("Rescan").on("rescan").key("rescan")]
-            }
             "calendar" => vec![w::icon_button("chevron-left").key("previous"), w::icon_button("chevron-right").key("next")],
             _ => Vec::new(),
         }
@@ -83,16 +76,5 @@ impl Panel for StandIn {
     fn body(&self, v: &View) -> El {
         let s = &v.theme.space;
         w::column(0.0, vec![w::space(s.control_height * 5.0)])
-    }
-
-    fn event(&mut self, ev: &Event, fx: &mut Effect) {
-        match (ev.on.as_str(), &ev.what) {
-            ("radio", What::Toggle(on)) => {
-                let on = *on;
-                fx.service(move |ctx| devices::run(ctx, devices::Op::Wifi(on)));
-            }
-            ("rescan", What::Click) => fx.service(|ctx| devices::run(ctx, devices::Op::Rescan)),
-            _ => {}
-        }
     }
 }
