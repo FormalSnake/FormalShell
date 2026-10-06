@@ -1,0 +1,200 @@
+// The launcher-reachability guard. Keeps the owner's philosophy true: every
+// panel registered in shell.qml's PanelIpc has a route in the launcher.
+// PANEL_NAMES here is a second, independently kept copy of the providers'
+// own panel list (not imported: a typo or a dropped entry in the shipped list
+// must show up as a mismatch between two independently-written sources, not
+// disappear because both read the same array); the registry test below
+// cross-checks it against shell.qml's actual PanelIpc registry text, so a
+// panel added to shell.qml without a matching row here fails loudly instead of
+// just shipping unreachable.
+
+mod common;
+
+use std::collections::{HashMap, HashSet};
+
+use common::*;
+use fs_menu::node::Kind;
+use fs_menu::providers::{
+    ProviderFn, RadioState, RadioStation, TrayItem, apply_providers, capture_entries, panels_provider, radio_result_rows,
+    radio_rows, tray_provider,
+};
+use fs_menu::search;
+use regex::Regex;
+
+const PANEL_NAMES: &[&str] = &[
+    "appmenu", "audio", "calendar", "network", "bluetooth", "earbuds", "iphone", "dualsense", "power", "weather",
+    "media", "github", "usage", "tailscale", "systemupdate", "display", "monitor", "radio",
+];
+
+// The headline guard: every panel name has a "panels.<name>" row whose action
+// actually opens it, and the submenu has no extra/stale rows.
+#[test]
+fn shipped_tree_covers_every_panel() {
+    let tree = real_tree();
+    let panels = tree.nodes.get("panels").expect("panels node");
+    assert_eq!(panels.child_ids.len(), PANEL_NAMES.len());
+    for name in PANEL_NAMES {
+        let node = tree.nodes.get(&format!("panels.{name}")).unwrap_or_else(|| panic!("missing launcher route for panel '{name}'"));
+        assert_eq!(node.kind, Kind::Action);
+        let action = node.action.as_deref().expect("action");
+        assert!(action.contains(&format!("call panel open {name}")), "panels.{name} does not open panel '{name}'");
+    }
+}
+
+// Drift guard the other direction: the list this test asserts against is
+// checked both ways against shell.qml's real PanelIpc registry, so an
+// added-and-forgotten panel (present in shell.qml, absent here) fails here
+// rather than silently shipping unrouted. trayoverflow is the one registry
+// name with no row: the "tray" route already lists its items.
+#[test]
+fn registry_names_match_the_test_list() {
+    let text = read_repo("shell/shell.qml");
+    let start = text.find("var reg = {").expect("PanelIpc registry literal not found in shell.qml");
+    let end = start + text[start..].find("};").expect("registry end");
+    let registry = &text[start..end];
+    for name in PANEL_NAMES {
+        assert!(registry.contains(&format!("{name}:")), "'{name}' not found in shell.qml's PanelIpc registry");
+    }
+    let keys: Vec<&str> = Regex::new(r"(\w+):\s*\w+Instance")
+        .unwrap()
+        .captures_iter(registry)
+        .map(|c| c.get(1).unwrap().as_str())
+        .collect();
+    assert!(!keys.is_empty(), "no registry entries parsed out of shell.qml");
+    for name in keys {
+        if name == "trayoverflow" {
+            continue;
+        }
+        assert!(PANEL_NAMES.contains(&name), "panel '{name}' is registered in shell.qml but has no launcher row");
+    }
+}
+
+// A panel is reached by typing its name at root, not only from inside the
+// Panels route.
+#[test]
+fn root_query_reaches_every_panel() {
+    let tree = real_tree();
+    for row in panels_provider("/fake/shell/dir") {
+        let ranked = search::rank(&tree.nodes, &row.label, &no_conds(), None);
+        assert!(ids(&ranked).contains(&row.id.as_str()), "root query '{}' does not reach {}", row.label, row.id);
+    }
+}
+
+#[test]
+fn panels_provider_action_shape() {
+    let rows = panels_provider("/store/share/formalshell");
+    assert_eq!(rows.len(), PANEL_NAMES.len());
+    for (row, name) in rows.iter().zip(PANEL_NAMES) {
+        assert_eq!(row.id, format!("panels.{name}"));
+        assert_eq!(row.kind, Kind::Action);
+        assert_eq!(row.action.as_deref(), Some(format!("qs ipc -p /store/share/formalshell call panel open {name}").as_str()));
+    }
+}
+
+// Tray: an item row calls tray activate <id> self-targeted the same way, and
+// an empty tray renders one dim note rather than nothing.
+#[test]
+fn tray_provider_empty_state() {
+    let rows = tray_provider(&[], "/store/share/formalshell");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].kind, Kind::Note);
+    assert_eq!(rows[0].dim, Some(true));
+}
+
+#[test]
+fn tray_provider_rows_activate_by_id() {
+    let item = TrayItem { id: "spotify".into(), title: "Spotify".into(), tooltip_title: String::new() };
+    let rows = tray_provider(&[item], "/store/share/formalshell");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].id, "tray.spotify");
+    assert_eq!(rows[0].label, "Spotify");
+    // The id is shell-quoted: tray ids are opaque strings that can carry
+    // spaces and quotes, so the provider must never interpolate one bare.
+    assert_eq!(rows[0].action.as_deref(), Some("qs ipc -p /store/share/formalshell call tray activate 'spotify'"));
+}
+
+// The rest of the sweep (console, plain screenshots, screensaver, plugins,
+// notification bulk actions, retheme/explicit mode) all injected the same
+// self-targeted way capture_entries already injects "capture". One assertion
+// per IPC target/function actually referenced.
+#[test]
+fn capture_entries_covers_the_rest_of_the_sweep() {
+    let call = "qs ipc -p /store/share/formalshell call ";
+    let entries = capture_entries("/store/share/formalshell");
+    let action = |id: &str| entries[id].action.clone().unwrap_or_default();
+    assert_eq!(action("capture.screenshot"), format!("{call}screenshot full"));
+    assert_eq!(action("capture.region"), format!("{call}screenshot region"));
+    assert_eq!(action("system.console"), format!("{call}console toggle"));
+    assert_eq!(action("system.screensaver"), format!("{call}screensaver start"));
+    assert_eq!(action("system.plugins.list"), format!("{call}plugins list"));
+    assert_eq!(action("system.plugins.reload"), format!("{call}plugins reload"));
+    assert_eq!(action("notifications.clear"), format!("{call}notifications clear"));
+    assert_eq!(action("notifications.markAllSeen"), format!("{call}notifications markAllSeen"));
+    assert_eq!(action("notifications.dismissAll"), format!("{call}notifications dismissAll"));
+    assert_eq!(action("theme.retheme"), format!("{call}theme retheme"));
+    assert_eq!(action("theme.mode-dark"), format!("{call}theme mode dark"));
+    assert_eq!(action("theme.mode-light"), format!("{call}theme mode light"));
+}
+
+// system.lock stays a deliberate dead route (owner's call, not part of this
+// sweep), asserted so a future edit that quietly flips it on gets caught here
+// rather than only in a live session.
+#[test]
+fn system_lock_stays_disabled() {
+    assert_eq!(real_tree().nodes["system.lock"].when.as_deref(), Some("false"));
+}
+
+// In-process through the lock service, not a spawned `qs ipc call`: that form
+// only ever resolves on the smoke rig, where the whole quickshell package is
+// installed (the same trap the clipboard rows fell into).
+#[test]
+fn system_lock_routes_in_process() {
+    assert_eq!(real_tree().nodes["system.lock"].action.as_deref(), Some("@ipc:lock.lock"));
+}
+
+#[test]
+fn wifi_is_a_root_provider_node() {
+    let tree = real_tree();
+    let node = &tree.nodes["wifi"];
+    assert_eq!(node.kind, Kind::Provider);
+    assert_eq!(node.provider.as_deref(), Some("wifi"));
+    assert_eq!(node.parent_id, None);
+}
+
+fn device_tree() -> fs_menu::node::Tree {
+    let mut tree = real_tree();
+    let mut fns: HashMap<String, ProviderFn> = HashMap::new();
+    fns.insert(
+        "radio".into(),
+        Box::new(|| {
+            let favorite = RadioStation { uuid: "u-1".into(), name: "Groove Salad".into(), ..RadioStation::default() };
+            let result = RadioStation { uuid: "u-2".into(), name: "Zebra Jazz".into(), ..RadioStation::default() };
+            let mut rows = radio_rows(&RadioState { running: false, favorites: vec![favorite] });
+            rows.extend(radio_result_rows(&[result], &HashSet::new()));
+            rows
+        }),
+    );
+    apply_providers(&mut tree, &fns);
+    tree
+}
+
+#[test]
+fn device_routes_exist_at_root() {
+    let tree = device_tree();
+    for (id, provider) in [("wifi", "wifi"), ("bluetooth", "bluetooth"), ("audio", "audio"), ("radio", "radio")] {
+        let node = tree.nodes.get(id).unwrap_or_else(|| panic!("missing route {id}"));
+        assert_eq!(node.provider.as_deref(), Some(provider));
+        assert_eq!(node.parent_id, None);
+    }
+    assert_eq!(tree.nodes["radio.search"].provider.as_deref(), Some("radioSearch"));
+    assert_eq!(tree.nodes["radio.search"].parent_id.as_deref(), Some("radio"));
+}
+
+#[test]
+fn root_query_finds_a_favorite_but_not_a_search_result() {
+    let tree = device_tree();
+    let fav = search::rank(&tree.nodes, "Groove Salad", &no_conds(), None);
+    assert!(ids(&fav).contains(&"radio.fav.u-1"));
+    let res = search::rank(&tree.nodes, "Zebra Jazz", &no_conds(), None);
+    assert!(!ids(&res).contains(&"radio.result.u-2"));
+}
