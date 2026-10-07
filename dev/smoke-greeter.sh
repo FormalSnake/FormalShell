@@ -49,6 +49,18 @@ journal_out="$out_dir/greetd-journal.txt"
 # string across this same cross-user path.
 wtype_settle_ms=300
 
+# A successful login leaves the authenticated user's greetd session on seat0,
+# and whatever it runs keeps the display card until something ends it. The
+# trap covers the failure exits too. greetd then brings the greeter back as
+# its default_session, which is the one thing that should hold the card.
+end_login_sessions() {
+  local id
+  for id in $(loginctl list-sessions --no-legend | awk -v u="$(id -un)" '$3 == u && $4 == "seat0" {print $1}'); do
+    sudo loginctl terminate-session "$id" || true
+  done
+}
+trap end_login_sessions EXIT
+
 sudo rm -f "$post_auth_src" "$session_log"
 sudo systemctl restart greetd
 

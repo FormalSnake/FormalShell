@@ -63,9 +63,23 @@ wait_for_ssh() {
 # live from the systemd --user environment (same fallback dev/smoke.sh
 # itself uses) rather than hardcoded, since it is the parent compositor's
 # own -- not guaranteed to be wayland-1 forever.
-vm_run() {
+vm_ssh() {
   ssh "${ssh_opts[@]}" test@localhost \
     "cd formalshell && export XDG_RUNTIME_DIR=/run/user/1000 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus WAYLAND_DISPLAY=\$(systemctl --user show-environment | sed -n 's/^WAYLAND_DISPLAY=//p') && $*"
+}
+
+# vm_ssh with the command in a scope of its own (dev/scoped-run.sh), stopped
+# whole if this side is signalled; the remote watcher covers a SIGKILL.
+# ssh runs in the background so a trapped signal is acted on at once, with
+# stdin handed over explicitly since a background job would lose it.
+vm_run() {
+  local unit="fs-run-$$-$RANDOM" pid status=0
+  vm_ssh "exec dev/scoped-run.sh $unit $(printf '%q' "$*")" <&0 &
+  pid=$!
+  trap 'kill "$pid" 2>/dev/null; ssh "${ssh_opts[@]}" test@localhost "systemctl --user stop $unit.scope" >/dev/null 2>&1; exit 143' INT TERM HUP
+  wait "$pid" || status=$?
+  trap - INT TERM HUP
+  return "$status"
 }
 
 cmd_start() {
@@ -162,7 +176,7 @@ cmd_sync() {
   # gigabytes that filled the VM's 40G disk.
   # Every leg builds the shell inside the VM, and those store paths fill
   # the same disk in a night of parallel runs, so collect them first.
-  vm_run 'used=$(df --output=pcent / | tail -1 | tr -dc 0-9); [ "$used" -lt 85 ] || { sudo nix-collect-garbage >/dev/null 2>&1; df -h / | tail -1; }'
+  vm_ssh 'used=$(df --output=pcent / | tail -1 | tr -dc 0-9); [ "$used" -lt 85 ] || { sudo nix-collect-garbage >/dev/null 2>&1; df -h / | tail -1; }'
   rsync -az --delete \
     --exclude 'result*' \
     --exclude '/.git' \
@@ -173,7 +187,7 @@ cmd_sync() {
     --exclude '/dev/.testvm/' \
     -e "ssh ${ssh_opts[*]}" \
     "$repo_root/" test@localhost:formalshell/
-  vm_run 'cd ~/formalshell && { [ -d .git ] || git init -q; }'
+  vm_ssh 'cd ~/formalshell && { [ -d .git ] || git init -q; }'
 }
 
 cmd_run() {
