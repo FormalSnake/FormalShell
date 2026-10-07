@@ -41,8 +41,11 @@ pub struct Shared<'a> {
     pub media: Option<NowPlaying<'a>>,
     /// The column's entrance: its opacity and how far it still has to rise.
     pub enter: (f32, f64),
-    /// Idle-blanked: nothing but black.
+    /// Idle-blanked: nothing but black once the wake fade has run out.
     pub blanked: bool,
+    /// The blank and wake crossfade (LockSurface.qml's _wakeOpacity): 0 is
+    /// black, 1 the whole screen.
+    pub wake: f32,
     /// The clock in `foreground` and the date in `mutedForeground` with no
     /// glow (AuthPrompt's own inks, which the greeter keeps), instead of
     /// the `lock.ink` state the backdrop asks for.
@@ -154,14 +157,15 @@ impl View {
     pub fn draw(&mut self, s: &Shared, theme: &Theme, kit: &mut Kit, now: Instant) -> bool {
         let (w, h) = (self.scene.size.w, self.scene.size.h);
         let full = IRect::new(0, 0, w, h);
-        if s.blanked {
+        if s.blanked && s.wake <= 0.0 {
             let mut p = Painter::new(&mut self.scene, &mut self.nodes, None);
             p.rect(full, Rgba { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }, 0.0);
             p.finish();
             self.ui.hide(&mut self.scene);
             return false;
         }
-        let (fade, rise) = s.enter;
+        let (enter, rise) = s.enter;
+        let fade = enter * s.wake;
         let font = &theme.font_size;
         let space = &theme.space;
         let big = (font.display_large * 3.0).round();
@@ -205,11 +209,14 @@ impl View {
 
         let mut p = Painter::new(&mut self.scene, &mut self.nodes, None);
         match s.backdrop.filter(|b| (b.pixmap.width() as i32, b.pixmap.height() as i32) == (w, h)) {
-            Some(b) => p.image(b, (0, 0), 1.0),
+            Some(b) => {
+                p.rect(full, theme.colors.get("background"), 0.0);
+                p.image(b, (0, 0), s.wake);
+            }
             None => {
                 p.rect(full, theme.colors.get("background"), 0.0);
                 if s.has_wallpaper {
-                    p.rect(full, Rgba { r: 0.0, g: 0.0, b: 0.0, a: SCRIM as f32 }, 0.0);
+                    p.rect(full, Rgba { r: 0.0, g: 0.0, b: 0.0, a: SCRIM as f32 * s.wake }, 0.0);
                 }
             }
         }
@@ -443,6 +450,39 @@ mod tests {
         assert_eq!(t(1, TKey::Other), Step { index: -1, taken: false, press: false });
         assert_eq!(t(-1, TKey::Enter), Step { index: -1, taken: false, press: false });
         assert_eq!(transport_key(1, 0, TKey::Tab).index, -1);
+    }
+
+    #[test]
+    fn blank_and_wake_crossfade_the_backdrop() {
+        use crate::render::Renderer;
+        let theme = Theme::resolve(|_| None, &Default::default());
+        let mut kit = Kit::new(&theme);
+        let (w, h) = (64, 64);
+        let white = Bitmap::from_rgba(w as u16, h as u16, vec![255; (w * h * 4) as usize]);
+        let mut corner = |wake: f32| {
+            let shared = Shared {
+                now: Local::now(),
+                prompt: Prompt::password(0, true),
+                error: "",
+                has_wallpaper: true,
+                backdrop: Some(&white),
+                picture: None,
+                avatar: None,
+                media: None,
+                enter: (1.0, 0.0),
+                blanked: true,
+                wake,
+                palette_ink: false,
+            };
+            let mut view = View::new(w, h);
+            view.draw(&shared, &theme, &mut kit, Instant::now());
+            let mut r = Renderer::new(w as u16, h as u16);
+            r.render(&view.scene, IRect::new(0, 0, w, h));
+            r.canvas().data()[0].r as i32
+        };
+        let (off, half, on) = (corner(0.0), corner(0.5), corner(1.0));
+        assert_eq!(off, 0);
+        assert!(half > off + 40 && half < on - 40, "{off} {half} {on}");
     }
 
     #[test]

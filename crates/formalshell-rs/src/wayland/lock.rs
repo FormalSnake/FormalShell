@@ -29,7 +29,7 @@ use smithay_client_toolkit::session_lock::{
 use zeroize::Zeroizing;
 
 use super::App;
-use crate::motion::{Animated, EFFECTS, Kind as Clock, SPATIAL};
+use crate::motion::{Animated, EFFECTS, EFFECTS_SLOW, Kind as Clock, SPATIAL};
 use crate::scene::Bitmap;
 use crate::surface::Ignore;
 use crate::services::hyprland;
@@ -93,6 +93,7 @@ pub struct Lock {
     art: Option<(String, Option<Bitmap>)>,
     fade: Animated,
     rise: Animated,
+    wake: Animated,
     entered: bool,
     notifier: Option<ExtIdleNotifierV1>,
     idle_watch: Option<ExtIdleNotificationV1>,
@@ -126,6 +127,7 @@ impl Lock {
             art: None,
             fade: Animated::new(1.0, EFFECTS),
             rise: Animated::new(0.0, SPATIAL),
+            wake: Animated::new(1.0, EFFECTS_SLOW),
             entered: false,
             notifier: globals.bind(qh, 2..=2, Ignore).ok(),
             idle_watch: None,
@@ -533,8 +535,10 @@ impl App {
             self.lock.rise.jump(theme.space.section_gap);
             self.lock.rise.set(now, 0.0, Clock::Spatial.ms(theme) * scale);
         }
-        let entering = self.lock.fade.running(now) || self.lock.rise.running(now);
         let blanked = self.lock_blanked();
+        let reveal = if theme.motion_enabled { theme.motion().families.reveal * self.motion_scale } else { 0.0 };
+        self.lock.wake.set(now, if blanked { 0.0 } else { 1.0 }, reveal);
+        let entering = self.lock.fade.running(now) || self.lock.rise.running(now) || self.lock.wake.running(now);
         let has_wallpaper = !self.store.state.data.wallpaper.is_empty();
         let shared = Shared {
             now: Local::now(),
@@ -547,6 +551,7 @@ impl App {
             media: None,
             enter: (self.lock.fade.value(now).clamp(0.0, 1.0) as f32, self.lock.rise.value(now)),
             blanked,
+            wake: self.lock.wake.value(now).clamp(0.0, 1.0) as f32,
             palette_ink: false,
         };
         let active = self.lock_media();

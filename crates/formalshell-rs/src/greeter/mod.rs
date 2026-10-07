@@ -337,6 +337,7 @@ fn shared<'a>(convo: &'a Conversation, field: &str, available: bool) -> Shared<'
         media: None,
         enter: (1.0, 0.0),
         blanked: false,
+        wake: 1.0,
         palette_ink: true,
     }
 }
