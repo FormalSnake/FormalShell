@@ -53,8 +53,8 @@ Anything the shell needs to remember for itself (wallpaper, mode, frecency,
 pending reminders) goes to `$XDG_STATE_HOME/formalshell/state.json` instead,
 which is the shell's file, not yours.
 
-**IPC.** Everything is driven through QuickShell's IPC. `formalshell-ipc` wraps
-the invocation, and a short alias helps:
+**IPC.** Everything is driven over the shell's IPC socket with
+`formalshell-ipc`, which the package puts on PATH. A short alias helps:
 
 ```sh
 alias fs='formalshell-ipc call'
@@ -230,7 +230,7 @@ outright and stop the sampling mattering at all. Anything else reads as
 programs.formalshell.settings.bar.paint = "transparent";
 ```
 
-`qs ipc call bar paint` reports what each band settled on, whether it was
+`formalshell-ipc call bar paint` reports what each band settled on, whether it was
 pinned, and the three numbers the rule read off the wallpaper. The key does
 nothing under the other presets, whose bar is a strip with nothing to
 sample.
@@ -1338,7 +1338,7 @@ or cells the level is showing, and `columns` how many cells wide it is: `1`
 for a row list, the grid's own count on the wallpaper and emoji routes,
 which is the only way to tell a grid from a list without measuring pixels.
 
-`select` and `input` are the dmenu replacement. `qs ipc call` is
+`select` and `input` are the dmenu replacement. `formalshell-ipc call` is
 synchronous but can't block on a UI answer, so both correlate by a
 caller-supplied token and hand the answer back through a file:
 
@@ -2283,7 +2283,7 @@ because it turns every copied image into network traffic. It cannot prompt,
 so it needs `clipssh.alias` to resolve to a name; with none it says so once
 per session and sends nothing.
 
-The row copies in-process; it does not shell out to `qs ipc`. The verb
+The row copies in-process; it does not shell out to `formalshell-ipc`. The verb
 below is the same operation for scripts and keybinds.
 
 ```sh
@@ -3254,7 +3254,7 @@ after `timeoutSeconds` with a `SCREENSHOT CANCELLED` notification, so no
 invisible slurp ever sits stuck for an hour.
 
 The IPC reply is the path the capture is writing toward, not a completion
-signal, since `qs ipc call` replies synchronously while slurp blocks on you
+signal, since `formalshell-ipc call` replies synchronously while slurp blocks on you
 indefinitely. A real failure fires `SCREENSHOT FAILED` and lands in
 `status()`'s `lastError`.
 

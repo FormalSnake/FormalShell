@@ -73,10 +73,14 @@ run_release() {
       || { echo "native $release: package build failed, see $dest/build.log"; return 1; }
   fi
   echo "native $release: running in the VM"
-  tar -C "$repo/artifacts/native/pkgs/$release" -cf - . \
-    | dev/vm-lock.sh dev/vm.sh run "rm -rf ~/native-pkgs/$release && mkdir -p ~/native-pkgs/$release && tar -C ~/native-pkgs/$release -xf -" \
-    || { echo "native $release: copying the packages into the VM failed"; return 1; }
-  out=$(dev/vm-lock.sh dev/vm.sh smoke --native "~/native-pkgs/$release" 2>&1)
+  # One lock for the copy and the run: each slot is its own VM, so the
+  # packages have to land in the VM the run gets.
+  # shellcheck disable=SC2016  # expanded by the inner bash
+  out=$(tar -C "$repo/artifacts/native/pkgs/$release" -cf - . \
+    | dev/vm-lock.sh bash -c '
+        dev/vm.sh run "rm -rf ~/native-pkgs/$1 && mkdir -p ~/native-pkgs/$1 && tar -C ~/native-pkgs/$1 -xf -" \
+          || { echo "native $1: copying the packages into the VM failed"; exit 1; }
+        dev/vm.sh smoke --native "~/native-pkgs/$1" < /dev/null' _ "$release" 2>&1)
   status=$?
   printf '%s\n' "$out" > "$dest/run.log"
   while IFS= read -r line; do

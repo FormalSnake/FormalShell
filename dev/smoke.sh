@@ -156,12 +156,12 @@ for leg_name in "${legs[@]}"; do
   if leg_on "$leg_name"; then active_legs+=("$leg_name"); fi
 done
 
-# FS_IMPL=rust runs crates/formalshell-rs in place of the QML shell, driven
-# over formalshell-ipc. Only a leg declaring leg_<n>_rust=1, whose targets
-# the rust shell serves, runs under it.
-fs_impl="${FS_IMPL:-qml}"
+# The packaged shell is the rust one, driven over formalshell-ipc. Only a leg
+# declaring leg_<n>_rust=1, whose targets the rust shell serves, runs under
+# it. FS_IMPL=qml is refused: no QML package is built any more.
+fs_impl="${FS_IMPL:-rust}"
 case "$fs_impl" in
-  qml) ;;
+  qml) echo "SMOKE_FAIL: the QML shell is no longer packaged; FS_IMPL=qml cannot run" >&2; exit 1 ;;
   rust)
     for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
       rust_var="leg_${leg_name}_rust"
@@ -174,7 +174,7 @@ case "$fs_impl" in
     screenshot_delay=52
     session_timeout=75
     ;;
-  *) echo "SMOKE_FAIL: FS_IMPL must be qml or rust, got '$fs_impl'" >&2; exit 1 ;;
+  *) echo "SMOKE_FAIL: FS_IMPL must be rust, got '$fs_impl'" >&2; exit 1 ;;
 esac
 
 for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
@@ -191,22 +191,16 @@ for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
   if [ "${!keep_var:-}" != "keep" ]; then fixture_window_mode=false; fi
 done
 
-# FS_RESULT and FS_RS_RESULT name store paths built elsewhere and copied in,
-# for a host that must not build (e1504g): the result links point at them
-# and nothing is evaluated here.
+# FS_RESULT names a store path built elsewhere and copied in, for a host
+# that must not build (e1504g): the result link points at it and nothing is
+# evaluated here.
 if [ -n "${FS_RESULT:-}" ]; then
   ln -sfn "$FS_RESULT" result
 else
   git add -A >/dev/null 2>&1 || true   # flakes only see tracked files
   nix build .#formalshell
 fi
-if [ "$fs_impl" = rust ]; then
-  if [ -n "${FS_RS_RESULT:-}" ]; then
-    ln -sfn "$FS_RS_RESULT" result-rs
-  else
-    nix build .#formalshell-rs --out-link result-rs
-  fi
-fi
+ln -sfn "$(readlink result)" result-rs
 
 # Resolved once, on demand: a leg names what it needs in leg_<name>_needs
 # and the scaffold's own four are always resolved.

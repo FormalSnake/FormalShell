@@ -115,6 +115,32 @@ its eight keys and its failure contract (`fs-chrome`'s manifest port);
 `entry` names the executable. A crashed plugin renders the dim PLUGIN
 ERROR cell and is restarted on a backoff. `CommandModule` stays as it is.
 
+## Installing (owner, 2026-10-07)
+
+NixOS users take the flake's modules. Everyone else gets one script and no
+Nix:
+
+    curl -fsSL https://raw.githubusercontent.com/FormalSnake/FormalShell/main/install.sh | sh
+
+- A GitHub release carries one tarball per arch (x86_64, aarch64): the
+  shell, `formalshell-ipc`, the greeter, and the helpers no distro packages
+  (matugen, ttfx, clipssh, localsend-cli, nothingctl, openscq30, tensaku),
+  built once in CI against an old glibc so they run on any current distro,
+  linking only libraries every distro carries under stable sonames
+  (pipewire, fontconfig, pam, xkbcommon).
+- `install.sh` detects pacman, apt or dnf and installs Hyprland and the
+  runtime tools from one small name table (required set minimal; the rest
+  optional, a missing one leaves its surface on its honest unavailable
+  state), unpacks the tarball under `~/.local` (or `/usr/local` with
+  `--system`), then runs `formalshell install`.
+- `formalshell install` writes the user systemd unit, the Hyprland Lua
+  include and a `hypr-user.lua` the user owns and updates never touch, and,
+  with sudo and a prompt for each, the `formalshell-lock` PAM file and the
+  optional greetd config. `formalshell update` fetches the newest release
+  and rewrites only what the installer owns; `formalshell uninstall`
+  reverses it.
+- No native distro packages, no per-distro builds.
+
 ## How we get there
 
 The QML shell stays the shipped shell until the Rust one passes everything.

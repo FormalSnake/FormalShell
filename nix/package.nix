@@ -1,150 +1,84 @@
-{ lib, stdenvNoCC, makeWrapper, quickshell, brightnessctl, wl-clipboard, curl, grim, slurp, wtype, qt6, formalshell-eds
-, matugen, qrencode, cava, ddcutil, tensaku, ttfx, clipssh, lucide-font, nerd-fonts
-, wf-recorder, tesseract, ffmpeg-headless, pulseaudio, pipewire, git, mpv, util-linux, coreutils, systemd, procps, openssh, xdg-utils
-, iphone-bridge, uxplay, localsend-cli, networkmanager, asusctl, glib, openscq30, nothingctl, earbuds }:
-stdenvNoCC.mkDerivation {
+{ lib, stdenvNoCC, rustCommon, makeBinaryWrapper, lucide-font, nerd-fonts, noto-fonts-color-emoji, matugen, brightnessctl, ddcutil, wlsunset
+, wireplumber, cava, mpv, curl, util-linux, coreutils, procps, systemd, glib, pipewire, asusctl, uxplay, iphone-bridge, openscq30, nothingctl, earbuds
+, formalshell-eds, git, qrencode, networkmanager, wl-clipboard, grim, slurp, wf-recorder, tesseract, ffmpeg-headless, pulseaudio, xdg-utils
+, tensaku, ttfx, clipssh, localsend-cli, wtype, openssh }:
+
+rustCommon.craneLib.buildPackage (rustCommon.commonArgs // {
+  inherit (rustCommon) cargoArtifacts cargoVendorDir;
   pname = "formalshell";
-  version = "0.1.0-dev";
-  src = ../shell;
-  nativeBuildInputs = [ makeWrapper ];
-  installPhase = ''
-    runHook preInstall
-    mkdir -p $out/share/formalshell $out/bin
-    cp -r . $out/share/formalshell/
-    # A ShaderEffect loads its shaders as .qsb, never as GLSL source.
-    for f in $(find $out/share/formalshell -name '*.frag'); do
-      ${lib.getExe' qt6.qtshadertools "qsb"} --qt6 -o "$f.qsb" "$f"
-    done
-    # Bundled default screensaver banner (M8b Task 7) — a sibling of shell/
-    # in the repo, so Quickshell.shellPath("branding/...") still resolves it
-    # once installed here alongside the copied shell tree.
-    cp -r ${../branding} $out/share/formalshell/branding
-    # The shipped Hyprland config (blur layer rules, the colours source line,
-    # every default bind). Nothing in the shell reads it: a nix install has no
-    # checkout to copy it out of, so the closure has to carry it.
-    mkdir -p $out/share/formalshell/examples
-    cp -r ${../docs/examples}/. $out/share/formalshell/examples/
-    # wtype (the menu's emoji instant-paste, M13 Task 6) is suffixed, not
-    # prefixed: an environment wtype must stay able to shadow the bundled
-    # one — the smoke rig substitutes an argv-logging shim to prove the
-    # spawn (real typing into a refocused window is host-trial territory),
-    # and any real wtype is equivalent for the typing itself.
-    # ttfx animates the screensaver banner (the shell parses its ANSI frame
-    # stream); without it on PATH the screensaver falls back to effect.js's
-    # five builtin effects rather than going blank.
-    # lucide-font is prefixed onto XDG_DATA_DIRS rather than PATH: fontconfig's
-    # default config scans "$dir/fonts" for every dir named there, which is
-    # what makes Icon.qml's "lucide" font.family resolve without depending
-    # on the host also declaring it in fonts.packages.
-    # nerd-fonts.symbols-only rides the same mechanism for one reason only:
-    # it embeds font-logos, which is where the launcher's distro mark comes
-    # from (Theme/icons/distro.js). Symbols-only rather than a patched face,
-    # since nothing here wants the glyphs merged into a text font.
-    # matugen/qrencode/cava/ddcutil back shipped features (theming, the Wi-Fi
-    # QR share, the visualizer widget, external-monitor brightness) and were
-    # only ever on PATH because nix/testvm.nix lists them in
-    # environment.systemPackages — a real install through the home-manager
-    # module got none of them. Daemon-paired CLIs stay out on purpose:
-    # nmcli and bluetoothctl must match the NetworkManager/bluez the system
-    # is actually running, and their callers already guard with `command -v`.
-    # wf-recorder/tesseract/ffmpeg-headless back the capture suite
-    # (RecordingService's screen recording, the `capture text` OCR verb, and
-    # the two-pass GIF transcode). wf-recorder rather than
-    # gpu-screen-recorder: it captures through wlr-screencopy, which a nested
-    # compositor implements, so recording is reachable by the smoke rig
-    # instead of needing real KMS. pulseaudio is CLI-only here (pactl):
-    # RecordingService's desktop/desktopmic audio setup resolves the
-    # default sink/source and mixes the two through it, and pipewire's own
-    # pulse compat layer (services.pipewire.pulse.enable) provides the
-    # protocol without ever installing the client tool itself. git is
-    # read-only here, probing the locked revision of a flake input for the
-    # system-update widget. mpv backs the recording.webcam overlay
-    # (RecordingService spawns it against a v4l2 device through the
-    # compositor, never through this wrapper's own child process tree).
-    # util-linux is here for setpriv alone (shell/Core/proc.js): quickshell
-    # takes no SIGTERM handler, so a `systemctl --user restart` leaves every
-    # long-lived child it owned running, and PR_SET_PDEATHSIG is what closes
-    # that. Unlike the optional CLIs above this one has no fallback state,
-    # which is why it is wired here rather than guarded with `command -v`.
-    # procps (ps) and openssh (ssh) back HerdrService's window-to-client walk
-    # and its remote poll; herdr itself stays the user's own install, never
-    # bundled here, and every caller already guards with `command -v herdr`.
-    # openssh is suffixed for wtype's reason: the user's own ssh wins, and
-    # the rig's --spaces leg shadows it with a shim answering one canned host.
-    # clipssh is suffixed for the same reason (the --clipssh legs shim it).
-    # pipewire is here for pw-dump alone, LyricsService's read of the output
-    # latency (Quickshell's PwNode carries no Latency param). Suffixed so the
-    # host's own pw-dump, built against the daemon it talks to, wins.
-    # xdg-utils (xdg-open) opens a finished recording and a GitHub link;
-    # neither caller guards, so it cannot be left to the host.
-    # uxplay, localsend-cli and iphone-bridge (the omarchy-iphone bridge and
-    # ams scripts) back AirplayService, LocalsendService and IphoneService.
-    # All three are suffixed and every caller guards with `command -v`, so a
-    # host install or the rig's PATH shims (--iphone, --airplay) shadow the
-    # bundled ones; prefixed, the --iphone shim never ran.
-    # nothingctl (Nothing, CMF), openscq30 (Soundcore) and earbuds (Samsung
-    # Galaxy Buds) back the earbuds panel's backends. All three are suffixed:
-    # earbuds is a client of a daemon the host may already run, which has to
-    # match that daemon's own build, and the rig's --earbuds leg shadows any
-    # of them with a shim. openscq30 and earbuds run only while BlueZ reports
-    # a matching device connected.
-    # qtimageformats: qtbase alone decodes gif/ico/jpeg/png, so a webp (or
-    # avif) wallpaper fails Background.qml's Image with "Unsupported image
-    # format" while matugen, which decodes the file itself, keeps recolouring.
-    # The plugin dir is a store path of its own, invisible to quickshell's Qt
-    # without this.
-    # QSG_RENDER_LOOP: Qt 6.11 falls back to the basic render loop on the
-    # nvidia/Wayland stack (QSG_INFO on the g815, 2026-08-31), and that loop
-    # advances animations off a ~60Hz timer no matter what the panel runs
-    # at. threaded paces each window off its own vsync (the 240Hz panel
-    # logs "Animation Driver: using vsync: 4.17 ms"). set-default keeps the
-    # smoke rig and any debugging session free to override it.
-    # QT_FFMPEG_DECODING_HW_DEVICE_TYPES set empty: QtMultimedia's ffmpeg
-    # backend then decodes AnimatedAlbumArt.qml's Video in software. Set to
-    # nothing rather than left unset on purpose (qffmpeghwaccel.cpp treats an
-    # unset variable as "probe every hwaccel", an empty one as "none"). With
-    # VA-API on nvidia_drv_video, vaExportSurfaceHandle fails on every frame
-    # and Qt falls back to mapping the frame on the render thread, which
-    # blocks inside vaSyncSurface for good; the main thread then waits on
-    # that render thread in polishAndSync and the whole shell freezes with
-    # every window and the IPC socket dead (g815, 2026-09-11, gdb backtrace).
-    # The frames are grabbed to CPU for the bar's mini cover anyway, so
-    # hardware decode bought nothing here. --set, not --set-default: no
-    # session variable may put the hwaccel back.
-    makeWrapper ${lib.getExe' quickshell "qs"} $out/bin/formalshell \
-      --add-flags "-p $out/share/formalshell" \
-      --prefix PATH : ${lib.makeBinPath [ brightnessctl wl-clipboard curl grim slurp formalshell-eds matugen qrencode cava ddcutil ttfx wf-recorder tesseract ffmpeg-headless pulseaudio git mpv util-linux procps xdg-utils ]} \
-      --suffix PATH : ${lib.makeBinPath ([ wtype tensaku openssh clipssh pipewire uxplay localsend-cli iphone-bridge systemd glib networkmanager ] ++ lib.optional (lib.meta.availableOn stdenvNoCC.hostPlatform asusctl) asusctl ++ lib.optionals (lib.meta.availableOn stdenvNoCC.hostPlatform earbuds) [ earbuds openscq30 ] ++ lib.optional (lib.meta.availableOn stdenvNoCC.hostPlatform nothingctl) nothingctl)} \
-      --prefix XDG_DATA_DIRS : ${lucide-font}/share \
-      --prefix XDG_DATA_DIRS : ${nerd-fonts.symbols-only}/share \
-      --prefix NIXPKGS_QT6_QML_IMPORT_PATH : ${qt6.qtpositioning}/lib/qt-6/qml \
-      --prefix NIXPKGS_QT6_QML_IMPORT_PATH : ${qt6.qtmultimedia}/lib/qt-6/qml \
-      --prefix QT_PLUGIN_PATH : ${qt6.qtpositioning}/lib/qt-6/plugins \
-      --prefix QT_PLUGIN_PATH : ${qt6.qtmultimedia}/lib/qt-6/plugins \
-      --prefix QT_PLUGIN_PATH : ${qt6.qtimageformats}/lib/qt-6/plugins \
-      --set-default QSG_RENDER_LOOP threaded \
-      --set QT_FFMPEG_DECODING_HW_DEVICE_TYPES ""
+  version = "0.1.1";
 
-    # Entry point for binds and scripts: the store path is baked in so
-    # nobody types it (`formalshell-ipc call menu toggle`).
-    makeWrapper ${lib.getExe' quickshell "qs"} $out/bin/formalshell-ipc \
-      --add-flags "ipc --any-display -p $out/share/formalshell"
+  # fs-theme embeds the chrome tables the QML shell reads too, one of its
+  # tests reads Core/Theme.qml, and the theme service's tests run matugen
+  # shims against the shell's own templates.
+  src = lib.fileset.toSource {
+    root = ../.;
+    fileset = lib.fileset.unions [
+      ../crates
+      ../shell/Theme/themes
+      ../shell/Theme/icons
+      ../shell/Theme/templates
+      ../shell/Core/Theme.qml
+      ../shell/Menu/default-menu.jsonc
+      ../shell/Menu/emoji.json
+      ../shell/Radio/countries.json
+    ];
+  };
+  postUnpack = ''
+    cd $sourceRoot/crates
+    sourceRoot="."
+  '';
 
-    # Liveness probe for the home-manager module's formalshell-watchdog
-    # timer. A main thread hung on a render thread (the vaSyncSurface case
-    # above) leaves a live process that answers nothing, so Restart=on-failure
-    # never fires and the session stays dead until someone restarts the unit
-    # by hand. `qs ipc show` is served by the main thread's event loop, so a
-    # timeout here means that loop is stuck. Two timeouts in a row restart
-    # the service; "no running instance" exits fast with 255 and is a
-    # stopped shell, not a hung one, so it clears the strike and does nothing.
+  # The pure library crates read repo fixtures (shell/, tests/) that this
+  # crates-only source does not carry, so the runtime package builds and tests
+  # itself alone; `cargo test` at the workspace root covers the rest.
+  cargoExtraArgs = "--locked --package formalshell-rs";
+
+  nativeBuildInputs = rustCommon.commonArgs.nativeBuildInputs ++ [ makeBinaryWrapper ];
+
+  # The icon fonts by path, registered with parley at startup.
+  #
+  # Suffixed rather than prefixed: anything a host install or the smoke rig's
+  # PATH shims must be able to shadow (wtype, ssh and clipssh, which the
+  # --spaces and --clipssh legs replace; uxplay, localsend-cli and the iPhone
+  # bridge, every caller guarding with `command -v`), and the clients of a
+  # daemon the host runs, which have to match that daemon's own build
+  # (nmcli, pw-dump, busctl and systemctl, earbuds, asusctl).
+  # util-linux is here for setpriv: every long-lived child is started under
+  # PR_SET_PDEATHSIG, with no fallback when it is missing.
+  #
+  # The examples directory carries the Hyprland config the home-manager
+  # module links (binds and layer rules); nothing in the shell reads it.
+  postInstall = ''
+    mkdir -p $out/share/formalshell
+    cp -r --no-preserve=mode ${../shell/Theme/templates} $out/share/formalshell/templates
+    cp -r --no-preserve=mode ${../branding} $out/share/formalshell/branding
+    cp -r --no-preserve=mode ${../docs/examples} $out/share/formalshell/examples
+    wrapProgram $out/bin/formalshell-rs \
+      --set-default FS_RS_ICON_FONT ${lucide-font}/share/fonts/truetype/lucide.ttf \
+      --set-default FS_RS_FONT_DIRS ${nerd-fonts.symbols-only}/share/fonts:${noto-fonts-color-emoji}/share/fonts \
+      --set-default FS_TEMPLATE_DIR $out/share/formalshell/templates \
+      --set-default FS_BRANDING_DIR $out/share/formalshell/branding \
+      --prefix PATH : ${lib.makeBinPath [ matugen brightnessctl ddcutil wlsunset wireplumber cava mpv curl util-linux procps git formalshell-eds qrencode wl-clipboard grim slurp wf-recorder tesseract ffmpeg-headless pulseaudio xdg-utils ttfx ]} \
+      --suffix PATH : ${lib.makeBinPath ([ tensaku wtype openssh clipssh localsend-cli uxplay iphone-bridge networkmanager pipewire systemd glib ]
+        ++ lib.optional (lib.meta.availableOn stdenvNoCC.hostPlatform asusctl) asusctl
+        ++ lib.optionals (lib.meta.availableOn stdenvNoCC.hostPlatform earbuds) [ earbuds openscq30 ]
+        ++ lib.optional (lib.meta.availableOn stdenvNoCC.hostPlatform nothingctl) nothingctl)}
+    ln -s formalshell-rs $out/bin/formalshell
+
+    # Liveness probe for the home-manager module's formalshell-watchdog timer
+    # (packaging/formalshell-watchdog.in has the why).
     substitute ${../packaging/formalshell-watchdog.in} $out/bin/formalshell-watchdog \
-      --subst-var-by QS ${lib.getExe' quickshell "qs"} \
-      --subst-var-by SHAREDIR $out/share/formalshell \
+      --subst-var-by IPC $out/bin/formalshell-ipc \
       --subst-var-by TIMEOUT ${lib.getExe' coreutils "timeout"} \
       --subst-var-by SYSTEMCTL ${lib.getExe' systemd "systemctl"}
     chmod +x $out/bin/formalshell-watchdog
-    runHook postInstall
   '';
-  meta = { mainProgram = "formalshell"; license = lib.licenses.mit; platforms = lib.platforms.linux; };
-}
+
+  meta = {
+    description = "FormalShell, a Hyprland desktop shell";
+    license = lib.licenses.mit;
+    mainProgram = "formalshell";
+    platforms = lib.platforms.linux;
+  };
+})
