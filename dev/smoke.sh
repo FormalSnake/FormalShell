@@ -579,6 +579,8 @@ if [ -n "${FS_CPU_QUOTA:-}" ]; then
   shell_prefix="systemd-run --user --scope --quiet --collect --unit=$shell_unit -p CPUQuota=$FS_CPU_QUOTA -p CPUQuotaPeriodSec=${FS_CPU_QUOTA_PERIOD:-100ms} -p RuntimeMaxSec=2h --"
   echo "shell cpu quota: $FS_CPU_QUOTA per ${FS_CPU_QUOTA_PERIOD:-100ms}"
 fi
+# FS_TRACE: the shell logs every commit, which the budget legs read.
+shell_prefix="env FS_TRACE=1${shell_prefix:+ $shell_prefix}"
 if [ -n "$shell_launcher" ]; then
   "$shell_launcher" "$shell_start_script"
 else

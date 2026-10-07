@@ -16,6 +16,13 @@ idle_results_path="$shot_dir/idle-results.txt"
 idle_start_path="$shot_dir/shell-start.ns"
 idle_done_path="$shot_dir/idle-done"
 
+# perf for a profile of the spin, where nix can fetch it; the run goes on
+# without one.
+leg_idle_fixture() {
+  idle_perf=$(timeout 300 nix build --no-link --print-out-paths nixpkgs#perf 2>/dev/null | head -1)
+  [ -n "$idle_perf" ] && idle_perf="$idle_perf/bin/perf"
+}
+
 leg_idle_shell() {
   local software=""
   if [ "$session_mode" = vkms ]; then software="export LIBGL_ALWAYS_SOFTWARE=1"; fi
@@ -30,7 +37,7 @@ EOF
 }
 
 leg_idle_timing() {
-  leg_timing 115 150
+  leg_timing 180 215
 }
 
 leg_idle_drive() {
@@ -71,6 +78,32 @@ if command -v strace > /dev/null; then
   st=strace; [ "\$(cat /proc/sys/kernel/yama/ptrace_scope 2>/dev/null)" = 0 ] || st="sudo -n strace"
   timeout -s INT 20 \$st -f -tt -T -p "\$pid" -o "$shot_dir/idle-strace.log" > /dev/null 2>&1 || true
 fi
+# The herdr badge spinning for 30 s: the cost of one 11x11 cell per frame.
+$ipc call debug r0Spinner true > /dev/null 2>&1
+sleep 2
+sample > "$shot_dir/spin-before.txt"
+s0=\$(grep -c '^commit surface=bar ' "$shell_log_path")
+sleep 30
+sample > "$shot_dir/spin-after.txt"
+s1=\$(grep -c '^commit surface=bar ' "$shell_log_path")
+if [ -n "${idle_perf:-}" ]; then
+  sudo -n "$idle_perf" record -F 1999 -g -p "\$pid" -o "$shot_dir/spin.perf" -- sleep 10 > /dev/null 2>&1 || true
+  sudo -n "$idle_perf" report -i "$shot_dir/spin.perf" --stdio --no-children -g none --percent-limit 0.5 2> /dev/null \
+    | head -80 > "$shot_dir/spin-perf.log" || true
+fi
+$ipc call debug r0Spinner false > /dev/null 2>&1
+awk 'NR == FNR { t[\$1] = \$3; next } { d = \$3 - t[\$1]; tt += d; if (d > 0) printf "spin thread %s %s ticks=%d\n", \$1, \$2, d }
+  END { printf "spin total ticks=%d over 30s\n", tt }' "$shot_dir/spin-before.txt" "$shot_dir/spin-after.txt" >> "$idle_results_path"
+echo "spin bar commits \$((s1 - s0))" >> "$idle_results_path"
+# One screensaver cycle: what it takes while it runs has to come back.
+rss() { awk '/^VmRSS/{print \$2}' "/proc/\$pid/status"; }
+r0=\$(rss)
+$ipc call screensaver start > /dev/null 2>&1
+sleep 8
+r1=\$(rss)
+$ipc call screensaver stop > /dev/null 2>&1
+sleep 4
+echo "rss_kb before_saver=\$r0 saver=\$r1 after_saver=\$(rss)" >> "$idle_results_path"
 touch "$idle_done_path"
 EOF
   hypr_exec_once "bash $script"
@@ -87,4 +120,5 @@ leg_idle_assert() {
   sed 's/^/SMOKE_IDLE /' "$idle_results_path"
   echo "SMOKE_IDLE_LOG $shell_log_path"
   if [ -s "$shot_dir/idle-strace.log" ]; then echo "SMOKE_IDLE_STRACE $shot_dir/idle-strace.log"; fi
+  if [ -s "$shot_dir/spin-perf.log" ]; then echo "SMOKE_IDLE_SPIN_PERF $shot_dir/spin-perf.log"; fi
 }
