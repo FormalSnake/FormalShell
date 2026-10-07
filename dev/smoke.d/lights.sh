@@ -12,8 +12,13 @@
 # ways, a refused effect and the source back to the wallpaper, each read
 # off `lights status` and the shim's call log, and the launcher's effect
 # level photographed with its tick on Breathe.
+#
+# Under FS_IMPL=rust the launcher is R4's, so the menu half (the `menu summon`
+# and its photograph) is skipped there and the rest runs against the same
+# shims: the shell half of the keyboard lights.
 leg_lights_flag="--lights"
 leg_lights_order=216
+leg_lights_rust=1
 
 lights_shim_dir="$shot_dir/lights-shim"
 lights_aura_dir="$shot_dir/lights-aura"
@@ -95,10 +100,12 @@ st 2
 ipc color '#FF0000' > /dev/null 2>&1
 sleep 1.5
 st 3
-$ipc call menu summon lights.effect > /dev/null 2>&1
-sleep 1.5
-"$grim_bin" "$lights_menu_png" > /dev/null 2>&1
-$ipc call menu close > /dev/null 2>&1
+if [ "$fs_impl" = qml ]; then
+  $ipc call menu summon lights.effect > /dev/null 2>&1
+  sleep 1.5
+  "$grim_bin" "$lights_menu_png" > /dev/null 2>&1
+  $ipc call menu close > /dev/null 2>&1
+fi
 ipc toggle > /dev/null 2>&1
 sleep 1.5
 st 4
@@ -140,6 +147,10 @@ leg_lights_assert() {
     || fail "asusctl never got the custom breathe"
   grep -q '^leds set off$' "$lights_calls_path" || fail "asusctl never got leds set off"
   grep -q '^leds set high$' "$lights_calls_path" || fail "asusctl never got leds set high"
-  [ -f "$lights_menu_png" ] || fail "no lights menu screenshot"
-  echo "SMOKE_LIGHTS_MENU $lights_menu_png"
+  if [ "$fs_impl" = qml ]; then
+    [ -f "$lights_menu_png" ] || fail "no lights menu screenshot"
+    echo "SMOKE_LIGHTS_MENU $lights_menu_png"
+  else
+    echo "SMOKE_LIGHTS_MENU skipped: the launcher is not in the rust shell yet"
+  fi
 }

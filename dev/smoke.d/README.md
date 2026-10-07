@@ -23,6 +23,8 @@ frame, teardown) and sources every file here. A leg defines:
 - `leg_<n>_rust=1` lets the leg run under `FS_IMPL=rust`, which refuses
   every other leg until the rust shell serves the targets it calls
   (`--r0-measure`).
+  A leg with no QML counterpart (`--headset-card`) sets it and refuses
+  `FS_IMPL=qml` in its `leg_<n>_validate`.
 - `leg_<n>_takeover` runs the whole thing itself and exits, for a leg that
   cannot share the one session (`--screensaver-gif` needs one per effect).
   It runs with the build done, the binaries resolved and the bus baseline

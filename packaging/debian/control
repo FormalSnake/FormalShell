@@ -67,6 +67,7 @@ Depends:
  upower,
  wf-recorder,
  wl-clipboard,
+ wlsunset,
  xdg-utils,
 Recommends:
  bluez,

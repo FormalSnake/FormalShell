@@ -19,6 +19,7 @@ mod earbuds;
 mod gallery;
 mod iphone;
 mod lock;
+mod lights;
 #[cfg(test)]
 mod golden;
 mod media;
@@ -27,6 +28,8 @@ mod notifications;
 mod overnight;
 mod monitor;
 mod network;
+mod nightlight;
+mod osd;
 mod panel;
 mod plugins;
 mod radio;
@@ -82,6 +85,9 @@ fn registry() ->&'static Registry<App> {
             iphone::target(),
             notifications::target(),
             notifications::reminder(),
+            osd::target(),
+            nightlight::target(),
+            lights::target(),
         ],
     })
 }

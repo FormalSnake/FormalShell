@@ -165,8 +165,10 @@ Milestones, each a plan under `docs/superpowers/plans/`:
   earbuds; BlueZ Battery1 otherwise; no ring when nothing reports a
   level, never an invented one). It never fires for devices already
   connected at startup or on a reconnect inside a few seconds, holds about
-  four seconds, dismisses on pointer leave or Escape, opens the earbuds or
-  Bluetooth panel on click, and stays down under fullscreen and DND.
+  four seconds, dismisses on pointer leave or its hold timing
+  out (Escape only once it has keyboard focus, which it asks for on demand),
+  opens the earbuds or Bluetooth panel on click, and stays down under
+  fullscreen and DND.
   Built with the frontend skills the user's CLAUDE.md lists, in the
   shell's own chrome, not a copy of Apple's.
 - R8: capture, record, OCR, screensaver, switcher and Spaces thumbnails,
