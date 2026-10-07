@@ -29,8 +29,9 @@ by surface; one line each.
   same (its graph events only trigger the re-read), but the Rust side lacks
   the default-sink and link-change triggers. A PipeWire-event read needs
   port, link and Latency param pods in fs-audio: kept as is.
-- Header Radio button (needs the Radio Atlas surface, Globe and search, not
-  ported) and the animated album art (needs a video decode path) not ported.
+- The animated album art (needs a video decode path) not ported.
+- Radio Atlas: its icon buttons carry no hover tooltips (the launcher's card
+  routes none to the tooltip group either).
 
 ## Launcher
 - Clipboard split preview, width/height size morph, row add/remove motion.

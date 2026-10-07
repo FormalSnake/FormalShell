@@ -232,7 +232,7 @@ impl Panel for Media {
     }
 
     fn actions(&self, v: &View) -> Vec<El> {
-        let mut out = Vec::new();
+        let mut out = vec![w::icon_button("radio").tip("Radio").on("radio").key("radio")];
         if v.store.media.active().is_some_and(|a| a.can_raise) {
             out.push(w::icon_button("external-link").on("raise").key("raise"));
         }
@@ -274,7 +274,8 @@ impl Panel for Media {
         }
         let Some(a) = m.active() else {
             self.sections.borrow_mut().clear();
-            return w::column(s.section_gap, vec![w::section_label(s, "No player", None, true).pad(0.0, s.sm, 0.0, s.sm)]);
+            let radio = w::icon_text_button("radio", "Radio").variant(crate::ui::Variant::Outline).stop("transport").on("radio");
+            return w::column(s.section_gap, vec![w::row(0.0, vec![w::section_label(s, "No player", None, true), w::spacer(), radio]).fill()]);
         };
         let mut col = Vec::new();
 
@@ -434,6 +435,7 @@ impl Panel for Media {
         }
         let a = fx.store.media.active();
         match (ev.on.as_str(), &ev.what) {
+            ("radio", _) => fx.summon = Some(super::ATLAS),
             ("raise", _) => fx.store.media.raise(),
             ("lyrics-follow", _) => set_follow(fx, true),
             ("lyrics-pane", What::Scroll(..)) => set_follow(fx, false),
@@ -477,6 +479,7 @@ impl Panel for Media {
         }
         match stop {
             "lyric-resync" => set_follow(fx, true),
+            "transport" if fx.store.media.active().is_none() => fx.summon = Some(super::ATLAS),
             "source" => self.toggle_menu("source"),
             "output" => self.toggle_menu("output"),
             "transport" => {

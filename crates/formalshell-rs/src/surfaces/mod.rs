@@ -1,6 +1,7 @@
 //! Each surface reads its slices of the store; [`changed`] routes a store
 //! change to the surfaces that read that slice.
 
+pub mod atlas;
 pub mod bar;
 pub mod battery;
 pub mod capture;
@@ -27,6 +28,7 @@ pub fn changed(app: &mut App, topic: Topic) {
         crate::services::display::reconcile(&app.store);
     }
     app.switcher_changed(topic);
+    app.atlas_changed(topic);
     app.preview_changed(topic);
     match topic {
         Topic::Menu => app.launcher_store_changed(),

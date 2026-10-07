@@ -41,6 +41,9 @@ pub struct Store {
     pub clipssh: clipssh::State,
     pub picker: picker::State,
     pub localsend: localsend::State,
+    /// Radio Browser answers and the country outlines, waiting for the
+    /// atlas to take them.
+    pub atlas: Vec<crate::services::radio::Reply>,
 }
 
 /// One service's change, tagged with the slice it applies to.
@@ -77,6 +80,7 @@ pub enum Diff {
     Clipssh(clipssh::Diff),
     Picker(picker::Diff),
     Localsend(localsend::Diff),
+    Atlas(crate::services::radio::Reply),
 }
 
 /// The slice a diff changed, for the surfaces that read it.
@@ -116,6 +120,7 @@ pub enum Topic {
     Clipssh,
     Picker,
     Localsend,
+    Atlas,
 }
 
 impl Store {
@@ -164,6 +169,10 @@ impl Store {
             Diff::Clipssh(d) => self.clipssh.apply(d).then_some(Topic::Clipssh),
             Diff::Picker(d) => self.picker.apply(d).then_some(Topic::Picker),
             Diff::Localsend(d) => self.localsend.apply(d).then_some(Topic::Localsend),
+            Diff::Atlas(r) => {
+                self.atlas.push(r);
+                Some(Topic::Atlas)
+            }
         }
     }
 }

@@ -1,9 +1,8 @@
 // Portions from omarchy-radio-atlas (MIT, Copyright 2026 Akshar Patel)
 
-//! RadioService.qml, as far as the bar reads it: the one mpv child, what it
-//! is playing, the saved favourites, recents, volume and output, and the
-//! Radio Browser requests playing a station makes. The atlas surface (search,
-//! the globe, country lists) arrives with its own milestone.
+//! RadioService.qml: the one mpv child, what it is playing, the saved
+//! favourites, recents, volume and output, and every Radio Browser request,
+//! Radio Atlas's (`Cmd::Atlas`) answered into the store's atlas inbox.
 //!
 //! mpv runs unsandboxed, so a station URL is only ever checked to be http(s).
 
@@ -52,6 +51,10 @@ pub struct State {
     /// The launcher's station search (RadioSearchProvider.qml): the query
     /// the answer is for, and the stations, `None` when every mirror failed.
     pub search: Option<(String, Option<Vec<Station>>)>,
+    /// `pactl`'s sinks, for the atlas's output picker.
+    pub outputs: Vec<stations::Sink>,
+    pub outputs_error: String,
+    pub outputs_loading: bool,
 }
 
 impl Default for State {
@@ -71,6 +74,9 @@ impl Default for State {
             player_error: String::new(),
             local_error: String::new(),
             search: None,
+            outputs: Vec::new(),
+            outputs_error: String::new(),
+            outputs_loading: false,
         }
     }
 }
@@ -110,6 +116,14 @@ impl State {
         text.chars().map(|c| if c.is_control() { ' ' } else { c }).collect::<String>().trim().to_owned()
     }
 
+    pub fn is_favorite(&self, uuid: &str) -> bool {
+        !uuid.is_empty() && self.favorites.iter().any(|s| s.uuid == uuid)
+    }
+
+    pub fn output_label(&self, id: &str) -> String {
+        self.outputs.iter().find(|o| o.id == id).map_or_else(|| id.to_owned(), |o| o.label.clone())
+    }
+
     pub fn status(&self) -> Value {
         json!({
             "running": self.running(),
@@ -130,9 +144,42 @@ impl State {
     }
 }
 
+/// What Radio Atlas asks of Radio Browser, each answer tagged with the
+/// token the atlas issued it under.
+#[derive(Clone, Debug)]
+pub enum Ask {
+    World,
+    WorldMore,
+    /// A country code and the world stations the atlas already holds.
+    Country(String, Vec<Station>),
+    Search(String),
+    Cliamp,
+}
+
+#[derive(Clone, Debug)]
+pub enum Reply {
+    /// `None` when every mirror failed.
+    Rows(u64, Option<Vec<Station>>),
+    /// RadioService.qml's `randomTuned` (the picked list) and `randomFailed`.
+    Random(Result<Vec<Station>, String>),
+    Countries(std::sync::Arc<crate::surfaces::atlas::globe::Countries>),
+}
+
 pub enum Cmd {
     /// A saved station and the list it came from, which becomes its queue.
     PlayFromSaved(Station, Vec<Station>),
+    /// A Radio Browser station and the list it was picked from.
+    Play(Station, Vec<Station>),
+    ToggleMute,
+    ClearLocalError,
+    RefreshOutputs,
+    Atlas(u64, Ask),
+    Answered(Reply),
+    OutputsRead(Option<Vec<stations::Sink>>),
+    /// A world (None) or country refresh, answering `token` when it has one.
+    Refresh(Option<String>, Option<u64>),
+    RefreshDone(Option<String>),
+    CliampRead(Option<Vec<Station>>),
     Toggle,
     Next,
     Previous,
@@ -160,6 +207,47 @@ pub fn send(cmd: Cmd) {
 
 fn runtime_dir() -> Option<PathBuf> {
     std::env::var("XDG_RUNTIME_DIR").ok().filter(|d| !d.is_empty()).map(PathBuf::from)
+}
+
+fn cache_dir() -> PathBuf {
+    let base = match std::env::var("XDG_CACHE_HOME") {
+        Ok(dir) if !dir.is_empty() => PathBuf::from(dir),
+        _ => PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".cache"),
+    };
+    base.join("formalshell").join("radio-atlas")
+}
+
+fn cache_path(country: Option<&str>) -> PathBuf {
+    match country {
+        Some(code) => cache_dir().join("countries").join(format!("{code}.json")),
+        None => cache_dir().join("world.json"),
+    }
+}
+
+fn now_ms() -> f64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0.0, |d| d.as_millis() as f64)
+}
+
+/// A cache document and its stations; `None` when it cannot be read.
+fn read_cache(path: &std::path::Path) -> Option<(Value, Vec<Station>)> {
+    let doc: Value = serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
+    let rows = doc.get("stations")?.as_array()?.iter().map(Station::from_saved).collect();
+    Some((doc, rows))
+}
+
+fn write_cache(path: &std::path::Path, rows: &[Station]) {
+    let doc = json!({ "fetchedAt": now_ms(), "stations": rows });
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let tmp = path.with_extension("json.tmp");
+    if std::fs::write(&tmp, format!("{doc}\n")).is_ok() {
+        let _ = std::fs::rename(&tmp, path);
+    }
+}
+
+fn stale_doc(doc: &Value) -> bool {
+    stations::stale(doc.get("fetchedAt").and_then(Value::as_f64).unwrap_or(0.0), now_ms())
 }
 
 fn state_path() -> PathBuf {
@@ -255,6 +343,10 @@ struct Radio {
     search_want: String,
     search_at: Option<Instant>,
     search_busy: bool,
+    /// The world (None) and the countries a refresh is running for.
+    refreshing: Vec<Option<String>>,
+    /// cliamp's channels, fetched once per session.
+    cliamp: Vec<Station>,
 }
 
 impl Radio {
@@ -640,7 +732,7 @@ impl Radio {
     async fn random_rows(&mut self, rows: Option<Vec<Station>>) {
         self.random_busy = false;
         let Some(rows) = rows else {
-            self.st.player_error = "Radio Browser is unavailable. Try again shortly.".into();
+            self.answer(Reply::Random(Err("Radio Browser is unavailable. Try again shortly.".into())));
             return;
         };
         let mut excluded: Vec<String> = Vec::new();
@@ -656,14 +748,175 @@ impl Radio {
         }
         excluded.truncate(32);
         let picked = stations::pick_random(&rows, &excluded, &mut fastrand::f64);
+        self.answer(Reply::Random(Ok(picked.clone())));
         if let Some(first) = picked.first().cloned() {
             self.last_random = first.uuid.clone();
             self.play(first, picked).await;
         }
     }
 
+    fn answer(&self, reply: Reply) {
+        self.ctx.publish(store::Diff::Atlas(reply));
+    }
+
+    /// RadioService.qml's `_refreshWorld` and `_refreshCountry`: the list
+    /// fetched again and written to its cache, a country's only when every
+    /// row is that country's. A background refresh already running is not
+    /// started twice.
+    fn refresh(&mut self, country: Option<String>, token: Option<u64>) {
+        if self.refreshing.contains(&country) && token.is_none() {
+            return;
+        }
+        self.refreshing.push(country.clone());
+        let (bases, follow, ctx) = (self.bases.clone(), self.follow.clone(), self.ctx.clone());
+        self.ctx.spawn(async move {
+            let req = match &country {
+                Some(code) => stations::country_request(code),
+                None => stations::world_request(),
+            };
+            let rows = request(&bases, &req).await;
+            let rows = match &country {
+                Some(code) => rows.filter(|r| r.iter().all(|s| s.country_code == *code)),
+                None => rows.filter(|r| !r.is_empty()),
+            };
+            if let Some(rows) = rows.clone() {
+                let path = cache_path(country.as_deref());
+                let _ = ctx.pool().run(move || write_cache(&path, &rows)).await;
+            }
+            let _ = follow.try_send(Cmd::RefreshDone(country));
+            if let Some(token) = token {
+                let _ = follow.try_send(Cmd::Answered(Reply::Rows(token, rows)));
+            }
+        });
+    }
+
+    fn atlas(&mut self, token: u64, ask: Ask) {
+        let (bases, follow, ctx) = (self.bases.clone(), self.follow.clone(), self.ctx.clone());
+        match ask {
+            // The cache when it has one, refreshed behind it once a day old.
+            Ask::World => self.ctx.spawn(async move {
+                let cached = ctx.pool().run(|| read_cache(&cache_path(None))).await.flatten();
+                match cached {
+                    Some((doc, rows)) if stations::valid_world_cache(&doc) => {
+                        let _ = follow.try_send(Cmd::Answered(Reply::Rows(token, Some(rows))));
+                        if stale_doc(&doc) {
+                            let _ = follow.try_send(Cmd::Refresh(None, None));
+                        }
+                    }
+                    _ => {
+                        let _ = follow.try_send(Cmd::Refresh(None, Some(token)));
+                    }
+                }
+            }),
+            Ask::WorldMore => self.ctx.spawn(async move {
+                let rows = request(&bases, &stations::world_more_request()).await;
+                let _ = follow.try_send(Cmd::Answered(Reply::Rows(token, rows)));
+            }),
+            // A country's own cache, else what the atlas already holds for it
+            // while the country's list is fetched behind it.
+            Ask::Country(code, known) => {
+                if code.len() != 2 || !code.chars().all(|c| c.is_ascii_uppercase()) {
+                    return self.answer(Reply::Rows(token, None));
+                }
+                self.ctx.spawn(async move {
+                    let path = cache_path(Some(&code));
+                    let cached = ctx.pool().run(move || read_cache(&path)).await.flatten();
+                    if let Some((doc, rows)) = cached.filter(|(d, r)| stations::valid_country_cache(d, &code) && !r.is_empty()) {
+                        let _ = follow.try_send(Cmd::Answered(Reply::Rows(token, Some(rows))));
+                        if stale_doc(&doc) {
+                            let _ = follow.try_send(Cmd::Refresh(Some(code), None));
+                        }
+                        return;
+                    }
+                    let local: Vec<Station> = known.into_iter().filter(|s| s.country_code == code).take(100).collect();
+                    if local.is_empty() {
+                        let _ = follow.try_send(Cmd::Refresh(Some(code), Some(token)));
+                    } else {
+                        let _ = follow.try_send(Cmd::Answered(Reply::Rows(token, Some(local))));
+                        let _ = follow.try_send(Cmd::Refresh(Some(code), None));
+                    }
+                });
+            }
+            Ask::Search(q) => {
+                let q = q.trim().to_owned();
+                if q.is_empty() || q.encode_utf16().count() > 128 {
+                    return self.answer(Reply::Rows(token, None));
+                }
+                self.ctx.spawn(async move {
+                    let mut lists = Vec::new();
+                    let mut ok = false;
+                    for r in stations::search_requests(&q) {
+                        let rows = request(&bases, &r).await;
+                        ok |= rows.is_some();
+                        lists.push(rows.unwrap_or_default());
+                    }
+                    let found = ok.then(|| stations::union(&lists, stations::MAX_RECORDS));
+                    let _ = follow.try_send(Cmd::Answered(Reply::Rows(token, found)));
+                });
+            }
+            Ask::Cliamp => {
+                if !self.cliamp.is_empty() {
+                    return self.answer(Reply::Rows(token, Some(self.cliamp.clone())));
+                }
+                self.ctx.spawn(async move {
+                    let args: Vec<String> = [
+                        "curl", "--fail", "--silent", "--connect-timeout", "4", "--max-time", "8", "--max-filesize", "65536",
+                        "--proto", "=https", "--user-agent", USER_AGENT, stations::CLIAMP_URL,
+                    ]
+                    .map(String::from)
+                    .to_vec();
+                    let rows = curl(&args).await.and_then(|t| stations::parse_cliamp(&t)).filter(|r| !r.is_empty());
+                    let _ = follow.try_send(Cmd::CliampRead(rows.clone()));
+                    let _ = follow.try_send(Cmd::Answered(Reply::Rows(token, rows)));
+                });
+            }
+        }
+    }
+
+    fn refresh_outputs(&mut self) {
+        if self.st.outputs_loading {
+            return;
+        }
+        self.st.outputs_loading = true;
+        let follow = self.follow.clone();
+        self.ctx.spawn(async move {
+            let argv: Vec<String> = ["pactl", "-f", "json", "list", "sinks"].map(String::from).to_vec();
+            let sinks = curl(&argv)
+                .await
+                .filter(|t| t.encode_utf16().count() <= stations::MAX_RESPONSE_CHARS)
+                .and_then(|t| stations::parse_sinks(&t));
+            let _ = follow.try_send(Cmd::OutputsRead(sinks));
+        });
+    }
+
     async fn handle(&mut self, cmd: Cmd) {
         match cmd {
+            Cmd::Play(station, list) => self.play(station, list).await,
+            Cmd::ToggleMute => {
+                if self.ready() {
+                    self.write(json!(["cycle", "mute"])).await;
+                }
+            }
+            Cmd::ClearLocalError => self.st.local_error.clear(),
+            Cmd::RefreshOutputs => self.refresh_outputs(),
+            Cmd::OutputsRead(sinks) => {
+                self.st.outputs_loading = false;
+                self.st.outputs_error = if sinks.is_none() { "Audio outputs are unavailable".into() } else { String::new() };
+                self.st.outputs = sinks.unwrap_or_default();
+            }
+            Cmd::Atlas(token, ask) => self.atlas(token, ask),
+            Cmd::Answered(reply) => self.answer(reply),
+            Cmd::Refresh(country, token) => self.refresh(country, token),
+            Cmd::RefreshDone(country) => {
+                if let Some(i) = self.refreshing.iter().position(|c| *c == country) {
+                    self.refreshing.remove(i);
+                }
+            }
+            Cmd::CliampRead(rows) => {
+                if let Some(rows) = rows {
+                    self.cliamp = rows;
+                }
+            }
             Cmd::PlayFromSaved(station, list) => {
                 self.play(station, list.clone()).await;
                 self.refresh_saved(&list);
@@ -808,6 +1061,8 @@ pub async fn run(ctx: Ctx) {
         search_want: String::new(),
         search_at: None,
         search_busy: false,
+        refreshing: Vec::new(),
+        cliamp: Vec::new(),
     };
     radio.load_state();
     // formalshell.service stops with KillMode=process, so a shell restart

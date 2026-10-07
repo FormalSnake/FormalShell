@@ -7,7 +7,7 @@ use vello_cpu::kurbo::{Affine, Cap, Join, Rect, RoundedRect, Shape, Stroke, Vec2
 use vello_cpu::peniko::{BlendMode, Compose, Fill, Mix};
 use vello_cpu::{Pixmap, RenderContext, Resources};
 
-use crate::scene::{IRect, Paint, Scene};
+use crate::scene::{Brush, IRect, Paint, Scene, VOp};
 use fs_theme::color::Rgba;
 
 pub struct Renderer {
@@ -149,6 +149,36 @@ impl Renderer {
                     }
                     self.ctx.pop_layer();
                 }
+                Paint::Vector(ops) => {
+                    self.ctx.set_transform(at);
+                    let mut depth = 0;
+                    for op in ops.iter() {
+                        match op {
+                            VOp::Fill(path, brush) => {
+                                self.set_brush(brush);
+                                self.ctx.fill_path(path);
+                            }
+                            VOp::Stroke(path, brush, width) => {
+                                self.set_brush(brush);
+                                self.ctx.set_stroke(Stroke::new(*width));
+                                self.ctx.stroke_path(path);
+                            }
+                            VOp::Clip(path) => {
+                                self.ctx.push_clip_layer(path);
+                                depth += 1;
+                            }
+                            VOp::Pop => {
+                                if depth > 0 {
+                                    self.ctx.pop_layer();
+                                    depth -= 1;
+                                }
+                            }
+                        }
+                    }
+                    for _ in 0..depth {
+                        self.ctx.pop_layer();
+                    }
+                }
                 Paint::Cells { rects, glyphs } => {
                     self.ctx.set_transform(at);
                     for (r, ink) in rects {
@@ -254,6 +284,19 @@ impl Renderer {
             let d = (rect.y as usize + row) * stride + rect.x as usize;
             let s = row * rect.w as usize;
             dst[d..d + rect.w as usize].copy_from_slice(&src[s..s + rect.w as usize]);
+        }
+    }
+}
+
+impl Renderer {
+    fn set_brush(&mut self, brush: &Brush) {
+        match brush {
+            Brush::Solid(c) => self.ctx.set_paint(color(*c)),
+            Brush::Radial { centre, r0, r1, stops } => {
+                let stops: Vec<(f32, AlphaColor<Srgb>)> = stops.iter().map(|(o, c)| (*o, color(*c))).collect();
+                let g = vello_cpu::peniko::Gradient::new_two_point_radial(*centre, *r0 as f32, *centre, *r1 as f32).with_stops(stops.as_slice());
+                self.ctx.set_paint(g);
+            }
         }
     }
 }
