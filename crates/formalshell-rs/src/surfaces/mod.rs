@@ -46,6 +46,10 @@ pub fn changed(app: &mut App, topic: Topic) {
             app.toasts_changed();
             app.refresh_bar(Some(topic));
         }
+        Topic::Devices | Topic::Media => {
+            app.launcher_devices();
+            app.refresh_bar(Some(topic));
+        }
         _ => app.refresh_bar(Some(topic)),
     }
 }

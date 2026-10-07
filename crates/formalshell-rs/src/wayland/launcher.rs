@@ -19,8 +19,14 @@ use crate::surface::{PixelSurface, Surface};
 use crate::surfaces::card::Ends;
 use crate::surfaces::launcher::{Out, Shown};
 
+const WIFI_PASSWORD: &str = "wifi-password";
+const WIFI_IDENTITY: &str = "wifi-identity";
+
 pub struct Window {
     pub shown: Shown,
+    /// The Wi-Fi route keeps the scanner awake while it is the level
+    /// (Menu.qml's `_wantsWifiScan`).
+    scan: Option<crate::services::devices::network::Hold>,
     /// The top line's own band, and everything under it.
     band: Option<PixelSurface>,
     dim: PixelSurface,
@@ -84,7 +90,7 @@ impl App {
         surface.wait_map = true;
         let shown = Shown::new(theme, surface, output, inset, ends, self.motion_scale, self.cast);
         let tone = f64::from(theme.box_style("scrim", None).fill.a);
-        self.launch = Some(Window { shown, band, dim, tone, pressed: None });
+        self.launch = Some(Window { shown, scan: None, band, dim, tone, pressed: None });
         self.log("menu mapped");
     }
 
@@ -120,7 +126,13 @@ impl App {
     }
 
     pub fn menu_input(&mut self, prompt: &str, token: &str) {
-        self.launcher.open_input(prompt, token, false);
+        self.menu_input_as(prompt, token, false);
+    }
+
+    /// An input step; a secret one is drawn masked and never filed.
+    fn menu_input_as(&mut self, prompt: &str, token: &str, secret: bool) {
+        self.launcher.open_input(prompt, token, secret);
+        self.launcher_resolve = true;
         self.show_launcher();
     }
 
@@ -168,6 +180,12 @@ impl App {
 
     /// Menu.qml's `_dispatchInternal`, for the targets this shell serves.
     fn dispatch_internal(&mut self, name: &str) {
+        if let Some((verb, value)) = name.split_once('.').map(|(_, rest)| rest.split_once(':').unwrap_or((rest, "")))
+            && let Some(group) = name.split('.').next()
+            && matches!(group, "wifi" | "bluetooth" | "audio" | "radio")
+        {
+            return self.device_action(group, verb, value);
+        }
         match name {
             "theme.toggleMode" => {
                 let key = crate::services::theme::mode_key(self.store.config.settings());
@@ -180,6 +198,124 @@ impl App {
                 self.set_caffeinated(on);
             }
             other => eprintln!("Menu: unknown internal action: {other}"),
+        }
+    }
+
+    /// Menu.qml's `wifi.`, `bluetooth.`, `audio.` and `radio.` actions.
+    fn device_action(&mut self, group: &str, verb: &str, value: &str) {
+        use crate::services::devices::{bluetooth, network as net};
+        use crate::services::radio::{self, Cmd};
+        let value = value.to_owned();
+        let service = |f: Box<dyn FnOnce(&crate::runtime::Ctx) + Send>| {
+            if let Some(rt) = &self.runtime {
+                rt.service(f);
+            }
+        };
+        match (group, verb) {
+            ("wifi", "enable") => service(Box::new(|ctx| net::set_wifi(ctx, true))),
+            ("wifi", "forget") => service(Box::new(move |ctx| net::forget(ctx, value))),
+            ("wifi", "activate") => {
+                let n = &self.store.devices.network;
+                let Some(row) = n.row(&value).cloned() else { return };
+                if n.action.is_some() {
+                    return;
+                }
+                if row.connected {
+                    return service(Box::new(move |ctx| net::disconnect(ctx, value)));
+                }
+                // A secured network nobody knows, or one whose last attempt
+                // failed on the secret, asks for it: a wrong password is
+                // retyped, never retried.
+                let retype = n.failure.as_ref().is_some_and(|f| f.ssid == value && f.secret);
+                if retype || (row.secured && !row.known) {
+                    let (prompt, token) = if row.enterprise {
+                        (format!("Identity for {value}"), WIFI_IDENTITY)
+                    } else {
+                        (format!("Password for {value}"), WIFI_PASSWORD)
+                    };
+                    self.wifi_pending = Some((value, String::new()));
+                    self.menu_input_as(&prompt, token, token == WIFI_PASSWORD);
+                } else {
+                    service(Box::new(move |ctx| net::connect(ctx, value, net::Secret::Saved)));
+                }
+            }
+            ("bluetooth", "power") if value == "on" => bluetooth::ask(bluetooth::Ask::Power(true)),
+            ("bluetooth", "toggle") => {
+                let Some(d) = self.store.devices.bluetooth.devices.iter().find(|d| d.address.eq_ignore_ascii_case(&value)) else { return };
+                let kind = if d.connected { bluetooth::ActionKind::Disconnect } else { bluetooth::ActionKind::Connect };
+                bluetooth::ask(bluetooth::Ask::Run(d.address.clone(), kind));
+            }
+            ("audio", "sink" | "source") => {
+                let c = if verb == "sink" {
+                    fs_audio::Command::SetDefaultSink(Some(value))
+                } else {
+                    fs_audio::Command::SetDefaultSource(Some(value))
+                };
+                service(Box::new(move |_| crate::services::devices::audio::command(c)));
+            }
+            ("radio", _) => {
+                let r = &self.store.media.radio;
+                let results = r.search.as_ref().and_then(|(_, f)| f.clone()).unwrap_or_default();
+                let station = r.favorites.iter().chain(results.iter()).find(|s| s.uuid == value).cloned();
+                match (verb, station) {
+                    ("stop", _) => radio::send(Cmd::Stop),
+                    ("fav", Some(s)) => radio::send(Cmd::PlayFromSaved(s, r.favorites.clone())),
+                    ("play", Some(s)) => radio::send(Cmd::PlayFromSaved(s, results)),
+                    ("favorite" | "unfavorite", Some(s)) => {
+                        if r.favorites.iter().any(|f| f.uuid == s.uuid) == (verb == "unfavorite") {
+                            radio::send(Cmd::ToggleFavorite(s));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            _ => eprintln!("Menu: unknown internal action: {group}.{verb}"),
+        }
+    }
+
+    /// shell.qml's `selectionResolved`: the answers whose token an
+    /// in-process owner holds.
+    fn launcher_answers(&mut self) {
+        for (token, value, cancelled) in self.launcher.take_resolved() {
+            if token == WIFI_IDENTITY || token == WIFI_PASSWORD {
+                self.wifi_answer(&token, value, cancelled);
+            }
+        }
+    }
+
+    /// WifiService.resolveInput, then the launcher back on the Wi-Fi list.
+    fn wifi_answer(&mut self, token: &str, value: Option<String>, cancelled: bool) {
+        use crate::services::devices::network as net;
+        let Some((ssid, identity)) = self.wifi_pending.take() else { return };
+        let value = value.unwrap_or_default();
+        if cancelled || value.is_empty() {
+            return;
+        }
+        if token == WIFI_IDENTITY {
+            self.wifi_pending = Some((ssid.clone(), value));
+            self.menu_input_as(&format!("Password for {ssid}"), WIFI_PASSWORD, true);
+            return;
+        }
+        let Some(row) = self.store.devices.network.row(&ssid) else { return };
+        let secret = if !identity.is_empty() && row.enterprise {
+            net::Secret::Eap { identity, password: value }
+        } else {
+            net::Secret::Psk(value)
+        };
+        if let Some(rt) = &self.runtime {
+            rt.service(move |ctx| net::connect(ctx, ssid, secret));
+        }
+        self.menu_open(Some("wifi"));
+    }
+
+    /// The device routes' rows, again from the store.
+    pub fn launcher_devices(&mut self) {
+        let mut moved = false;
+        for (name, rows) in crate::surfaces::launcher::device_sources(&self.store) {
+            moved |= self.store.menu.apply(index::Diff::Source(name.into(), rows));
+        }
+        if moved || self.launcher.open {
+            self.launcher_store_changed();
         }
     }
 
@@ -201,6 +337,13 @@ impl App {
 
     /// The launcher's frame, its scrim on the card's own pose.
     pub(super) fn present_launcher(&mut self, now: Instant) {
+        self.launcher_answers();
+        if let Some(w) = &mut self.launch {
+            let want = self.launcher.open && w.shown.open && self.launcher.level.as_deref() == Some("wifi");
+            if want != w.scan.is_some() {
+                w.scan = want.then(crate::services::devices::network::Hold::new);
+            }
+        }
         if self.launch.as_ref().is_some_and(|w| w.finished(now)) {
             self.launch = None;
             self.sync_join();

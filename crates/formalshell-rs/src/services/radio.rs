@@ -49,6 +49,9 @@ pub struct State {
     pub error: String,
     pub player_error: String,
     pub local_error: String,
+    /// The launcher's station search (RadioSearchProvider.qml): the query
+    /// the answer is for, and the stations, `None` when every mirror failed.
+    pub search: Option<(String, Option<Vec<Station>>)>,
 }
 
 impl Default for State {
@@ -67,6 +70,7 @@ impl Default for State {
             error: String::new(),
             player_error: String::new(),
             local_error: String::new(),
+            search: None,
         }
     }
 }
@@ -137,6 +141,11 @@ pub enum Cmd {
     SetVolume(f64),
     RandomRows(Option<Vec<Station>>),
     Refreshed(Vec<Station>),
+    /// Saved when it is not a favourite, dropped when it is.
+    ToggleFavorite(Station),
+    /// A launcher query, run 500ms after the last one asked.
+    Search(String),
+    Searched(String, Option<Vec<Station>>),
 }
 
 static CMD: OnceLock<async_channel::Sender<Cmd>> = OnceLock::new();
@@ -241,6 +250,9 @@ struct Radio {
     last_random: String,
     random_busy: bool,
     follow: async_channel::Sender<Cmd>,
+    search_want: String,
+    search_at: Option<Instant>,
+    search_busy: bool,
 }
 
 impl Radio {
@@ -603,6 +615,26 @@ impl Radio {
         });
     }
 
+    fn start_search(&mut self) {
+        let q = self.search_want.clone();
+        if self.search_busy || q.is_empty() || q.chars().count() > 128 {
+            return;
+        }
+        self.search_busy = true;
+        let (bases, follow) = (self.bases.clone(), self.follow.clone());
+        self.ctx.spawn(async move {
+            let mut lists = Vec::new();
+            let mut ok = false;
+            for r in stations::search_requests(&q) {
+                let rows = request(&bases, &r).await;
+                ok |= rows.is_some();
+                lists.push(rows.unwrap_or_default());
+            }
+            let found = ok.then(|| stations::union(&lists, stations::MAX_RECORDS));
+            let _ = follow.try_send(Cmd::Searched(q, found));
+        });
+    }
+
     async fn random_rows(&mut self, rows: Option<Vec<Station>>) {
         self.random_busy = false;
         let Some(rows) = rows else {
@@ -650,6 +682,40 @@ impl Radio {
                     self.play(station, list).await;
                 }
             }
+            Cmd::ToggleFavorite(station) => {
+                if station.uuid.is_empty() {
+                    return;
+                }
+                if !self.writable {
+                    self.st.local_error = "Favorite could not be updated".into();
+                    return;
+                }
+                let before = self.st.favorites.len();
+                self.st.favorites.retain(|s| s.uuid != station.uuid);
+                if self.st.favorites.len() == before {
+                    self.st.favorites.insert(0, stations::saved_record(&station));
+                    self.st.favorites.truncate(stations::MAX_FAVORITES);
+                }
+                self.st.local_error.clear();
+                self.save_state();
+            }
+            Cmd::Search(q) => {
+                let q = q.trim().to_owned();
+                let answered = self.st.search.as_ref().is_some_and(|(a, _)| *a == q);
+                if q.chars().count() < 2 || q == self.search_want || answered {
+                    return;
+                }
+                self.search_want = q;
+                self.search_at = Some(Instant::now() + Duration::from_millis(500));
+            }
+            Cmd::Searched(q, found) => {
+                self.search_busy = false;
+                if q != self.search_want {
+                    self.start_search();
+                    return;
+                }
+                self.st.search = Some((q, found));
+            }
             Cmd::Next => self.step(1).await,
             Cmd::Previous => self.step(-1).await,
             Cmd::Stop => self.stop().await,
@@ -669,7 +735,7 @@ impl Radio {
     }
 
     fn deadline(&self) -> Option<Instant> {
-        [self.save_at, self.stop_at, self.mpv.as_ref().and_then(|m| m.connect_at)].into_iter().flatten().min()
+        [self.save_at, self.stop_at, self.search_at, self.mpv.as_ref().and_then(|m| m.connect_at)].into_iter().flatten().min()
     }
 
     async fn next_event(&mut self, rx: &async_channel::Receiver<Cmd>) -> Ev {
@@ -725,6 +791,9 @@ pub async fn run(ctx: Ctx) {
         last_random: String::new(),
         random_busy: false,
         follow: tx,
+        search_want: String::new(),
+        search_at: None,
+        search_busy: false,
     };
     radio.load_state();
     // formalshell.service stops with KillMode=process, so a shell restart
@@ -756,6 +825,10 @@ pub async fn run(ctx: Ctx) {
                 if radio.save_at.is_some_and(|t| t <= now) {
                     radio.save_at = None;
                     radio.save_state();
+                }
+                if radio.search_at.is_some_and(|t| t <= now) {
+                    radio.search_at = None;
+                    radio.start_search();
                 }
                 if radio.stop_at.is_some_and(|t| t <= now) {
                     radio.stop_at = None;

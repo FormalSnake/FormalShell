@@ -197,6 +197,9 @@ pub struct App {
     /// at the next idle frame, so the first open finds the text and rows
     /// already laid out.
     launcher_warm: bool,
+    /// The network the launcher's password step is for, and the identity
+    /// an enterprise one was given first (WifiService.pendingSsid).
+    wifi_pending: Option<(String, String)>,
     mods: fs_menu::nav::Modifiers,
     menu_buttons: Option<serde_json::Value>,
     menu_launches: Option<serde_json::Value>,
@@ -259,6 +262,7 @@ impl App {
             launch: None,
             launcher_resolve: true,
             launcher_warm: false,
+            wifi_pending: None,
             mods: Default::default(),
             menu_buttons: None,
             menu_launches: None,
