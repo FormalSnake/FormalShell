@@ -157,7 +157,7 @@ fn identity_and_capabilities_hold() {
         let p = rig.proxy().await;
         assert_eq!(
             p.get_server_information().await.unwrap(),
-            ("quickshell".into(), "quickshell".into(), env!("CARGO_PKG_VERSION").into(), "1.2".into())
+            ("formalshell".into(), "FormalShell".into(), env!("CARGO_PKG_VERSION").into(), "1.2".into())
         );
         assert_eq!(p.get_capabilities().await.unwrap(), ["persistence", "body", "actions", "icon-static"]);
     });
@@ -410,7 +410,7 @@ fn name_already_owned_is_an_error_and_not_stolen() {
         assert!(matches!(err, Error::NameTaken), "{err:?}");
 
         let p = rig.proxy().await;
-        assert_eq!(p.get_server_information().await.unwrap().0, "quickshell");
+        assert_eq!(p.get_server_information().await.unwrap().0, "formalshell");
         p.notify("a", 0, "", "s", "", &[], hints(vec![]), 0).await.unwrap();
         notified(&rig.events).await;
     });

@@ -131,8 +131,9 @@ leg_notify_assert() {
     fail "no toasts-expanded screenshot produced"
   fi
   cat "$notify_server_info_path" 2>/dev/null || true
-  # GetServerInformation and GetCapabilities, held byte for byte.
-  grep -qxF 'ssss "quickshell" "quickshell" "" "1.2"' "$notify_server_info_path" \
+  # GetServerInformation at whatever release this is, and GetCapabilities
+  # held byte for byte.
+  grep -qxE 'ssss "formalshell" "FormalShell" "[0-9]+\.[0-9]+\.[0-9]+" "1\.2"' "$notify_server_info_path" \
     || fail "GetServerInformation is not the expected answer: $(head -n 1 "$notify_server_info_path")"
   grep -qxF 'as 4 "persistence" "body" "actions" "icon-static"' "$notify_server_info_path" \
     || fail "GetCapabilities is not the expected answer: $(tail -n 1 "$notify_server_info_path")"

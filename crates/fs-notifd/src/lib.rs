@@ -58,7 +58,7 @@ impl From<zbus::Error> for Error {
 
 /// What `GetServerInformation` and `GetCapabilities` report.
 ///
-/// The default advertises the identity `quickshell`, no markup, and the
+/// The default advertises the identity `formalshell`, no markup, and the
 /// `persistence`, `body`, `actions` and `icon-static` capabilities.
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -72,8 +72,8 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Config {
-            name: "quickshell".into(),
-            vendor: "quickshell".into(),
+            name: "formalshell".into(),
+            vendor: "FormalShell".into(),
             version: env!("CARGO_PKG_VERSION").into(),
             spec_version: "1.2".into(),
             capabilities: ["persistence", "body", "actions", "icon-static"].map(String::from).into(),

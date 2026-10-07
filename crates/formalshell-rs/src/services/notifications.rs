@@ -683,10 +683,10 @@ fn arrival(n: &fs_notifd::Notification, replaced: bool) -> Arrival {
     }
 }
 
-/// The server identity senders may key on: the default name and capabilities,
-/// and an empty version.
+/// The server identity senders may key on: the default name and
+/// capabilities, at this package's version.
 fn config() -> Config {
-    Config { version: String::new(), ..Config::default() }
+    Config { version: env!("CARGO_PKG_VERSION").into(), ..Config::default() }
 }
 
 pub async fn run(ctx: Ctx) {
