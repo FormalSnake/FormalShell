@@ -111,6 +111,7 @@ leg_menu_budget_assert() {
   # where a gap came from (the compositor's wait or the shell's own turn).
   grep -E '^(commit|ipc|event loop:) ' "$shell_log_path" > "$shot_dir/menu-budget.log" || true
   echo "SMOKE_MENU_BUDGET_LOG $shot_dir/menu-budget.log"
+  echo "SMOKE_MENU_BUDGET_SHELL $shell_log_path"
   local worst
   worst=$(echo "$out" | tail -1)
   local first gap quiet opens
