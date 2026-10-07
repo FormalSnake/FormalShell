@@ -18,7 +18,7 @@ pub struct NowPlaying {
 }
 
 /// The slot ActiveWindow's app icon takes: a body-size line of text.
-fn slot(env: &Env) -> f64 {
+pub(super) fn slot(env: &Env) -> f64 {
     (env.store.theme.theme.font_size.body * 1.25).round()
 }
 
@@ -53,7 +53,7 @@ impl Cell for NowPlaying {
             None => Part::Icon { name: "music".into(), dim: !available, dot: false },
         }];
         if let Some((title, _)) = &self.track {
-            parts.push(Part::Free { text: title.clone(), dim: false, lead: 0.0, ceiling: CAP });
+            parts.push(Part::Free { text: title.clone(), dim: false, lead: 0.0, ceiling: CAP, cross: true });
         }
         let tooltip = match &self.track {
             None => "NOTHING PLAYING / CLICK FOR THE RADIO".to_owned(),

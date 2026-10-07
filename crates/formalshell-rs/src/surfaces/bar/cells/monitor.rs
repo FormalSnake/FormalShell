@@ -48,7 +48,7 @@ impl Cell for Monitor {
             tooltip.push_str(&format!(" / GPU {}", pct(self.gpu)));
         }
         let mut parts = vec![
-            Part::Icon { name: "activity".into(), dim: false, dot: false },
+            Part::SlotIcon { name: "activity".into(), width: look.huge },
             Part::DimLabel { text },
         ];
         if self.label {

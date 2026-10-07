@@ -117,6 +117,10 @@ impl App {
         let qh = self.qh.clone();
         let theme = &self.store.theme.theme;
         let Some(t) = &mut self.toasts else { return };
+        if now >= t.rel_at + surfaces::toasts::REL_EVERY {
+            t.rel_at = now;
+            self.toasts_dirty = true;
+        }
         if (self.toasts_dirty || t.animating(now)) && t.surface.mapped {
             t.draw(&self.store, theme, &mut self.bar.kit, &insets, self.motion_scale, now);
             t.sync_region(&self.compositor);

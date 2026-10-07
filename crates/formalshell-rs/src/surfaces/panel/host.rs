@@ -82,6 +82,18 @@ struct Handoff {
 pub enum Out {
     None,
     Close,
+    /// Close, then open the launcher on this route.
+    Summon(&'static str),
+}
+
+impl Effect<'_> {
+    fn out(&self) -> Out {
+        match (self.summon, self.close) {
+            (Some(route), _) => Out::Summon(route),
+            (None, true) => Out::Close,
+            (None, false) => Out::None,
+        }
+    }
 }
 
 pub struct Host {
@@ -255,7 +267,24 @@ impl Host {
     }
 
     fn view<'a>(&'a self, store: &'a Store, theme: &'a Theme) -> View<'a> {
-        View { store, theme, output: self.place.output, cursor: self.cursor.key.as_deref().filter(|_| self.cursor.active) }
+        View { store, theme, output: self.place.output, cursor: self.cursor.key.as_deref().filter(|_| self.cursor.active), hovered: self.hovered_stop() }
+    }
+
+    /// The stop under the pointer: the hit's own, else the smallest row
+    /// round it that has one.
+    fn hovered_stop(&self) -> Option<String> {
+        let path = self.body.hover.as_ref()?;
+        let hit = self.body.hits.iter().find(|h| &h.path == path)?;
+        if hit.stop.is_some() {
+            return hit.stop.clone();
+        }
+        let r = hit.rect;
+        self.body
+            .hits
+            .iter()
+            .filter(|h| h.stop.is_some() && h.rect.x <= r.x && h.rect.y <= r.y && h.rect.right() >= r.right() && h.rect.bottom() >= r.bottom())
+            .min_by_key(|h| h.rect.w * h.rect.h)
+            .and_then(|h| h.stop.clone())
     }
 
     /// The frame's target size off the content, before the morph.
@@ -369,7 +398,9 @@ impl Host {
         if !actions.is_empty() {
             parts.push(w::row(s.xs, actions));
         }
-        parts.push(w::icon_button("x").tip("Close").on("close").key("close"));
+        if self.module.closable() {
+            parts.push(w::icon_button("x").tip("Close").on("close").key("close"));
+        }
         w::row(0.0, parts).fill()
     }
 
@@ -387,7 +418,7 @@ impl Host {
         let ring = theme.ring_width();
 
         self.wake = None;
-        let v = View { store, theme, output: self.place.output, cursor: self.cursor.key.as_deref().filter(|_| self.cursor.active) };
+        let v = View { store, theme, output: self.place.output, cursor: self.cursor.key.as_deref().filter(|_| self.cursor.active), hovered: self.hovered_stop() };
         let head = if self.module.header() { Some(self.header(&v, &s)) } else { None };
         let body = self.module.body(&v);
         let module_wake = self.module.wake(&v);
@@ -486,7 +517,7 @@ impl Host {
     }
 
     fn effect<'a>(store: &'a Store, runtime: Option<&'a Runtime>) -> Effect<'a> {
-        Effect { store, runtime, close: false }
+        Effect { store, runtime, close: false, summon: None }
     }
 
     /// cursor.js `move` and Panel.qml's `moveCursor`.
@@ -548,7 +579,7 @@ impl Host {
                 Key::Move(..) => return Out::None,
             };
             self.module.edit(edit, &mut fx);
-            return if fx.close { Out::Close } else { Out::None };
+            return fx.out();
         }
         match name {
             Key::Escape if self.module.escape() => {}
@@ -585,7 +616,7 @@ impl Host {
             },
         }
         self.take_module_cursor();
-        if fx.close { Out::Close } else { Out::None }
+        fx.out()
     }
 
     /// The stop a panel moved the cursor to by itself.
@@ -694,7 +725,7 @@ impl Host {
         let mut fx = Self::effect(store, runtime);
         self.module.event(&e, &mut fx);
         self.take_module_cursor();
-        if fx.close { Out::Close } else { Out::None }
+        fx.out()
     }
 
     /// A scroll of `dx`, `dy` wheel notches: a scroll region under the

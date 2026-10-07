@@ -263,6 +263,13 @@ pub struct El {
     /// Text laid out at least as wide as this one shaped in its own font
     /// (a column of times sized off its widest).
     pub gauge: Option<String>,
+    /// Breathes between full and 0.4 opacity on the pulse clock.
+    pub pulse: bool,
+    /// What this node shows, so a change of it slides and fades the node in.
+    pub swap: Option<i64>,
+    /// An icon on a disc over the bottom-right corner (a notification's
+    /// source mark).
+    pub badge: Option<&'static str>,
 }
 
 impl El {
@@ -274,7 +281,22 @@ impl El {
             Kind::Input { .. } | Kind::Para { .. } | Kind::Matrix { .. } | Kind::Lyrics(_) => Size::Fill,
             _ => Size::Hug,
         };
-        Self { kind, width, pad: [0.0; 4], key: None, stop: false, on: None, tip: None, centred: false, top: false, mid: false, gauge: None }
+        Self { kind, width, pad: [0.0; 4], key: None, stop: false, on: None, tip: None, centred: false, top: false, mid: false, gauge: None, pulse: false, swap: None, badge: None }
+    }
+
+    pub fn badge(mut self, icon: &'static str) -> Self {
+        self.badge = Some(icon);
+        self
+    }
+
+    pub fn swap(mut self, token: i64) -> Self {
+        self.swap = Some(token);
+        self
+    }
+
+    pub fn pulse(mut self, on: bool) -> Self {
+        self.pulse = on;
+        self
     }
 
     pub fn key(mut self, key: impl Into<String>) -> Self {

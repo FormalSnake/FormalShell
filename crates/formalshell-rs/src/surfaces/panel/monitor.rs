@@ -124,13 +124,13 @@ impl Panel for Monitor {
 
     fn event(&mut self, ev: &crate::ui::Event, fx: &mut Effect) {
         if ev.on == "open" {
-            fx.close = true;
+            fx.summon = Some("monitor");
         }
     }
 
     fn activate(&mut self, stop: &str, fx: &mut Effect) {
         if stop == "open" {
-            fx.close = true;
+            fx.summon = Some("monitor");
         }
     }
 }

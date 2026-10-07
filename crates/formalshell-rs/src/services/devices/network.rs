@@ -19,12 +19,17 @@ use fs_network::{ConnectError, DeviceKind, NetworkManager, Snapshot};
 use futures_lite::{FutureExt, StreamExt};
 
 use crate::runtime::Ctx;
+use crate::services::info;
+use crate::services::wants::Source;
 use crate::store;
 
 /// WifiService.qml's `actionTimeout`.
 const ACTION_TIMEOUT: Duration = Duration::from_secs(15);
 /// How often a held scanner asks the radio for a fresh scan.
 const SCAN_EVERY: Duration = Duration::from_secs(10);
+
+/// ConnectivityService's settle between the link coming up and the refetch.
+const RECONNECT_SETTLE: Duration = Duration::from_secs(3);
 
 const ST_PHASE: Duration = Duration::from_millis(5000);
 const ST_SAMPLE: Duration = Duration::from_millis(500);
@@ -299,7 +304,30 @@ pub async fn run(ctx: Ctx) {
         }
     };
     INNER.with_borrow_mut(|i| i.nm = Some(nm));
+    let mut online = false;
+    let mut settling: Option<std::rc::Rc<std::cell::Cell<bool>>> = None;
     while let Some(snapshot) = changes.next().await {
+        let up = snapshot.devices.iter().any(|d| d.connected());
+        if up != online {
+            online = up;
+            if let Some(stale) = settling.take() {
+                stale.set(true);
+            }
+            if up {
+                // DHCP and DNS on a fresh association are not up yet, so the
+                // polls that went stale offline go again after a settle.
+                let cancelled = std::rc::Rc::new(std::cell::Cell::new(false));
+                settling = Some(cancelled.clone());
+                ctx.spawn(async move {
+                    Timer::after(RECONNECT_SETTLE).await;
+                    if !cancelled.get() {
+                        for source in [Source::Weather, Source::Github, Source::Tailscale, Source::SystemUpdate] {
+                            info::kick(source);
+                        }
+                    }
+                });
+            }
+        }
         INNER.with_borrow_mut(|i| {
             let was = connected_ssid(i);
             i.snapshot = Some(snapshot);
@@ -448,6 +476,18 @@ pub fn forget(ctx: &Ctx, ssid: String) {
                 eprintln!("network: {err}");
                 clear(ActionKind::Forget, &ssid);
             }
+        }
+    });
+}
+
+/// A wired row's click: down while it is up, else up on the profile
+/// NetworkManager picks.
+pub fn wired_toggle(ctx: &Ctx, interface: String, connected: bool) {
+    let Some(nm) = nm() else { return };
+    ctx.spawn(async move {
+        let done = if connected { nm.disconnect_wired(&interface).await } else { nm.connect_wired(&interface).await };
+        if let Err(err) = done {
+            eprintln!("network: {err}");
         }
     });
 }

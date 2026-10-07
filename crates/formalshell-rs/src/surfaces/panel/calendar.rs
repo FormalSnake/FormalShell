@@ -158,7 +158,8 @@ impl Panel for Calendar {
         head.extend(WEEKDAYS.iter().map(|d| w::section_label(s, d, None, false).mid().fill()));
         let mut lines = vec![w::row(s.row_gap, head).fill()];
         for (r, line) in cells.chunks(grid::COLUMNS).enumerate() {
-            let mut row = vec![w::value(clock::pad2(weeks[r].into())).size(Type::Caption).ink(Ink::Muted).width(Size::Px(s.xl)).mid()];
+            let week = w::value(clock::pad2(weeks[r].into())).size(Type::Caption).ink(Ink::Muted).width(Size::Px(s.xl)).mid();
+            let mut row = Vec::new();
             for (k, cell) in line.iter().enumerate() {
                 let i = r * grid::COLUMNS + k;
                 let date = cell.date();
@@ -186,7 +187,8 @@ impl Panel for Calendar {
                         .on(key(i)),
                 );
             }
-            lines.push(w::row(s.row_gap, row).fill());
+            let days = w::row(s.row_gap, row).fill().swap(i64::from(self.year) * 12 + i64::from(self.month));
+            lines.push(w::row(s.row_gap, vec![week, days]).fill());
         }
         let month = w::column(s.row_gap, vec![w::section_label(s, &month_name, None, true), w::column(s.row_gap, lines)]);
 

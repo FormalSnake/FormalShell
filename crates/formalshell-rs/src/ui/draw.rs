@@ -39,7 +39,7 @@ fn weight(w: Weight) -> f32 {
 
 pub fn style(cx: &Cx, font: &Font) -> TextStyle {
     let family = if font.mono { cx.kit.look.mono } else { cx.kit.look.sans };
-    TextStyle { family, size: px(cx, font.size), weight: weight(font.weight) }
+    TextStyle { family, size: px(cx, font.size), weight: weight(font.weight), tracking: 0.0 }
 }
 
 fn shape(cx: &mut Cx, s: &str, font: &Font) -> ShapedText {
@@ -49,7 +49,7 @@ fn shape(cx: &mut Cx, s: &str, font: &Font) -> ShapedText {
 
 fn icon(cx: &mut Cx, name: &str, size: Type) -> ShapedText {
     let g = fs_theme::icons::glyph(&cx.kit.look.icon_set, name);
-    let st = TextStyle { family: Family::Named(g.family), size: px(cx, size), weight: 400.0 };
+    let st = TextStyle { family: Family::Named(g.family), size: px(cx, size), weight: 400.0, tracking: 0.0 };
     cx.kit.shape(g.text, st)
 }
 
@@ -370,6 +370,50 @@ fn child_path(path: &str, el: &El, i: usize) -> String {
 
 /// Paints `el` into `rect` (its full measured box, padding included).
 pub fn paint(cx: &mut Cx, el: &El, rect: Rect, path: &str) {
+    let pulse = el.pulse && cx.theme.motion_enabled;
+    if !pulse && el.swap.is_none() && el.badge.is_none() {
+        return paint_body(cx, el, rect, path);
+    }
+    let saved = cx.alpha;
+    let mut rect = rect;
+    if pulse {
+        let born = cx.born(path);
+        cx.animate();
+        cx.alpha *= crate::motion::breathe(born, cx.now);
+    }
+    if let Some(token) = el.swap {
+        let (progress, sign) = cx.swap(path, token);
+        let dx = (1.0 - progress) * sign * cx.theme.space.lg;
+        cx.alpha *= progress as f32;
+        rect = Rect::new(rect.x0 + dx, rect.y0, rect.x1 + dx, rect.y1);
+    }
+    paint_body(cx, el, rect, path);
+    if let Some(name) = el.badge {
+        badge(cx, rect, name, path);
+    }
+    cx.alpha = saved;
+}
+
+/// The source mark riding a slot's corner: a caption-sized disc in the
+/// background colour keeping the glyph readable over the picture under it,
+/// reaching `xxs` past the slot.
+fn badge(cx: &mut Cx, rect: Rect, name: &str, path: &str) {
+    let d = cx.theme.font_size.caption;
+    let xxs = cx.theme.space.xxs;
+    let disc = IRect::new((rect.x1 + xxs - d).round() as i32, (rect.y1 + xxs - d).round() as i32, d.round() as i32, d.round() as i32);
+    let glyph = icon(cx, name, Type::Caption);
+    let fill = cx.a(cx.theme.colors.get("background"));
+    let ink = cx.a(cx.theme.colors.get("mutedForeground"));
+    let at = (disc.x + (disc.w - glyph.width) / 2, disc.y + (disc.h - glyph.line_height()) / 2);
+    let mut p = cx.painter(&format!("{path}/badge"));
+    p.rect(disc, fill, disc.w as f32 / 2.0);
+    p.text(&glyph, at, ink, &[]);
+    let last = p.last();
+    p.finish();
+    cx.done(last);
+}
+
+fn paint_body(cx: &mut Cx, el: &El, rect: Rect, path: &str) {
     let [ps, pt, pe, pb] = el.pad;
     let inner = Rect::new(rect.x0 + ps, rect.y0 + pt, rect.x1 - pe, rect.y1 - pb);
     if cx.clip.is_some_and(|c| !c.intersects(&irect(rect).union(&IRect::new(irect(rect).x - 4, irect(rect).y - 4, irect(rect).w + 8, irect(rect).h + 8)))) {

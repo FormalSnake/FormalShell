@@ -37,6 +37,8 @@ pub struct TextStyle {
     pub family: Family,
     pub size: f32,
     pub weight: f32,
+    /// Extra advance after every glyph, in pixels (Qt's `letterSpacing`).
+    pub tracking: f32,
 }
 
 /// Room left round the line box for ink that overhangs it (side bearings,
@@ -182,6 +184,9 @@ impl Text {
         }
         builder.push_default(StyleProperty::FontSize(style.size));
         builder.push_default(StyleProperty::FontWeight(FontWeight::new(style.weight)));
+        if style.tracking != 0.0 {
+            builder.push_default(StyleProperty::LetterSpacing(style.tracking));
+        }
         let mut layout: Layout<()> = builder.build(source);
         layout.break_all_lines(None);
 

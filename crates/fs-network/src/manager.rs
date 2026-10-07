@@ -353,6 +353,40 @@ impl NetworkManager {
         Ok(false)
     }
 
+    /// Brings a wired device up on the profile NetworkManager picks for it
+    /// (`/` asks for its best match), as Quickshell's `network.connect()`.
+    pub async fn connect_wired(&self, interface: &str) -> zbus::Result<()> {
+        let none = ObjectPath::try_from("/")?;
+        for path in self.manager.get_devices().await? {
+            let Some(device) = self.read_device(path.clone()).await? else {
+                continue;
+            };
+            if device.kind == DeviceKind::Wired && device.interface == interface {
+                self.manager.activate_connection(&none, &path, &none).await?;
+                return Ok(());
+            }
+        }
+        Ok(())
+    }
+
+    /// Takes a wired device's active connection down.
+    pub async fn disconnect_wired(&self, interface: &str) -> zbus::Result<()> {
+        for path in self.manager.get_devices().await? {
+            let Some(device) = self.read_device(path.clone()).await? else {
+                continue;
+            };
+            if device.kind != DeviceKind::Wired || device.interface != interface {
+                continue;
+            }
+            let props = self.props(&path, DEVICE_INTERFACE).await?;
+            if let Some(active) = get::<OwnedObjectPath>(&props, "ActiveConnection").filter(|a| a.as_str() != "/") {
+                self.manager.deactivate_connection(&active).await?;
+            }
+            return Ok(());
+        }
+        Ok(())
+    }
+
     /// Deletes every saved profile for the SSID. `Ok(false)` when there was
     /// none.
     pub async fn forget(&self, ssid: &str) -> zbus::Result<bool> {

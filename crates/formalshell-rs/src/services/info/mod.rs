@@ -8,6 +8,7 @@
 //! reads the keys it owns again whenever that changes.
 
 pub mod calendar;
+pub mod geoclue;
 pub mod github;
 pub mod iphone;
 pub mod monitor;

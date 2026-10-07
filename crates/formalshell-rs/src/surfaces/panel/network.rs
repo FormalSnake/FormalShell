@@ -106,6 +106,12 @@ impl Network {
         fx.service(move |ctx| net::forget(ctx, ssid));
     }
 
+    fn wired(name: &str, fx: &mut Effect) {
+        let connected = Self::state(fx).wired_rows.iter().any(|d| d.name == name && d.connected);
+        let name = name.to_owned();
+        fx.service(move |ctx| net::wired_toggle(ctx, name, connected));
+    }
+
     fn speed(fx: &mut Effect) {
         if !Self::state(fx).speed.running() {
             fx.service(|ctx| {
@@ -141,8 +147,8 @@ impl Network {
         let failed = status.as_ref().is_some_and(|(_, f)| *f);
         let name = if r.ssid.is_empty() { w::label("Hidden network").ink(Ink::Muted) } else { w::label(r.ssid.clone()) };
         let mut top = vec![w::icon("wifi"), name.elide(), w::value(format!("{}%", (r.signal * 100.0).round()))];
-        // Forget reveals on the row the pointer or the keyboard is on.
-        if r.known && !r.connected && v.cursor == Some(key.as_str()) && n.action.is_none() {
+        // Forget reveals on the row the pointer is on.
+        if r.known && !r.connected && v.hovered.as_deref() == Some(key.as_str()) && n.action.is_none() {
             top.push(w::icon("trash").ink(Ink::Dim).on(format!("forget:{}", r.ssid)).tip("Forget"));
         }
         if r.secured {
@@ -346,7 +352,7 @@ impl Panel for Network {
                     if d.connected {
                         r.push(w::icon("check").ink(Ink::Primary));
                     }
-                    w::cell(w::row(s.icon_gap, r).fill()).ghost()
+                    w::cell(w::row(s.icon_gap, r).fill()).ghost().interactive().stop(format!("wired:{}", d.name)).on(format!("wired:{}", d.name))
                 })
                 .collect();
             parts.push(w::section(s, "Wired", Some(n.wired_rows.len()), rows));
@@ -415,6 +421,8 @@ impl Panel for Network {
                     self.activate_row(ssid, fx);
                 } else if let Some(ssid) = on.strip_prefix("forget:") {
                     self.forget(ssid, fx);
+                } else if let Some(name) = on.strip_prefix("wired:") {
+                    Self::wired(name, fx);
                 }
             }
             _ => {}
@@ -430,6 +438,8 @@ impl Panel for Network {
             fx.service(net::reveal_toggle);
         } else if let Some(ssid) = stop.strip_prefix("wifi:") {
             self.activate_row(ssid, fx);
+        } else if let Some(name) = stop.strip_prefix("wired:") {
+            Self::wired(name, fx);
         }
     }
 

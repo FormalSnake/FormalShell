@@ -27,6 +27,9 @@ use crate::ui::{self, El, Ink, Type, Ui, Variant, Weight, w};
 
 const MAX_PEEK_LEVELS: usize = 2;
 
+/// How often the relative times ("2m ago") recompute, off their own clock.
+pub const REL_EVERY: std::time::Duration = std::time::Duration::from_secs(30);
+
 /// What a click on a card asks for.
 pub enum Act {
     None,
@@ -61,6 +64,8 @@ pub struct Toasts {
     pressed: Option<(String, String)>,
     /// Pictures fitted to the icon slot, per entry.
     fitted: HashMap<String, Option<Bitmap>>,
+    /// When the relative times were last recomputed.
+    pub rel_at: Instant,
 }
 
 /// Where the stack hangs: the bar's own edge cleared, `screenPadding` in.
@@ -85,6 +90,7 @@ fn card(theme: &Theme, g: &Group, now: i64, picture: Option<Bitmap>) -> El {
             .width(ui::Size::Px(slot))
             .centred(),
     };
+    let mark = if e.source == "iphone" { mark.badge("smartphone") } else { mark };
     let header = w::row(
         s.icon_gap,
         vec![
@@ -94,10 +100,10 @@ fn card(theme: &Theme, g: &Group, now: i64, picture: Option<Bitmap>) -> El {
             w::icon_button("x").on("close"),
         ],
     );
-    let mut parts = vec![header, w::text(e.summary.clone()).weight(Weight::Medium).elide().fill()];
+    let mut parts = vec![header, w::para(e.summary.clone(), Type::Body, Weight::Medium, Ink::Fg, 2)];
     let body = model::sanitize_body(&e.body, &e.app_name, &e.app_icon);
     if !body.is_empty() {
-        parts.push(w::text(body).size(Type::BodySmall).ink(Ink::Muted).elide().fill());
+        parts.push(w::para(body, Type::BodySmall, Weight::Normal, Ink::Muted, 2));
     }
     let actions = model::button_actions(e);
     if !actions.is_empty() {
@@ -128,12 +134,13 @@ fn bubble(theme: &Theme, g: &Group, now: i64, picture: Option<Bitmap>, hovered: 
         .width(ui::Size::Px(slot))
         .centred(),
     };
+    let mark = if e.source == "iphone" { mark.badge("smartphone") } else { mark };
     let mut head = vec![w::section_label(s, &e.app_name, None, false), w::caption(meta).mono().fill()];
     head.push(if hovered { w::icon_button("x").on("close") } else { w::space(s.control_height) });
-    let mut words = vec![w::row(s.icon_gap, head), w::text(e.summary.clone()).weight(Weight::Semibold).elide().fill()];
+    let mut words = vec![w::row(s.icon_gap, head), w::para(e.summary.clone(), Type::Body, Weight::Semibold, Ink::Fg, 2)];
     let body = model::sanitize_body(&e.body, &e.app_name, &e.app_icon);
     if !body.is_empty() {
-        words.push(w::text(body).size(Type::BodySmall).ink(Ink::Muted).elide().fill());
+        words.push(w::para(body, Type::BodySmall, Weight::Normal, Ink::Muted, 2));
     }
     let actions = model::button_actions(e);
     if !actions.is_empty() {
@@ -154,6 +161,7 @@ impl Toasts {
             hovered: false,
             pressed: None,
             fitted: HashMap::new(),
+            rel_at: Instant::now(),
         }
     }
 
@@ -263,8 +271,12 @@ impl Toasts {
             slot.members = by_key[k].member_ids.clone();
             let radius = theme.box_radius(&b, rect.h as f64);
             let shown = IRect::new(rect.x, rect.y, rect.w, (rect.h as f64 * slot.reveal.value(now).clamp(0.0, 1.0)).round() as i32);
-            let mut p = Painter::new(&mut self.scene, &mut slot.nodes, Some(shown)).after(anchor);
-            ui::boxes::paint(&mut p, rect, &b, radius, 1.0, 0.0);
+            // The box opens out with the unfold, so its cast opens with it
+            // rather than being cut to the card's own rect.
+            let reach = fs_theme::style::geometry::cast_pad(&b.casts).ceil() as i32;
+            let around = IRect::new(rect.x - reach, rect.y - reach, rect.w + reach * 2, shown.h + reach * 2);
+            let mut p = Painter::new(&mut self.scene, &mut slot.nodes, Some(around)).after(anchor);
+            ui::boxes::paint(&mut p, shown, &b, radius, 1.0, 0.0);
             p.finish();
             anchor = slot.nodes.last().copied().or(anchor);
             if g.content_visible {
@@ -350,5 +362,60 @@ impl Toasts {
 
     pub fn animating(&self, now: Instant) -> bool {
         !self.surface.mapped || self.slots.values().any(|s| s.reveal.running(now))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::services::theme::getter;
+    use crate::ui::el::Kind;
+    use serde_json::json;
+
+    fn group(source: &str, body: &str) -> Group {
+        let entry = model::Entry {
+            source: source.into(),
+            app_name: "Messages".into(),
+            summary: "hello".into(),
+            body: body.into(),
+            ..Default::default()
+        };
+        Group { entry, count: 1, member_ids: Vec::new() }
+    }
+
+    fn walk(el: &El, f: &mut dyn FnMut(&El)) {
+        f(el);
+        if let Kind::Column { children, .. } | Kind::Row { children, .. } = &el.kind {
+            children.iter().for_each(|c| walk(c, f));
+        }
+    }
+
+    fn theme() -> Theme {
+        Theme::resolve(getter(json!({})), &fs_theme::palette::fallback("dark"))
+    }
+
+    #[test]
+    fn a_card_mirrored_off_the_phone_carries_the_source_mark() {
+        let theme = theme();
+        for (source, marked) in [("iphone", true), ("", false)] {
+            let mut badges = 0;
+            walk(&card(&theme, &group(source, ""), 0, None), &mut |e| badges += usize::from(e.badge.is_some()));
+            assert_eq!(badges, usize::from(marked), "source {source:?}");
+            let mut badges = 0;
+            walk(&bubble(&theme, &group(source, ""), 0, None, false), &mut |e| badges += usize::from(e.badge.is_some()));
+            assert_eq!(badges, usize::from(marked), "bubble, source {source:?}");
+        }
+    }
+
+    #[test]
+    fn the_summary_and_the_body_wrap_to_two_lines() {
+        let theme = theme();
+        let mut wrapped = Vec::new();
+        walk(&card(&theme, &group("", "some body"), 0, None), &mut |e| {
+            if let Kind::Para { lines, .. } = &e.kind {
+                wrapped.push(*lines);
+            }
+        });
+        assert_eq!(wrapped, vec![2, 2]);
     }
 }

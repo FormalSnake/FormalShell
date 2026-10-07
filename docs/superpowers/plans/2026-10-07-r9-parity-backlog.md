@@ -5,37 +5,18 @@ Each is fixed, or kept with the owner's say-so, before R9 cuts over. Grouped
 by surface; one line each.
 
 ## Bar
-- Meta labels have no letter spacing (the text style has no tracking field).
-- Monitor cell's icon slot is narrower than the QML one.
-- ActiveWindow lacks the app icon, desktop-entry name and name crossfade.
-- NowPlaying title crossfade between tracks is not ported.
-- Spaces chip label colour transition is not ported; touchpad wheel steps
-  once per event (no magnitude).
-- Indicators is one cell, not the QML rail of cells; nightlight, overnight,
-  clipssh, airplay and reminder indicators need wiring.
-- Weather location has no GeoClue path and no place name.
-- No re-poll when the network comes back.
+- Indicators is one cell, not the QML rail of cells: a rail needs the strip to host
+  several independent hover and click cells inside one slot, which the cell model
+  does not do yet. All seven indicators are wired into the one cell.
 
 ## Panels
-- Tray menu: no click-outside dismiss, no wheel scroll past the height cap,
-  no animated height morph; second-bar card keeps its opening size when
-  items change while open; no per-item hover tooltips.
-- Wired network row click does nothing (QML connects or disconnects); the
-  Wi-Fi forget icon shows on cursor rather than hover alone.
-- `bluetooth` IPC verbs not ported.
-- Power: low-battery notification watcher, charging and tailscale-dot
-  pulses, iPhone figure in PowerFlow, "Open monitor" only closes.
-- Calendar: life-progress prompt, month-swap slide.
-- App menu populated state (hero, actions, windows) never rendered in a leg.
-- `--pantheon --systemupdate` never opens its panel (check QML too).
-- Spaces preview: one sideways notch scrolls 32 px in Rust, 72 px in QML.
+- Calendar: the life-progress prompt needs the launcher's input answer routed back to the
+  panel (`wayland/launcher.rs`'s resolved tokens), which the R4b launcher agent holds.
 
 ## Notifications
-- Desktop-entry step in the icon order; iPhone source mark on cards; the
-  30 s relative-time refresh; two-line wrapping of summary and body;
-  restack and arrive motion for row toasts; centre header shows the host's
-  close button (QML has none); bell pending dot and count; bubble's
-  pantheon shadow draws outside the unfold clip while arriving.
+- Restack and arrive motion for row toasts: needs the departing-slot model Toasts.qml
+  keeps (a leaving card holds its frozen geometry while it fades), the staggered
+  restack springs, the arrive translate and the velocity deform, about 300 lines.
 
 ## Lock and auth
 - Polkit card's slide-in off the top line and its identity avatar.

@@ -170,6 +170,15 @@ impl Cell for Tray {
         false
     }
 
+    /// The item's own words, else its title, else its id (TrayCell.qml).
+    fn tip_at(&self) -> Option<(String, f64, f64)> {
+        let i = self.hover.filter(|_| self.icons())?;
+        let item = &self.items[i];
+        let text = [&item.tooltip, &item.title, &item.id].into_iter().find(|t| !t.is_empty())?.clone();
+        let (start, e) = *self.boxes().get(i)?;
+        Some((text, start, e))
+    }
+
     fn custom(&mut self) -> Option<&mut dyn Custom> {
         Some(self)
     }
