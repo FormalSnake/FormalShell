@@ -14,12 +14,7 @@
 # valid in the local store. Combined with the formalshell/quickshell
 # packages also being staged below, `nix build .#formalshell` inside the VM
 # needs neither the network nor a shared store to be a no-op.
-#
-# greeterImplementation picks services.formalshell-greeter.implementation.
-# The slot VMs keep "qml"; testvm-greeter-rs (dev/vm.sh with
-# FS_VM_ATTR=testvm-greeter-rs) boots the Rust greeter in a smaller VM of
-# its own, so trying it never restarts a slot another run is using.
-{ self, nixpkgs, quickshell, greeterImplementation ? "qml" }:
+{ self, nixpkgs, quickshell }:
 
 nixpkgs.lib.nixosSystem {
   system = "aarch64-linux";
@@ -81,7 +76,7 @@ nixpkgs.lib.nixosSystem {
           host.pkgs = nixpkgs.legacyPackages.aarch64-darwin;
           graphics = false;
           cores = 6;
-          memorySize = if greeterImplementation == "qml" then 8192 else 4096;
+          memorySize = 8192;
           diskSize = 40960;
           useNixStoreImage = true;
           writableStore = true;
@@ -169,17 +164,10 @@ nixpkgs.lib.nixosSystem {
         # deployment on real hardware needs none of them.
         services.formalshell-greeter = {
           enable = true;
-          implementation = greeterImplementation;
           extraEnvironment = {
             WLR_BACKENDS = "headless";
             WLR_RENDERER = "pixman";
             WLR_LIBINPUT_NO_DEVICES = "1";
-            # Surfaces Greetd's own qCDebug trail (Connected/Sending
-            # request/Received response/Authentication complete/Quitting) in
-            # sessionLogFile — dev/smoke-greeter.sh's evidence for the auth
-            # exchange, since greetd(1) itself barely logs beyond errors
-            # (confirmed by reading greetd/src/context.rs).
-            QT_LOGGING_RULES = "quickshell.service.greetd.debug=true";
           };
           # Append, not truncate: greetd falls back to this same
           # default_session almost immediately after a successful login's
