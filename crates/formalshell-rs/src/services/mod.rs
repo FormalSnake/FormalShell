@@ -21,11 +21,13 @@ pub mod herdr;
 pub mod hyprland;
 pub mod icons;
 pub mod lights;
+pub mod localsend;
 pub mod media;
 pub mod menu;
 pub mod nightlight;
 pub mod notifications;
 pub mod overnight;
+pub mod picker;
 pub mod info;
 pub mod lyrics;
 pub mod plugins;
@@ -77,4 +79,6 @@ pub fn start(ctx: &Ctx) {
     ctx.spawn(screensaver::run(ctx.clone()));
     ctx.spawn(clipboard::run(ctx.clone()));
     ctx.spawn(clipssh::run(ctx.clone()));
+    ctx.spawn(picker::run(ctx.clone()));
+    ctx.spawn(localsend::run(ctx.clone()));
 }

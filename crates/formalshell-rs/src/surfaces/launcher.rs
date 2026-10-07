@@ -43,6 +43,9 @@ pub enum View {
     Rows,
     Emoji,
     AppGrid,
+    Picker,
+    /// MonitorView.qml: the metric tiles over the process table.
+    Monitor,
 }
 
 impl View {
@@ -51,6 +54,8 @@ impl View {
             View::Rows => "rows",
             View::Emoji => "emoji",
             View::AppGrid => "appGrid",
+            View::Picker => "picker",
+            View::Monitor => "monitor",
         }
     }
 }
@@ -111,6 +116,37 @@ pub struct Model {
     pub dirty: bool,
     /// A `pasteAfter` row ran: the chord goes out once the window is gone.
     pub paste: bool,
+    pub picker: Picker,
+    /// The Dark | Light switcher's height at the head of the body, 0 when
+    /// the route has none.
+    picker_switch_h: f64,
+    /// The monitor route's tile strip height, 0 off the route.
+    monitor_strip_h: f64,
+    /// The monitor route keeps both polls running while it is the level.
+    monitor_wants: Option<(crate::services::wants::Want, crate::services::wants::Want)>,
+    /// The pid an Enter armed TERM on; the next Enter on it sends it.
+    monitor_armed: Option<u64>,
+}
+
+pub const MONITOR_ROUTE: &str = "monitor";
+
+/// WallpaperPickerProvider.qml: the wallpaper route lists `dir`, and in
+/// select mode answers `token` in picker-selection.txt instead of setting
+/// the wallpaper.
+#[derive(Clone, Debug, Default)]
+pub struct Picker {
+    pub select: bool,
+    pub dir: String,
+    pub token: String,
+    pub light: bool,
+    /// `picker select` set this up for the open that follows.
+    pending: bool,
+}
+
+pub const PICKER_ROUTE: &str = "wallpaper";
+
+pub fn picker_selection_path() -> std::path::PathBuf {
+    state::state_path().with_file_name("picker-selection.txt")
 }
 
 impl Default for Model {
@@ -135,6 +171,11 @@ impl Default for Model {
             cursor: 0,
             cursor_id: String::new(),
             paste: false,
+            picker: Picker::default(),
+            picker_switch_h: 0.0,
+            monitor_strip_h: 0.0,
+            monitor_wants: None,
+            monitor_armed: None,
             placed: false,
             want: String::new(),
             from_keys: true,
@@ -259,6 +300,116 @@ impl Model {
         }
     }
 
+    /// The clipboard routes' 50/50 split: the list, then the cursor row's
+    /// whole content.
+    pub fn split(&self) -> bool {
+        self.mode == Mode::Menu && matches!(self.level.as_deref(), Some("clipboard" | "share.history"))
+    }
+
+    pub fn body_height(&self) -> f64 {
+        self.body_h
+    }
+
+    pub fn on_picker(&self) -> bool {
+        self.mode == Mode::Menu && self.level.as_deref() == Some(PICKER_ROUTE)
+    }
+
+    pub fn picker_variants(&self, store: &Store) -> fs_menu::providers::WallpaperVariants {
+        if store.picker.dir != self.picker.dir {
+            return Default::default();
+        }
+        fs_menu::providers::wallpaper_variants(&store.picker.scanned, &self.picker.dir)
+    }
+
+    fn picker_variant(&self) -> Option<fs_menu::providers::Variant> {
+        use fs_menu::providers::Variant;
+        Some(if self.picker.light { Variant::Light } else { Variant::Dark })
+    }
+
+    pub fn picker_listing(&self, store: &Store) -> Vec<String> {
+        fs_menu::providers::wallpaper_listing(&self.picker_variants(store), self.picker_variant()).to_vec()
+    }
+
+    /// The wallpaper route's segmented switcher shows.
+    pub fn picker_switch(&self, store: &Store) -> bool {
+        self.on_picker() && self.picker_variants(store).has_variants
+    }
+
+    /// `openImageSelect`.
+    pub fn open_image_select(&mut self, store: &Store, dir: &str, token: &str) {
+        self.picker_abandon();
+        let dir = if dir.is_empty() { store.config.str("picker.directory").unwrap_or("").to_owned() } else { dir.to_owned() };
+        self.picker = Picker { select: true, dir, token: token.into(), light: self.picker.light, pending: true };
+        self.open(store, Some(PICKER_ROUTE));
+    }
+
+    /// `chooseImage`: false off the route or for a path not listed.
+    pub fn choose_image(&mut self, store: &Store, path: &str) -> bool {
+        if !self.open || !self.on_picker() || !self.picker_listing(store).iter().any(|p| p == path) {
+            return false;
+        }
+        if self.picker.select {
+            write_picker_selection(&json!({"token": self.picker.token, "value": path}));
+            self.picker.token.clear();
+        } else {
+            let mode = fs_menu::providers::wallpaper_pick_mode(&self.picker_variants(store), self.picker_variant());
+            let mode = mode.map(|v| if v == fs_menu::providers::Variant::Light { "light" } else { "dark" });
+            state::set_wallpaper(path, mode);
+        }
+        self.close();
+        true
+    }
+
+    /// `setPickerVariant`.
+    pub fn set_picker_variant(&mut self, store: &Store, light: bool) -> bool {
+        if !self.open || !self.picker_switch(store) {
+            return false;
+        }
+        if self.picker.light != light {
+            self.picker.light = light;
+            self.from_keys = true;
+            self.dirty = true;
+        }
+        true
+    }
+
+    /// `pickerStatus`.
+    pub fn picker_status(&self, store: &Store) -> Value {
+        let v = self.picker_variants(store);
+        let listing = self.picker_listing(store);
+        json!({
+            "open": self.open && self.on_picker(),
+            "mode": if self.picker.select { "select" } else { "wallpaper" },
+            "directory": self.picker.dir,
+            "count": listing.len(),
+            "variant": if v.has_variants { if self.picker.light { "light" } else { "dark" } } else { "none" },
+            "hasVariants": v.has_variants,
+            "cachedThumbnails": listing.iter().filter(|p| store.picker.cached.contains(*p)).count(),
+            "darkCount": v.dark.len(),
+            "lightCount": v.light.len(),
+            "cursor": self.cursor,
+        })
+    }
+
+    fn picker_enter(&mut self, store: &Store) {
+        if !self.picker.pending {
+            self.picker_abandon();
+            self.picker.select = false;
+            self.picker.dir = store.config.str("picker.directory").unwrap_or("").to_owned();
+            self.picker.token.clear();
+        }
+        self.picker.pending = false;
+        self.picker.light = store.state.data.mode == "light";
+        crate::services::picker::command(crate::services::picker::Cmd::Scan(self.picker.dir.clone()));
+    }
+
+    fn picker_abandon(&mut self) {
+        if self.picker.select && !self.picker.token.is_empty() {
+            write_picker_selection(&json!({"token": self.picker.token, "cancelled": true}));
+            self.picker.token.clear();
+        }
+    }
+
     pub fn placeholder(&self, store: &Store) -> String {
         if self.mode != Mode::Menu {
             return self.select_prompt.clone();
@@ -321,7 +472,14 @@ impl Model {
         let emoji = menu && (level == Some("emoji") || emoji_q.is_some());
         let route_rows = matches!(level, Some("nix" | "keybinds" | "calc" | "radio.search" | "clipboard" | "share.history"));
         let grid_wanted = store.config.bool("menu.appGrid").unwrap_or(true);
-        let view = if emoji {
+        let picker = menu && level == Some(PICKER_ROUTE);
+        let monitor = menu && level == Some(MONITOR_ROUTE);
+        let emoji = emoji && !picker && !monitor;
+        let view = if monitor {
+            View::Monitor
+        } else if picker {
+            View::Picker
+        } else if emoji {
             View::Emoji
         } else if menu && grid_wanted && !route_rows {
             View::AppGrid
@@ -339,6 +497,8 @@ impl Model {
                     .collect()
             }
             Mode::Input => Vec::new(),
+            Mode::Menu if picker => fs_menu::providers::image_rows(&self.picker_listing(store), q),
+            Mode::Menu if monitor => monitor_rows(store, q),
             Mode::Menu if matches!(level, Some("clipboard" | "share.history")) => {
                 let history: Vec<Node> = model::visible_children(nodes, level, cond).into_iter().cloned().collect();
                 if history.is_empty() {
@@ -400,8 +560,8 @@ impl Model {
             rows = parts.rows;
             app_count = parts.app_count;
         }
-        let searching = menu && !q.is_empty() && !emoji && !route_rows && keys_q.is_none();
-        let key = format!("{:?}\u{1}{}\u{1}{}", self.mode, level.unwrap_or(""), q);
+        let searching = menu && !q.is_empty() && !emoji && !picker && !monitor && !route_rows && keys_q.is_none();
+        let key = format!("{:?}\u{1}{}\u{1}{}\u{1}{}", self.mode, level.unwrap_or(""), q, if picker && self.picker.light { "light" } else { "" });
         (view, rows, app_count, empty, searching, key)
     }
 
@@ -436,6 +596,8 @@ impl Model {
         let ids: Vec<&str> = self.rows.iter().map(|r| r.id.as_str()).collect();
         let index = nav::rederive(&self.want, self.cursor as i64, &ids, fresh, self.placed);
         self.key = key;
+        self.monitor_strip_h = if view == View::Monitor { ui::measure(&monitor_strip(store, theme), theme.space.popup_width_menu, theme, kit).1 } else { 0.0 };
+        self.picker_switch_h = if self.picker_switch(store) { ui::measure(&picker_switch(self), 400.0, theme, kit).1 } else { 0.0 };
         self.layout(theme, kit);
         self.place(index, false);
         if fresh || view_changed {
@@ -471,13 +633,18 @@ impl Model {
             if band == prev { String::new() } else { band }
         };
         match self.view {
-            View::AppGrid | View::Emoji => {
+            View::AppGrid | View::Emoji | View::Picker => {
+                if self.picker_switch_h > 0.0 {
+                    y += self.picker_switch_h + s.row_gap;
+                }
                 let (cells, min_cell) = if self.view == View::AppGrid {
                     (self.app_count, s.control_height * 4.0)
                 } else {
                     (self.rows.len(), 0.0)
                 };
-                let columns = if self.view == View::Emoji {
+                let columns = if self.view == View::Picker {
+                    fs_theme::tokens::LAUNCHER.picker_columns as usize
+                } else if self.view == View::Emoji {
                     fs_theme::tokens::LAUNCHER.emoji_columns as usize
                 } else {
                     fs_menu::appgrid::columns_for(width, min_cell)
@@ -513,9 +680,13 @@ impl Model {
                     y += band + row_h;
                 }
             }
-            View::Rows => {
+            View::Rows | View::Monitor => {
                 out.columns = 1;
                 let side = s.sm;
+                let width = if self.split() { (width / 2.0).round() } else { width };
+                if self.monitor_strip_h > 0.0 {
+                    y += self.monitor_strip_h + s.section_gap;
+                }
                 for i in 0..self.rows.len() {
                     let h_text = heading(i, &self.sections);
                     let band = band_of(&h_text, i == 0);
@@ -542,7 +713,7 @@ impl Model {
         let view = self.body_h;
         let mut next = self.scroll;
         // The grid's own heading rides with its first row.
-        let top = if self.view != View::Rows && self.cursor < self.cells() && self.cursor < self.layout.columns { 0.0 } else { top };
+        let top = if !matches!(self.view, View::Rows | View::Monitor) && self.cursor < self.cells() && self.cursor < self.layout.columns { 0.0 } else { top };
         if top < next {
             next = top;
         } else if top + h > next + view {
@@ -555,8 +726,8 @@ impl Model {
     fn cells(&self) -> usize {
         match self.view {
             View::AppGrid => self.app_count,
-            View::Emoji => self.rows.len(),
-            View::Rows => 0,
+            View::Emoji | View::Picker => self.rows.len(),
+            View::Rows | View::Monitor => 0,
         }
     }
 
@@ -572,6 +743,7 @@ impl Model {
         self.placed = true;
         self.want = self.cursor_id.clone();
         self.confirm.clear();
+        self.monitor_armed = None;
         self.from_keys = true;
         self.follow();
         self.dirty = true;
@@ -588,7 +760,7 @@ impl Model {
     /// A wheel notch: the view scrolls a row (a grid row of cells) and the
     /// cursor stays where it is.
     pub fn wheel(&mut self, notches: i32) {
-        let step = if self.view == View::Rows { 32.0 } else { self.layout.cell_h.max(1.0) };
+        let step = if matches!(self.view, View::Rows | View::Monitor) { 32.0 } else { self.layout.cell_h.max(1.0) };
         let max = (self.layout.content_h - self.body_h).max(0.0);
         let next = (self.scroll + notches as f64 * step).clamp(0.0, max);
         if next != self.scroll {
@@ -639,8 +811,8 @@ impl Model {
         };
         let drawn: Vec<Value> = match self.view {
             View::AppGrid => self.rows[..self.app_count].iter().map(|r| json!({"id": r.id, "label": r.label})).collect(),
-            View::Rows => self.rows.iter().map(|r| json!({"id": r.id, "label": r.label})).collect(),
-            View::Emoji => Vec::new(),
+            View::Rows | View::Monitor => self.rows.iter().map(|r| json!({"id": r.id, "label": r.label})).collect(),
+            View::Emoji | View::Picker => Vec::new(),
         };
         json!({
             "isOpen": self.open,
@@ -741,6 +913,11 @@ impl Model {
 
     pub fn close(&mut self) {
         self.abandon_select();
+        if self.on_picker() {
+            self.picker_abandon();
+        }
+        self.monitor_wants = None;
+        self.monitor_armed = None;
         self.open = false;
         self.confirm.clear();
     }
@@ -796,7 +973,19 @@ impl Model {
     }
 
     fn enter_level(&mut self, store: &Store, id: Option<String>) {
+        if self.level.as_deref() == Some(PICKER_ROUTE) && id.as_deref() != Some(PICKER_ROUTE) {
+            self.picker_abandon();
+        }
+        let entering = id.as_deref() == Some(PICKER_ROUTE);
+        self.monitor_armed = None;
+        self.monitor_wants = (id.as_deref() == Some(MONITOR_ROUTE)).then(|| {
+            use crate::services::wants::{Source, Want};
+            (Want::new(Source::Monitor), Want::new(Source::Processes))
+        });
         self.level = id;
+        if entering {
+            self.picker_enter(store);
+        }
         self.confirm.clear();
         self.from_keys = true;
         self.query.clear();
@@ -815,6 +1004,7 @@ impl Model {
     pub fn set_query(&mut self, store: &Store, text: &str) {
         self.query = text.into();
         self.confirm.clear();
+        self.monitor_armed = None;
         if self.mode == Mode::Menu && fs_menu::providers::emoji_trigger_query(text).is_some() && store.menu.emoji.is_none() {
             index::ask(Ask::Emoji);
         }
@@ -823,6 +1013,16 @@ impl Model {
     /// `_activateRow`.
     pub fn activate(&mut self, store: &Store, index: usize) -> Out {
         let Some(node) = self.rows.get(index).cloned() else { return Out::None };
+        if self.view == View::Monitor {
+            let Some(pid) = node.id.strip_prefix("proc.").and_then(|p| p.parse::<u64>().ok()) else { return Out::None };
+            self.dirty = true;
+            if self.monitor_armed == Some(pid) {
+                self.monitor_armed = None;
+                return Out::Internal(format!("monitor.kill:{pid}"));
+            }
+            self.monitor_armed = Some(pid);
+            return Out::None;
+        }
         match node.kind {
             NodeKind::Other(ref k) if k == "option" => {
                 self.complete_select(&node.label);
@@ -878,6 +1078,10 @@ impl Model {
                 self.close();
                 Out::Close
             }
+            NodeKind::Image => {
+                let path = node.path.clone();
+                if self.choose_image(store, &path) { Out::Close } else { Out::None }
+            }
             NodeKind::Submenu | NodeKind::Provider => {
                 self.enter_level(store, Some(node.id.clone()));
                 Out::None
@@ -910,10 +1114,10 @@ impl Model {
         let ctx = KeyCtx {
             mode: self.key_mode(),
             query: !self.query.is_empty(),
-            grid: self.view != View::Rows,
+            grid: !matches!(self.view, View::Rows | View::Monitor),
             app_view: false,
             scrollable: false,
-            variants: false,
+            variants: self.picker_switch(store),
         };
         let action = nav::key_action(key, mods, repeat, &ctx);
         let out = match action {
@@ -957,6 +1161,11 @@ impl Model {
                 Out::None
             }
             KeyAction::Pop => self.pop(store),
+            KeyAction::Variant => {
+                let light = !self.picker.light;
+                self.set_picker_variant(store, light);
+                Out::None
+            }
             KeyAction::Close => {
                 self.close();
                 Out::Close
@@ -1072,6 +1281,7 @@ pub struct Shown {
     pub surface: Surface,
     head: Ui,
     body: Ui,
+    preview: Ui,
     foot: Ui,
     rules: Vec<NodeId>,
     pub output: (f64, f64),
@@ -1095,6 +1305,7 @@ impl Shown {
             surface,
             head: Ui::new(Some(top)),
             body: Ui::new(Some(top)),
+            preview: Ui::new(Some(top)),
             foot: Ui::new(Some(top)),
             rules: Vec::new(),
             output,
@@ -1214,6 +1425,18 @@ impl Shown {
         let d = self.body.draw(&body, Rect::new(origin.0, origin.1, origin.0 + inner_w, origin.1 + m.layout.content_h), Some(body_clip), alpha, theme, kit, scene, now);
         if d.animating {
             self.wake = Some(now);
+        }
+        // SplitPreview.qml: the cursor row's whole content beside the list.
+        if m.split() && body_h > 0.0 {
+            let half = (inner_w / 2.0).round();
+            let r = Rect::new(fx + pad + half + s.sm, body_top + s.lg, fx + pad + inner_w - side, body_top + body_h - s.lg);
+            let el = split_preview(m, store, theme, kit, r.width(), r.height());
+            let d = self.preview.draw(&el, r, Some(body_clip), alpha, theme, kit, scene, now);
+            if d.animating {
+                self.wake = Some(now);
+            }
+        } else {
+            self.preview.draw(&w::space(0.0), Rect::new(0.0, 0.0, 0.0, 0.0), Some(body_clip), alpha, theme, kit, scene, now);
         }
         let _ = side;
 
@@ -1363,6 +1586,13 @@ fn body_el(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, scroll: f64, 
             items.push((*y, h, w::section_label(s, text, None, true).pad_start(s.control_padding_x + x)));
         }
     }
+    if m.monitor_strip_h > 0.0 {
+        items.push((lay.slots.first().map_or(s.lg, |s0| s0.y) - m.monitor_strip_h - s.section_gap, m.monitor_strip_h, monitor_strip(store, theme)));
+    }
+    if m.picker_switch_h > 0.0 {
+        let top = lay.slots.first().map_or(0.0, |s0| s0.y) - m.picker_switch_h - s.row_gap;
+        items.push((top, m.picker_switch_h, picker_switch(m).pad_start(s.sm)));
+    }
     let cells = m.cells();
     for (i, slot) in lay.slots.iter().enumerate() {
         if !visible(slot.y, slot.h) {
@@ -1387,6 +1617,21 @@ fn body_el(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, scroll: f64, 
                 .cell_state(|st| st.cursor = selected && m.from_keys)
                 .on(format!("row:{i}"))
                 .key(format!("c:{}", row.id))
+                .width(Size::Px(slot.w))
+                .pad(gutter, gutter, gutter, gutter)
+        } else if m.view == View::Monitor {
+            proc_row(m, row, i, selected, theme).width(Size::Px(slot.w))
+        } else if i < cells && m.view == View::Picker {
+            let gutter = s.sm;
+            let edge = (slot.w - (gutter + s.sm) * 2.0).max(1.0);
+            let image = store.picker.thumbs.get(&row.path).cloned().flatten();
+            w::cell(w::picture(image, edge).centred())
+                .ghost()
+                .selected(selected)
+                .interactive()
+                .cell_state(|st| st.cursor = selected && m.from_keys)
+                .on(format!("row:{i}"))
+                .key(format!("p:{}", row.id))
                 .width(Size::Px(slot.w))
                 .pad(gutter, gutter, gutter, gutter)
         } else if i < cells {
@@ -1437,6 +1682,150 @@ fn body_el(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, scroll: f64, 
     }
     col.push(w::space((lay.content_h - y).max(0.0)));
     w::column(0.0, col)
+}
+
+/// The process table's rows: the filter, busiest first.
+fn monitor_rows(store: &Store, q: &str) -> Vec<Node> {
+    use fs_system::monitor::{format, procs};
+    let p = &store.info.procs;
+    if !p.available {
+        let note = if p.sampled_ms.is_none() { "Reading processes" } else { "No process table" };
+        return vec![Node { dim: Some(true), ..Node::note("monitor.empty", note) }];
+    }
+    let rows = procs::sort_rows(&procs::filter_rows(&p.rows, q), "cpu");
+    if rows.is_empty() {
+        return vec![Node { dim: Some(true), ..Node::note("monitor.empty", format!("No process matches \u{201C}{q}\u{201D}")) }];
+    }
+    rows.iter()
+        .take(200)
+        .map(|r| Node {
+            desc: Some(r.cmd.clone()),
+            meta: Some(format!("{}\u{1}{}\u{1}{}", r.pid, format::proc_pct(r.cpu_fraction), format::bytes(Some(r.mem_bytes)))),
+            ..Node::new(format!("proc.{}", r.pid), r.name.clone(), NodeKind::Action)
+        })
+        .collect()
+}
+
+/// MonitorView.qml's strip: CPU, Memory, GPU, Disk and Network, each a
+/// label over one figure; a reading nobody has taken yet is a dash.
+fn monitor_strip(store: &Store, theme: &Theme) -> El {
+    use fs_system::monitor::format;
+    let s = &theme.space;
+    let m = &store.info.monitor;
+    let gpu = m
+        .cards
+        .iter()
+        .find(|c| c.record.metrics.available && c.record.metrics.busy.is_some())
+        .or_else(|| m.cards.first());
+    let gpu_figure = match gpu {
+        None => "No GPU".to_owned(),
+        Some(c) => c.record.metrics.busy.filter(|_| c.record.metrics.available).map_or_else(|| "No metrics".to_owned(), |b| format::pct(Some(b))),
+    };
+    let disk = m.disk.iter().find(|d| d.mount == "/").or_else(|| m.disk.first());
+    let rx: Option<f64> = m.net_available.then(|| m.net.iter().map(|n| n.rx_bytes_per_sec).sum());
+    let tiles = [
+        ("CPU", format::pct(m.cpu.aggregate)),
+        ("Memory", format::pct(m.mem.as_ref().map(|x| x.used_fraction))),
+        ("GPU", gpu_figure),
+        ("Disk", format::pct(disk.map(|d| d.fraction))),
+        ("Network", format::rate(rx)),
+    ];
+    let cells = tiles
+        .into_iter()
+        .map(|(label, figure)| {
+            w::cell(w::column(s.xxs, vec![w::section_label(s, label, None, false), w::text(figure).size(Type::Title).mono().weight(Weight::Semibold)]))
+                .fill()
+        })
+        .collect();
+    w::row(s.sm, cells).fill().pad(s.sm, 0.0, s.sm, 0.0)
+}
+
+/// One process: name and command line, then pid, CPU and memory in mono.
+/// An armed row turns destructive under a confirm.
+fn proc_row(m: &Model, row: &Node, i: usize, selected: bool, theme: &Theme) -> El {
+    let s = &theme.space;
+    let pid = row.id.strip_prefix("proc.").and_then(|p| p.parse::<u64>().ok());
+    let armed = pid.is_some() && m.monitor_armed == pid;
+    let meta = row.meta.clone().unwrap_or_default();
+    let mut nums = meta.split('\u{1}');
+    let (pid_s, cpu, mem) = (nums.next().unwrap_or(""), nums.next().unwrap_or(""), nums.next().unwrap_or(""));
+    let name = if armed { format!("End {}? Enter again", row.label) } else { row.label.clone() };
+    let mut lead = vec![w::label(name).elide()];
+    if row.kind == NodeKind::Note {
+        return w::cell(w::text(row.label.clone()).ink(Ink::Dim)).ghost();
+    }
+    if let Some(cmd) = row.desc.clone().filter(|c| !c.is_empty() && !armed) {
+        lead.push(w::text(cmd).size(Type::BodySmall).ink(Ink::Dim).elide());
+    }
+    // Fixed gutters, so the mono figures line up down the table.
+    let figure = |t: &str, px: f64| w::caption(t.to_owned()).mono().ink(Ink::Muted).width(Size::Px(px));
+    let trail = vec![figure(pid_s, 56.0), figure(cpu, 48.0), figure(mem, 56.0)];
+    let parts = vec![w::row(s.icon_gap, lead).fill(), w::row(s.sm, trail)];
+    w::cell(w::row(s.control_padding_x, parts).fill())
+        .ghost()
+        .selected(selected)
+        .interactive()
+        .cell_state(|st| st.destructive = armed)
+        .on(format!("row:{i}"))
+        .key(format!("r:{}", row.id))
+}
+
+/// The split pane's picture box for an area `w` by `h`.
+pub fn preview_box(theme: &Theme, kit: &mut Kit, w: f64, h: f64) -> (u32, u32) {
+    let head = ui::measure(&w::section_label(&theme.space, "Ag", None, false), w, theme, kit).1 + theme.space.row_gap;
+    let pad = theme.space.control_padding_x * 2.0;
+    ((w - pad).max(1.0).round() as u32, (h - head - pad).max(1.0).round() as u32)
+}
+
+/// SplitPreview.qml: "Text" or "Image" and the capture time over the full
+/// text, the emoji at display size, or the picture fitted to the pane.
+fn split_preview(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, width: f64, height: f64) -> El {
+    let s = &theme.space;
+    let Some(row) = m.rows.get(m.cursor).filter(|r| r.kind != NodeKind::Note) else { return w::space(0.0) };
+    let image = !row.thumb_source.is_empty();
+    let head = w::row(
+        s.sm,
+        vec![w::section_label(s, if image { "Image" } else { "Text" }, None, false), w::caption(row.time.clone()).mono().ink(Ink::Muted)],
+    );
+    let body = if image {
+        let (bw, bh) = preview_box(theme, kit, width, height);
+        let bitmap = store.clipboard.preview.as_ref().filter(|(p, size, _)| *p == row.thumb_source && *size == (bw, bh)).and_then(|(_, _, b)| b.clone());
+        w::picture(bitmap, f64::from(bw.max(bh))).width(Size::Px(f64::from(bw)))
+    } else if row.emoji_only {
+        w::text(row.full_text.clone()).size(Type::Display).centred()
+    } else {
+        let line = ui::measure(&w::text("Ag"), width, theme, kit).1.max(1.0);
+        let lines = ((height - line * 2.0) / line).floor().max(1.0) as usize;
+        w::para(row.full_text.clone(), Type::Body, Weight::Normal, Ink::Fg, lines)
+    };
+    // The pane keeps its height whatever it holds: room under a text,
+    // and an emoji centred in it.
+    let head_h = ui::measure(&w::section_label(s, "Ag", None, false), width, theme, kit).1;
+    let body_h = ui::measure(&body, width, theme, kit).1;
+    let room = (height - head_h - s.row_gap * 3.0 - s.control_padding_y * 2.0 - body_h).max(0.0);
+    let above = if row.emoji_only { (room / 2.0).floor() } else { 0.0 };
+    w::cell(w::column(s.row_gap, vec![head, w::space(above), body, w::space(room - above)]).fill()).fill()
+}
+
+/// The wallpaper route's Dark | Light switcher.
+fn picker_switch(m: &Model) -> El {
+    w::segmented(vec!["Dark".into(), "Light".into()], usize::from(m.picker.light)).on("variant")
+}
+
+/// A picker cell's picture edge for a slot `w` wide.
+pub fn picker_cell_px(theme: &Theme) -> u32 {
+    let s = &theme.space;
+    let width = s.popup_width_menu - s.panel_padding * 2.0;
+    let cell = width / f64::from(fs_theme::tokens::LAUNCHER.picker_columns.max(1));
+    (cell - (s.sm + s.sm) * 2.0).max(1.0).round() as u32
+}
+
+fn write_picker_selection(payload: &Value) {
+    let path = picker_selection_path();
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = std::fs::write(&path, payload.to_string());
 }
 
 /// Where an item sits across the body, off its key.

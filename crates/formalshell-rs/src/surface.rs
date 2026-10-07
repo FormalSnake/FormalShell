@@ -406,19 +406,31 @@ macro_rules! ignore_events {
 ignore_events!(WpViewporter, WpViewport, WpSinglePixelBufferManagerV1, WpAlphaModifierV1, WpAlphaModifierSurfaceV1, WlBuffer);
 
 /// The desktop's own layer (Background.qml): the theme's background colour,
-/// or the wallpaper's ready pixels over the whole output. Drawn once per
-/// change, never on a clock.
+/// or the wallpaper's ready pixels over the whole output. A new wallpaper
+/// crossfades in over `reveal`; nothing draws at rest, and frame callbacks
+/// are asked for only while a fade runs.
 pub struct Backdrop {
     pub layer: LayerSurface,
     pool: SlotPool,
     buffer: Option<Buffer>,
     size: Option<(i32, i32)>,
-    drawn: Option<(String, i32, i32, [u8; 4])>,
+    drawn: Option<(String, Option<usize>, i32, i32, [u8; 4])>,
+    /// What is on screen once any fade lands.
+    shown: Option<std::sync::Arc<crate::services::wallpaper::Picture>>,
+    fade: Option<Fade>,
+}
+
+struct Fade {
+    from: Option<std::sync::Arc<crate::services::wallpaper::Picture>>,
+    to: Option<std::sync::Arc<crate::services::wallpaper::Picture>>,
+    color: [u8; 4],
+    start: Instant,
+    ms: f64,
 }
 
 impl Backdrop {
     pub fn new(layer: LayerSurface, shm: &Shm) -> Self {
-        Self { layer, pool: SlotPool::new(4096, shm).expect("wl_shm pool"), buffer: None, size: None, drawn: None }
+        Self { layer, pool: SlotPool::new(4096, shm).expect("wl_shm pool"), buffer: None, size: None, drawn: None, shown: None, fade: None }
     }
 
     pub fn configure(&mut self, width: i32, height: i32) {
@@ -431,21 +443,80 @@ impl Backdrop {
         self.size
     }
 
-    /// `picture` when it was made for this size, else the plain colour.
-    pub fn draw(&mut self, picture: Option<&crate::services::wallpaper::Picture>, background: fs_theme::color::Rgba) {
+    /// `picture` when it was made for this size, else the plain colour; a
+    /// change after the first paint fades over `reveal_ms`.
+    pub fn draw(
+        &mut self,
+        picture: Option<std::sync::Arc<crate::services::wallpaper::Picture>>,
+        background: fs_theme::color::Rgba,
+        reveal_ms: f64,
+        qh: &QueueHandle<App>,
+    ) {
         let Some((w, h)) = self.size else { return };
         let picture = picture.filter(|p| (p.width as i32, p.height as i32) == (w, h));
         let [r, g, b, _] = background.to_u8();
-        let key = (picture.map(|p| p.path.clone()).unwrap_or_default(), w, h, [b, g, r, 255]);
+        let color = [b, g, r, 255];
+        let key = (picture.as_ref().map(|p| p.path.clone()).unwrap_or_default(), picture.as_ref().and_then(|p| p.dither), w, h, color);
         if self.drawn.as_ref() == Some(&key) {
             return;
         }
+        let first = self.drawn.is_none();
+        self.drawn = Some(key);
+        let from = match self.fade.take() {
+            Some(f) => f.to,
+            None => self.shown.clone(),
+        };
+        self.shown = picture.clone();
+        if first || reveal_ms <= 0.0 || picture.is_none() {
+            self.paint(None, picture.as_deref(), color, 1.0);
+            return;
+        }
+        self.fade = Some(Fade { from, to: picture, color, start: Instant::now(), ms: reveal_ms });
+        self.step(Instant::now(), qh);
+    }
+
+    /// One frame of a running fade; the frame callback lands back here.
+    pub fn step(&mut self, now: Instant, qh: &QueueHandle<App>) {
+        let Some(f) = &self.fade else { return };
+        let t = (now.duration_since(f.start).as_secs_f64() * 1000.0 / f.ms).clamp(0.0, 1.0);
+        // effectsSlow's ease-out, close enough at a crossfade's length.
+        let a = 1.0 - (1.0 - t).powi(3);
+        let (from, to, color) = (f.from.clone(), f.to.clone(), f.color);
+        if t >= 1.0 {
+            self.fade = None;
+            self.paint(None, to.as_deref(), color, 1.0);
+            return;
+        }
+        let surface = self.layer.wl_surface().clone();
+        surface.frame(qh, FrameCallbackData(surface.clone()));
+        self.paint(Some(from.as_deref()), to.as_deref(), color, a as f32);
+    }
+
+    /// `to` over `from` at `a`; `from` none is no blend at all, `Some(None)`
+    /// the plain colour.
+    fn paint(
+        &mut self,
+        from: Option<Option<&crate::services::wallpaper::Picture>>,
+        to: Option<&crate::services::wallpaper::Picture>,
+        color: [u8; 4],
+        a: f32,
+    ) {
+        let Some((w, h)) = self.size else { return };
         let Ok((buffer, canvas)) = self.pool.create_buffer(w, h, w * 4, wl_shm::Format::Argb8888) else { return };
-        match picture {
-            Some(p) => canvas.copy_from_slice(&p.bgra),
-            None => {
+        match (from, to) {
+            (None, Some(p)) => canvas.copy_from_slice(&p.bgra),
+            (None, None) => {
                 for px in canvas.chunks_exact_mut(4) {
-                    px.copy_from_slice(&key.3);
+                    px.copy_from_slice(&color);
+                }
+            }
+            (Some(src), dst) => {
+                let k = (a.clamp(0.0, 1.0) * 256.0) as u32;
+                let pick = |p: Option<&crate::services::wallpaper::Picture>, i: usize| p.map_or(color[i % 4], |p| p.bgra[i]);
+                for (i, c) in canvas.iter_mut().enumerate() {
+                    let s0 = u32::from(pick(src, i));
+                    let d0 = u32::from(pick(dst, i));
+                    *c = ((s0 * (256 - k) + d0 * k) >> 8) as u8;
                 }
             }
         }
@@ -456,7 +527,8 @@ impl Backdrop {
         surface.damage_buffer(0, 0, w, h);
         self.layer.commit();
         self.buffer = Some(buffer);
-        eprintln!("commit surface=wallpaper {}x{} picture={}", w, h, !key.0.is_empty());
-        self.drawn = Some(key);
+        if from.is_none() {
+            eprintln!("commit surface=wallpaper {}x{} picture={}", w, h, to.is_some());
+        }
     }
 }

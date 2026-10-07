@@ -15,6 +15,7 @@
 # proves the arming press did not already kill.
 leg_processes_flag="--processes"
 leg_processes_order=150
+leg_processes_rust=1
 
 processes_victim_pid_path="$shot_dir/processes-victim.pid"
 processes_restart_pid_path="$shot_dir/processes-restart.pid"

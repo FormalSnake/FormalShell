@@ -144,6 +144,36 @@ impl App {
         self.console_tick();
     }
 
+    /// ConsoleService.runOnce: `script` in a console window of its own,
+    /// under `<appId>.run` so it never becomes the quake console.
+    pub fn console_run_once(&mut self, script: &str) {
+        use fs_info::notifications::Urgency;
+        let fail = |app: &mut Self, body: &str| {
+            app.store.notifications.notify("CONSOLE UNAVAILABLE", body, Urgency::Normal);
+            crate::surfaces::changed(app, crate::store::Topic::Notifications);
+        };
+        if !self.console_available() {
+            return fail(self, "this compositor cannot place a floating window");
+        }
+        if self.console.spawning {
+            return;
+        }
+        let argv = self.console_command();
+        if argv.is_empty() {
+            return fail(self, "console.command is not set");
+        }
+        let app_id = self.console_app_id();
+        let run_id = format!("{app_id}.run");
+        let Some(spawn) = fs_system::console::one_off_argv(Some(&argv), &app_id, &run_id, script) else {
+            return fail(self, &format!("console.command has to name {app_id}"));
+        };
+        self.console.spawning = true;
+        self.console.await_app_id = run_id;
+        self.console.attempts = 0;
+        hyprland::spawn(&spawn);
+        self.console_tick();
+    }
+
     pub fn console_hide(&mut self) {
         let id = self.console_window_id(&self.console_app_id());
         if id.is_empty() {

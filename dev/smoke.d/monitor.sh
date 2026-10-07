@@ -9,10 +9,8 @@
 # status`, taken in the same breath, carries real CPU and memory numbers off
 # the VM's own /proc.
 #
-# Under FS_IMPL=rust this is the bar half: the cell, `monitor status` and
-# `monitor gpu`, and the panel (a stand-in card until the panels land). The
-# launcher's monitor route is the launcher milestone's, so the menu summon
-# and its asserts are skipped there.
+# Under FS_IMPL=rust the cell is also read off `bar room`, whole on the
+# strip.
 #
 # monitor_done_path is this leg's own finish marker: --processes types into
 # the same launcher route and waits on it rather than summoning over this
@@ -55,14 +53,13 @@ leg_monitor_timing() {
 }
 
 leg_monitor_drive() {
-  local script="$shot_dir/monitor-drive.sh" menu_lines="" room_line=""
-  if [ "$fs_impl" != rust ]; then
-    menu_lines="sleep 1
+  local script="$shot_dir/monitor-drive.sh" room_line=""
+  local menu_lines="sleep 1
 $ipc call menu summon monitor > \"$monitor_menu_reply_path\" 2>&1
 sleep 3
 $ipc call menu status > \"$monitor_menu_status_path\" 2>&1
 \"$grim_bin\" \"$monitor_view_png\" > /dev/null 2>&1"
-  else
+  if [ "$fs_impl" = rust ]; then
     room_line="$ipc call bar room > \"$monitor_room_path\" 2>&1"
   fi
   write_script "$script" <<EOF
@@ -143,7 +140,6 @@ leg_monitor_assert() {
   if [ "$fs_impl" = rust ]; then
     jq -e '.[].cells[] | select(.name == "monitor" and .whole == true and .width > 0)' "$monitor_room_path" > /dev/null \
       || fail "the monitor cell is not whole on the strip: $(cat "$monitor_room_path" 2>/dev/null)"
-    return
   fi
   if ! grep -q '^ok$' "$monitor_menu_reply_path" 2>/dev/null; then
     fail "menu summon monitor did not answer ok, got: $(cat "$monitor_menu_reply_path" 2>/dev/null)"

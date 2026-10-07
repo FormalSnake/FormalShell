@@ -213,6 +213,15 @@ impl App {
         if let Some((verb, value)) = name.strip_prefix("lights.").and_then(|r| r.split_once(':')) {
             return self.call_self("lights", verb, &[value]);
         }
+        if let Some((i, id)) = name.strip_prefix("localsend.send:").and_then(|r| r.split_once(':')) {
+            return self.localsend_entry(i, id);
+        }
+        if let Some(attr) = name.strip_prefix("nix.run:") {
+            return self.console_run_once(&format!("nix run nixpkgs#{attr}; read"));
+        }
+        if let Some(pid) = name.strip_prefix("monitor.kill:") {
+            return self.call_self("monitor", "kill", &[pid, "TERM"]);
+        }
         if let Some(alias) = name.strip_prefix("clipssh.send:") {
             return crate::services::clipssh::command(crate::services::clipssh::Cmd::Send(alias.to_owned()));
         }
@@ -461,8 +470,97 @@ impl App {
         if !want.is_empty() {
             crate::services::clipboard::command(crate::services::clipboard::Cmd::Thumbs(want, size));
         }
-        if self.store.menu.apply(index::Diff::Source("clipboard".into(), rows)) {
+        let shared = fs_menu::providers::clipboard_provider(&c.items, fs_menu::providers::ClipMode::Share, paste);
+        let moved = self.store.menu.apply(index::Diff::Source("clipboard".into(), rows));
+        if self.store.menu.apply(index::Diff::Source("shareHistory".into(), shared)) || moved {
             self.launcher_store_changed();
+        }
+    }
+
+    /// The picker grid's pictures, asked for once the listing's thumbnails
+    /// are in the cache (or the warm gave up on them).
+    pub fn launcher_picker(&mut self) {
+        if self.launcher.open && self.launcher.on_picker() {
+            let px = crate::surfaces::launcher::picker_cell_px(&self.store.theme.theme);
+            let p = &self.store.picker;
+            let want: Vec<String> = self
+                .launcher
+                .picker_listing(&self.store)
+                .into_iter()
+                .filter(|path| px != p.thumb_px || !p.thumbs.contains_key(path))
+                .filter(|path| p.cached.contains(path) || !p.cached.is_empty())
+                .collect();
+            if !want.is_empty() {
+                crate::services::picker::command(crate::services::picker::Cmd::Thumbs(want, px));
+            }
+        }
+        self.launcher_store_changed();
+    }
+
+    pub fn picker_summon(&mut self) {
+        self.menu_open(Some(crate::surfaces::launcher::PICKER_ROUTE));
+        self.launcher_picker();
+    }
+
+    pub fn picker_select(&mut self, dir: &str, token: &str) {
+        self.launcher.open_image_select(&self.store, dir, token);
+        self.show_launcher();
+        self.launcher_picker();
+    }
+
+    pub fn picker_choose(&mut self, path: &str) -> bool {
+        let chosen = self.launcher.choose_image(&self.store, path);
+        if chosen {
+            self.hide_launcher();
+        }
+        chosen
+    }
+
+    pub fn picker_variant(&mut self, light: bool) -> bool {
+        let ok = self.launcher.set_picker_variant(&self.store, light);
+        self.launcher_resolve = true;
+        self.launcher_picker();
+        ok
+    }
+
+    /// LocalsendService.sendClipboardEntryAt: a ledger entry to the peer at
+    /// `index` of the last scan.
+    fn localsend_entry(&mut self, index: &str, id: &str) {
+        use crate::services::localsend::{self, Cmd, Payload};
+        use fs_info::notifications::Urgency;
+        let peer = index.parse::<usize>().ok().and_then(|i| self.store.localsend.peers.get(i)).cloned();
+        let Some(peer) = peer else {
+            self.store.notifications.notify("LOCALSEND FAILED", "That device is no longer in range, rescan and try again", Urgency::Critical);
+            return crate::surfaces::changed(self, crate::store::Topic::Notifications);
+        };
+        let Some(entry) = self.store.clipboard.items.iter().find(|e| e.id == id) else { return };
+        let payload = match entry.kind {
+            fs_menu::clipboard::history::EntryKind::Image => Payload::Path(entry.path.clone().unwrap_or_default()),
+            fs_menu::clipboard::history::EntryKind::Text => Payload::Text(entry.text.clone().unwrap_or_default()),
+        };
+        localsend::command(Cmd::Send { peer, payload });
+    }
+
+    /// Asks for the split pane's picture when the cursor sits on an image
+    /// row whose picture is not decoded at the pane's size yet.
+    fn launcher_preview(&mut self) {
+        if !self.launcher.split() {
+            return;
+        }
+        let Some(path) = self.launcher.rows.get(self.launcher.cursor).map(|r| r.thumb_source.clone()).filter(|p| !p.is_empty()) else { return };
+        let theme = &self.store.theme.theme;
+        let s = &theme.space;
+        let inner = s.popup_width_menu - s.panel_padding * 2.0;
+        let width = inner - (inner / 2.0).round() - s.sm * 2.0;
+        let height = self.launcher.body_height() - s.lg * 2.0;
+        if height <= 0.0 {
+            return;
+        }
+        let size = crate::surfaces::launcher::preview_box(theme, &mut self.bar.kit, width, height);
+        let have = self.store.clipboard.preview.as_ref().is_some_and(|(p, sz, _)| *p == path && *sz == size);
+        if !have && self.preview_asked.as_ref() != Some(&(path.clone(), size)) {
+            self.preview_asked = Some((path.clone(), size));
+            crate::services::clipboard::command(crate::services::clipboard::Cmd::Preview(path, size));
         }
     }
 
@@ -528,6 +626,7 @@ impl App {
         }
         let t0 = Instant::now();
         self.resolve_launcher();
+        self.launcher_preview();
         let resolved = t0.elapsed();
         let qh = self.qh.clone();
         let theme = &self.store.theme.theme;
@@ -689,6 +788,10 @@ impl App {
                 }
                 match on.as_deref() {
                     Some("outside" | "close") => self.menu_close(),
+                    Some("variant") => {
+                        let light = !self.launcher.picker.light;
+                        self.picker_variant(light);
+                    }
                     Some("back") => {
                         let out = self.launcher.key(&self.store, nav::Key::Escape, nav::Modifiers::default(), false, None);
                         self.launcher_out(out);
@@ -742,6 +845,20 @@ impl App {
             lights: l.available.then(|| {
                 l.effects.iter().map(|(id, label)| fs_menu::providers::LightEffect { id: id.clone(), label: label.clone() }).collect()
             }),
+            share: {
+                let ls = &self.store.localsend;
+                Some(index::ShareInputs {
+                    installed: ls.installed,
+                    peers: ls.peers.iter().map(|p| p.name.clone()).collect(),
+                    items: self.store.clipboard.items.clone(),
+                    receive: fs_menu::providers::ReceiveStatus {
+                        enabled: ls.enabled,
+                        receiving: ls.receiving,
+                        alias: ls.alias.clone(),
+                        dir: ls.dir.clone(),
+                    },
+                })
+            },
         };
         if self.menu_buttons.as_ref() != Some(&inputs) || !self.store.config.loaded {
             self.menu_buttons = Some(inputs.clone());

@@ -156,6 +156,16 @@ pub struct BaseInputs {
     pub buttons: Value,
     /// The keyboard lights' effects, `None` while no keyboard was found.
     pub lights: Option<Vec<providers::LightEffect>>,
+    /// The share subtree: LocalSend's state and what it can send.
+    pub share: Option<ShareInputs>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ShareInputs {
+    pub installed: bool,
+    pub peers: Vec<String>,
+    pub items: Vec<fs_menu::clipboard::history::Entry>,
+    pub receive: providers::ReceiveStatus,
 }
 
 pub enum Ask {
@@ -251,6 +261,12 @@ fn base(inputs: &BaseInputs) -> Tree {
     }
     if let Some(effects) = &inputs.lights {
         for (k, v) in providers::lights_entries(true, effects) {
+            merged.insert(k, v);
+        }
+    }
+    if let Some(sh) = &inputs.share {
+        let peers: Vec<providers::Peer> = sh.peers.iter().map(|n| providers::Peer { name: n.clone() }).collect();
+        for (k, v) in providers::share_peer_entries(sh.installed, &peers, &sh.items, Some(&sh.receive)) {
             merged.insert(k, v);
         }
     }

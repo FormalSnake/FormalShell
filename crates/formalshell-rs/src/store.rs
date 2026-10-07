@@ -4,7 +4,7 @@
 
 use crate::services::{
     appicon, barpaint, brightness, caffeinate, capture, clipboard, clipssh, clock, commands, config, devices, display, herdr,
-    hyprland, info, lights, lyrics, media, menu, nightlight, notifications, plugins, recording, screensaver, state, theme, tray,
+    hyprland, info, lights, localsend, lyrics, media, menu, nightlight, notifications, picker, plugins, recording, screensaver, state, theme, tray,
     visualizer, wallpaper,
 };
 
@@ -39,6 +39,8 @@ pub struct Store {
     pub screensaver: screensaver::State,
     pub clipboard: clipboard::State,
     pub clipssh: clipssh::State,
+    pub picker: picker::State,
+    pub localsend: localsend::State,
 }
 
 /// One service's change, tagged with the slice it applies to.
@@ -73,6 +75,8 @@ pub enum Diff {
     Screensaver(screensaver::Diff),
     Clipboard(clipboard::Diff),
     Clipssh(clipssh::Diff),
+    Picker(picker::Diff),
+    Localsend(localsend::Diff),
 }
 
 /// The slice a diff changed, for the surfaces that read it.
@@ -110,6 +114,8 @@ pub enum Topic {
     Screensaver,
     Clipboard,
     Clipssh,
+    Picker,
+    Localsend,
 }
 
 impl Store {
@@ -156,6 +162,8 @@ impl Store {
             Diff::Screensaver(d) => self.screensaver.apply(d).then_some(Topic::Screensaver),
             Diff::Clipboard(d) => self.clipboard.apply(d).then_some(Topic::Clipboard),
             Diff::Clipssh(d) => self.clipssh.apply(d).then_some(Topic::Clipssh),
+            Diff::Picker(d) => self.picker.apply(d).then_some(Topic::Picker),
+            Diff::Localsend(d) => self.localsend.apply(d).then_some(Topic::Localsend),
         }
     }
 }

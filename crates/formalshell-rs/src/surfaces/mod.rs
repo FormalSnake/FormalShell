@@ -31,6 +31,13 @@ pub fn changed(app: &mut App, topic: Topic) {
         Topic::Menu => app.launcher_store_changed(),
         Topic::Config => {
             app.launcher_inputs();
+            crate::services::picker::command(crate::services::picker::Cmd::Boot(app.store.config.str("picker.directory").unwrap_or("").to_owned()));
+            let c = &app.store.config;
+            crate::services::localsend::command(crate::services::localsend::Cmd::Config {
+                receive: c.bool("localsend.receive").unwrap_or(false),
+                alias: c.str("localsend.alias").unwrap_or("").to_owned(),
+                dir: c.str("localsend.dir").unwrap_or("").to_owned(),
+            });
             let settings = app.store.config.settings().clone();
             if app.store.theme.apply(theme::Diff::Settings(settings)) {
                 changed(app, Topic::Theme);
@@ -74,7 +81,18 @@ pub fn changed(app: &mut App, topic: Topic) {
             app.launcher_store_changed();
             app.refresh_bar(Some(topic));
         }
-        Topic::Clipboard => app.launcher_clipboard(),
+        Topic::Clipboard => {
+            app.launcher_clipboard();
+            app.launcher_inputs();
+        }
+        Topic::Localsend => app.launcher_inputs(),
+        Topic::Picker => app.launcher_picker(),
+        Topic::Info => {
+            if app.launcher.open && app.launcher.level.as_deref() == Some(crate::surfaces::launcher::MONITOR_ROUTE) {
+                app.launcher_store_changed();
+            }
+            app.refresh_bar(Some(topic));
+        }
         Topic::Clipssh => {
             app.launcher_clipssh();
             app.refresh_bar(Some(topic));

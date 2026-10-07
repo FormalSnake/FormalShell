@@ -142,7 +142,8 @@ pub struct Card {
     pub far_gap: Option<(f64, f64)>,
     /// The frame's whole opacity: 0 cuts a handed-over card outright.
     pub frame_alpha: f32,
-    /// Drawer.qml's `deformAmount`.
+    /// Drawer.qml's `deformAmount`: the pill is small and travels its whole
+    /// height, so it asks for more than a popout does.
     pub deform_amount: f64,
     casts: NodeId,
     shape: NodeId,

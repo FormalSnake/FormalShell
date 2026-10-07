@@ -388,6 +388,30 @@ fn stub() -> Registry<()> {
                 ],
             },
             Target {
+                name: "localsend",
+                functions: vec![
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                    f("peers", &[], Type::String, |_, _| s("[]")),
+                    f("scan", &[], Type::String, |_, _| s("ok")),
+                    f("send", &[("peer", Type::String), ("path", Type::String)], Type::String, |_, a| {
+                        s(format!("send {} {}", a[0].str(), a[1].str()))
+                    }),
+                ],
+            },
+            Target {
+                name: "picker",
+                functions: vec![
+                    f("summon", &[], Type::String, |_, _| s("ok")),
+                    f("select", &[("directory", Type::String), ("token", Type::String)], Type::String, |_, a| {
+                        s(format!("select {} {}", a[0].str(), a[1].str()))
+                    }),
+                    f("choose", &[("path", Type::String)], Type::String, |_, a| s(format!("choose {}", a[0].str()))),
+                    f("variant", &[("name", Type::String)], Type::String, |_, a| s(format!("variant {}", a[0].str()))),
+                    f("close", &[], Type::String, |_, _| s("ok")),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
                 name: "clipboard",
                 functions: vec![
                     f("list", &[], Type::String, |_, _| s("[]")),
@@ -584,6 +608,8 @@ fn signatures_match_qml() {
         super::console::target(),
         super::screensaver::target(),
         super::clipboard::target(),
+        super::picker::target(),
+        super::localsend::target(),
     ] {
         let defs: Vec<String> = real.functions.iter().map(|f| f.definition()).collect();
         let qml = stub.targets.iter().find(|t| t.name == real.name).expect("a stub target");

@@ -240,6 +240,8 @@ pub struct App {
     wifi_pending: Option<(String, String)>,
     mods: fs_menu::nav::Modifiers,
     menu_buttons: Option<crate::services::menu::BaseInputs>,
+    /// The split pane's last picture request, so a frame asks once.
+    preview_asked: Option<(String, (u32, u32))>,
     menu_launches: Option<serde_json::Value>,
     pub capture: crate::surfaces::capture::Capture,
     pickers: picker::Pickers,
@@ -315,6 +317,7 @@ impl App {
             wifi_pending: None,
             mods: Default::default(),
             menu_buttons: None,
+            preview_asked: None,
             menu_launches: None,
             capture: Default::default(),
             pickers: Default::default(),
@@ -330,11 +333,14 @@ impl App {
     fn update_backdrop(&mut self) {
         let Some(b) = &mut self.backdrop else { return };
         let Some((w, h)) = b.size() else { return };
-        wallpaper::show(&self.store.state.data.wallpaper, w as u32, h as u32);
-        let background = self.store.theme.theme.colors.get("background");
+        let theme = &self.store.theme.theme;
+        let dither = theme.wallpaper_dither.then(|| self.store.config.f64("wallpaper.ditherColors").unwrap_or(6.0).max(1.0) as usize);
+        wallpaper::show(&self.store.state.data.wallpaper, w as u32, h as u32, dither);
+        let background = theme.colors.get("background");
         let picture = self.store.wallpaper.picture.clone();
         let wanted = &self.store.state.data.wallpaper;
-        b.draw(picture.as_deref().filter(|p| p.path == *wanted), background);
+        let reveal = theme.motion().families.reveal * self.motion_scale;
+        b.draw(picture.filter(|p| p.path == *wanted && p.dither == dither), background, reveal, &self.qh);
     }
 
     pub fn set_handle(&mut self, handle: LoopHandle<'static, App>) {
@@ -1727,7 +1733,11 @@ impl CompositorHandler for App {
             Some(Owner::Switcher) => self.switcher_frame(),
             Some(o @ (Owner::Launcher | Owner::LauncherScrim(_))) => self.launcher_frame(o, now),
             Some(Owner::Picker(i)) => self.picker_frame(i),
-            Some(Owner::Backdrop) => {}
+            Some(Owner::Backdrop) => {
+                if let Some(b) = &mut self.backdrop {
+                    b.step(now, &self.qh);
+                }
+            }
             None if self.saver_owns(surface) => self.saver_frame_callback(),
             None => {
                 if !self.polkit_frame(surface) {

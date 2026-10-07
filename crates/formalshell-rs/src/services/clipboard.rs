@@ -50,11 +50,14 @@ pub struct State {
     /// one reader. A re-copied image only moves its entry, so the list
     /// alone cannot say a capture happened.
     pub captured: bool,
+    /// The split pane's picture: the capture, the box it was fitted to.
+    pub preview: Option<(String, (u32, u32), Option<Bitmap>)>,
 }
 
 pub enum Diff {
     Items(Vec<Entry>),
     Captured,
+    Preview(String, (u32, u32), Option<Bitmap>),
     Thumbs((u32, u32), Vec<(String, Option<Bitmap>)>),
 }
 
@@ -68,6 +71,7 @@ impl State {
                 self.items = items;
             }
             Diff::Captured => self.captured = true,
+            Diff::Preview(path, size, bitmap) => self.preview = Some((path, size, bitmap)),
             Diff::Thumbs(size, list) => {
                 if size != self.thumb_box {
                     self.thumbs.clear();
@@ -91,6 +95,8 @@ pub enum Cmd {
     Clear,
     /// Decode these captures' `fit` thumbnails into a `(w, h)` box.
     Thumbs(Vec<String>, (u32, u32)),
+    /// The split pane's picture of one capture, fitted to `(w, h)`.
+    Preview(String, (u32, u32)),
 }
 
 static CHANNEL: LazyLock<(Sender<Cmd>, Receiver<Cmd>)> = LazyLock::new(async_channel::unbounded);
@@ -251,6 +257,16 @@ pub async fn run(ctx: Ctx) {
                 let r = history::clear(&state(&items));
                 items = r.state.items;
                 removed = r.removed_paths;
+            }
+            Event::Cmd(Cmd::Preview(path, size)) => {
+                let c = ctx.clone();
+                ctx.spawn(async move {
+                    let p = path.clone();
+                    if let Some(mut list) = c.pool().run(move || decode_thumbs(&[p], size)).await {
+                        let bitmap = list.pop().and_then(|(_, b)| b);
+                        c.publish(store::Diff::Clipboard(Diff::Preview(path, size, bitmap)));
+                    }
+                });
             }
             Event::Cmd(Cmd::Thumbs(paths, size)) => {
                 let c = ctx.clone();
