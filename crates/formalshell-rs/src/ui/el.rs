@@ -166,6 +166,12 @@ pub enum Kind {
     Para { text: String, font: Font, ink: Ink, lines: usize },
     /// A bitmap fitted at its own size in a `size` square; blank without one.
     Picture { pic: Pic, size: f64 },
+    /// Cover.qml: a `muted` well under a border, the picture filling it
+    /// inside the border; the well alone until the picture lands.
+    Cover { pic: Pic, size: f64 },
+    /// VisualizerCanvas.qml: the spectrum in one style, `columns` wide,
+    /// redrawn every frame while `live` and at rest otherwise.
+    Spectrum { style: String, columns: usize, live: bool },
 }
 
 /// One element: what it is, how wide it sits, and how it is addressed.

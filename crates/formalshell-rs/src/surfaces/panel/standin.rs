@@ -30,7 +30,6 @@ fn header(id: &str) -> (&'static str, &'static str) {
         "dualsense" => ("DualSense", "gamepad-2"),
         "power" => ("Power", "zap"),
         "weather" => ("Weather", "cloud"),
-        "media" => ("Media", "music"),
         "github" => ("GitHub", "git-branch"),
         "usage" => ("Usage", "gauge"),
         "tailscale" => ("Tailscale", "network"),
@@ -63,7 +62,7 @@ impl Panel for StandIn {
     fn width(&self, v: &View) -> f64 {
         let s = &v.theme.space;
         match self.id {
-            "calendar" | "earbuds" | "monitor" | "media" => s.popup_width_wide,
+            "calendar" | "earbuds" | "monitor" => s.popup_width_wide,
             _ => s.popup_width_default,
         }
     }

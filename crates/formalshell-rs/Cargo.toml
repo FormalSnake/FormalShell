@@ -9,6 +9,7 @@ async-channel = "2.5"
 async-executor = "1.14"
 async-io = "2.6"
 async-process = "2"
+base64 = "0.22"
 calloop = "0.14"
 chrono = "0.4"
 fs-theme = { version = "0.1.0", path = "../fs-theme" }

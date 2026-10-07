@@ -24,6 +24,7 @@
 pub mod boxes;
 mod draw;
 pub mod el;
+mod spectrum;
 pub mod w;
 
 use std::collections::HashMap;
@@ -118,6 +119,7 @@ pub struct Drawn {
 /// Everything that persists for one surface between draws.
 pub struct Ui {
     groups: HashMap<String, Group>,
+    spectra: HashMap<String, spectrum::Live>,
     tweens: HashMap<String, Tween>,
     births: HashMap<String, Instant>,
     frame: u64,
@@ -143,6 +145,7 @@ impl Ui {
     pub fn new(anchor: Option<NodeId>) -> Self {
         Self {
             groups: HashMap::new(),
+            spectra: HashMap::new(),
             tweens: HashMap::new(),
             births: HashMap::new(),
             frame: 0,
@@ -215,6 +218,7 @@ impl Ui {
             }
         }
         self.tweens.retain(|_, t| frame - t.seen < 120);
+        self.spectra.retain(|_, l| frame - l.seen < 120);
         drawn
     }
 

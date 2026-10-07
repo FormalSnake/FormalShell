@@ -101,6 +101,10 @@ pub enum Part {
     /// cell, scrolling once it outgrows it. `lead` is its own padding,
     /// `ceiling` the most it ever draws.
     Free { text: String, dim: bool, lead: f64, ceiling: f64 },
+    /// Cover.qml in the icon's slot, `size` square: the `muted` well under a
+    /// border, the picture inside it once decoded. Content imagery, so it
+    /// keeps its own colours on any cell fill.
+    Cover { image: crate::ui::el::Pic, size: f64 },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -248,6 +252,7 @@ pub struct Look {
     /// The flat tracks' trough, its thickness and its corner (`muted`,
     /// `trackThickness`, `radiusSm`).
     pub muted_fill: Rgba,
+    pub border: Rgba,
     pub track: f64,
     pub radius_sm: f64,
     pub radius: f32,
@@ -311,6 +316,7 @@ impl Look {
             primary: theme.colors.get("primary"),
             background: theme.colors.get("background"),
             muted_fill: theme.colors.get("muted"),
+            border: theme.colors.get("border"),
             track: s.track_thickness,
             radius_sm: theme.radii.sm,
             radius: theme.box_radius(&theme.box_style("cell", None), s.bar_cell_height) as f32,
@@ -580,6 +586,7 @@ impl Kit {
         let look = self.look.clone();
         match part {
             Part::Icon { name, .. } => self.icon(name),
+            Part::Cover { .. } => self.icon("music"),
             Part::Glyph { text, family } => self.shape(text, TextStyle { family: Family::Named(family), size: look.body, weight: 400.0 }),
             Part::Label { text, weight } => {
                 let w = if band { WEIGHTS.semibold } else { weight.unwrap_or(WEIGHTS.medium as f32) as f64 };
@@ -615,6 +622,10 @@ impl Kit {
             let b = match part {
                 Part::Icon { .. } | Part::Glyph { .. } => {
                     if vertical { (icon_h, look.body as f64) } else { (look.body as f64, icon_h) }
+                }
+                Part::Cover { size, .. } => {
+                    let across = icon_h.max(*size);
+                    if vertical { (across, *size) } else { (*size, across) }
                 }
                 Part::Label { .. } | Part::DimLabel { .. } | Part::Meta { .. } => {
                     if vertical && w > look.content_across() + 0.5 {
@@ -725,6 +736,18 @@ impl Kit {
                         let dot_r = IRect::new((bx + size) as i32 - d, (if vertical { by } else { across_mid as f64 - b.1 / 2.0 }) as i32, d, d);
                         p.rect(dot_r, ink.of(look.primary), d as f32 / 2.0);
                     }
+                }
+                Part::Cover { image, size } => {
+                    let n = size.round() as i32;
+                    let (x, y) = if vertical { (across_mid - n / 2, at.round() as i32) } else { (at.round() as i32, across_mid - n / 2) };
+                    let slot = IRect::new(x, y, n, n);
+                    let radius = fs_theme::tokens::cover_radius(look.radius_sm, *size) as f32;
+                    p.framed(slot, ink.of(look.muted_fill), radius, Rgba::TRANSPARENT, 0.0);
+                    if let Some(image) = &image.0 {
+                        let (w, h) = (image.pixmap.width() as i32, image.pixmap.height() as i32);
+                        p.image(image, (x + (n - w) / 2, y + (n - h) / 2), f.alpha);
+                    }
+                    p.framed(slot, Rgba::TRANSPARENT, radius, ink.of(look.border), look.border_width as f32);
                 }
                 Part::Label { .. } | Part::DimLabel { .. } | Part::Meta { .. } => {
                     let color = ink.of(if matches!(part, Part::Label { .. }) { ink.fg } else { ink.dim });

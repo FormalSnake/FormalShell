@@ -156,6 +156,8 @@ pub struct Active {
     pub length: f64,
     pub can_seek: bool,
     pub can_raise: bool,
+    pub can_next: bool,
+    pub can_previous: bool,
     pub shuffle: Option<bool>,
     pub loop_name: Option<&'static str>,
     pub volume: Option<f64>,
@@ -169,6 +171,8 @@ pub struct State {
     pub ams: ams::State,
     /// A bus name, "radio", "iphone" or "airplay"; "" is auto.
     pub selected: String,
+    /// Decoded art by url and slot size; `None` is art that failed to load.
+    covers: Vec<(String, u32, Option<crate::scene::Bitmap>)>,
 }
 
 pub enum Diff {
@@ -176,6 +180,9 @@ pub enum Diff {
     Radio(radio::State),
     Airplay(airplay::State),
     Ams(ams::State),
+    Cover(String, u32, Option<crate::scene::Bitmap>),
+    /// The panel's source menu, as `media select` does it.
+    Select(String),
 }
 
 /// JS prints a whole number without its fraction.
@@ -194,6 +201,21 @@ fn loop_name(l: LoopStatus) -> &'static str {
 impl State {
     pub fn apply(&mut self, diff: Diff) -> bool {
         let changed = match diff {
+            Diff::Select(id) => {
+                let changed = self.selected != id;
+                self.select(&id);
+                return changed;
+            }
+            Diff::Cover(url, size, bitmap) => {
+                // Only the art something can still be showing is kept.
+                let active = self.active().map(|a| a.art_url).unwrap_or_default();
+                self.covers.retain(|(u, s, _)| *u == active && !(*u == url && *s == size));
+                if url != active {
+                    return false;
+                }
+                self.covers.push((url, size, bitmap));
+                return true;
+            }
             Diff::Mpris(next) => {
                 let same = self.mpris.len() == next.len() && self.mpris.iter().zip(&next).all(|(a, b)| a.same(b));
                 self.mpris = next;
@@ -211,6 +233,16 @@ impl State {
             self.sync_gate();
         }
         changed
+    }
+
+    /// The active art at `size` pixels square, asked for when it has not
+    /// been yet.
+    pub fn cover(&self, url: &str, size: u32, radius: f64) -> Option<crate::scene::Bitmap> {
+        if let Some((_, _, b)) = self.covers.iter().find(|(u, s, _)| u == url && *s == size) {
+            return b.clone();
+        }
+        super::cover::request(url, size, radius);
+        None
     }
 
     pub fn select(&mut self, id: &str) {
@@ -280,6 +312,8 @@ impl State {
                     title: if track.is_empty() { name.clone() } else { track.clone() },
                     artist: if track.is_empty() { String::new() } else { name },
                     playing: !r.paused(),
+                    can_next: r.queue.len() > 1,
+                    can_previous: r.queue.len() > 1,
                     volume: Some(r.volume as f64 / 100.0),
                     ..base
                 }
@@ -293,6 +327,8 @@ impl State {
                     artist: a.artist.clone(),
                     album: a.album.clone(),
                     playing: a.playing(),
+                    can_next: true,
+                    can_previous: true,
                     position: a.position(now),
                     length: a.duration,
                     volume: (a.volume >= 0.0).then(|| pick::clamp_volume(a.volume)),
@@ -301,7 +337,14 @@ impl State {
             }
             "airplay" => {
                 let a = &self.airplay;
-                Active { kind: "airplay", identity: label, title: a.title.clone(), artist: a.artist.clone(), album: a.album.clone(), ..base }
+                // The one cover file is rewritten per track, so the track
+                // names which picture this is.
+                let art_url = if a.has_cover {
+                    format!("file://{}?{}-{}", airplay::dir().join("cover.jpg").display(), a.artist, a.title)
+                } else {
+                    String::new()
+                };
+                Active { kind: "airplay", identity: label, title: a.title.clone(), artist: a.artist.clone(), album: a.album.clone(), art_url, ..base }
             }
             _ => {
                 let p = self.mpris.iter().find(|p| p.id == id)?;
@@ -317,6 +360,8 @@ impl State {
                     length: p.length,
                     can_seek: p.can_seek,
                     can_raise: p.can_raise,
+                    can_next: p.can_next,
+                    can_previous: p.can_previous,
                     shuffle: p.shuffle,
                     loop_name: p.loop_status.map(loop_name),
                     volume: p.volume.map(pick::clamp_volume),
@@ -471,6 +516,17 @@ impl State {
         }
     }
 
+    /// An absolute position in seconds, through MPRIS's relative Seek from
+    /// where the player is now.
+    pub fn seek_to(&self, seconds: f64) {
+        let Some(a) = self.active() else { return };
+        if a.kind != "mpris" || !a.can_seek || a.length <= 0.0 {
+            return;
+        }
+        let target = seconds.clamp(0.0, a.length);
+        mpris_send(Cmd::Seek(a.id, ((target - a.position) * 1_000_000.0).round() as i64));
+    }
+
     pub fn raise(&self) {
         if let Some(p) = self.mpris_active().filter(|p| p.can_raise) {
             mpris_send(Cmd::Raise(p.id.clone()));
@@ -499,6 +555,7 @@ enum Cmd {
     Loop(String, LoopStatus),
     Volume(String, f64),
     Raise(String),
+    Seek(String, i64),
 }
 
 static CMD: OnceLock<async_channel::Sender<Cmd>> = OnceLock::new();
@@ -537,6 +594,7 @@ pub async fn run(ctx: Ctx) {
                 Cmd::Loop(id, status) => controls.set_loop_status(&id, status).await,
                 Cmd::Volume(id, v) => controls.set_volume(&id, v).await,
                 Cmd::Raise(id) => controls.raise(&id).await,
+                Cmd::Seek(id, us) => controls.seek(&id, us).await,
             };
         }
     });

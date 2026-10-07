@@ -615,6 +615,7 @@ dependencies = [
  "async-executor",
  "async-io",
  "async-process",
+ "base64",
  "calloop",
  "chrono",
  "fastrand",

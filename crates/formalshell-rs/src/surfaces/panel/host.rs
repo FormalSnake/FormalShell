@@ -179,6 +179,7 @@ impl Host {
             return;
         }
         self.open = false;
+        self.module.closed();
         self.cursor.active = false;
         self.handoff = None;
         self.card.set_bypass(now, false);
@@ -190,6 +191,7 @@ impl Host {
     /// screen and no longer joined, until the incoming card starts moving.
     pub fn hand_over(&mut self) {
         self.open = false;
+        self.module.closed();
         self.cursor.active = false;
         self.card.set_joined(false);
         self.set_keyboard(KeyboardInteractivity::None);
@@ -372,6 +374,7 @@ impl Host {
         let v = View { store, theme, output: self.place.output, cursor: self.cursor.key.as_deref().filter(|_| self.cursor.active) };
         let head = if self.module.header() { Some(self.header(&v, &s)) } else { None };
         let body = self.module.body(&v);
+        let module_wake = self.module.wake(&v);
 
         let scene = &mut self.card.scene;
         if let Some(head) = head {
@@ -438,6 +441,9 @@ impl Host {
             }
         }
         self.cursor.travels = false;
+        if let Some(w) = module_wake {
+            self.wake = Some(self.wake.map_or(w, |x: Instant| x.min(w)));
+        }
         if d.animating {
             self.wake = Some(now);
         }
@@ -517,8 +523,16 @@ impl Host {
         let mut fx = Self::effect(store, runtime);
         let stop = self.cursor.key.clone().filter(|_| self.cursor.active);
         match name {
+            Key::Escape if self.module.escape() => {}
             Key::Escape => return Out::Close,
-            Key::Tab(_) => {
+            Key::Tab(d) => {
+                if let Some(k) = self.module.tab(self.cursor.key.as_deref(), d) {
+                    if let Some(i) = self.body.stop_index(&k) {
+                        self.cursor.index = i;
+                    }
+                    self.cursor.travels = self.cursor.active;
+                    self.cursor.key = Some(k);
+                }
                 self.cursor.active = true;
                 self.cursor.keyed = true;
             }
