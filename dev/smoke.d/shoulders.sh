@@ -34,7 +34,6 @@
 # between the open and closed frames for a reason that has nothing to do with
 # the join.
 leg_shoulders_flag="--shoulders"
-leg_shoulders_rust=1
 leg_shoulders_order=74
 leg_shoulders_needs="convert jq"
 

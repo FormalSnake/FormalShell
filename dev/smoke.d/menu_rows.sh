@@ -13,7 +13,6 @@
 # step only ever shows one or the other.
 leg_menu_rows_flag="--menu-rows"
 leg_menu_rows_order=127
-leg_menu_rows_rust=1
 leg_menu_rows_needs="convert"
 
 menu_rows_frames=16

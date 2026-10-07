@@ -1,12 +1,8 @@
-// The launcher-reachability guard. Keeps the owner's philosophy true: every
-// panel registered in shell.qml's PanelIpc has a route in the launcher.
+// The launcher-reachability guard: every panel has a route in the launcher.
 // PANEL_NAMES here is a second, independently kept copy of the providers'
 // own panel list (not imported: a typo or a dropped entry in the shipped list
 // must show up as a mismatch between two independently-written sources, not
-// disappear because both read the same array); the registry test below
-// cross-checks it against shell.qml's actual PanelIpc registry text, so a
-// panel added to shell.qml without a matching row here fails loudly instead of
-// just shipping unreachable.
+// disappear because both read the same array).
 
 mod common;
 
@@ -19,7 +15,6 @@ use fs_menu::providers::{
     radio_rows, tray_provider,
 };
 use fs_menu::search;
-use regex::Regex;
 
 const PANEL_NAMES: &[&str] = &[
     "appmenu", "audio", "calendar", "network", "bluetooth", "earbuds", "iphone", "dualsense", "power", "weather",
@@ -38,34 +33,6 @@ fn shipped_tree_covers_every_panel() {
         assert_eq!(node.kind, Kind::Action);
         let action = node.action.as_deref().expect("action");
         assert!(action.contains(&format!("call panel open {name}")), "panels.{name} does not open panel '{name}'");
-    }
-}
-
-// Drift guard the other direction: the list this test asserts against is
-// checked both ways against shell.qml's real PanelIpc registry, so an
-// added-and-forgotten panel (present in shell.qml, absent here) fails here
-// rather than silently shipping unrouted. trayoverflow is the one registry
-// name with no row: the "tray" route already lists its items.
-#[test]
-fn registry_names_match_the_test_list() {
-    let text = read_repo("shell/shell.qml");
-    let start = text.find("var reg = {").expect("PanelIpc registry literal not found in shell.qml");
-    let end = start + text[start..].find("};").expect("registry end");
-    let registry = &text[start..end];
-    for name in PANEL_NAMES {
-        assert!(registry.contains(&format!("{name}:")), "'{name}' not found in shell.qml's PanelIpc registry");
-    }
-    let keys: Vec<&str> = Regex::new(r"(\w+):\s*\w+Instance")
-        .unwrap()
-        .captures_iter(registry)
-        .map(|c| c.get(1).unwrap().as_str())
-        .collect();
-    assert!(!keys.is_empty(), "no registry entries parsed out of shell.qml");
-    for name in keys {
-        if name == "trayoverflow" {
-            continue;
-        }
-        assert!(PANEL_NAMES.contains(&name), "panel '{name}' is registered in shell.qml but has no launcher row");
     }
 }
 

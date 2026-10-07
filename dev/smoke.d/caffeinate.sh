@@ -7,7 +7,6 @@
 # `caffeinate disable` the same timeout fires the screensaver on its own. The
 # inhibitor's surface is read off `hyprctl -j layers` both ways.
 leg_caffeinate_flag="--caffeinate"
-leg_caffeinate_rust=1
 leg_caffeinate_order=232
 leg_caffeinate_needs="jq"
 

@@ -26,7 +26,6 @@
 # drops it.
 leg_emoji_flag="--emoji"
 leg_emoji_order=25
-leg_emoji_rust=1
 leg_emoji_needs="wl-paste jq"
 
 # This leg's own clock: the launcher covers the whole output, so under

@@ -15,7 +15,6 @@ leg_instance_order=210
 # Nothing is summoned over the desktop, so this leg keeps the base run's
 # focused fixture window in its frame.
 leg_instance_fixture_window=keep
-leg_instance_rust=1
 
 instance_status_path="$shot_dir/instance-status.json"
 instance_second_log_path="$shot_dir/instance-second.log"
@@ -46,22 +45,13 @@ leg_instance_timing() {
 
 leg_instance_drive() {
   local script="$shot_dir/instance-drive.sh"
-  # The wrapped launcher, not a bare `qs -p <path>`: the wrapper carries the
-  # QT_PLUGIN_PATH/NIXPKGS_QT6_QML_IMPORT_PATH that QtPositioning and
-  # QtMultimedia need (nix/package.nix), and every real second instance goes
-  # through it. LIBGL_ALWAYS_SOFTWARE for the same reason dev/smoke.sh exports
-  # it around the primary: on the vkms card Qt's EGL init takes the process
-  # down otherwise.
-  # Under FS_IMPL=rust the daemon is the wrapped binary itself, told apart
-  # from formalshell-ipc and the scripts by what /proc says it executes.
+  # The wrapped launcher, as every real second instance starts.
+  # LIBGL_ALWAYS_SOFTWARE for the same reason dev/smoke.sh exports it around
+  # the primary. The daemon is the wrapped binary itself, told apart from
+  # formalshell-ipc and the scripts by what /proc says it executes.
   local find_daemons launch
-  if [ "$fs_impl" = rust ]; then
-    find_daemons='for pid in $(pgrep -f -- formalshell-rs); do case "$(readlink /proc/$pid/exe 2>/dev/null)" in *formalshell-rs-wrapped|*/bin/formalshell-rs) echo "$pid" ;; esac; done'
-    launch="$PWD/result-rs/bin/formalshell-rs"
-  else
-    find_daemons='for pid in $(pgrep -f -- "-p '"$shell_path"'"); do if [ "$(tr '"'"'\0'"'"' '"'"'\n'"'"' < /proc/$pid/cmdline 2>/dev/null | sed -n '"'"'2p'"'"')" = "-p" ]; then echo "$pid"; fi; done'
-    launch="$PWD/result/bin/formalshell"
-  fi
+  find_daemons='for pid in $(pgrep -f -- formalshell-rs); do case "$(readlink /proc/$pid/exe 2>/dev/null)" in *formalshell-rs-wrapped|*/bin/formalshell-rs) echo "$pid" ;; esac; done'
+  launch="$PWD/result/bin/formalshell-rs"
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 3

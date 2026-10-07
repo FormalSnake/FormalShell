@@ -65,7 +65,6 @@
 # icons' badges, which is what "the spinner damages only its own rect" means.
 leg_spaces_flag="--spaces"
 leg_spaces_order=196
-leg_spaces_rust=1
 leg_spaces_needs="foot jq convert wlrctl"
 leg_spaces_fixture_window=keep
 
@@ -517,9 +516,7 @@ leg_spaces_assert() {
   "$jq_bin" -e '.slots[1].active and (.slots[1].icons | map(.agent) | index("working") != null)' "$spaces_status_two_path" > /dev/null \
     || fail "workspace 2's slot is not active with its working badge after the notch: $(cat "$spaces_status_two_path")"
 
-  if [ "$fs_impl" = rust ]; then
-    spaces_badge_damage
-  fi
+  spaces_badge_damage
 
   # The preview, by IPC and by pointer.
   cat "$spaces_peek_reply_path"

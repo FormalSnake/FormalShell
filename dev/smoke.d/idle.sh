@@ -13,15 +13,10 @@
 leg_idle_flag="--idle"
 leg_idle_order=901
 leg_idle_needs=""
-leg_idle_rust=1
 
 idle_results_path="$shot_dir/idle-results.txt"
 idle_start_path="$shot_dir/shell-start.ns"
 idle_done_path="$shot_dir/idle-done"
-
-leg_idle_validate() {
-  [ "${FS_IMPL:-qml}" = rust ] || { echo "usage: --idle reads the rust shell's own log, run it with FS_IMPL=rust" >&2; exit 1; }
-}
 
 leg_idle_shell() {
   local software=""

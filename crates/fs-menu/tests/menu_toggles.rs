@@ -126,17 +126,6 @@ fn allow_list_is_exactly_the_documented_paths() {
     assert!(!is_known_path("bluetooth.powered"));
 }
 
-// Drift guard: a typo in ConditionEvaluator.qml's stateSnapshot object literal
-// is invisible to qmllint and would render a permanently-off checkmark.
-#[test]
-fn menu_qml_snapshot_names_every_allow_listed_path() {
-    let text = read_repo("shell/Surfaces/Menu/ConditionEvaluator.qml");
-    assert!(!text.is_empty());
-    for path in PATHS.iter().chain(ENUM_PATHS).chain(LIST_PATHS) {
-        assert!(text.contains(&format!("\"{path}\"")), "{path}");
-    }
-}
-
 #[test]
 fn enum_condition_matches_only_its_own_value() {
     let s = snap(json!({ "lights.effect": "breathe", "lights.colour": "" }));

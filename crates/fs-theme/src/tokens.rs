@@ -714,15 +714,6 @@ mod tests {
         assert_eq!(DEFORM.epsilon, 0.002);
     }
 
-    // The QML guard reads Theme.qml for the deleted fixed `spacing` object;
-    // while that file still ships, the same read holds here.
-    #[test]
-    fn legacy_theme_spacing_property_is_deleted() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../shell/Core/Theme.qml");
-        let text = std::fs::read_to_string(path).expect("shell/Core/Theme.qml is readable");
-        assert!(!text.contains("property var spacing"));
-    }
-
     #[test]
     fn js_number_reads_like_javascript() {
         assert_eq!(js_number(Some(&json!(""))), 0.0);

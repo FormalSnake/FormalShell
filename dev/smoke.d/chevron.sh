@@ -21,7 +21,6 @@
 # frame inside the card: a dark plate with light words on it, not the band's
 # black ink drawn onto it.
 leg_chevron_flag="--chevron"
-leg_chevron_rust=1
 leg_chevron_order=180
 leg_chevron_needs="wlrctl convert jq"
 

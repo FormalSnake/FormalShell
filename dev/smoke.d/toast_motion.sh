@@ -19,7 +19,6 @@
 # notification, below the bar so the bell cell's unread mark stays out of it.
 leg_toast_motion_flag="--toast-motion"
 leg_toast_motion_order=32
-leg_toast_motion_rust=1
 leg_toast_motion_needs="notify-send convert"
 
 toast_motion_scale=1000
@@ -157,10 +156,6 @@ leg_toast_motion_assert() {
   left=$(toast_motion_box "$toast_motion_left_path")
   [ "$left" = "$rest" ] || fail "the pile left behind is not the one card at rest (box '$left', rest '$rest')"
 
-  if [ "$fs_impl" != rust ]; then
-    echo "SMOKE_TOAST_MOTION_QUIET skipped: only the rust shell logs its commits"
-    return 0
-  fi
   local commits
   commits=$(awk '
     function t(line) { match(line, /t=[0-9]+ms/); return substr(line, RSTART + 2, RLENGTH - 4) + 0 }

@@ -22,7 +22,6 @@
 # (Hyprland draws a fullscreen window over the top level) and its card is in
 # the frame, read as the frame differing from the bare fullscreen one.
 leg_fullscreen_flag="--fullscreen"
-leg_fullscreen_rust=1
 leg_fullscreen_order=200
 leg_fullscreen_needs="convert jq"
 leg_fullscreen_fixture_window=keep

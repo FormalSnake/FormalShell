@@ -15,7 +15,6 @@
 # actually flips inside an open hub.
 leg_toggles_flag="--toggles"
 leg_toggles_order=230
-leg_toggles_rust=1
 leg_toggles_needs="jq"
 
 toggles_menu_status1_path="$shot_dir/toggles-menu-status-1.json"

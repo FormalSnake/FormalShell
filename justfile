@@ -5,13 +5,6 @@ smoke *FLAGS:
     ./dev/smoke.sh {{FLAGS}}
 lint:
     git add -A && nix flake check -L
-# QML_XHR_ALLOW_FILE_READ: tst_menu_emoji.qml XHR-loads shell/Menu/emoji.json,
-# which sits outside the test file's own directory subtree.
-# -import tests/stubs: resolves the `qs.Core` module for the tests that
-# instantiate real shell components (tst_cell_geometry.qml).
-test:
-    nix develop -c env QT_QPA_PLATFORM=offscreen QML_XHR_ALLOW_FILE_READ=1 qmltestrunner -import tests/stubs -input tests
-
 # The release tarball for this machine's arch, built in debian:bookworm as
 # release.yml builds it (dev/tarball.sh), into artifacts/tarball/. The
 # volume keeps the toolchains and cargo caches between runs.
@@ -26,17 +19,9 @@ vm-down:
     ./dev/vm.sh stop
 vm-build:
     ./dev/vm.sh prebuild
-vm-test:
-    ./dev/vm.sh sync
-    ./dev/vm.sh run 'nix develop -c env QT_QPA_PLATFORM=offscreen QML_XHR_ALLOW_FILE_READ=1 qmltestrunner -import tests/stubs -input tests'
 vm-lint:
     ./dev/vm.sh sync
     ./dev/vm.sh run 'git add -A && nix flake check -L'
-# dev/ipc-golden.sh's recording, synced and run under one lock (dev/vm-lock.sh
-# just vm-ipc-golden > crates/formalshell-rs/tests/ipc-golden.jsonl).
-vm-ipc-golden:
-    @./dev/vm.sh sync >&2
-    @./dev/vm.sh run bash dev/ipc-golden.sh
 # cargo inside the VM against the synced tree, in the rust package's own
 # build environment (the mac has no pipewire or wayland to link).
 vm-cargo *ARGS:

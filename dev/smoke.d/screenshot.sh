@@ -19,7 +19,6 @@
 # no synthetic pointer.
 leg_screenshot_flag="--screenshot"
 leg_screenshot_order=205
-leg_screenshot_rust=1
 leg_screenshot_needs="wl-paste file"
 
 screenshot_reply_path="$shot_dir/screenshot-reply.txt"

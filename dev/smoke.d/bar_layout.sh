@@ -15,7 +15,6 @@
 # leaves the `bar` key out entirely, which is itself the no-config-fallback
 # proof.
 leg_bar_layout_flag="--bar-layout"
-leg_bar_layout_rust=1
 leg_bar_layout_order=190
 
 bar_layout_path="$shot_dir/bar-layout.png"

@@ -38,8 +38,8 @@
 # ThemeEngine re-executes the owner's real matugen post_hooks against the
 # live desktop (observed 2026-07-27). XDG_RUNTIME_DIR stays the host's,
 # since the session has to publish its sockets somewhere the drive scripts
-# can reach; InstanceLock.qml keys its own socket on WAYLAND_DISPLAY for
-# exactly that reason.
+# can reach; the shell's single-instance lock keys its socket on
+# WAYLAND_DISPLAY for exactly that reason.
 set -euo pipefail
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 cd "$script_dir/.."
@@ -156,26 +156,9 @@ for leg_name in "${legs[@]}"; do
   if leg_on "$leg_name"; then active_legs+=("$leg_name"); fi
 done
 
-# The packaged shell is the rust one, driven over formalshell-ipc. Only a leg
-# declaring leg_<n>_rust=1, whose targets the rust shell serves, runs under
-# it. FS_IMPL=qml is refused: no QML package is built any more.
-fs_impl="${FS_IMPL:-rust}"
-case "$fs_impl" in
-  qml) echo "SMOKE_FAIL: the QML shell is no longer packaged; FS_IMPL=qml cannot run" >&2; exit 1 ;;
-  rust)
-    for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
-      rust_var="leg_${leg_name}_rust"
-      if [ "${!rust_var:-0}" != 1 ]; then
-        echo "SMOKE_FAIL: FS_IMPL=rust does not serve --${leg_name//_/-} yet (no leg_${leg_name}_rust=1)" >&2
-        exit 1
-      fi
-    done
-    # Long enough for the drive below and ten seconds of rest after it.
-    screenshot_delay=52
-    session_timeout=75
-    ;;
-  *) echo "SMOKE_FAIL: FS_IMPL must be rust, got '$fs_impl'" >&2; exit 1 ;;
-esac
+# Long enough for the base run's drive below and ten seconds of rest after it.
+screenshot_delay=52
+session_timeout=75
 
 for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
   if declare -F "leg_${leg_name}_validate" >/dev/null; then "leg_${leg_name}_validate"; fi
@@ -200,7 +183,6 @@ else
   git add -A >/dev/null 2>&1 || true   # flakes only see tracked files
   nix build .#formalshell
 fi
-ln -sfn "$(readlink result)" result-rs
 
 # Resolved once, on demand: a leg names what it needs in leg_<name>_needs
 # and the scaffold's own four are always resolved.
@@ -238,16 +220,6 @@ need_grim() {
       grim_bin=$(command -v grim)
     else
       grim_bin=$(nix build --no-link --print-out-paths 'nixpkgs#grim^out')/bin/grim
-    fi
-  fi
-}
-
-need_qs() {
-  if [ -z "${qs_bin:-}" ]; then
-    if command -v qs >/dev/null 2>&1; then
-      qs_bin=$(command -v qs)
-    else
-      qs_bin=$(nix develop -c bash -c 'command -v qs')
     fi
   fi
 }
@@ -356,7 +328,7 @@ need_localsend_cli() {
   fi
 }
 
-need_bin hyprland hyprctl grim qs
+need_bin hyprland hyprctl grim
 if $fixture_window_mode; then
   need_bin foot convert
 fi
@@ -367,20 +339,10 @@ for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
   need_bin ${leg_needs[@]+"${leg_needs[@]}"}
 done
 
-# shellcheck disable=SC2034  # every leg drive script reads it
-shell_path=$(readlink -f result/share/formalshell)
-
 # The one way a leg reaches the shell: `$ipc call <target> <fn> [args...]`,
-# shell-quoted so it pastes into a generated script as it stands.
-# `$ipc_wrapper` is the same command as a user's binds run it, the
-# package's own `formalshell-ipc`.
-if [ "$fs_impl" = rust ]; then
-  printf -v ipc '%q' "$PWD/result-rs/bin/formalshell-ipc"
-  ipc_wrapper=$ipc
-else
-  printf -v ipc '%q ipc -p %q' "$qs_bin" "$shell_path"
-  printf -v ipc_wrapper '%q' "$(readlink -f result)/bin/formalshell-ipc"
-fi
+# shell-quoted so it pastes into a generated script as it stands: the
+# package's own `formalshell-ipc`, the same command a user's binds run.
+printf -v ipc '%q' "$PWD/result/bin/formalshell-ipc"
 
 # A dead Wayland socket file outlives its compositor (nothing left to unlink
 # it), so a value read back out of the systemd user environment has to be
@@ -604,8 +566,7 @@ shell_launcher=""
 for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
   if declare -F "leg_${leg_name}_shell" >/dev/null; then shell_launcher="leg_${leg_name}_shell"; fi
 done
-shell_bin="$PWD/result/bin/formalshell"
-if [ "$fs_impl" = rust ]; then shell_bin="$PWD/result-rs/bin/formalshell-rs"; fi
+shell_bin="$PWD/result/bin/formalshell-rs"
 # FS_CPU_QUOTA=25% runs the shell alone under a CPU quota, in a transient
 # user scope of its own, so a fast machine stands in for e1504g's N305 in
 # power saver. systemd-run reaches the user manager over its private socket,
@@ -625,16 +586,16 @@ write_script "$shell_start_script" <<EOF
 #!/usr/bin/env bash
 # LIBGL_ALWAYS_SOFTWARE: on the vkms card the compositor advertises dmabuf
 # with a main device Mesa cannot open for a client ("failed to get driver
-# name for fd -1"), and Qt's EGL init takes the whole shell down with it.
-# Forcing the software driver puts the shell back on the wl_shm/llvmpipe
-# path it renders on anyway. Scoped to this process: Hyprland's
+# name for fd -1"), and a client's EGL init fails on it. Forcing the
+# software driver keeps the shell and its children on the wl_shm/llvmpipe
+# path they render on anyway. Scoped to this process: Hyprland's
 # own EGL runs on gbm over that same card and must keep doing so.
 export LIBGL_ALWAYS_SOFTWARE=1
-# Captured, not discarded: a shell that dies on a QML error at startup would
-# otherwise fail every assertion below with no way to see why.
+# Captured, not discarded: a shell that dies at startup would otherwise
+# fail every assertion below with no way to see why.
 # Backgrounded rather than exec'd so the shell's pid lands in a file the
-# screenshot script reads for its memory sample; the wrapper execs
-# quickshell in place, so the pid stays the shell's own.
+# screenshot script reads for its memory sample; the wrapper execs the
+# binary in place, so the pid stays the shell's own.
 $wayland_debug_line
 $shell_prefix "$shell_bin" > "$shell_log_path" 2>&1 &
 echo \$! > "$shot_dir/shell.pid"
@@ -676,7 +637,7 @@ done
 # and a scrim at full speed for the frame log, and the same at a tenth of
 # the speed for frames read mid-flight and at rest.
 rs_ipc_path="$shot_dir/rs-ipc.txt"
-if [ "$fs_impl" = rust ] && [ ${#active_legs[@]} -eq 0 ]; then
+if [ ${#active_legs[@]} -eq 0 ]; then
   rs_drive="$shot_dir/rs-drive.sh"
   write_script "$rs_drive" <<EOF
 #!/usr/bin/env bash
@@ -720,12 +681,11 @@ sleep $screenshot_delay
 "$grim_bin" "$shot_path" > "$shot_dir/grim.log" 2>&1
 sleep $tail_gap
 # Memory sample of the shell at the end of the run, once every leg has
-# driven what it drives: RSS and the QML JS heap (QV4's memfd chunks), the
-# two numbers a memory regression shows up in first.
-if shell_pid=\$(cat "$shot_dir/shell.pid" 2>/dev/null) && [ -r "/proc/\$shell_pid/smaps" ]; then
+# driven what it drives: RSS, the number a memory regression shows up in
+# first.
+if shell_pid=\$(cat "$shot_dir/shell.pid" 2>/dev/null) && [ -r "/proc/\$shell_pid/status" ]; then
   rss_kb=\$(awk '/^VmRSS/{print \$2}' "/proc/\$shell_pid/status")
-  js_kb=\$(awk '/^[0-9a-f]+-[0-9a-f]+ /{n=\$6} /^Rss:/{if (n ~ /JSGCHeap/) s+=\$2} END{print s+0}' "/proc/\$shell_pid/smaps")
-  echo "SMOKE_MEM rss_kb=\$rss_kb jsheap_kb=\$js_kb" > "$shot_dir/mem.txt"
+  echo "SMOKE_MEM rss_kb=\$rss_kb" > "$shot_dir/mem.txt"
 fi
 $fixture_cleanup
 "$hyprctl_bin" dispatch "hl.dsp.exit()"
@@ -808,63 +768,39 @@ for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
   if declare -F "leg_${leg_name}_assert" >/dev/null; then "leg_${leg_name}_assert"; fi
 done
 
-# A crashed shell still leaves a perfectly good screenshot of quickshell's
-# own crash dialog, so the frame's existence proves nothing on its own.
-if grep -q "has crashed" "$shell_log_path" 2>/dev/null; then
-  fail "the shell crashed during the run"
-fi
-
-# A missing property or a missing import is a load error the QML engine
-# reports once and then carries on from, so the surface it broke keeps
-# drawing something plausible and no assert here ever looks at it: the
-# display panel spent three weeks telling a session with an empty output
-# list it was still LOADING, because one contract property was never
-# declared on the backend (added 2026-08-06, found on e1504g 2026-08-26).
-# Neither pattern can fire transiently, so this is a check on every run
-# rather than a leg of its own. Components/cast.js loads BoxCast.qml on
-# purpose to find out whether this Qt has RectangularShadow (6.9+), and
-# logs the miss on an older one.
-load_errors=$(grep -nE "Cannot assign to non-existent property|is not a type" "$shell_log_path" 2>/dev/null \
-  | grep -v "Box casts unavailable" || true)
-if [ -n "$load_errors" ]; then
-  printf "%s\n" "$load_errors" | head -5 >&2
-  fail "the shell logged a QML load error (lines above)"
-fi
-
-# The rust shell logs every commit it makes, which is the evidence that a
+# The shell logs every commit it makes, which is the evidence that a
 # strip at rest commits nothing.
-if [ "$fs_impl" = rust ]; then
-  grep -E '^(start|commit|exit|ipc|text:|hyprland:|event loop:) ' "$shell_log_path" 2>/dev/null || true
-  if [ ${#active_legs[@]} -eq 0 ]; then
-    # `debug dump` and `debug query` grow with the shell, so they are read
-    # as data: every dump key must be one DebugIpc.qml's dump() emits and
-    # the numbers this rig pins must read back, and a query answers with
-    # the launcher's rows. Every other reply must match QML byte for byte.
-    [ -s "$rs_ipc_path" ] || fail "the rust drive wrote no debug replies"
-    need_jq
-    qml_dump_keys=$(awk '/function dump\(\)/{f=1;next} f&&/^    }/{exit} f&&/^            [a-zA-Z]+:/{sub(/:.*/,"");gsub(/ /,"");print}' shell/Ipc/DebugIpc.qml | "$jq_bin" -R . | "$jq_bin" -sc .)
-    dumps=$(awk 'prev=="> debug dump"{print} {prev=$0}' "$rs_ipc_path")
-    [ "$(printf '%s\n' "$dumps" | wc -l)" -eq 2 ] || fail "expected two debug dump replies in $rs_ipc_path"
-    check_dump() {
-      printf '%s' "$1" | "$jq_bin" -e --argjson qml "$qml_dump_keys" --argjson join "$2" '
-        (keys - $qml) == []
-        and (["compositor","configLoaded","join","bar","frame","theme"] - keys) == []
-        and .compositor == "hyprland"
-        and (.bar | length) == 1
-        and (.frame | keys) == ["enabled","habit","requested","thickness"]
-        and (.theme | del(.edgeInset)) == {"radius":10,"radiusXl":14,"borderWidth":1,"barPosition":"top"}
-        and (.theme.edgeInset | keys) == ["bottom","left","right","top"]
-        and (if $join == null then .join == null
-             else (.join | del(.screen)) == $join and (.join.screen | type) == "string" end)' >/dev/null
-    }
-    first_dump=$(printf '%s\n' "$dumps" | sed -n 1p)
-    second_dump=$(printf '%s\n' "$dumps" | sed -n 2p)
-    check_dump "$first_dump" null || fail "debug dump (no join) is not what DebugIpc.qml's keys allow: $first_dump"
-    check_dump "$second_dump" '{"edge":"top","x":100,"width":200,"reach":14}' || fail "debug dump (joined) is not what DebugIpc.qml's keys allow: $second_dump"
-    query_reply=$(awk 'prev=="> debug query x"{print} {prev=$0}' "$rs_ipc_path")
-    printf '%s' "$query_reply" | "$jq_bin" -e 'type == "array" and all(.[]; (.id | type) == "string" and (.label | type) == "string" and (.kind | type) == "string")' >/dev/null \
-      || fail "debug query x is not a list of launcher rows: $query_reply"
-    diff -u - <(awk 'prev=="> debug dump" || prev=="> debug query x"{print "<checked>"; prev=$0; next} {print; prev=$0}' "$rs_ipc_path") <<EOF || fail "debug's replies over formalshell-ipc differ (diff above)"
+grep -E '^(start|commit|exit|ipc|text:|hyprland:|event loop:) ' "$shell_log_path" 2>/dev/null || true
+if [ ${#active_legs[@]} -eq 0 ]; then
+  # `debug dump` and `debug query` grow with the shell, so they are read
+  # as data: every dump key must be one of the contract's and the numbers
+  # this rig pins must read back, and a query answers with the launcher's
+  # rows. Every other reply is matched byte for byte.
+  [ -s "$rs_ipc_path" ] || fail "the rust drive wrote no debug replies"
+  need_jq
+  dump_keys='["compositor","available","workspaces","windows","focusedWindowId","heldFocusedWindowId","focusedWorkspaceId","fullscreenOutputs","configLoaded","audio","brightness","location","lyrics","herdr","iphone","localsend","airplay","bar","join","frame","theme"]'
+  dumps=$(awk 'prev=="> debug dump"{print} {prev=$0}' "$rs_ipc_path")
+  [ "$(printf '%s\n' "$dumps" | wc -l)" -eq 2 ] || fail "expected two debug dump replies in $rs_ipc_path"
+  check_dump() {
+    printf '%s' "$1" | "$jq_bin" -e --argjson allowed "$dump_keys" --argjson join "$2" '
+      (keys - $allowed) == []
+      and (["compositor","configLoaded","join","bar","frame","theme"] - keys) == []
+      and .compositor == "hyprland"
+      and (.bar | length) == 1
+      and (.frame | keys) == ["enabled","habit","requested","thickness"]
+      and (.theme | del(.edgeInset)) == {"radius":10,"radiusXl":14,"borderWidth":1,"barPosition":"top"}
+      and (.theme.edgeInset | keys) == ["bottom","left","right","top"]
+      and (if $join == null then .join == null
+           else (.join | del(.screen)) == $join and (.join.screen | type) == "string" end)' >/dev/null
+  }
+  first_dump=$(printf '%s\n' "$dumps" | sed -n 1p)
+  second_dump=$(printf '%s\n' "$dumps" | sed -n 2p)
+  check_dump "$first_dump" null || fail "debug dump (no join) carries a key outside the contract or a wrong value: $first_dump"
+  check_dump "$second_dump" '{"edge":"top","x":100,"width":200,"reach":14}' || fail "debug dump (joined) carries a key outside the contract or a wrong value: $second_dump"
+  query_reply=$(awk 'prev=="> debug query x"{print} {prev=$0}' "$rs_ipc_path")
+  printf '%s' "$query_reply" | "$jq_bin" -e 'type == "array" and all(.[]; (.id | type) == "string" and (.label | type) == "string" and (.kind | type) == "string")' >/dev/null \
+    || fail "debug query x is not a list of launcher rows: $query_reply"
+  diff -u - <(awk 'prev=="> debug dump" || prev=="> debug query x"{print "<checked>"; prev=$0; next} {print; prev=$0}' "$rs_ipc_path") <<EOF || fail "debug's replies over formalshell-ipc differ (diff above)"
 > debug dump
 <checked>
 exit 0
@@ -894,14 +830,13 @@ exit 0
 Target not found.
 exit 0
 EOF
-    echo "SMOKE_RS_IPC $rs_ipc_path"
-  fi
-  for frame in "$shot_dir"/rs-*.png; do
-    [ -f "$frame" ] || continue
-    name=$(basename "$frame" .png | tr 'a-z-' 'A-Z_')
-    echo "SMOKE_${name} $frame"
-  done
+  echo "SMOKE_RS_IPC $rs_ipc_path"
 fi
+for frame in "$shot_dir"/rs-*.png; do
+  [ -f "$frame" ] || continue
+  name=$(basename "$frame" .png | tr 'a-z-' 'A-Z_')
+  echo "SMOKE_${name} $frame"
+done
 
 if [ -f "$shot_path" ]; then
   echo "SMOKE_OK $shot_path"

@@ -24,7 +24,7 @@ pub fn tree_of(value: Value) -> Tree {
 }
 
 pub fn default_menu() -> Entries {
-    entries_from_value(&parse_jsonc(&read_repo("shell/Menu/default-menu.jsonc")).expect("default-menu.jsonc"))
+    entries_from_value(&parse_jsonc(&read_repo("crates/fs-menu/data/default-menu.jsonc")).expect("default-menu.jsonc"))
         .expect("default-menu entries")
 }
 

@@ -20,7 +20,6 @@
 # go back to idle rather than latching on.
 leg_airplay_flag="--airplay"
 leg_airplay_order=173
-leg_airplay_rust=1
 leg_airplay_needs="convert"
 
 airplay_shim_dir="$shot_dir/airplay-shim"

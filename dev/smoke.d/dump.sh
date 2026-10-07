@@ -7,13 +7,8 @@
 # The reply is captured with stderr folded in, so "not empty" alone would
 # green-light an error string. What the dump has to carry is live compositor
 # state: the backend CompositorService picked, connected and streaming.
-#
-# The call goes through the built package's own `formalshell-ipc` wrapper
-# rather than `qs ipc -p`, so the no-store-path entry point binds and users
-# rely on is proven to reach a running shell.
 leg_dump_flag="--dump"
 leg_dump_order=10
-leg_dump_rust=1
 
 dump_path="$shot_dir/dump.json"
 
@@ -22,7 +17,7 @@ leg_dump_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 4
-$ipc_wrapper call debug dump > "$dump_path" 2>&1
+$ipc call debug dump > "$dump_path" 2>&1
 EOF
   hypr_exec_once "bash $script"
 }

@@ -16,7 +16,6 @@
 #   closed   with the panel shut no decoder is left running.
 leg_motion_art_flag="--motion-art"
 leg_motion_art_order=36
-leg_motion_art_rust=1
 leg_motion_art_needs="mpv ffmpeg convert"
 
 motion_art_artist="FormalShell Motion Artist"

@@ -10,7 +10,6 @@
 # and print an interface listing while the surface never opened. isOpen read
 # back afterwards is what caught that.
 leg_gallery_flag="--gallery"
-leg_gallery_rust=1
 leg_gallery_order=220
 
 gallery_log_path="$shot_dir/gallery.log"

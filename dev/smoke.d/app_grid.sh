@@ -39,7 +39,6 @@
 leg_app_grid_flag="--app-grid"
 leg_app_grid_order=26
 leg_app_grid_needs="convert wtype jq"
-leg_app_grid_rust=1
 
 # This leg's own clock: the launcher covers the whole output, so under
 # --wallpaper it starts after that leg's last frame, the rule menu_t0 draws.

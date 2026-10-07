@@ -13,7 +13,7 @@ use fs_menu::model::parse_headered_json;
 use fs_menu::providers::{EmojiEntry, EmojiIndex, emoji_trigger_query};
 
 static DATASET: LazyLock<Vec<EmojiEntry>> = LazyLock::new(|| {
-    let value = parse_headered_json(&read_repo("shell/Menu/emoji.json")).expect("emoji.json parses");
+    let value = parse_headered_json(&read_repo("crates/fs-menu/data/emoji.json")).expect("emoji.json parses");
     serde_json::from_value(value).expect("emoji entries")
 });
 

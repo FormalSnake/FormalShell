@@ -11,10 +11,10 @@
 # outputs) into the guest's Nix store image: nix's flake fetcher resolves a
 # locked github/git input to a deterministic store path from its narHash
 # alone, and skips the network entirely when that exact path is already
-# valid in the local store. Combined with the formalshell/quickshell
-# packages also being staged below, `nix build .#formalshell` inside the VM
+# valid in the local store. Combined with the formalshell package also
+# being staged below, `nix build .#formalshell` inside the VM
 # needs neither the network nor a shared store to be a no-op.
-{ self, nixpkgs, quickshell }:
+{ self, nixpkgs }:
 
 nixpkgs.lib.nixosSystem {
   system = "aarch64-linux";
@@ -28,8 +28,6 @@ nixpkgs.lib.nixosSystem {
     self.nixosModules.formalshell-greeter
     ({ pkgs, lib, config, ... }:
       let
-        quickshellPkg = quickshell.packages.aarch64-linux.default;
-
         # Only job: get WAYLAND_DISPLAY into the systemd --user environment,
         # the exact lookup dev/smoke.sh falls back to
         # (`systemctl --user show-environment`). Mirrors the
@@ -85,7 +83,7 @@ nixpkgs.lib.nixosSystem {
           # No forwardPorts: dev/vm.sh hands each slot its own ssh host port
           # through QEMU_NET_OPTS, and a baked-in 2222 would collide with
           # slot 0's on a second VM.
-          additionalPaths = [ nixpkgs.outPath quickshell.outPath ];
+          additionalPaths = [ nixpkgs.outPath ];
 
           # Populated at boot from the $KEYS env var, same mechanism
           # nix-builder-vm.nix uses for its own authorized_keys — dev/vm.sh
@@ -257,8 +255,6 @@ nixpkgs.lib.nixosSystem {
           # shell's own wrapper carries it separately via nix/package.nix.
           self.packages.aarch64-linux.formalshell-eds
           pkgs.evolution-data-server
-          quickshellPkg
-          pkgs.qt6.qtdeclarative
           pkgs.matugen
           # M41: dev/smoke.sh's compositor, and hyprctl with it. The rig can
           # fall back to `nix run nixpkgs#hyprland` on a host without it, but

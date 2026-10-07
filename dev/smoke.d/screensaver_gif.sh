@@ -20,7 +20,6 @@
 # wall-clock time, so the same frame index means something different on the
 # next machine.
 leg_screensaver_gif_flag="--screensaver-gif"
-leg_screensaver_gif_rust=1
 leg_screensaver_gif_order=240
 leg_screensaver_gif_needs="convert"
 
@@ -32,8 +31,7 @@ leg_screensaver_gif_takeover() {
   local expected_frames frame_count out_gif gif_delay last_frame i
   local -a frame_files
   local -a gif_env
-  local gif_shell="$PWD/result/bin/formalshell"
-  if [ "$fs_impl" = rust ]; then gif_shell="$PWD/result-rs/bin/formalshell-rs"; fi
+  local gif_shell="$PWD/result/bin/formalshell-rs"
 
   # SCREENSAVER_GIF_EFFECTS (optional, space-separated) limits the run to a
   # subset: verifying the recorder itself needs one effect and must not

@@ -13,7 +13,6 @@
 # must not have been spawned by it.
 leg_nix_run_flag="--nix-run"
 leg_nix_run_order=95
-leg_nix_run_rust=1
 leg_nix_run_needs="foot jq"
 
 nix_run_activate_path="$shot_dir/nix-run-activate.txt"

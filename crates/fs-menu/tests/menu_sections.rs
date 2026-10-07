@@ -145,7 +145,7 @@ fn prompt_is_the_nodes_own_or_its_label() {
 // heading appearing twice.
 #[test]
 fn shipped_root_is_two_contiguous_groups() {
-    let parsed = parse_jsonc(&read_repo("shell/Menu/default-menu.jsonc")).expect("parses");
+    let parsed = parse_jsonc(&read_repo("crates/fs-menu/data/default-menu.jsonc")).expect("parses");
     let tree = build_tree(&fs_menu::model::entries_from_value(&parsed).expect("entries"), &Entries::new());
     let rows: Vec<Node> = visible_children(&tree.nodes, None, &no_conds()).into_iter().cloned().collect();
     assert!(rows.len() > 8);

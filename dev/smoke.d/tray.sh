@@ -15,7 +15,6 @@
 leg_tray_flag="--tray"
 leg_tray_order=170
 leg_tray_needs="python3"
-leg_tray_rust=1
 
 # nix/testvm.nix stages a PyGObject-capable interpreter into
 # environment.systemPackages, so `command -v python3` already resolves inside

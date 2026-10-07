@@ -35,7 +35,6 @@
 leg_osd_flag="--osd"
 leg_osd_order=50
 leg_osd_needs="wpctl convert"
-leg_osd_rust=1
 
 osd_manual_path="$shot_dir/osd-manual.png"
 osd_brightness_path="$shot_dir/osd-brightness.png"

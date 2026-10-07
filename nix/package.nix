@@ -8,30 +8,17 @@ rustCommon.craneLib.buildPackage (rustCommon.commonArgs // {
   pname = "formalshell";
   version = "0.1.1";
 
-  # fs-theme embeds the chrome tables the QML shell reads too, one of its
-  # tests reads Core/Theme.qml, and the theme service's tests run matugen
-  # shims against the shell's own templates.
   src = lib.fileset.toSource {
     root = ../.;
-    fileset = lib.fileset.unions [
-      ../crates
-      ../shell/Theme/themes
-      ../shell/Theme/icons
-      ../shell/Theme/templates
-      ../shell/Core/Theme.qml
-      ../shell/Menu/default-menu.jsonc
-      ../shell/Menu/emoji.json
-      ../shell/Radio/countries.json
-    ];
+    fileset = ../crates;
   };
   postUnpack = ''
     cd $sourceRoot/crates
     sourceRoot="."
   '';
 
-  # The pure library crates read repo fixtures (shell/, tests/) that this
-  # crates-only source does not carry, so the runtime package builds and tests
-  # itself alone; `cargo test` at the workspace root covers the rest.
+  # The runtime package builds and tests itself alone; the pure crates'
+  # tests are nix/rust-tests.nix.
   cargoExtraArgs = "--locked --package formalshell-rs";
 
   nativeBuildInputs = rustCommon.commonArgs.nativeBuildInputs ++ [ makeBinaryWrapper ];
@@ -51,7 +38,7 @@ rustCommon.craneLib.buildPackage (rustCommon.commonArgs // {
   # module links (binds and layer rules); nothing in the shell reads it.
   postInstall = ''
     mkdir -p $out/share/formalshell
-    cp -r --no-preserve=mode ${../shell/Theme/templates} $out/share/formalshell/templates
+    cp -r --no-preserve=mode ${../crates/fs-theme/templates} $out/share/formalshell/templates
     cp -r --no-preserve=mode ${../branding} $out/share/formalshell/branding
     cp -r --no-preserve=mode ${../docs/examples} $out/share/formalshell/examples
     wrapProgram $out/bin/formalshell-rs \

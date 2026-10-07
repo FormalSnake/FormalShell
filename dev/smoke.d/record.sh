@@ -24,7 +24,6 @@
 # UNAVAILABLE leg, which resolves on an empty device glob and costs nothing.
 leg_record_flag="--record"
 leg_record_order=210
-leg_record_rust=1
 leg_record_needs="file ffprobe"
 
 record_start_reply_path="$shot_dir/record-start-reply.txt"

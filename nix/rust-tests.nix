@@ -1,14 +1,14 @@
 { lib, rustCommon }:
 
-# The pure crates' tests, which nix/formalshell-rs.nix leaves out: some read
-# files under shell/ and tests/ relative to the repo root, so the source keeps
-# the repo layout and cargo runs from crates/. Service crates (fs-mpris,
+# The pure crates' tests, which nix/package.nix leaves out. Some read
+# fixtures relative to the repo root, so the source keeps the repo layout and
+# cargo runs from crates/. Service crates (fs-mpris,
 # fs-tray, ...) need a bus or a VM and carry checks of their own.
 rustCommon.craneLib.cargoTest (rustCommon.checkArgs // {
   pname = "formalshell-rs-tests";
   src = lib.fileset.toSource {
     root = ../.;
-    fileset = lib.fileset.unions [ ../crates ../shell ../tests/fixtures ];
+    fileset = ../crates;
   };
   postUnpack = ''
     cd $sourceRoot/crates

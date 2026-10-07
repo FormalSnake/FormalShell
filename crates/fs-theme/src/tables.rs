@@ -6,12 +6,12 @@ use std::sync::LazyLock;
 use serde_json::Value;
 
 static METAMORPHOSIS: LazyLock<Value> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("../../../shell/Theme/themes/metamorphosis.json"))
+    serde_json::from_str(include_str!("../themes/metamorphosis.json"))
         .expect("metamorphosis.json is valid JSON")
 });
 
 static PANTHEON: LazyLock<Value> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("../../../shell/Theme/themes/pantheon.json"))
+    serde_json::from_str(include_str!("../themes/pantheon.json"))
         .expect("pantheon.json is valid JSON")
 });
 

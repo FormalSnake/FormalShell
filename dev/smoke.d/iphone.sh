@@ -57,7 +57,6 @@
 # and a same-inode rewrite has always been the ordinary case it handles.
 leg_iphone_flag="--iphone"
 leg_iphone_order=174
-leg_iphone_rust=1
 leg_iphone_needs="notify-send jq"
 
 iphone_shim_dir="$shot_dir/iphone-shim"

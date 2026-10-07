@@ -17,7 +17,7 @@ use vello_cpu::kurbo::{self, BezPath, Circle, Shape as _};
 
 use crate::scene::{Brush, VOp};
 
-const COUNTRIES: &str = include_str!("../../../../../shell/Radio/countries.json");
+const COUNTRIES: &str = include_str!("../../../data/countries.json");
 
 pub const HIT_RADIUS: f64 = 12.0;
 const MINIMUM_SCALE: f64 = 0.72;

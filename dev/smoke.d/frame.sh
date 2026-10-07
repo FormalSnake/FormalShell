@@ -24,7 +24,6 @@
 # reports why in the dump. The owner had 6px of nothing between every window
 # and the screen edge under this preset.
 leg_frame_flag="--frame"
-leg_frame_rust=1
 leg_frame_order=190
 leg_frame_needs="jq"
 leg_frame_wayland_debug=1

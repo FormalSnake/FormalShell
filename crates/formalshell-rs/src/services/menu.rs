@@ -25,8 +25,8 @@ use crate::runtime::Ctx;
 use crate::scene::Bitmap;
 use crate::store;
 
-const DEFAULT_MENU: &str = include_str!("../../../../shell/Menu/default-menu.jsonc");
-const EMOJI: &str = include_str!("../../../../shell/Menu/emoji.json");
+const DEFAULT_MENU: &str = include_str!("../../../fs-menu/data/default-menu.jsonc");
+const EMOJI: &str = include_str!("../../../fs-menu/data/emoji.json");
 
 /// What fs-menu's self-targeted fragments call the shell by: the QML
 /// shell's `qs ipc -p <path> call`, which [`ipc_command`] turns into this

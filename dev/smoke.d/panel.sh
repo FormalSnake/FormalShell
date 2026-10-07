@@ -7,7 +7,6 @@
 # the claim a screenshot cannot make is that the shell's own bookkeeping
 # says this panel, and only this one, is the open one.
 leg_panel_flag="--panel <name>"
-leg_panel_rust=1
 leg_panel_order=60
 
 panel_open_path="$shot_dir/panel-open.txt"

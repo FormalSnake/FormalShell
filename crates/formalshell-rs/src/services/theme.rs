@@ -148,7 +148,7 @@ impl Env {
         let state = var("XDG_STATE_HOME").map_or_else(|| home.join(".local/state"), PathBuf::from);
         let config = var("XDG_CONFIG_HOME").map_or_else(|| home.join(".config"), PathBuf::from);
         Self {
-            template_dir: var("FS_TEMPLATE_DIR").map_or_else(|| PathBuf::from("shell/Theme/templates"), PathBuf::from),
+            template_dir: var("FS_TEMPLATE_DIR").map_or_else(|| PathBuf::from("crates/fs-theme/templates"), PathBuf::from),
             state_dir: state.join("formalshell"),
             config_dir: config,
             hyprland: var("HYPRLAND_INSTANCE_SIGNATURE").is_some(),
@@ -877,7 +877,7 @@ printf '%s' 'return {{}}' > '{state}/formalshell-colors.lua.tmp'"##,
             home: root.join("home"),
             state_dir: state,
             config_dir: root.join("home/.config"),
-            template_dir: Path::new(env!("CARGO_MANIFEST_DIR")).join("../../shell/Theme/templates"),
+            template_dir: Path::new(env!("CARGO_MANIFEST_DIR")).join("../fs-theme/templates"),
             hyprland: true,
             matugen: shim(&bin, "matugen", &matugen),
             hyprctl: shim(&bin, "hyprctl", &logger("hyprctl")),

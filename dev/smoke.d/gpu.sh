@@ -35,7 +35,6 @@
 # file, read back to confirm all four offload variables reached the child and
 # that the Exec's %U field code did not.
 leg_gpu_flag="--gpu"
-leg_gpu_rust=1
 leg_gpu_order=145
 leg_gpu_needs="jq"
 
@@ -159,7 +158,7 @@ EOF
 }
 
 leg_gpu_assert() {
-  local var gpu_card_count gpu_menu
+  local var gpu_card_count
   if [ ! -s "$gpu_cards_path" ]; then
     fail "no monitor gpu produced"
   fi
@@ -197,23 +196,16 @@ leg_gpu_assert() {
   if [ "$gpu_card_count" != "2" ]; then
     fail "monitor gpu reported $gpu_card_count cards, want the fixture's 2: $(cat "$gpu_cards_path")"
   fi
-  # The launcher's half waits for a shell that serves `menu`.
-  if [ "$fs_impl" = rust ] && grep -q '^Target not found' "$gpu_route_reply_path" 2>/dev/null; then
-    gpu_menu=false
-    echo "SMOKE_GPU route and monitor view skipped: this shell serves no menu target yet"
-  else
-    gpu_menu=true
-  fi
-  if $gpu_menu && ! grep -q '^ok$' "$gpu_route_reply_path" 2>/dev/null; then
+  if ! grep -q '^ok$' "$gpu_route_reply_path" 2>/dev/null; then
     fail "menu summon gpu did not answer ok, got: $(cat "$gpu_route_reply_path" 2>/dev/null)"
   fi
   if [ -s "$gpu_menu_status_path" ]; then
     cat "$gpu_menu_status_path"; echo
   fi
-  if $gpu_menu && [ ! -f "$gpu_route_png" ]; then
+  if [ ! -f "$gpu_route_png" ]; then
     fail "no gpu-route screenshot produced"
   fi
-  $gpu_menu && echo "SMOKE_GPU_ROUTE $gpu_route_png"
+  echo "SMOKE_GPU_ROUTE $gpu_route_png"
   if ! grep -q '^ok: launched' "$gpu_launch_reply_path" 2>/dev/null; then
     fail "monitor launch was refused, got: $(cat "$gpu_launch_reply_path" 2>/dev/null)"
   fi
@@ -234,7 +226,6 @@ leg_gpu_assert() {
   if ! grep -q '^ARGV:$' "$gpu_offload_env_path"; then
     fail "the launched child was handed arguments, the Exec's %U field code survived. Got: $(grep '^ARGV:' "$gpu_offload_env_path")"
   fi
-  $gpu_menu || return 0
   if [ ! -f "$gpu_monitor_png" ]; then
     fail "no gpu-monitor screenshot produced"
   fi

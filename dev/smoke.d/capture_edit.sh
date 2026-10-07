@@ -25,7 +25,6 @@
 # desktop that would look identical to the card's own background.
 leg_capture_edit_flag="--capture-edit"
 leg_capture_edit_order=225
-leg_capture_edit_rust=1
 leg_capture_edit_needs="foot file"
 
 capture_edit_reply_path="$shot_dir/capture-edit-reply.txt"

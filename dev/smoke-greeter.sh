@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # greetd smoke (M8 Task 2): drives the real greetd instance's default_session
 # (the formalshell-greeter compositor nix/testvm.nix declares) through a full
-# login — typed via wtype into the greeter's own Wayland session, not an IPC
-# shortcut, since Quickshell.Services.Greetd exposes no such thing (see
-# greeter/greeter.qml's own header comment; same "verify the action, not the
-# input method" idiom dev/smoke.sh's --lock leg already uses). Prints
+# login, typed via wtype into the greeter's own Wayland session rather than
+# an IPC shortcut (the same "verify the action, not the input method" idiom
+# dev/smoke.sh's --lock leg already uses). Prints
 # the pre-auth (clock + input cell) and post-auth screenshots plus the
 # session log, proving the real create_session/auth_message/start_session
 # exchange happened rather than just "it renders".
@@ -80,8 +79,8 @@ if [ -z "$wayland_display" ]; then
 fi
 greeter_env=(sudo env "XDG_RUNTIME_DIR=$runtime_dir" "WAYLAND_DISPLAY=$wayland_display")
 
-# formalshell-greeter needs a moment after connecting to map its PanelWindow
-# surfaces and pull the first Greetd.state — matches the fixed post-connect
+# formalshell-greeter needs a moment after connecting to map its surfaces
+# and read greetd's first state — matches the fixed post-connect
 # settle windows dev/smoke.sh's own legs use before their first shot.
 sleep 3
 "${greeter_env[@]}" grim "$pre_auth_png"
@@ -94,8 +93,8 @@ sleep 3
 # prompt switching from "USER" to the password step.
 sleep 3
 
-# Wrong-password leg first (regression guard for the onError/onAuthFailure
-# race documented in greeter/greeter.qml: greetd unconditionally follows
+# Wrong-password leg first (regression guard for the auth error race:
+# greetd unconditionally follows
 # every auth_error with a cancel_session it can no longer deliver, and the
 # resulting "Connection refused" error must never clobber the real PAM
 # failure text already showing). 3s covers the same PAM round trip plus the
@@ -126,7 +125,7 @@ for _ in $(seq 1 30); do
   sleep 2
 done
 if ! sudo test -f "$post_auth_src"; then
-  echo "SMOKE_FAIL: no post-auth screenshot — greeter never reached Greetd.launch(); session log:" >&2
+  echo "SMOKE_FAIL: no post-auth screenshot, the greeter never started the session; session log:" >&2
   sudo cat "$session_log" >&2 || true
   exit 1
 fi
@@ -137,14 +136,12 @@ sudo cp "$session_log" "$session_log_out" 2>/dev/null || true
 sudo chmod 644 "$session_log_out" 2>/dev/null || true
 sudo journalctl -u greetd --no-pager -n 300 > "$journal_out" 2>&1 || true
 
-# Quickshell's Greetd and `formalshell-rs greeter` word the same two
-# moments differently; either greeter's line is the evidence.
-if ! grep -qE "Authentication complete\.|greetd: authentication complete" "$session_log_out"; then
+if ! grep -qF "greetd: authentication complete" "$session_log_out"; then
   echo "SMOKE_FAIL: session log has no authentication-complete line, got:" >&2
   cat "$session_log_out" >&2
   exit 1
 fi
-if ! grep -qE "Quitting\.|greeter: session started" "$session_log_out"; then
+if ! grep -qF "greeter: session started" "$session_log_out"; then
   echo "SMOKE_FAIL: session log has no line saying the greeter exited after start_session, got:" >&2
   cat "$session_log_out" >&2
   exit 1

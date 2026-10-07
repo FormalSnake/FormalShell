@@ -27,7 +27,6 @@
 leg_menu_flag="--menu"
 leg_menu_order=20
 leg_menu_needs="jq wtype"
-leg_menu_rust=1
 
 # This leg's own clock. The launcher covers the whole output, so under
 # --wallpaper it starts after that leg's last frame (t=14) rather than

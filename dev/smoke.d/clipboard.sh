@@ -49,7 +49,6 @@
 # preview draw the glyph at display size, the inline one stays body text.
 leg_clipboard_flag="--clipboard"
 leg_clipboard_order=130
-leg_clipboard_rust=1
 leg_clipboard_needs="wl-copy wl-paste convert"
 
 clip_list1_path="$shot_dir/clipboard-list1.json"

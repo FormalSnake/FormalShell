@@ -24,8 +24,8 @@ self: { config, lib, pkgs, ... }:
 let
   cfg = config.services.formalshell-greeter;
 
-  # greeter.sessionCommand (Core/Config.qml, read by greeter.qml as the argv
-  # Greetd.launch() runs on successful auth) — a real deployment's version of
+  # greeter.sessionCommand (the argv the greeter starts on successful auth),
+  # a real deployment's version of
   # the settings.json key the shell would otherwise read from a real user's
   # $HOME the `greeter` account doesn't have. Written as a static store path
   # and pointed at via XDG_CONFIG_HOME rather than any settings.json write:

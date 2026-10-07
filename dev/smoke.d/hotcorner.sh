@@ -11,7 +11,6 @@
 leg_hotcorner_flag="--hotcorner"
 leg_hotcorner_order=160
 leg_hotcorner_needs="jq"
-leg_hotcorner_rust=1
 # Nothing is summoned over the desktop, so this leg keeps the base run's
 # focused fixture window in its frame.
 leg_hotcorner_fixture_window=keep

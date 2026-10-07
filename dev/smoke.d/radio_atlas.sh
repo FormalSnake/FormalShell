@@ -16,7 +16,6 @@
 # line), since nothing over IPC reports it.
 leg_radio_atlas_flag="--radio-atlas"
 leg_radio_atlas_order=176
-leg_radio_atlas_rust=1
 leg_radio_atlas_needs="ffmpeg wtype wlrctl convert"
 
 radio_atlas_track_path="$shot_dir/radio-atlas-station.mp3"

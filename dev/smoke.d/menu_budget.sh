@@ -17,7 +17,6 @@
 leg_menu_budget_flag="--menu-budget"
 leg_menu_budget_order=22
 leg_menu_budget_needs=""
-leg_menu_budget_rust=1
 
 leg_menu_budget_timing() {
   leg_timing 30 60
@@ -49,10 +48,6 @@ EOF
 }
 
 leg_menu_budget_assert() {
-  if [ "$fs_impl" != rust ]; then
-    echo "SMOKE_MENU_BUDGET skipped: only the rust shell logs its commits"
-    return 0
-  fi
   local out
   out=$(awk '
     function t(line) { match(line, /t=[0-9]+ms/); return substr(line, RSTART + 2, RLENGTH - 4) + 0 }

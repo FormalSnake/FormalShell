@@ -28,7 +28,6 @@
 leg_wheel_flag="--wheel"
 leg_wheel_order=125
 leg_wheel_needs="wlrctl convert wpctl"
-leg_wheel_rust=1
 
 wheel_before_png="$shot_dir/wheel-before.png"
 wheel_after_png="$shot_dir/wheel-after.png"

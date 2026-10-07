@@ -31,7 +31,6 @@
 # trip is what this rig can honestly still prove of that half.
 leg_localsend_flag="--localsend"
 leg_localsend_order=231
-leg_localsend_rust=1
 leg_localsend_needs="localsend-cli jq"
 
 localsend_receive_dir="$shot_dir/localsend-receive"

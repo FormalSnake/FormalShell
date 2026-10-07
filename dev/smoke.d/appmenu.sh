@@ -7,7 +7,6 @@
 # opens the panel over the real `panel` route: the hero carries the entry's
 # name and picture, and the window list holds the fixture window.
 leg_appmenu_flag="--appmenu"
-leg_appmenu_rust=1
 leg_appmenu_order=62
 leg_appmenu_fixture_window=keep
 

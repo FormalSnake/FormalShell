@@ -43,7 +43,6 @@
 leg_hotcorner_relock_flag="--hotcorner-relock"
 leg_hotcorner_relock_order=161
 leg_hotcorner_relock_needs="wlrctl wtype jq"
-leg_hotcorner_relock_rust=1
 # The frames here are the ordinary desktop and the lock plate over it, so
 # the base run's fixture window stays where it is.
 leg_hotcorner_relock_fixture_window=keep

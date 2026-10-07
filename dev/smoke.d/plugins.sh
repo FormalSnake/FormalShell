@@ -7,21 +7,15 @@
 # in is the whole install, which is the contract worth proving. `list` is the
 # resolved manifest record and `status` is the load outcome.
 #
-# Under QML the plugin is a QML entry, and `status` is the one place its
-# entry failing to load is visible from outside the process, since plugin
-# QML lives outside the repo and qmllint never sees it. The entry imports
-# qs.Core and reads Theme, the same proof --bar-layout's `qml` module makes.
-#
-# Under FS_IMPL=rust a plugin is an executable (the spec's "User code"
-# section): `entry` names a shell script that prints JSON lines and reads
+# A plugin is an executable (the spec's "User code" section): `entry` names a shell script that prints JSON lines and reads
 # events as JSON lines. Two plugins prove the contract. smoke-bar prints one
 # line and logs every event it is sent, and the leg then clicks and scrolls
 # its cell with a real pointer. smoke-crash logs its start and exits, which
 # has to read as a PLUGIN ERROR in `status` and be started again on the
 # backoff, so its start log has to grow.
 leg_plugins_flag="--plugins"
-leg_plugins_rust=1
 leg_plugins_order=200
+leg_plugins_needs="jq wlrctl"
 
 plugins_list_path="$shot_dir/plugins-list.json"
 plugins_status_path="$shot_dir/plugins-status.json"
@@ -32,17 +26,10 @@ plugins_bar_png="$shot_dir/plugins-bar.png"
 plugin_dir="$iso_home/.config/formalshell/plugins/smoke-bar"
 plugin_crash_dir="$iso_home/.config/formalshell/plugins/smoke-crash"
 
-leg_plugins_validate() {
-  if [ "${fs_impl:-qml}" = rust ]; then
-    leg_plugins_needs="jq wlrctl"
-  fi
-}
-
 leg_plugins_fixture() {
   mkdir -p "$plugin_dir"
-  if [ "$fs_impl" = rust ]; then
-    mkdir -p "$plugin_crash_dir"
-    cat > "$plugin_dir/manifest.json" <<'EOF'
+  mkdir -p "$plugin_crash_dir"
+  cat > "$plugin_dir/manifest.json" <<'EOF'
 {
   "apiVersion": 1,
   "id": "smoke-bar",
@@ -52,14 +39,14 @@ leg_plugins_fixture() {
   "region": "right"
 }
 EOF
-    cat > "$plugin_dir/entry.sh" <<EOF
+  cat > "$plugin_dir/entry.sh" <<EOF
 #!/usr/bin/env bash
 printf '%s\n' '{"text": "PLUGIN OK", "icon": "puzzle", "tooltip": "smoke plugin", "class": ""}'
 while IFS= read -r line; do
   printf '%s\n' "\$line" >> "$plugins_events_path"
 done
 EOF
-    cat > "$plugin_crash_dir/manifest.json" <<'EOF'
+  cat > "$plugin_crash_dir/manifest.json" <<'EOF'
 {
   "apiVersion": 1,
   "id": "smoke-crash",
@@ -68,35 +55,12 @@ EOF
   "region": "right"
 }
 EOF
-    cat > "$plugin_crash_dir/entry.sh" <<EOF
+  cat > "$plugin_crash_dir/entry.sh" <<EOF
 #!/usr/bin/env bash
 echo start >> "$plugins_starts_path"
 exit 3
 EOF
-    chmod +x "$plugin_dir/entry.sh" "$plugin_crash_dir/entry.sh"
-    return
-  fi
-  cat > "$plugin_dir/manifest.json" <<'EOF'
-{
-  "apiVersion": 1,
-  "id": "smoke-bar",
-  "kind": "bar",
-  "entry": "entry.qml",
-  "name": "Smoke Bar Plugin",
-  "region": "right"
-}
-EOF
-  cat > "$plugin_dir/entry.qml" <<'EOF'
-import QtQuick
-import qs.Core
-
-Text {
-    text: "PLUGIN OK"
-    color: Theme.color.accent
-    font.family: Theme.fontFamily
-    font.pixelSize: Theme.fontSize.body
-}
-EOF
+  chmod +x "$plugin_dir/entry.sh" "$plugin_crash_dir/entry.sh"
 }
 
 leg_plugins_timing() {
@@ -107,8 +71,7 @@ leg_plugins_timing() {
 
 leg_plugins_drive() {
   local script="$shot_dir/plugins-drive.sh"
-  if [ "$fs_impl" = rust ]; then
-    write_script "$script" <<EOF
+  write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 5
 $ipc call plugins list > "$plugins_list_path" 2>&1
@@ -127,15 +90,6 @@ fi
 $ipc call plugins status > "$plugins_status_path" 2>&1
 "$grim_bin" "$plugins_bar_png" > /dev/null 2>&1
 EOF
-  else
-    write_script "$script" <<EOF
-#!/usr/bin/env bash
-sleep 5
-$ipc call plugins list > "$plugins_list_path" 2>&1
-$ipc call plugins status > "$plugins_status_path" 2>&1
-"$grim_bin" "$plugins_bar_png" > /dev/null 2>&1
-EOF
-  fi
   hypr_exec_once "bash $script"
 }
 
@@ -151,29 +105,8 @@ leg_plugins_assert() {
   if [ ! -f "$plugins_bar_png" ]; then
     fail "no plugins screenshot produced at $plugins_bar_png"
   fi
-  if [ "$fs_impl" = rust ]; then
-    leg_plugins_assert_command
-  else
-    leg_plugins_assert_qml
-  fi
+  leg_plugins_assert_command
   echo "SMOKE_PLUGINS $plugins_bar_png (no bar key in settings.json: the manifest's own region is what placed the cell)"
-}
-
-leg_plugins_assert_qml() {
-  if ! grep -qF '"id":"smoke-bar"' "$plugins_list_path" \
-    || ! grep -qF '"kind":"bar"' "$plugins_list_path" \
-    || ! grep -qF '"region":"right"' "$plugins_list_path" \
-    || ! grep -qF "\"entryUrl\":\"file://$plugin_dir/entry.qml\"" "$plugins_list_path"; then
-    fail "the drop-in plugin did not resolve out of its manifest: $(cat "$plugins_list_path")"
-  fi
-  if ! grep -qF '"loaded":true' "$plugins_status_path" \
-    || ! grep -qF '"count":1' "$plugins_status_path" \
-    || ! grep -qF '"bar":1' "$plugins_status_path"; then
-    fail "plugins status did not report one loaded bar plugin: $(cat "$plugins_status_path")"
-  fi
-  if ! grep -qF '"errors":[]' "$plugins_status_path" || ! grep -qF '"warnings":[]' "$plugins_status_path"; then
-    fail "the plugin loaded with errors or warnings: $(cat "$plugins_status_path")"
-  fi
 }
 
 leg_plugins_assert_command() {

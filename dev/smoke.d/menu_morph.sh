@@ -15,7 +15,6 @@
 # between has to sit strictly between them: a card that jumped never does.
 leg_menu_morph_flag="--menu-morph"
 leg_menu_morph_order=126
-leg_menu_morph_rust=1
 leg_menu_morph_needs="convert"
 
 menu_morph_frames=24

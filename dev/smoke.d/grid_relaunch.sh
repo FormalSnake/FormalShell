@@ -17,7 +17,6 @@
 # (`--app-grid`, `--menu`): run it on its own.
 leg_grid_relaunch_flag="--grid-relaunch"
 leg_grid_relaunch_order=27
-leg_grid_relaunch_rust=1
 leg_grid_relaunch_needs="jq"
 
 grid_relaunch_dir="$iso_home/.local/share/applications"

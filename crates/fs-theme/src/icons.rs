@@ -5,9 +5,9 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-const LUCIDE: &str = include_str!("../../../shell/Theme/icons/lucide.js");
-const NERD: &str = include_str!("../../../shell/Theme/icons/nerd.js");
-const DISTRO: &str = include_str!("../../../shell/Theme/icons/distro.js");
+const LUCIDE: &str = include_str!("../icons/lucide.js");
+const NERD: &str = include_str!("../icons/nerd.js");
+const DISTRO: &str = include_str!("../icons/distro.js");
 
 /// The family Lucide's glyphs are drawn in.
 pub const LUCIDE_FAMILY: &str = "lucide";

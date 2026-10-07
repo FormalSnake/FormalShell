@@ -27,7 +27,6 @@
 # the bar off the overlay layer while a window covers the output, and the
 # solid paint is exactly what a session that turned that off gets to see.
 leg_bar_adaptive_flag="--bar-adaptive"
-leg_bar_adaptive_rust=1
 leg_bar_adaptive_order=101
 leg_bar_adaptive_needs="convert jq"
 # The base run's own focused window is what goes fullscreen for the fourth

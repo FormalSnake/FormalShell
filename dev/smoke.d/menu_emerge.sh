@@ -53,7 +53,6 @@
 leg_menu_emerge_flag="--menu-emerge"
 leg_menu_emerge_order=21
 leg_menu_emerge_needs="convert jq"
-leg_menu_emerge_rust=1
 
 menu_emerge_scale_path="$shot_dir/menu-emerge-scale.txt"
 menu_emerge_summon_path="$shot_dir/menu-emerge-summon.txt"

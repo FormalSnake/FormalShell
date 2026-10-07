@@ -2,12 +2,10 @@
 # shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
 # --earbuds proves the earbuds panel (spec 2026-09-30-m77-earbuds.md
 # "Verification") against PATH-shimmed `nothingctl` and `openscq30`. Every
-# line either shim prints is a fixture from tests/ read out of the test file
-# at fixture time (tst_earbuds_nothing.qml's `b175Custom`, nothingctl's own
-# serialisation; tst_earbuds_soundcore.qml's `paired`, `settingsEarbuds` and
-# `valuesEdited`, captured from a real openscq30 2.12.0;
-# tst_earbuds_airpods.qml's `fixturePro3`, the librepods daemon's own
-# status.json), so the shims never invent a shape. The nothingctl shim logs
+# line either shim prints is a fixture under dev/smoke.d/fixtures
+# (nothing-b175-custom.json, nothingctl's own serialisation; the soundcore-*
+# files, captured from a real openscq30 2.12.0; airpods-pro3.json, the
+# librepods daemon's own status.json), so the shims never invent a shape. The nothingctl shim logs
 # every `watch` it is asked for and every stdin line it gets, and answers a
 # line the way nothingctl does (`{"cmd":...,"type":"ack"}`); the openscq30
 # shim logs its argv.
@@ -38,7 +36,6 @@
 leg_earbuds_flag="--earbuds"
 leg_earbuds_order=176
 leg_earbuds_needs="jq"
-leg_earbuds_rust=1
 
 earbuds_dir="$shot_dir/earbuds"
 earbuds_shim_dir="$earbuds_dir/shim"
@@ -66,23 +63,17 @@ earbuds_devices_refused="$shot_dir/earbuds-devices-refused.json"
 earbuds_status_b175="$shot_dir/earbuds-status-b175.json"
 earbuds_replies="$shot_dir/earbuds-set-replies.txt"
 
-# One `property string <name>: "<json>"` line of a test file, decoded: a QML
-# string literal with only \" and \\ escapes is a JSON string.
-earbuds_fixture() {
-  sed -n "s/^ *property string $2: \(\".*\"\)\$/\1/p" "tests/$1" | "$jq_bin" -r .
-}
-
 leg_earbuds_fixture() {
   local b175 settings values airpods
   mkdir -p "$earbuds_shim_dir"
-  b175=$(earbuds_fixture tst_earbuds_nothing.qml b175Custom)
-  settings=$(earbuds_fixture tst_earbuds_soundcore.qml settingsEarbuds)
-  values=$(earbuds_fixture tst_earbuds_soundcore.qml valuesEdited)
-  airpods=$(earbuds_fixture tst_earbuds_airpods.qml fixturePro3)
-  earbuds_fixture tst_earbuds_soundcore.qml paired > "$earbuds_dir/soundcore-paired-fixture.json"
+  b175=$(cat dev/smoke.d/fixtures/nothing-b175-custom.json)
+  settings=$(cat dev/smoke.d/fixtures/soundcore-settings-earbuds.json)
+  values=$(cat dev/smoke.d/fixtures/soundcore-values-edited.json)
+  airpods=$(cat dev/smoke.d/fixtures/airpods-pro3.json)
+  cp dev/smoke.d/fixtures/soundcore-paired.json "$earbuds_dir/soundcore-paired-fixture.json"
   printf '%s\n' "$airpods" > "$earbuds_dir/airpods-status.json"
   for f in "$b175" "$settings" "$values" "$airpods"; do
-    [ -n "$f" ] || { echo "earbuds: a fixture did not decode out of tests/" >&2; exit 1; }
+    [ -n "$f" ] || { echo "earbuds: a fixture under dev/smoke.d/fixtures is missing" >&2; exit 1; }
   done
 
   printf '[{"address":"%s","name":"CMF Headphone Pro","connected":true}]\n' "$earbuds_b175_address" > "$earbuds_nothing_list"

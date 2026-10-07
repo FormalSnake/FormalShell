@@ -18,7 +18,6 @@
 # holds neither the bar nor the clock, so a difference there is the card
 # being in it exactly once.
 leg_panel_anchor_flag="--panel-anchor"
-leg_panel_anchor_rust=1
 leg_panel_anchor_order=75
 
 panel_anchor_toggle_reply_path="$shot_dir/panel-anchor-toggle.txt"

@@ -40,7 +40,6 @@
 # drive writes; the comment beside it says why.
 leg_switcher_keys_flag="--switcher-keys"
 leg_switcher_keys_order=104
-leg_switcher_keys_rust=1
 leg_switcher_keys_needs="foot jq wtype"
 # A fourth window sits on workspace 2 throughout and must not reach the card
 # (M64): the owner's quick Alt+Tab was landing on a window elsewhere and
