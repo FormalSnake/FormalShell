@@ -33,6 +33,7 @@ mod osd;
 mod panel;
 mod plugins;
 mod radio;
+mod switcher;
 pub mod registry;
 mod theme;
 mod tray;
@@ -88,6 +89,7 @@ fn registry() ->&'static Registry<App> {
             osd::target(),
             nightlight::target(),
             lights::target(),
+            switcher::target(),
         ],
     })
 }

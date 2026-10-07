@@ -12,8 +12,9 @@
 # `airplay`, `visualizer`, `overnight`, `earbuds`, `display`, `hdr` and
 # `workspaces` their own IPC files' (WorkspacesIpc.qml's `status` only: peek
 # and close wait for the preview), `calendar`, `iphone`, `notifications`,
-# `reminder`, `osd`, `nightlight` and `lights` their own; `probe` covers every
-# type qs converts and the function names that collide with qs's subcommands.
+# `reminder`, `osd`, `nightlight`, `lights` and `switcher` their own; `probe`
+# covers every type qs converts and the function names that collide with qs's
+# subcommands.
 set -euo pipefail
 
 dir=$(mktemp -d)
@@ -155,6 +156,14 @@ ShellRoot {
         function lock(): string { return "ok" }
         function isLocked(): string { return "false" }
         function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "switcher"
+        function next(): string { return "ok" }
+        function prev(): string { return "ok" }
+        function commit(): string { return "ok" }
+        function cancel(): string { return "ok" }
+        function state(): string { return "{}" }
     }
     IpcHandler {
         target: "gallery"
@@ -535,6 +544,14 @@ rec call lock isLocked
 rec call lock status
 rec call lock status x
 rec call lock unlock
+rec call switcher next
+rec call switcher prev
+rec call switcher commit
+rec call switcher cancel
+rec call switcher state
+rec call switcher state x
+rec call switcher nope
+rec show switcher
 rec call gallery open
 rec call gallery status
 rec call gallery status x
