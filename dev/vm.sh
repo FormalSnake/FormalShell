@@ -83,12 +83,42 @@ vm_run() {
   return "$status"
 }
 
+# A qcow2 never gives guest-freed blocks back on this host, so past
+# FS_VM_COMPACT_GB allocated (default 20) the image is rewritten with
+# `qemu-img convert`, when the mac has room for the copy plus 15 GB spare.
+# Runs with the VM stopped and the slot lock held. Prints nothing and leaves
+# the image alone on any failure; the old file survives until the new one
+# has booted (see cmd_start).
+compact_disk() {
+  [ -f "$disk_image" ] || return 0
+  local used_kb free_kb limit_kb=$(( ${FS_VM_COMPACT_GB:-20} * 1024 * 1024 ))
+  used_kb=$(du -k "$disk_image" | awk '{print $1}')
+  [ "$used_kb" -gt "$limit_kb" ] || return 0
+  free_kb=$(df -k "$work_dir" | awk 'NR==2 {print $4}')
+  if [ "$free_kb" -lt $(( used_kb + 15 * 1024 * 1024 )) ]; then
+    echo "testvm: $((used_kb / 1048576)) GB image, but only $((free_kb / 1048576)) GB free; not compacting" >&2
+    return 0
+  fi
+  echo "testvm: compacting $disk_image ($((used_kb / 1048576)) GB)" >&2
+  rm -f "$disk_image.new"
+  if nix shell nixpkgs#qemu -c qemu-img convert -O qcow2 "$disk_image" "$disk_image.new" \
+    && nix shell nixpkgs#qemu -c qemu-img check "$disk_image.new" >/dev/null; then
+    mv "$disk_image" "$disk_image.old"
+    mv "$disk_image.new" "$disk_image"
+    echo "testvm: compacted to $(( $(du -k "$disk_image" | awk '{print $1}') / 1048576 )) GB" >&2
+  else
+    echo "testvm: compaction failed, keeping the old image" >&2
+    rm -f "$disk_image.new"
+  fi
+}
+
 cmd_start() {
   if is_running; then
     echo "testvm already running (pid $(cat "$pid_file"))"
     return 0
   fi
   mkdir -p "$keys_dir" "$work_dir"
+  compact_disk
   if [ ! -f "$priv_key" ]; then
     ssh-keygen -t ed25519 -N "" -C "formalshell-testvm" -f "$priv_key" >/dev/null
     echo "generated ssh keypair: $priv_key"
@@ -121,8 +151,14 @@ cmd_start() {
 
   if ! wait_for_ssh 60; then
     echo "testvm: ssh did not come up after 5 minutes; see $log_file" >&2
+    if [ -f "$disk_image.old" ]; then
+      cmd_stop
+      mv -f "$disk_image.old" "$disk_image"
+      echo "testvm: restored the uncompacted image" >&2
+    fi
     exit 1
   fi
+  rm -f "$disk_image.old"
   echo "testvm ssh is up on 127.0.0.1:${ssh_port}"
 }
 
@@ -204,11 +240,38 @@ cmd_run() {
 # sync, run the smoke rig with the given flags, then pull the SMOKE_OK
 # screenshot plus any other stdout (the dump/status/query JSON the smoke
 # script cats inline) back to ./artifacts/ on the mac.
+# Builds the shell on the mac (through the linux-builder) and copies the
+# closure into the VM's store, then prints the FS_RESULT assignment
+# for the VM-side command. A closure the VM already holds copies as a no-op,
+# and nothing compiles in the guest, whose freed blocks never shrink the
+# qcow2 on the mac. FS_BUILD_IN_VM=1 skips this and lets smoke.sh build in
+# the VM. Needs the VM up and the caller holding the slot lock.
+prebuild_env() {
+  [ -z "${FS_BUILD_IN_VM:-}" ] || return 0
+  local attrs=(formalshell) paths=() out attr
+  git -C "$repo_root" add -A >/dev/null 2>&1 || true  # flakes only see tracked files
+  for attr in "${attrs[@]}"; do
+    # One root per slot and package: the copy in use survives a mac GC, and
+    # the build it replaces becomes garbage instead of piling up.
+    out=$(nix build --out-link "$work_dir/gcroot-$attr" --print-out-paths "$repo_root#packages.aarch64-linux.$attr") || return 1
+    paths+=("$out")
+    printf 'FS_RESULT=%s ' "$out"
+  done
+  NIX_SSHOPTS="${ssh_opts[*]}" nix copy --no-check-sigs --to ssh-ng://test@localhost "${paths[@]}" >&2 || return 1
+}
+
+cmd_prebuild() {
+  local env
+  env=$(prebuild_env) || exit 1
+  printf '%s\n' "$env"
+}
+
 cmd_smoke() {
   local script="./dev/smoke.sh"
   cmd_sync
-  local out status=0
-  out=$(vm_run "${FS_IMPL:+FS_IMPL=$FS_IMPL }$script $*" 2>&1) || status=$?
+  local out status=0 prebuilt
+  prebuilt=$(prebuild_env) || { echo "testvm: building the shell on the mac failed" >&2; exit 1; }
+  out=$(vm_run "${FS_IMPL:+FS_IMPL=$FS_IMPL }${prebuilt}$script $*" 2>&1) || status=$?
   echo "$out"
   if [ "$status" -ne 0 ]; then
     echo "testvm: smoke run failed (exit $status)" >&2
@@ -296,7 +359,7 @@ cmd_shell() {
 # holder's session. Anything that touches the VM's checkout or sessions goes
 # through the lock.
 case "${1:-}" in
-  sync|run|smoke|pull)
+  sync|run|smoke|pull|prebuild)
     if [ -z "${FS_VM_LOCK_HELD:-}" ]; then
       exec "$(dirname "$0")/vm-lock.sh" "$0" "$@"
     fi
@@ -311,9 +374,10 @@ case "${1:-}" in
   run) shift; cmd_run "$@" ;;
   smoke) shift; cmd_smoke "$@" ;;
   pull) shift; cmd_pull "$@" ;;
+  prebuild) cmd_prebuild ;;
   shell) cmd_shell ;;
   *)
-    echo "usage: $0 {start|stop|status|sync|run <cmd...>|smoke [flags...]|pull <vm-dir> <local-dir>|shell}" >&2
+    echo "usage: $0 {start|stop|status|sync|run <cmd...>|smoke [flags...]|pull <vm-dir> <local-dir>|prebuild|shell}" >&2
     exit 1
     ;;
 esac

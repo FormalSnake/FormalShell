@@ -191,22 +191,16 @@ for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
   if [ "${!keep_var:-}" != "keep" ]; then fixture_window_mode=false; fi
 done
 
-# FS_RESULT and FS_RS_RESULT name store paths built elsewhere and copied in,
-# for a host that must not build (e1504g): the result links point at them
-# and nothing is evaluated here.
+# FS_RESULT names a store path built elsewhere and copied in, for a host
+# that must not build (e1504g): the result link points at it and nothing is
+# evaluated here.
 if [ -n "${FS_RESULT:-}" ]; then
   ln -sfn "$FS_RESULT" result
 else
   git add -A >/dev/null 2>&1 || true   # flakes only see tracked files
   nix build .#formalshell
 fi
-if [ "$fs_impl" = rust ]; then
-  if [ -n "${FS_RS_RESULT:-}" ]; then
-    ln -sfn "$FS_RS_RESULT" result-rs
-  else
-    ln -sfn "$(readlink result)" result-rs
-  fi
-fi
+ln -sfn "$(readlink result)" result-rs
 
 # Resolved once, on demand: a leg names what it needs in leg_<name>_needs
 # and the scaffold's own four are always resolved.
