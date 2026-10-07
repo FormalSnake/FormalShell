@@ -99,7 +99,7 @@ async fn fetch(ctx: &Ctx, url: &str) -> Option<Vec<u8>> {
     ctx.pool().run(move || std::fs::read(path).ok()).await.flatten()
 }
 
-fn percent_decode(s: &str) -> String {
+pub fn percent_decode(s: &str) -> String {
     let b = s.as_bytes();
     let mut out = Vec::with_capacity(b.len());
     let mut i = 0;

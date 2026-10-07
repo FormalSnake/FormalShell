@@ -19,6 +19,7 @@ use std::time::{Duration, Instant};
 use fs_media::visualizer::styles;
 
 use super::{Effect, Panel, View};
+use crate::services::lyrics;
 use crate::services::media::Active;
 use crate::services::visualizer::{self, Avail};
 use crate::store::{self, Topic};
@@ -134,6 +135,12 @@ fn press(store: &store::Store, id: &str) {
     }
 }
 
+fn set_follow(fx: &Effect, on: bool) {
+    if fx.store.lyrics.follow != on {
+        fx.service(move |ctx| ctx.publish(store::Diff::Lyrics(lyrics::Diff::Follow(on))));
+    }
+}
+
 fn spectrum_enabled(v: &View) -> bool {
     v.store.config.bool("media.visualizer").unwrap_or(true)
 }
@@ -195,18 +202,23 @@ impl Panel for Media {
     }
 
     fn reads(&self) -> &'static [Topic] {
-        &[Topic::Media, Topic::Visualizer, Topic::Config]
+        &[Topic::Media, Topic::Visualizer, Topic::Config, Topic::Lyrics]
     }
 
     fn width(&self, v: &View) -> f64 {
-        v.theme.space.popup_width_wide
+        let s = &v.theme.space;
+        if v.store.lyrics.synced() { s.popup_width_menu_split } else { s.popup_width_wide }
     }
 
     fn actions(&self, v: &View) -> Vec<El> {
-        match v.store.media.active() {
-            Some(a) if a.can_raise => vec![w::icon_button("external-link").on("raise").key("raise")],
-            _ => Vec::new(),
+        let mut out = Vec::new();
+        if v.store.lyrics.synced() && !v.store.lyrics.follow {
+            out.push(w::icon_button("refresh-cw").tip("Follow the song").on("lyrics-follow").key("lyrics-follow"));
         }
+        if v.store.media.active().is_some_and(|a| a.can_raise) {
+            out.push(w::icon_button("external-link").on("raise").key("raise"));
+        }
+        out
     }
 
     fn opened(&mut self) {
@@ -220,6 +232,7 @@ impl Panel for Media {
     }
 
     fn start(&mut self, fx: &mut Effect) {
+        set_follow(fx, true);
         let on = fx.store.config.bool("media.visualizer").unwrap_or(true);
         self.spectrum.set(on);
         visualizer::set_panel(on);
@@ -322,6 +335,23 @@ impl Panel for Media {
         if !controls.is_empty() {
             col.push(w::row(s.icon_gap, controls).fill());
         }
+        let column = w::column(s.section_gap, col);
+        let body = if v.store.lyrics.synced() {
+            let settings = lyrics::Settings::read(&v.store.config);
+            let ly = &v.store.lyrics;
+            let pane = El::new(crate::ui::el::Kind::Lyrics(crate::ui::lyrics::View {
+                lines: ly.lines.clone(),
+                t: fs_media::lyrics::led_position(a.position, settings.hold(ly.latency)),
+                follow: ly.follow,
+                blur: settings.blur,
+                strength: settings.strength,
+                height: s.control_height * 6.0,
+            }))
+            .key("lyrics");
+            w::row(s.sm, vec![column.width(crate::ui::Size::Fill), pane]).top()
+        } else {
+            column
+        };
         let mut sections = Vec::new();
         if !ids.is_empty() {
             sections.push(vec!["transport".to_owned()]);
@@ -336,13 +366,19 @@ impl Panel for Media {
         }
         sections.push(menu);
         *self.sections.borrow_mut() = sections;
-        w::column(s.section_gap, col)
+        body
     }
 
     fn wake(&self, v: &View) -> Option<Instant> {
         let a = v.store.media.active()?;
         if !a.playing || !has_timeline(&a) {
             return None;
+        }
+        // The lit set moves on the song's own clock, so a synced track redraws
+        // every frame it plays; between line changes only the lit row's
+        // nodes differ.
+        if v.store.lyrics.synced() {
+            return Some(Instant::now());
         }
         let into = a.position.fract();
         Some(Instant::now() + Duration::from_secs_f64((1.0 - into).max(0.01)))
@@ -353,9 +389,17 @@ impl Panel for Media {
             self.pick(id, fx);
             return;
         }
+        if let Some(i) = ev.on.strip_prefix("lyric:").and_then(|i| i.parse::<usize>().ok()) {
+            if let Some(line) = fx.store.lyrics.lines.get(i) {
+                fx.store.media.seek_to(line.time);
+            }
+            return;
+        }
         let a = fx.store.media.active();
         match (ev.on.as_str(), &ev.what) {
             ("raise", _) => fx.store.media.raise(),
+            ("lyrics-follow", _) => set_follow(fx, true),
+            ("lyrics-pane", What::Wheel(_)) => set_follow(fx, false),
             ("source", _) => self.menu = !self.menu,
             ("transport", What::Pick(i)) => {
                 if let Some(a) = &a

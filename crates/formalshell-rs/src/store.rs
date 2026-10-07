@@ -3,7 +3,7 @@
 //! [`Store::apply`].
 
 use crate::services::{
-    appicon, barpaint, caffeinate, clock, commands, config, devices, herdr, hyprland, info, media, plugins, recording, state,
+    appicon, barpaint, caffeinate, clock, commands, config, devices, herdr, hyprland, info, lyrics, media, plugins, recording, state,
     theme, tray, visualizer, wallpaper,
 };
 
@@ -15,6 +15,7 @@ pub struct Store {
     pub state: state::State,
     pub theme: theme::State,
     pub media: media::State,
+    pub lyrics: lyrics::State,
     pub visualizer: visualizer::State,
     pub devices: devices::State,
     pub commands: commands::State,
@@ -37,6 +38,7 @@ pub enum Diff {
     State(state::Diff),
     Theme(theme::Diff),
     Media(media::Diff),
+    Lyrics(lyrics::Diff),
     Visualizer(visualizer::Diff),
     Devices(devices::Diff),
     Commands(commands::Diff),
@@ -61,6 +63,7 @@ pub enum Topic {
     State,
     Theme,
     Media,
+    Lyrics,
     Visualizer,
     Devices,
     Commands,
@@ -81,6 +84,14 @@ pub enum Topic {
 impl Store {
     /// `None` when the diff left the slice as it was, so nothing redraws.
     pub fn apply(&mut self, diff: Diff) -> Option<Topic> {
+        let topic = self.apply_slice(diff);
+        if matches!(topic, Some(Topic::Media | Topic::Config | Topic::Lyrics)) {
+            lyrics::sync(&self.media, &self.config, &self.lyrics);
+        }
+        topic
+    }
+
+    fn apply_slice(&mut self, diff: Diff) -> Option<Topic> {
         match diff {
             Diff::Clock(d) => self.clock.apply(d).then_some(Topic::Clock),
             Diff::Config(d) => self.config.apply(d).then_some(Topic::Config),
@@ -88,6 +99,7 @@ impl Store {
             Diff::Hyprland(d) => self.hyprland.apply(d).then_some(Topic::Hyprland),
             Diff::Theme(d) => self.theme.apply(d).then_some(Topic::Theme),
             Diff::Media(d) => self.media.apply(d).then_some(Topic::Media),
+            Diff::Lyrics(d) => self.lyrics.apply(d).then_some(Topic::Lyrics),
             Diff::Visualizer(d) => self.visualizer.apply(d).then_some(Topic::Visualizer),
             Diff::Devices(d) => self.devices.apply(d).then_some(Topic::Devices),
             Diff::Commands(d) => self.commands.apply(d).then_some(Topic::Commands),

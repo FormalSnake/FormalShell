@@ -110,6 +110,9 @@ pub enum Paint {
     /// A rounded rect's fill under a border drawn inside its edge.
     Framed { fill: Rgba, radius: f32, border: Rgba, width: f32 },
     Text { text: ShapedText, color: Rgba },
+    /// A line under a real Gaussian blur of `blur` px (the lyrics pane's
+    /// depth of field), placed the way `Text` is.
+    Blur { text: ShapedText, color: Rgba, blur: f32 },
     /// A blurred copy of a line under its crisp one (Components/InkGlow.qml):
     /// the glyphs offset by `x`, `y` and smeared over `blur` pixels.
     Glow { text: ShapedText, color: Rgba, x: f32, y: f32, blur: f32 },
@@ -287,6 +290,9 @@ fn paint_eq(a: &Paint, b: &Paint) -> bool {
     match (a, b) {
         (Paint::Rect { fill: f1, radius: r1 }, Paint::Rect { fill: f2, radius: r2 }) => f1 == f2 && r1 == r2,
         (Paint::Text { text: t1, color: c1 }, Paint::Text { text: t2, color: c2 }) => c1 == c2 && t1.same_as(t2),
+        (Paint::Blur { text: t1, color: c1, blur: b1 }, Paint::Blur { text: t2, color: c2, blur: b2 }) => {
+            c1 == c2 && b1 == b2 && t1.same_as(t2)
+        }
         (
             Paint::Framed { fill: f1, radius: r1, border: b1, width: w1 },
             Paint::Framed { fill: f2, radius: r2, border: b2, width: w2 },

@@ -209,6 +209,7 @@ pub fn measure(cx: &mut Cx, el: &El, avail: f64) -> (f64, f64) {
             (inner, ls.iter().map(|l| l.line_height() as f64).sum())
         }
         Kind::Picture { size, .. } | Kind::Cover { size, .. } => (*size, *size),
+        Kind::Lyrics(v) => (inner, v.height),
         Kind::Spectrum { columns, .. } => {
             let n = *columns as f64;
             (n * s.track_thickness + (n - 1.0).max(0.0) * s.xxs, s.control_height)
@@ -273,7 +274,7 @@ pub fn measure(cx: &mut Cx, el: &El, avail: f64) -> (f64, f64) {
         }
     };
     let w = match el.kind {
-        Kind::Grid { .. } | Kind::Track { .. } | Kind::Input { .. } | Kind::Sparkline(_) => avail,
+        Kind::Grid { .. } | Kind::Track { .. } | Kind::Input { .. } | Kind::Sparkline(_) | Kind::Lyrics(_) => avail,
         _ => width_of(el, avail, nw + ps + pe),
     };
     (w, nh + pt + pb)
@@ -401,6 +402,8 @@ pub fn paint(cx: &mut Cx, el: &El, rect: Rect, path: &str) {
                 }
                 let (cw, ch) = measure(cx, c, w);
                 let cw = if c.width == Size::Fill { w } else { cw };
+                // The lyrics pane stands as tall as the column beside it.
+                let ch = if matches!(c.kind, Kind::Lyrics(_)) { ch.max(inner.height()) } else { ch };
                 let y = if el.top { inner.y0 } else { inner.y0 + (inner.height() - ch) / 2.0 };
                 paint(cx, c, Rect::new(x, y, x + cw, y + ch), &child_path(path, c, i));
                 x += w + gap;
@@ -480,6 +483,7 @@ pub fn paint(cx: &mut Cx, el: &El, rect: Rect, path: &str) {
             cx.done(last);
         }
         Kind::Spectrum { style, columns, live } => super::spectrum::paint(cx, inner, style, *columns, *live, path),
+        Kind::Lyrics(v) => super::lyrics::paint(cx, inner, v, path),
         Kind::Icon { name, size, ink } => {
             let t = icon(cx, name, *size);
             let color = cx.a(resolve(cx, *ink));

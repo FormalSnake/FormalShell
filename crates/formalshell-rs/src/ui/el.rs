@@ -172,6 +172,8 @@ pub enum Kind {
     /// VisualizerCanvas.qml: the spectrum in one style, `columns` wide,
     /// redrawn every frame while `live` and at rest otherwise.
     Spectrum { style: String, columns: usize, live: bool },
+    /// LyricsPane.qml at `height`.
+    Lyrics(super::lyrics::View),
 }
 
 /// One element: what it is, how wide it sits, and how it is addressed.
@@ -204,7 +206,7 @@ impl El {
         let width = match &kind {
             Kind::Column { .. } | Kind::Separator { vertical: false, .. } | Kind::Track { .. } | Kind::Group { .. } => Size::Fill,
             Kind::Cell { state, .. } if !state.chip => Size::Fill,
-            Kind::Input { .. } | Kind::Para { .. } => Size::Fill,
+            Kind::Input { .. } | Kind::Para { .. } | Kind::Lyrics(_) => Size::Fill,
             _ => Size::Hug,
         };
         Self { kind, width, pad: [0.0; 4], key: None, stop: false, on: None, tip: None, centred: false, top: false, mid: false, gauge: None }

@@ -670,6 +670,17 @@ impl Host {
 
     /// A wheel notch: a track under it steps, anything else scrolls.
     pub fn wheel(&mut self, x: f64, y: f64, up: bool, store: &Store, runtime: Option<&Runtime>) {
+        // A wheel notch over a scrolling region is a control height of its
+        // content (WheelHandler's angleDelta over 120).
+        if let Some(h) = self.body.scroll_hit(x, y).cloned()
+            && let Some(on) = h.on.clone()
+        {
+            let notch = if up { 1 } else { -1 };
+            self.body.scroll(&h.path, notch as f64 * store.theme.theme.space.control_height);
+            let mut fx = Self::effect(store, runtime);
+            self.module.event(&Event { on, what: What::Wheel(notch) }, &mut fx);
+            return;
+        }
         if let Some((_, h)) = self.hit_at(x, y)
             && h.what == ui::HitWhat::Track
             && let Some(on) = h.on.clone()

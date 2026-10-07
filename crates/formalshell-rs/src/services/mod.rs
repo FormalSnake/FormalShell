@@ -18,6 +18,7 @@ pub mod icons;
 pub mod media;
 pub mod overnight;
 pub mod info;
+pub mod lyrics;
 pub mod plugins;
 pub mod proc;
 pub mod radio;
@@ -41,6 +42,7 @@ pub fn start(ctx: &Ctx) {
     theme::start(ctx);
     ctx.spawn(media::run(ctx.clone()));
     ctx.spawn(cover::run(ctx.clone()));
+    ctx.spawn(lyrics::run(ctx.clone()));
     ctx.spawn(radio::run(ctx.clone()));
     ctx.spawn(airplay::run(ctx.clone()));
     ctx.spawn(ams::run(ctx.clone()));

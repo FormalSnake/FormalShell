@@ -73,6 +73,7 @@ ShellRoot {
         function select(id: string): string { return "select " + id }
         function players(): string { return "[]" }
         function status(): string { return "{}" }
+        function lyrics(): string { return "{}" }
     }
     IpcHandler {
         target: "radio"
@@ -382,6 +383,8 @@ rec call panel state
 rec show panel
 rec call media status
 rec call media status x
+rec call media lyrics
+rec call media lyrics x
 rec show media
 rec call overnight toggle
 rec call overnight status x

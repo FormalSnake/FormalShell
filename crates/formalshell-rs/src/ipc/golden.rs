@@ -105,6 +105,7 @@ fn stub() -> Registry<()> {
                     f("select", &[("id", Type::String)], Type::String, |_, a| s(format!("select {}", a[0].str()))),
                     f("players", &[], Type::String, |_, _| s("[]")),
                     f("status", &[], Type::String, |_, _| s("{}")),
+                    f("lyrics", &[], Type::String, |_, _| s("{}")),
                 ],
             },
             Target { name: "workspaces", functions: vec![f("status", &[], Type::String, |_, _| s("{}"))] },

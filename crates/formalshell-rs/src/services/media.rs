@@ -89,6 +89,8 @@ pub struct Player {
     pub artist: String,
     pub album: String,
     pub art_url: String,
+    /// `xesam:url`, for a sibling `.lrc`.
+    pub url: String,
     pub playing: bool,
     /// Seconds at `at`; `position_now` carries it forward while playing.
     pub position: f64,
@@ -113,6 +115,7 @@ impl Player {
             artist: state.metadata.artist(),
             album: state.metadata.album.clone(),
             art_url: state.metadata.art_url.clone(),
+            url: state.metadata.url.clone(),
             playing: state.is_playing(),
             position: state.position(now).as_secs_f64(),
             at: now,
@@ -248,6 +251,15 @@ impl State {
     pub fn select(&mut self, id: &str) {
         self.selected = id.to_owned();
         self.sync_gate();
+    }
+
+    /// The MPRIS player's `xesam:url`, empty for every other source.
+    pub fn url_of(&self, id: &str) -> String {
+        self.mpris.iter().find(|p| p.id == id).map(|p| p.url.clone()).unwrap_or_default()
+    }
+
+    pub fn players_rows(&self) -> Vec<PlayerRow> {
+        self.rows()
     }
 
     fn rows(&self) -> Vec<PlayerRow> {
@@ -616,6 +628,7 @@ mod tests {
             artist: "Band".into(),
             album: String::new(),
             art_url: String::new(),
+            url: String::new(),
             playing,
             position: 5.0,
             at: Instant::now(),

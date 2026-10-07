@@ -27,6 +27,7 @@ pub fn target() -> Target<App> {
             Function { name: "select", params: &[("id", Type::String)], ret: Type::String, call: select },
             Function { name: "players", params: &[], ret: Type::String, call: players },
             Function { name: "status", params: &[], ret: Type::String, call: status },
+            Function { name: "lyrics", params: &[], ret: Type::String, call: lyrics },
         ],
     }
 }
@@ -104,6 +105,7 @@ fn select(app: &mut App, args: &[Value]) -> Value {
         return text(format!("error: no player {id}"));
     }
     app.store.media.select(id);
+    crate::services::lyrics::sync(&app.store.media, &app.store.config, &app.store.lyrics);
     crate::surfaces::changed(app, Topic::Media);
     text(OK)
 }
@@ -114,4 +116,14 @@ fn players(app: &mut App, _: &[Value]) -> Value {
 
 fn status(app: &mut App, _: &[Value]) -> Value {
     text(app.store.media.status().to_string())
+}
+
+/// LyricsService's own read for headless checks: the display set, the lit
+/// main line and the secondary ones worked out against the held position at
+/// the moment of the call, the follow state, the output latency and the hold.
+fn lyrics(app: &mut App, _: &[Value]) -> Value {
+    use crate::services::lyrics;
+    let position = app.store.media.active().map_or(0.0, |a| a.position);
+    let settings = lyrics::Settings::read(&app.store.config);
+    text(lyrics::status(&app.store.lyrics, position, &settings).to_string())
 }
