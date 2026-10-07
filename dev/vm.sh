@@ -254,7 +254,9 @@ prebuild_env() {
   [ "${FS_IMPL:-qml}" != rust ] || attrs+=(formalshell-rs)
   git -C "$repo_root" add -A >/dev/null 2>&1 || true  # flakes only see tracked files
   for attr in "${attrs[@]}"; do
-    out=$(nix build --no-link --print-out-paths "$repo_root#packages.aarch64-linux.$attr") || return 1
+    # One root per slot and package: the copy in use survives a mac GC, and
+    # the build it replaces becomes garbage instead of piling up.
+    out=$(nix build --out-link "$work_dir/gcroot-$attr" --print-out-paths "$repo_root#packages.aarch64-linux.$attr") || return 1
     paths+=("$out")
     case "$attr" in
       formalshell) var=FS_RESULT ;;
