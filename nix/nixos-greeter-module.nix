@@ -59,6 +59,9 @@ let
     # (confirmed by reproducing that exact failure directly). The compositor
     # picks its own socket name (wl_display_add_socket_auto), so discover
     # whichever one actually got created rather than assuming a fixed name.
+    # A compositor killed on the last restart leaves its socket file behind,
+    # and the search below would hand the greeter that dead one.
+    rm -f "$XDG_RUNTIME_DIR"/wayland-*
     ${lib.getExe cfg.compositorPackage} --config ${compositorConfigFile} &
     compositor_pid=$!
     wayland_socket=""
