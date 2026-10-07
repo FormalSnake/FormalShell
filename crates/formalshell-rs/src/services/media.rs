@@ -180,6 +180,8 @@ pub struct State {
     pub routing: Routing,
     /// Decoded art by url and slot size; `None` is art that failed to load.
     covers: Vec<(String, u32, Option<crate::scene::Bitmap>)>,
+    /// The animated cover's latest frame, by `motion_art` album key.
+    pub motion: Option<(String, crate::scene::Bitmap)>,
 }
 
 pub enum Diff {
@@ -188,6 +190,8 @@ pub enum Diff {
     Airplay(airplay::State),
     Ams(ams::State),
     Cover(String, u32, Option<crate::scene::Bitmap>),
+    /// The animated cover's latest frame by album key, none once it stopped.
+    Motion(Option<(String, crate::scene::Bitmap)>),
     Routing(Routing),
     /// The panel's source menu, as `media select` does it.
     Select(String),
@@ -223,6 +227,11 @@ impl State {
                 }
                 self.covers.push((url, size, bitmap));
                 return true;
+            }
+            Diff::Motion(next) => {
+                let changed = next.is_some() || self.motion.is_some();
+                self.motion = next;
+                return changed;
             }
             Diff::Routing(next) => std::mem::replace(&mut self.routing, next) != self.routing,
             Diff::Mpris(next) => {

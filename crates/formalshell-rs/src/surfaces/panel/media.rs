@@ -20,7 +20,7 @@ use fs_media::visualizer::styles;
 
 use super::{Effect, Panel, View};
 use crate::services::devices::audio;
-use crate::services::lyrics;
+use crate::services::{lyrics, motion_art};
 use crate::services::media::Active;
 use crate::services::visualizer::{self, Avail};
 use crate::store::{self, Topic};
@@ -56,6 +56,7 @@ impl Default for Media {
 
 impl Drop for Media {
     fn drop(&mut self) {
+        motion_art::want(None);
         visualizer::set_panel(false);
         audio::routing_wanted(0, false);
     }
@@ -247,6 +248,7 @@ impl Panel for Media {
 
     fn closed(&mut self) {
         self.open = false;
+        motion_art::want(None);
         visualizer::set_panel(false);
         audio::routing_wanted(0, false);
     }
@@ -273,6 +275,7 @@ impl Panel for Media {
             visualizer::set_panel(enabled);
         }
         let Some(a) = m.active() else {
+            motion_art::want(None);
             self.sections.borrow_mut().clear();
             return w::column(s.section_gap, vec![w::section_label(s, "No player", None, true).pad(0.0, s.sm, 0.0, s.sm)]);
         };
@@ -293,11 +296,22 @@ impl Panel for Media {
         }
 
         let mut info = Vec::new();
+        let mut motion = None;
         if !a.art_url.is_empty() {
             let slot = s.control_height * 3.0;
             let (px, radius) = w::cover_inner(v.theme, slot);
-            info.push(w::cover(m.cover(&a.art_url, px, radius), slot));
+            // AnimatedAlbumArt.qml over the static art: only while the panel
+            // shows the slot, motion is on and the album has motion art.
+            let animated = self.open
+                && v.theme.motion_enabled
+                && v.store.config.bool("media.appleMusicArt").unwrap_or(false)
+                && !a.artist.is_empty()
+                && !a.album.is_empty();
+            motion = animated.then(|| motion_art::Want { artist: a.artist.clone(), album: a.album.clone(), size: px, radius, playing: a.playing });
+            let frame = motion.as_ref().and_then(|w| m.motion.as_ref().filter(|(k, _)| *k == w.key()).map(|(_, b)| b.clone()));
+            info.push(w::cover(frame.or_else(|| m.cover(&a.art_url, px, radius)), slot));
         }
+        motion_art::want(motion);
         let mut words = vec![w::label(if a.title.is_empty() { "Unknown title".to_owned() } else { a.title.clone() }).size(Type::Title).elide()];
         if !a.artist.is_empty() {
             words.push(w::text(a.artist.clone()).elide());

@@ -10,7 +10,9 @@ by surface; one line each.
 
 ## Media
 - Header Radio button (needs the Radio Atlas surface, Globe and search, not
-  ported) and the animated album art (needs a video decode path) not ported.
+  ported) not ported.
+- The animated album art runs in the media panel only; the bar's now-playing
+  cover (`media.animatedBarCover`) still draws the static art.
 
 ## Launcher
 - Clipboard split preview, width/height size morph, row add/remove motion.

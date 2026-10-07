@@ -134,7 +134,7 @@ pub fn decode(bytes: &[u8], size: u32, radius: f64) -> Option<Bitmap> {
     Some(Bitmap::from_rgba(size, size, out.into_raw()))
 }
 
-fn round_corners(img: &mut RgbaImage, radius: f64) {
+pub fn round_corners(img: &mut RgbaImage, radius: f64) {
     let (w, h) = img.dimensions();
     let r = radius.min(w.min(h) as f64 / 2.0);
     if r <= 0.0 {
