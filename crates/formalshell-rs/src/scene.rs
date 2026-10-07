@@ -83,6 +83,11 @@ impl Bitmap {
                 *c = ((*c as u32 * a + 127) / 255) as u8;
             }
         }
+        Self::from_premultiplied(width, height, rgba)
+    }
+
+    /// `rgba` already premultiplied, `width * height * 4` bytes.
+    pub fn from_premultiplied(width: u16, height: u16, rgba: Vec<u8>) -> Self {
         Self { pixmap: Arc::new(Pixmap::from_parts(rgba, width, height, PixelMetadata::default())) }
     }
 
@@ -107,6 +112,9 @@ pub enum Paint {
     Rect { fill: Rgba, radius: f32 },
     /// A bitmap drawn at the node's bounds origin, one pixel to a pixel.
     Image { image: Bitmap, alpha: f32 },
+    /// A bitmap stretched over the node's bounds inside a rounded rect (a
+    /// window thumbnail).
+    Picture { image: Bitmap, alpha: f32, radius: f32 },
     /// A rounded rect's fill under a border drawn inside its edge.
     Framed { fill: Rgba, radius: f32, border: Rgba, width: f32 },
     Text { text: ShapedText, color: Rgba },
@@ -295,6 +303,9 @@ fn paint_eq(a: &Paint, b: &Paint) -> bool {
             c1 == c2 && t1.same_as(t2) && x1 == x2 && y1 == y2 && b1 == b2
         }
         (Paint::Image { image: i1, alpha: a1 }, Paint::Image { image: i2, alpha: a2 }) => a1 == a2 && i1.same_as(i2),
+        (Paint::Picture { image: i1, alpha: a1, radius: r1 }, Paint::Picture { image: i2, alpha: a2, radius: r2 }) => {
+            a1 == a2 && r1 == r2 && i1.same_as(i2)
+        }
         (Paint::Shape { fill: f1, strokes: s1 }, Paint::Shape { fill: f2, strokes: s2 }) => f1 == f2 && s1 == s2,
         (
             Paint::Casts { rect: r1, radius: a1, layers: l1, cutout: c1 },

@@ -5,6 +5,7 @@ pub mod bar;
 pub mod card;
 pub mod panel;
 pub mod shoulders;
+pub mod switcher;
 pub mod tray_menu;
 pub mod tooltip;
 
@@ -13,6 +14,7 @@ use crate::store::Topic;
 use crate::wayland::{App, theme_inputs};
 
 pub fn changed(app: &mut App, topic: Topic) {
+    app.switcher_changed(topic);
     match topic {
         Topic::Config => {
             let settings = app.store.config.settings().clone();

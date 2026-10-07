@@ -25,6 +25,7 @@ mod monitor;
 mod panel;
 mod plugins;
 mod radio;
+mod switcher;
 pub mod registry;
 mod theme;
 mod tray;
@@ -70,6 +71,7 @@ fn registry() ->&'static Registry<App> {
             gallery::target(),
             calendar::target(),
             iphone::target(),
+            switcher::target(),
         ],
     })
 }

@@ -11,7 +11,7 @@
 # WallpaperIpc.qml's exact signatures, `bar`, `panel`, `media`, `radio`,
 # `airplay`, `visualizer`, `overnight`, `earbuds` and `workspaces` their own
 # IPC files' (WorkspacesIpc.qml's `status` only: peek and close wait for the
-# preview), `calendar` and `iphone` their own; `probe` covers every type qs
+# preview), `calendar`, `iphone` and `switcher` their own; `probe` covers every type qs
 # converts and the function names that collide with qs's subcommands.
 set -euo pipefail
 
@@ -135,6 +135,14 @@ ShellRoot {
         function enable(): string { return "ok" }
         function disable(): string { return "ok" }
         function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "switcher"
+        function next(): string { return "ok" }
+        function prev(): string { return "ok" }
+        function commit(): string { return "ok" }
+        function cancel(): string { return "ok" }
+        function state(): string { return "{}" }
     }
     IpcHandler {
         target: "gallery"
@@ -416,6 +424,14 @@ rec call caffeinate disable
 rec call caffeinate status
 rec call caffeinate status x
 rec show caffeinate
+rec call switcher next
+rec call switcher prev
+rec call switcher commit
+rec call switcher cancel
+rec call switcher state
+rec call switcher state x
+rec call switcher nope
+rec show switcher
 rec call gallery open
 rec call gallery status
 rec call gallery status x

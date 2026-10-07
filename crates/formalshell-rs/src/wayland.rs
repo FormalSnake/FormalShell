@@ -5,6 +5,8 @@
 //! callback or an input event belongs to.
 
 mod caffeinate;
+pub mod capture;
+pub mod switcher;
 
 use std::time::Instant;
 
@@ -130,6 +132,7 @@ enum Owner {
     Scrim,
     Zone(usize),
     Backdrop,
+    Switcher,
 }
 
 pub struct App {
@@ -145,6 +148,8 @@ pub struct App {
     pub runtime: Option<Runtime>,
     pub store: Store,
     caffeinate: caffeinate::Caffeinate,
+    capture: capture::Capture,
+    pub switcher: switcher::State,
     pub bar: Bar,
     bar_surface: Option<Surface>,
     backdrop: Option<Backdrop>,
@@ -207,6 +212,8 @@ impl App {
             runtime: None,
             store,
             caffeinate: caffeinate::Caffeinate::bind(globals, qh),
+            capture: capture::Capture::bind(globals, qh),
+            switcher: switcher::State::default(),
             bar,
             bar_surface: None,
             backdrop: None,
@@ -1089,6 +1096,7 @@ impl App {
             h.surface.present(&mut h.card.scene, animating, &qh);
         }
         self.panel_dirty = false;
+        self.switcher_present();
         self.present_tooltip(now);
         if let Some((surface, scene, _)) = &mut self.preview {
             surface.present(scene, false, &qh);
@@ -1144,7 +1152,7 @@ impl App {
     /// nothing asks for frames while it waits.
     fn arm_wake(&mut self, now: Instant) {
         let hosts = [&self.panel, &self.outgoing];
-        let at = [self.bar.wake(now), self.tips.wake()]
+        let at = [self.bar.wake(now), self.tips.wake(), self.switcher_deadline()]
             .into_iter()
             .chain(hosts.iter().filter_map(|h| h.as_ref()).flat_map(|h| [h.prime_until, h.wake.filter(|w| *w > now)]))
             .flatten()
@@ -1190,6 +1198,9 @@ impl App {
         }
         if self.backdrop.as_ref().is_some_and(|b| b.layer.wl_surface() == surface) {
             return Some(Owner::Backdrop);
+        }
+        if self.switcher.owns(surface) {
+            return Some(Owner::Switcher);
         }
         self.zones.iter().position(|(_, z)| z.layer.wl_surface() == surface).map(Owner::Zone)
     }
@@ -1306,6 +1317,10 @@ impl App {
                     self.hover(None, (x, y));
                 }
                 PointerEventKind::Press { .. } => {
+                    if owner == Some(Owner::Switcher) {
+                        self.switcher_close();
+                        continue;
+                    }
                     if owner == Some(Owner::Panel) {
                         if let Some(h) = &mut self.panel {
                             h.press(x, y, &self.store, self.runtime.as_ref());
@@ -1423,6 +1438,9 @@ impl App {
     /// One key on the keyboard: the open panel's, as KeyCatcher.qml binds
     /// them.
     fn key_event(&mut self, event: KeyEvent) {
+        if self.switcher_key(event.keysym) {
+            return;
+        }
         let key = match event.keysym {
             Keysym::Escape => Key::Escape,
             Keysym::Tab => Key::Tab(1),
@@ -1526,6 +1544,7 @@ impl CompositorHandler for App {
                 let z = &mut self.zones[i].1;
                 (z.frame_pending, z.mapped, z.callbacks) = (false, true, z.callbacks + 1);
             }
+            Some(Owner::Switcher) => self.switcher_frame(),
             Some(Owner::Backdrop) | None => {}
         }
     }
@@ -1556,6 +1575,7 @@ impl LayerShellHandler for App {
             Some(Owner::Menu) => self.menu = None,
             Some(Owner::Scrim) => self.scrim = None,
             Some(Owner::Backdrop) => self.backdrop = None,
+            Some(Owner::Switcher) => self.switcher_close(),
             Some(Owner::Zone(_)) | None => {}
         }
     }
@@ -1607,6 +1627,7 @@ impl LayerShellHandler for App {
                 }
                 self.update_backdrop();
             }
+            Some(Owner::Switcher) => self.switcher_configure(width, height),
             None if self.caffeinate_owns(layer) => self.caffeinate_configure(),
             None => {}
         }
