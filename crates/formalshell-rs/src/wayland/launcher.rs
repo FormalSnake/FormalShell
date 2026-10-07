@@ -194,6 +194,8 @@ impl App {
     pub fn launcher_store_changed(&mut self) {
         if self.launcher.open {
             self.launcher_resolve = true;
+        } else {
+            self.launcher_warm = true;
         }
     }
 
@@ -206,20 +208,37 @@ impl App {
             return;
         }
         if self.launch.is_none() {
+            if self.launcher_warm && !self.launcher.open {
+                self.launcher_warm = false;
+                self.launcher.resolve(&self.store, &self.store.theme.theme, &mut self.bar.kit);
+            }
             return;
         }
+        let t0 = Instant::now();
         self.resolve_launcher();
+        let resolved = t0.elapsed();
         let qh = self.qh.clone();
         let theme = &self.store.theme.theme;
         let Some(w) = &mut self.launch else { return };
         let animating = w.shown.animating(now);
+        let t1 = Instant::now();
         if self.launcher.dirty || animating || !w.shown.surface.mapped {
             w.shown.sync_region(&self.compositor);
             w.shown.layout(&mut self.launcher, &self.store, theme, &mut self.bar.kit, now);
             self.launcher.dirty = false;
         }
+        let laid = t1.elapsed();
         let animating = w.shown.animating(now);
         w.shown.surface.present(&mut w.shown.card.scene, animating, &qh);
+        if t0.elapsed().as_millis() >= 8 {
+            eprintln!(
+                "event loop: slow launcher t={}ms resolve_us={} layout_us={} total_us={}",
+                self.started.elapsed().as_millis(),
+                resolved.as_micros(),
+                laid.as_micros(),
+                t0.elapsed().as_micros()
+            );
+        }
         let pose = w.shown.card.pose(now);
         let attach = w.shown.card.attach(now);
         if let Some(b) = &mut w.band {
@@ -250,7 +269,7 @@ impl App {
         match owner {
             Owner::Launcher => {
                 let s = &mut w.shown.surface;
-                (s.frame_pending, s.callbacks) = (false, s.callbacks + 1);
+                s.landed(now);
                 if s.mapped {
                     w.shown.card.tick(now);
                 } else {

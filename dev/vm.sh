@@ -234,7 +234,7 @@ cmd_smoke() {
     [ -z "$extra_line" ] && continue
     remote_extra=$(printf '%s\n' "$extra_line" | awk '{print $2}')
     case "$remote_extra" in
-      *.png)
+      *.png|*.log)
         local_extra="$repo_root/artifacts/$(basename "$remote_extra")"
         scp "${scp_opts[@]}" "test@localhost:$remote_extra" "$local_extra"
         echo "pulled screenshot: $local_extra"

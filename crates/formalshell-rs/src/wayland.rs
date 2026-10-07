@@ -189,6 +189,10 @@ pub struct App {
     pub launcher: crate::surfaces::launcher::Model,
     launch: Option<launcher::Window>,
     launcher_resolve: bool,
+    /// The index moved while the launcher was shut: resolve its root once
+    /// at the next idle frame, so the first open finds the text and rows
+    /// already laid out.
+    launcher_warm: bool,
     mods: fs_menu::nav::Modifiers,
     menu_buttons: Option<serde_json::Value>,
     menu_launches: Option<serde_json::Value>,
@@ -248,6 +252,7 @@ impl App {
             launcher: Default::default(),
             launch: None,
             launcher_resolve: true,
+            launcher_warm: false,
             mods: Default::default(),
             menu_buttons: None,
             menu_launches: None,
@@ -1498,13 +1503,14 @@ impl CompositorHandler for App {
         match self.owner(surface) {
             Some(Owner::Bar) => {
                 let Some(s) = &mut self.bar_surface else { return };
-                (s.frame_pending, s.mapped, s.callbacks) = (false, true, s.callbacks + 1);
+                s.landed(now);
+                s.mapped = true;
                 self.bar_dirty = true;
             }
             Some(o @ (Owner::Overflow | Owner::Menu)) => {
                 let Some(p) = self.popout_of(o) else { return };
                 let s = &mut p.surface;
-                (s.frame_pending, s.callbacks) = (false, s.callbacks + 1);
+                s.landed(now);
                 if s.mapped {
                     p.card.tick(now);
                 } else {

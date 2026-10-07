@@ -939,7 +939,6 @@ pub struct Shown {
     foot: Ui,
     rules: Vec<NodeId>,
     pub output: (f64, f64),
-    pub line_at: f64,
     scale: f64,
     pub wake: Option<Instant>,
     region: Option<IRect>,
@@ -963,7 +962,6 @@ impl Shown {
             foot: Ui::new(Some(top)),
             rules: Vec::new(),
             output,
-            line_at,
             scale,
             wake: None,
             region: None,
@@ -1276,7 +1274,7 @@ fn body_el(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, scroll: f64, 
     items.sort_by(|a, b| a.0.total_cmp(&b.0));
     let mut col: Vec<El> = Vec::new();
     let mut y = 0.0;
-    let mut i = 0;
+    let i = 0;
     while i < items.len() {
         let top = items[i].0;
         let mut line = Vec::new();
