@@ -20,22 +20,16 @@ frame, teardown) and sources every file here. A leg defines:
   of the scaffold's, for a leg that runs some other build of the shell
   (`--installed`). It still logs to `$shell_log_path` and may write the
   shell's pid to `$shot_dir/shell.pid` for the memory sample.
-- `leg_<n>_rust=1` lets the leg run under `FS_IMPL=rust`, which refuses
-  every other leg until the rust shell serves the targets it calls
-  (`--r0-measure`).
-  A leg with no QML counterpart (`--headset-card`) sets it and refuses
-  `FS_IMPL=qml` in its `leg_<n>_validate`.
 - `leg_<n>_takeover` runs the whole thing itself and exits, for a leg that
   cannot share the one session (`--screensaver-gif` needs one per effect).
   It runs with the build done, the binaries resolved and the bus baseline
   taken, and owns its own `SMOKE_OK` line.
 
 A leg reaches the shell only through `$ipc call <target> <fn> [args...]`,
-never `qs ipc` by hand: `$ipc` is `qs ipc -p <shell>` under QML and
-`formalshell-ipc` under `FS_IMPL=rust`, shell-quoted to paste into a
+never by hand: `$ipc` is `formalshell-ipc`, shell-quoted to paste into a
 generated script unquoted. `$ipc_wrapper` is the package's own
 `formalshell-ipc` entry point, for the leg that proves it (`--dump`).
-Arguments go through CLI11 either way: one starting with `[` and ending
+Arguments follow the CLI11 rules the IPC contract was recorded under: one starting with `[` and ending
 with `]` is split on commas, a `-x` word is refused, and a bare `show`,
 `wait`, `listen` or `prop` switches subcommand. A `--` before the
 arguments stops the last two; only a leading space stops the split.
