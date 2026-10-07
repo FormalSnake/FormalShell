@@ -94,6 +94,7 @@ impl App {
     fn drop_launch(&mut self) {
         if let Some(w) = self.launch.take() {
             self.launch_kept = Some(w.shown.modal.surface.keep());
+            self.launcher.ask_fresh(&self.store);
         }
     }
 
@@ -741,6 +742,10 @@ impl App {
                 self.launcher_warm = false;
                 self.launcher.resolve(&self.store, &self.store.theme.theme, &mut self.bar.kit);
                 self.warm_launcher_text();
+                if !self.fresh_asked && !self.store.menu.nodes().is_empty() {
+                    self.fresh_asked = true;
+                    self.launcher.ask_fresh(&self.store);
+                }
             }
             return;
         }
