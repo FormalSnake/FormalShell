@@ -81,6 +81,18 @@ pub struct Surface<R: Role = LayerSurface> {
     started: Instant,
     commits: u64,
     pub callbacks: u64,
+    /// When the outstanding frame callback was asked for, and how long the
+    /// last one took to land: a slow compositor reads here, a slow shell
+    /// in `event loop:` lines.
+    asked: Option<Instant>,
+    waited_us: u128,
+    landed_at: Option<Instant>,
+    /// No buffer has been dropped out of the pool, so every byte of it a
+    /// new buffer gets is still the zero (clear) memfd fill.
+    pool_clean: bool,
+    /// Everything the renderer has drawn since its canvas was cleared: all
+    /// a buffer cut from a clean pool lacks.
+    drawn: Option<IRect>,
 }
 
 impl<R: Role> Surface<R> {
@@ -98,7 +110,22 @@ impl<R: Role> Surface<R> {
             started,
             commits: 0,
             callbacks: 0,
+            asked: None,
+            waited_us: 0,
+            landed_at: None,
+            pool_clean: true,
+            drawn: None,
         }
+    }
+
+    /// A frame callback landed.
+    pub fn landed(&mut self, now: Instant) {
+        self.frame_pending = false;
+        self.callbacks += 1;
+        if let Some(asked) = self.asked.take() {
+            self.waited_us = now.duration_since(asked).as_micros();
+        }
+        self.landed_at = Some(now);
     }
 
     /// The compositor's size, which the owner has resized its scene to.
@@ -106,7 +133,9 @@ impl<R: Role> Surface<R> {
         self.configured = true;
         if (self.renderer.width() as i32, self.renderer.height() as i32) != (width, height) {
             self.renderer.resize(width as u16, height as u16);
+            self.pool_clean &= self.buffers.is_empty();
             self.buffers.clear();
+            self.drawn = None;
         }
     }
 
@@ -132,16 +161,20 @@ impl<R: Role> Surface<R> {
                 let surface = self.layer.role_surface();
                 surface.frame(qh, FrameCallbackData(surface.clone()));
                 self.frame_pending = true;
+                self.asked = Some(Instant::now());
                 self.layer.role_commit();
             }
             return;
         }
         let damage = scene.take_damage();
+        // From the callback that let this frame go to the start of drawing it.
+        let react_us = self.landed_at.take().map_or(0, |at| at.elapsed().as_micros());
         let t0 = Instant::now();
         for rect in &damage {
             self.renderer.render(scene, *rect);
         }
         let render_us = t0.elapsed().as_micros();
+        self.drawn = damage.iter().fold(self.drawn, |u, r| Some(u.map_or(*r, |u| u.union(r))));
 
         let t1 = Instant::now();
         let size = scene.size;
@@ -152,7 +185,8 @@ impl<R: Role> Surface<R> {
                     .pool
                     .create_buffer(size.w, size.h, size.w * 4, wl_shm::Format::Argb8888)
                     .expect("wl_shm buffer");
-                self.buffers.push(ShmBuffer { buffer, stale: vec![size] });
+                let stale = if self.pool_clean { self.drawn.into_iter().collect() } else { vec![size] };
+                self.buffers.push(ShmBuffer { buffer, stale });
                 self.buffers.len() - 1
             }
         };
@@ -196,6 +230,7 @@ impl<R: Role> Surface<R> {
         if request {
             surface.frame(qh, FrameCallbackData(surface.clone()));
             self.frame_pending = true;
+            self.asked = Some(Instant::now());
         }
         target.buffer.attach_to(surface).expect("attach released buffer");
         self.layer.role_commit();
@@ -204,7 +239,7 @@ impl<R: Role> Surface<R> {
         let area: i64 = damage.iter().map(IRect::area).sum();
         let rects: Vec<String> = damage.iter().map(|r| format!("{},{},{}x{}", r.x, r.y, r.w, r.h)).collect();
         eprintln!(
-            "commit surface={} n={} t={}ms render_us={} copy_us={} rects={} px={} damage=[{}] buffer={} frame_callbacks={} request={}",
+            "commit surface={} n={} t={}ms render_us={} copy_us={} rects={} px={} damage=[{}] buffer={} frame_callbacks={} request={} last_wait_us={} react_us={}",
             self.name,
             self.commits,
             self.started.elapsed().as_millis(),
@@ -216,6 +251,8 @@ impl<R: Role> Surface<R> {
             at,
             self.callbacks,
             request as u8,
+            self.waited_us,
+            react_us,
         );
     }
 

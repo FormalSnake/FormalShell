@@ -59,7 +59,12 @@ fn main() {
 
     let signal = event_loop.get_signal();
     let ended = event_loop.run(None, &mut app, |app| {
+        // A present that holds the thread past half a frame is one line.
+        let t0 = Instant::now();
         app.present();
+        if t0.elapsed().as_millis() >= 8 {
+            eprintln!("event loop: slow present t={}ms present_us={}", started.elapsed().as_millis(), t0.elapsed().as_micros());
+        }
         if app.exit {
             signal.stop();
         }

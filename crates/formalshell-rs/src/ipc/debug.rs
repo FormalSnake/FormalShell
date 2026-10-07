@@ -31,8 +31,7 @@ pub fn target() -> Target<App> {
             },
             Function { name: "joinClear", params: &[], ret: Type::String, call: join_clear },
             Function { name: "motionScale", params: &[("percent", Type::Int)], ret: Type::String, call: motion_scale },
-            // No launcher yet: DebugIpc.qml's own answer with no menu instance.
-            Function { name: "query", params: &[("q", Type::String)], ret: Type::String, call: |_, _| text("[]") },
+            Function { name: "query", params: &[("q", Type::String)], ret: Type::String, call: query },
             Function { name: "r0Spinner", params: &[("on", Type::Bool)], ret: Type::String, call: r0_spinner },
             Function { name: "r0Panel", params: &[("action", Type::String)], ret: Type::String, call: r0_panel },
             Function { name: "r0Scrim", params: &[("on", Type::Bool)], ret: Type::String, call: r0_scrim },
@@ -121,6 +120,10 @@ fn motion_scale(app: &mut App, args: &[Value]) -> Value {
     app.motion_scale = percent as f64 / 100.0;
     app.bar.kit.motion_scale = app.motion_scale;
     ok()
+}
+
+fn query(app: &mut App, args: &[Value]) -> Value {
+    text(app.launcher.query(&app.store, args[0].str()).to_string())
 }
 
 fn r0_spinner(app: &mut App, args: &[Value]) -> Value {

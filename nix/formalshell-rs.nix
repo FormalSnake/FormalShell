@@ -17,6 +17,8 @@ rustCommon.craneLib.buildPackage (rustCommon.commonArgs // {
       ../shell/Theme/icons
       ../shell/Theme/templates
       ../shell/Core/Theme.qml
+      ../shell/Menu/default-menu.jsonc
+      ../shell/Menu/emoji.json
     ];
   };
   postUnpack = ''

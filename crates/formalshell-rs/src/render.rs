@@ -49,11 +49,32 @@ impl Renderer {
         let (w, h) = (rect.w as u16, rect.h as u16);
         self.ctx.reset_and_resize(w, h);
         let origin = Affine::translate((-rect.x as f64, -rect.y as f64));
+        // A clip is a layer composited on its own, so a run of nodes under
+        // one clip shares a layer, and a node the clip cannot cut (its box
+        // inside the clip, moved by a plain translation at most) needs none.
+        // A launcher frame is a few hundred rows under the body's one clip.
+        let mut active: Option<IRect> = None;
         for node in scene.nodes().filter(|n| n.bounds.intersects(&rect)) {
-            if let Some(c) = node.clip {
-                self.ctx.set_transform(origin);
-                let r = Rect::new(c.x as f64, c.y as f64, c.right() as f64, c.bottom() as f64);
-                self.ctx.push_clip_layer(&r.to_path(0.1));
+            // Casts and glows paint past their own box.
+            let spills = matches!(node.paint, Paint::Casts { .. } | Paint::Glow { .. });
+            let drawn = drawn_box(node.bounds, node.transform).filter(|_| !spills);
+            let inside = |c: &IRect| drawn.is_some_and(|d| c.contains(&d));
+            let want = node.clip.filter(|c| !inside(c));
+            match want {
+                Some(c) if active != Some(c) => {
+                    if active.is_some() {
+                        self.ctx.pop_layer();
+                    }
+                    self.ctx.set_transform(origin);
+                    let r = Rect::new(c.x as f64, c.y as f64, c.right() as f64, c.bottom() as f64);
+                    self.ctx.push_clip_layer(&r.to_path(0.1));
+                    active = Some(c);
+                }
+                None if active.is_some_and(|a| !inside(&a)) => {
+                    self.ctx.pop_layer();
+                    active = None;
+                }
+                _ => {}
             }
             let at = origin * node.transform;
             match &node.paint {
@@ -172,9 +193,9 @@ impl Renderer {
                     self.ctx.pop_layer();
                 }
             }
-            if node.clip.is_some() {
-                self.ctx.pop_layer();
-            }
+        }
+        if active.is_some() {
+            self.ctx.pop_layer();
         }
         self.ctx.flush();
         let mut tile = Pixmap::new(w, h);
@@ -189,6 +210,18 @@ impl Renderer {
             dst[d..d + rect.w as usize].copy_from_slice(&src[s..s + rect.w as usize]);
         }
     }
+}
+
+/// A node's box where it lands, when its transform is a translation (or
+/// nothing); `None` for anything that scales, rotates or skews it.
+fn drawn_box(bounds: IRect, transform: Affine) -> Option<IRect> {
+    let [a, b, c, d, e, f] = transform.as_coeffs();
+    if a != 1.0 || b != 0.0 || c != 0.0 || d != 1.0 {
+        return None;
+    }
+    let (dx, dy) = (e.floor() as i32, f.floor() as i32);
+    let (ex, ey) = (i32::from(e.fract() != 0.0), i32::from(f.fract() != 0.0));
+    Some(IRect::new(bounds.x + dx, bounds.y + dy, bounds.w + ex, bounds.h + ey))
 }
 
 fn color(c: Rgba) -> AlphaColor<Srgb> {

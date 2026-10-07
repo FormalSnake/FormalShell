@@ -22,6 +22,7 @@ mod lock;
 #[cfg(test)]
 mod golden;
 mod media;
+mod menu;
 mod notifications;
 mod overnight;
 mod monitor;
@@ -76,6 +77,7 @@ fn registry() ->&'static Registry<App> {
             caffeinate::target(),
             gallery::target(),
             lock::target(),
+            menu::target(),
             calendar::target(),
             iphone::target(),
             notifications::target(),

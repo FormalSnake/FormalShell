@@ -189,7 +189,7 @@ fn window_of(q: &Query) -> appicon::Window {
     appicon::Window { app_id: q.app_id.clone(), initial_class: q.initial_class.clone(), initial_title: q.initial_title.clone() }
 }
 
-fn applications_dirs() -> Vec<PathBuf> {
+pub fn applications_dirs() -> Vec<PathBuf> {
     icons::data_dirs().into_iter().map(|d| d.join("applications")).collect()
 }
 
@@ -216,6 +216,11 @@ fn scan_entries(dirs: &[PathBuf]) -> (Vec<DesktopEntry>, HashMap<String, Extras>
         }
     }
     (out, extras)
+}
+
+/// The launcher's apps source: every launchable entry.
+pub fn scan_launchable(dirs: &[PathBuf]) -> Vec<DesktopEntry> {
+    scan_entries(dirs).0
 }
 
 /// What an entry carries past the fields `DesktopEntry` holds.
@@ -281,6 +286,7 @@ fn parse_entry(id: &str, path: &Path) -> Option<(DesktopEntry, Extras)> {
         startup_class: text("StartupWMClass"),
         icon: text("Icon"),
         command: split_exec(fields.get("Exec").copied().unwrap_or_default()),
+        generic_name: text("GenericName"),
     };
     Some((entry, Extras { terminal: flag("Terminal"), actions }))
 }

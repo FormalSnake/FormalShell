@@ -223,6 +223,29 @@ fn stub() -> Registry<()> {
                 ],
             },
             Target {
+                name: "menu",
+                functions: vec![
+                    f("toggle", &[], Type::String, |_, _| s("ok")),
+                    f("summon", &[("route", Type::String)], Type::String, |_, a| s(format!("summon {}", a[0].str()))),
+                    f("activate", &[("index", Type::Int)], Type::String, |_, a| s(format!("activate {}", a[0].int()))),
+                    f("activateAlternate", &[("index", Type::Int)], Type::String, |_, a| s(format!("activateAlternate {}", a[0].int()))),
+                    f("filter", &[("text", Type::String)], Type::String, |_, a| s(format!("filter {}", a[0].str()))),
+                    f("close", &[], Type::String, |_, _| s("ok")),
+                    f("refresh", &[], Type::String, |_, _| s("ok")),
+                    f("ping", &[], Type::String, |_, _| s("pong")),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                    f(
+                        "select",
+                        &[("prompt", Type::String), ("optionsJson", Type::String), ("token", Type::String)],
+                        Type::String,
+                        |_, a| s(format!("select {} {} {}", a[0].str(), a[1].str(), a[2].str())),
+                    ),
+                    f("input", &[("prompt", Type::String), ("token", Type::String)], Type::String, |_, a| {
+                        s(format!("input {} {}", a[0].str(), a[1].str()))
+                    }),
+                ],
+            },
+            Target {
                 name: "calendar",
                 functions: vec![
                     f("select", &[("date", Type::String)], Type::String, |_, a| s(format!("select {}", a[0].str()))),
@@ -416,6 +439,7 @@ fn signatures_match_qml() {
         super::plugins::target(),
         super::caffeinate::target(),
         super::gallery::target(),
+        super::menu::target(),
         super::calendar::target(),
         super::iphone::target(),
         super::display::target(),

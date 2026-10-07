@@ -45,6 +45,10 @@ impl IRect {
         !self.intersect(o).is_empty()
     }
 
+    pub fn contains(&self, o: &IRect) -> bool {
+        o.x >= self.x && o.y >= self.y && o.right() <= self.right() && o.bottom() <= self.bottom()
+    }
+
     pub fn union(&self, o: &IRect) -> IRect {
         let x = self.x.min(o.x);
         let y = self.y.min(o.y);

@@ -164,6 +164,20 @@ ShellRoot {
         function status(): string { return JSON.stringify({ isOpen: false }) }
     }
     IpcHandler {
+        target: "menu"
+        function toggle(): string { return "ok" }
+        function summon(route: string): string { return "summon " + route }
+        function activate(index: int): string { return "activate " + index }
+        function activateAlternate(index: int): string { return "activateAlternate " + index }
+        function filter(text: string): string { return "filter " + text }
+        function close(): string { return "ok" }
+        function refresh(): string { return "ok" }
+        function ping(): string { return "pong" }
+        function status(): string { return "{}" }
+        function select(prompt: string, optionsJson: string, token: string): string { return "select " + prompt + " " + optionsJson + " " + token }
+        function input(prompt: string, token: string): string { return "input " + prompt + " " + token }
+    }
+    IpcHandler {
         target: "calendar"
         function select(date: string): string { return "select " + date }
         function status(): string { return "{}" }
@@ -501,6 +515,27 @@ rec call gallery status x
 rec call gallery toggle
 rec call gallery close
 rec show gallery
+rec call menu toggle
+rec call menu summon ''
+rec call menu summon emoji
+rec call menu summon ':e sob'
+rec call menu summon
+rec call menu activate 3
+rec call menu activate x
+rec call menu activate -1
+rec call menu activateAlternate 0
+rec call menu filter 'a b'
+rec call menu filter
+rec call menu close
+rec call menu refresh
+rec call menu ping
+rec call menu status
+rec call menu select Pick ' ["a","b","c"]' tok1
+rec call menu select Pick '["a","b"]' tok1
+rec call menu select Pick x
+rec call menu input Prompt tok2
+rec call menu nope
+rec show menu
 rec call calendar select 2026-10-06
 rec call calendar select
 rec call calendar status
