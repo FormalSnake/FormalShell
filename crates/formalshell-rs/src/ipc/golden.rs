@@ -208,6 +208,38 @@ fn stub() -> Registry<()> {
                 ],
             },
             Target {
+                name: "osd",
+                functions: vec![
+                    f("volume", &[], Type::String, |_, _| s("ok")),
+                    f("brightness", &[], Type::String, |_, _| s("ok")),
+                    f("media", &[("text", Type::String)], Type::String, |_, a| s(format!("media {}", a[0].str()))),
+                    f("close", &[], Type::String, |_, _| s("ok")),
+                    f("state", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
+                name: "nightlight",
+                functions: vec![
+                    f("toggle", &[], Type::String, |_, _| s("ok")),
+                    f("enable", &[], Type::String, |_, _| s("ok")),
+                    f("disable", &[], Type::String, |_, _| s("ok")),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
+                name: "lights",
+                functions: vec![
+                    f("toggle", &[], Type::String, |_, _| s("ok")),
+                    f("effect", &[("id", Type::String)], Type::String, |_, a| s(format!("effect {}", a[0].str()))),
+                    f("color", &[("hex", Type::String)], Type::String, |_, a| s(format!("color {}", a[0].str()))),
+                    f("source", &[("value", Type::String)], Type::String, |_, a| s(format!("source {}", a[0].str()))),
+                    f("speed", &[("value", Type::String)], Type::String, |_, a| s(format!("speed {}", a[0].str()))),
+                    f("brightness", &[("level", Type::String)], Type::String, |_, a| s(format!("brightness {}", a[0].str()))),
+                    f("refresh", &[], Type::String, |_, _| s("ok")),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
                 name: "probe",
                 functions: vec![
                     f("s", &[STR], Type::String, |_, a| s(format!("[{}]", a[0].str()))),
@@ -327,6 +359,9 @@ fn signatures_match_qml() {
         super::gallery::target(),
         super::calendar::target(),
         super::iphone::target(),
+        super::osd::target(),
+        super::nightlight::target(),
+        super::lights::target(),
     ] {
         let defs: Vec<String> = real.functions.iter().map(|f| f.definition()).collect();
         let qml = stub.targets.iter().find(|t| t.name == real.name).expect("a stub target");

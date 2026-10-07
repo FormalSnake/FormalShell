@@ -138,6 +138,9 @@ pub struct Card {
     scale: f64,
     pub target: Option<Target>,
     pub ends: Ends,
+    /// Drawer.qml's `deformAmount`: the pill is small and travels its whole
+    /// height, so it asks for more than a popout does.
+    pub deform_amount: f64,
     /// A child's gap in this card's far edge, `(start, end)` along the line.
     pub far_gap: Option<(f64, f64)>,
     /// The frame's whole opacity: 0 cuts a handed-over card outright.
@@ -201,6 +204,7 @@ impl Card {
             scale,
             target: None,
             ends: Ends::default(),
+            deform_amount: DEFORM_AMOUNT,
             far_gap: None,
             frame_alpha: 1.0,
             casts,
@@ -398,7 +402,7 @@ impl Card {
         let depth = (rest.y0 - self.line_at).max(0.0) + border;
         let travel = rest_extent + depth;
         let release_at = 0.85 - 0.35 * (depth / rest_extent.max(1.0)).clamp(0.0, 1.0);
-        let amount = DEFORM_AMOUNT * rest_extent / (rest_extent + depth).max(1.0);
+        let amount = self.deform_amount * rest_extent / (rest_extent + depth).max(1.0);
 
         let pose = if self.bypass { if self.open { 1.0 } else { 0.0 } } else { self.progress.value(now) };
         let shown = self.shown(now);

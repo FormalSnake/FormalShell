@@ -3,8 +3,8 @@
 //! [`Store::apply`].
 
 use crate::services::{
-    appicon, barpaint, caffeinate, clock, commands, config, devices, herdr, hyprland, info, media, plugins, recording, state,
-    theme, tray, visualizer, wallpaper,
+    appicon, barpaint, brightness, caffeinate, clock, commands, config, devices, herdr, hyprland, info, lights, media, nightlight,
+    plugins, recording, state, theme, tray, visualizer, wallpaper,
 };
 
 #[derive(Default)]
@@ -27,6 +27,9 @@ pub struct Store {
     pub caffeinate: caffeinate::State,
     pub plugins: plugins::State,
     pub recording: recording::State,
+    pub brightness: brightness::State,
+    pub nightlight: nightlight::State,
+    pub lights: lights::State,
 }
 
 /// One service's change, tagged with the slice it applies to.
@@ -50,6 +53,9 @@ pub enum Diff {
     Plugins(plugins::Diff),
     #[allow(dead_code)]
     Recording(recording::Diff),
+    Brightness(brightness::Diff),
+    NightLight(nightlight::Diff),
+    Lights(lights::Diff),
 }
 
 /// The slice a diff changed, for the surfaces that read it.
@@ -76,6 +82,9 @@ pub enum Topic {
     /// What a plugin shows changed.
     PluginOutput,
     Recording,
+    Brightness,
+    NightLight,
+    Lights,
 }
 
 impl Store {
@@ -103,6 +112,9 @@ impl Store {
             }),
             Diff::Recording(d) => self.recording.apply(d).then_some(Topic::Recording),
             Diff::Caffeinate(d) => self.caffeinate.apply(d).then_some(Topic::Caffeinate),
+            Diff::Brightness(d) => self.brightness.apply(d).then_some(Topic::Brightness),
+            Diff::NightLight(d) => self.nightlight.apply(d).then_some(Topic::NightLight),
+            Diff::Lights(d) => self.lights.apply(d).then_some(Topic::Lights),
         }
     }
 }

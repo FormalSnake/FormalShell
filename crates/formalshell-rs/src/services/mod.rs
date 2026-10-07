@@ -6,6 +6,7 @@ pub mod airplay;
 pub mod ams;
 pub mod appicon;
 pub mod barpaint;
+pub mod brightness;
 pub mod caffeinate;
 pub mod clock;
 pub mod commands;
@@ -14,7 +15,9 @@ pub mod devices;
 pub mod herdr;
 pub mod hyprland;
 pub mod icons;
+pub mod lights;
 pub mod media;
+pub mod nightlight;
 pub mod overnight;
 pub mod info;
 pub mod plugins;
@@ -50,6 +53,9 @@ pub fn start(ctx: &Ctx) {
     ctx.spawn(appicon::run(ctx.clone()));
     ctx.spawn(wants::run(ctx.clone()));
     ctx.spawn(plugins::run(ctx.clone()));
+    ctx.spawn(nightlight::run(ctx.clone()));
+    ctx.spawn(lights::run(ctx.clone()));
+    brightness::start(ctx);
     devices::start(ctx);
     ctx.spawn(tray::run(ctx.clone()));
 }

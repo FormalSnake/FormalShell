@@ -17,11 +17,14 @@ mod debug;
 mod earbuds;
 mod gallery;
 mod iphone;
+mod lights;
 #[cfg(test)]
 mod golden;
 mod media;
 mod overnight;
 mod monitor;
+mod nightlight;
+mod osd;
 mod panel;
 mod plugins;
 mod radio;
@@ -70,6 +73,9 @@ fn registry() ->&'static Registry<App> {
             gallery::target(),
             calendar::target(),
             iphone::target(),
+            osd::target(),
+            nightlight::target(),
+            lights::target(),
         ],
     })
 }
