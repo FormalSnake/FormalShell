@@ -4,50 +4,59 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
 
 ## Standing orders
 
-- Plans are created autonomously — no user approval gate before writing one.
+- Plans are created autonomously, with no user approval gate before writing
+  one.
 - Implementation, mapping, testing, and docs all run through subagent
   workflows (one subagent per plan task, sequential, verification evidence
-  required before commit — see `docs/superpowers/plans/`).
+  required before commit; see `docs/superpowers/plans/`).
 - The approved design lives at `docs/superpowers/specs/`. Plans live at
   `docs/superpowers/plans/`. **The spec wins over any plan on conflict.**
-- Since 2026-08-25 the approved design is
-  `docs/superpowers/specs/2026-08-25-shadcn-omarchy-redesign.md` (Omarchy
-  behaviour, shadcn chrome, wallpaper palette, keyboard everywhere, Hyprland
-  only). The 2026-07-27 spec still holds for architecture, IPC and config;
-  the 08-25 spec wins where the two disagree.
-- Since 2026-09-18 `docs/superpowers/specs/2026-09-18-theme-boundary.md`
-  decides what a theme owns (styling, bar position, motion) and what is
-  global (layout, behaviour, spacing, casing, palette source). It wins
-  over both specs above.
-- Since 2026-10-06 `docs/superpowers/specs/2026-10-06-rust-rewrite.md`
-  replaces the Quickshell runtime with a Rust binary under `crates/`. It
-  wins over the "pure QML/JS" hard rule; `shell/` stays the shipped shell
-  until milestone R9 cuts over.
+- `docs/superpowers/specs/2026-10-06-rust-rewrite.md` is the architecture:
+  one Rust binary under `crates/` (threads, renderer, services, command
+  plugins, installing). It wins over the 2026-07-27 spec's runtime choice.
+- `docs/superpowers/specs/2026-08-25-shadcn-omarchy-redesign.md` is the
+  design (Omarchy behaviour, shadcn chrome, wallpaper palette, keyboard
+  everywhere, Hyprland only). The 2026-07-27 spec still holds for the IPC
+  contract and config; the 08-25 spec wins where the two disagree.
+- `docs/superpowers/specs/2026-09-18-theme-boundary.md` decides what a
+  theme owns (styling, bar position, motion) and what is global (layout,
+  behaviour, spacing, casing, palette source). It wins over the two design
+  specs above.
 
 ## Verification loop
 
-- `just build`: `nix build .#formalshell`. **`git add` first**, flakes only
-  see git-tracked files, so an unstaged file is invisible to the build.
-- `just test`: headless `qmltestrunner` over `tests/` (`QT_QPA_PLATFORM=offscreen`).
-- `just lint`: `nix flake check -L` (qml-tests + qmllint).
+- `just build`: `nix build .#formalshell`: the shell (the greeter is its
+  `greeter` subcommand) and `formalshell-ipc`. **`git add` first**, flakes only see git-tracked files, so an
+  unstaged file is invisible to the build.
+- `just lint`: `nix flake check -L`. `rust-tests` runs the pure crates'
+  tests (`nix/rust-tests.nix`); each service crate carries a check of its
+  own against the real daemon: `fs-tray`, `fs-notifd` and `fs-mpris` on a
+  private bus, `fs-auth`, `fs-audio`, `fs-bluez`, `fs-network` and
+  `fs-upower` in a NixOS VM test (`nix/fs-*.nix`). Run one with
+  `nix build .#checks.<system>.<name>`.
+- `just vm-cargo <args>`: cargo inside the VM against the synced tree, in
+  the package's own build environment (the mac has no pipewire or wayland
+  to link), for a quick `test -p <crate>` or `clippy` before the flake.
 - `just smoke` / `dev/smoke.sh <flags>`: the runtime loop. Builds the shell,
   brings up an isolated Hyprland session under `dbus-run-session`, drives
   the legs the flags asked for, screenshots, tears it down. **Read the PNGs
-  rather than assuming they look right.**
+  rather than assuming they look right.** `FS_RESULT=<store path>` runs a
+  shell built elsewhere instead of building one.
 - `just vm-smoke <flags>`: the same script inside the mac VM, screenshots
-  pulled back to the mac (the mac rig section below).
+  pulled back to the mac (the mac rig section below). The shell is built on
+  the mac through the linux-builder and `nix copy`'d into the VM, so
+  nothing compiles in the guest; `FS_BUILD_IN_VM=1` builds in the VM
+  instead.
 - `just vm-greeter` / `dev/smoke-greeter.sh`: not a flag on the rig. greetd's
   `default_session` is a standing system service, so this drives the
   already-running greeter session (restart greetd, screenshot pre-auth, a
   wrong password then the real one over `wtype`) and pulls
   `artifacts/greeter/`. It fails unless the session log shows a real
   `pam_authenticate: AUTH_ERR` on the wrong attempt.
-- `dev/parity.sh <flags>`: runs one leg combination through `just vm-smoke`
-  from this worktree and from a sibling worktree at `origin/main`
-  (`../FormalShell-main`), then `compare -metric AE`s every frame pair into
-  `artifacts/parity/diff/`. The one acceptance test for a theme table
-  migration: a non-zero diff outside the bar clock, a caret or a toast
-  timestamp is a defect, never a pixel to wave off.
+- `crates/formalshell-rs/tests/ipc-golden.jsonl` is the recorded IPC
+  contract, kept fixed: argument parsing, argument errors and output
+  strings, replayed through `formalshell-ipc`'s parser and the registry by
+  `ipc/golden.rs`. The live list of targets is `formalshell-ipc show`.
 - `just tarball`: the release tarball install.sh unpacks
   (`dev/tarball.sh`), built for this machine's arch in a debian:bookworm
   container, into `artifacts/tarball/`. It fails on a binary needing glibc
@@ -90,21 +99,20 @@ How a run works:
   `dev/.testvm/slot1`; each VM is 8 GB and 6 cores, so no third slot.
 - matugen's source colour is pinned to its own rank 0 rather than left to
   `--prefer`, which is a bad proxy for what colour a wallpaper is;
-  `shell/Theme/ThemeEngine.qml`'s header carries the why. Force the source
+  `crates/formalshell-rs/src/services/theme.rs`'s header carries the why. Force the source
   the same way if you run matugen by hand while debugging.
 
 Every leg is one file, `dev/smoke.d/<name>.sh`, whose header carries the
 detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 
-- `airplay.sh` `--airplay`: AirplayService against a PATH-shimmed `uxplay`
-  (the real one decodes into a GL texture this rig's software KMS card has
-  no path for), which prints uxplay's own connect log line and writes the
-  `-md`/`-ca`/`-dacp` files at its own startup, standing in for a client
-  already connected. `airplay status` and the media panel's `airplay`
-  source (MediaService's `_airplayRows`) read the metadata and cover art
-  back; a drive-script trigger then tells the shim to clear the files and
-  print the disconnect line, and both go back to idle in the frame and
-  over IPC.
+- `airplay.sh` `--airplay`: `services/airplay.rs` against a PATH-shimmed
+  `uxplay` (the real one decodes into a GL texture this rig's software KMS
+  card has no path for), which prints uxplay's own connect log line and
+  writes the `-md`/`-ca`/`-dacp` files at its own startup, standing in for
+  a client already connected. `airplay status` and the media panel's
+  `airplay` source read the metadata and cover art back; a drive-script
+  trigger then tells the shim to clear the files and print the disconnect
+  line, and both go back to idle in the frame and over IPC.
 - `app_grid.sh` `--app-grid`: `menu.appGrid` drawing the launcher's app
   results as icons over their names, read off the probe entry's own colour
   covering a 64px cell rather than a row's glyph, with real arrow keys
@@ -116,6 +124,11 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   `viewCursor` after a re-rank and a Backspace, a query no app matches
   keeping the grid with no rows in it, Escape clearing the query and
   leaving the launcher open, and a held Backspace climbing one level.
+- `appmenu.sh` `--appmenu`: the app menu over the real `panel` route with
+  the base run's fixture window focused (its desktop entry names it "Iconic
+  Test App" with a themed icon): the hero carrying the entry's name and
+  picture, and the window list holding the fixture window. `--panel
+  appmenu` alone only ever shows the empty "No window" state.
 - `bar_adaptive.sh` `--bar-adaptive`: the wingpanel band reading its own
   paint off the wallpaper under it, four wallpapers in one session (a flat
   bright field, a flat dark one, a half-and-half field, and the dark one
@@ -124,8 +137,8 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   patch of the frame above the cells. Pins `theme.preset` and
   `fullscreen.hideChrome` itself.
 - `bar_layout.sh` `--bar-layout`: user `bar.modules` and a reordered layout
-  resolved from settings.json alone, every `CommandModule` failure path in
-  the one frame.
+  resolved from settings.json alone, every `command` module failure path
+  (`services/commands.rs`) in the one frame.
 - `bar_position.sh` `--bar-position <edge>`: the strip on a bottom, left or
   right edge, read off the compositor's own layer geometry, with a chevron
   collapsing and expanding along it and a panel hanging off its inner edge.
@@ -147,8 +160,8 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   and the title no more than the track while the track is short, and the
   centre's middle within 2px of the strip's where the cells let it be.
   Then settings.json rewritten to the title cell alone, the title
-  stopping at its own ceiling with the marquee running. Rides `--bar-position <edge>`, which pins the edge in this
-  leg's own `bar` key.
+  stopping at its own ceiling with the marquee running. Rides
+  `--bar-position <edge>`, which pins the edge in this leg's own `bar` key.
 - `caffeinate.sh` `--caffeinate`: `caffeinate.onStartup` starting the
   session caffeinated with its `formalshell:caffeinate` layer surface
   mapped, the real ext-idle-notify monitor staying non-idle three screensaver
@@ -216,8 +229,8 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `dump.sh` `--dump`: the `debug` target's whole state dump, saved as the
   run's JSON sidecar and read by other legs for what the shell resolved.
 - `earbuds.sh` `--earbuds`: the earbuds panel against PATH-shimmed
-  `nothingctl` and `openscq30` answering with fixtures read out of
-  `tests/tst_earbuds_*.qml`, and a staged librepods status.json, in five
+  `nothingctl` and `openscq30` answering with fixtures captured off the
+  real tools, and a staged librepods status.json, in five
   phases: the B175 alone (wrapped listening mode and EQ rows, custom bands
   in signed dB), the Soundcore pair alone, both with the device choice
   heading the panel, the AirPods, and a device nothingctl refuses. `earbuds
@@ -227,9 +240,9 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   `unsupported-model` line and exits 3, and 12s later it was started once
   and no device is listed. The VM has no Bluetooth controller, so the leg
   exports `FORMALSHELL_SMOKE_BLUETOOTH`, a device list that replaces the
-  adapter's (`Earbuds/model.js` `bluetoothDevices`), with the Soundcore
+  adapter's (`fs-devices` `earbuds::bluetooth_devices`), with the Soundcore
   pair connected.
- the launcher's emoji route by search and by order:
+- `emoji.sh` `--emoji`: the launcher's emoji route by search and by order:
   `:e sob` reaching 😭 through CLDR's keywords (its Unicode name has no
   "sob" in it), and one copy through the row's own Enter path putting that
   emoji at the head of its own rank and no higher, with no settings key
@@ -250,8 +263,9 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   while the fixture window is fullscreen and back to their starting counts
   after, with `hyprctl clients` confirming a window really was fullscreen.
 - `gallery.sh` `--gallery`: the dev gallery sheet, every shared component
-  drawn against the live theme. `PowerFlow` is drawn from `Power/flow.js`'s
-  fixed g815 snapshot (labelled a sample), the only populated view of it on
+  drawn against the live theme. The power flow is drawn from
+  `fs_system::power::flow::sample_flow` (labelled a sample), the only
+  populated view of it on
   a rig with no battery; `--panel power` proves the honest "No power
   sources" state.
 - `gpu.sh` `--gpu`: both cards of a hybrid laptop this rig is not, and the
@@ -260,13 +274,15 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   re-rank it and desktop entry rescans while it is closed and open, read
   off `menu status`'s `cells`: eight ids, none twice, the launched app
   first.
-- `headset_card.sh` `--headset-card`: the headset connect card, which only
-  the Rust shell has (it needs `FS_IMPL=rust`). `FORMALSHELL_SMOKE_BLUETOOTH`
+- `headset_card.sh` `--headset-card`: the headset connect card.
+  `FORMALSHELL_SMOKE_BLUETOOTH`
   is exported as `@<file>`, a JSON device list the shell reads again on every
   change (the rig has no controller), so a device connects and disconnects
   by the leg rewriting that file. A device connected at startup raising no
   card; a headphone connecting raising one with its BlueZ battery ring, held
-  past four seconds by a real pointer parked on it and dismissed by the pointer leaving (Escape needs on-demand focus, which Hyprland gives on a click);
+  past four seconds by a real pointer parked on it and dismissed by the
+  pointer leaving (Escape needs on-demand focus, which Hyprland gives on a
+  click);
   the same device off and on inside a second raising none; AirPods off the
   staged librepods status file raising left, right and case rings, the
   pointer leaving dismissing them; and do-not-disturb raising none. Counted
@@ -279,12 +295,12 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   unavailable" line, and `hdr rule <output>` (the rule an enable would
   send, unsent) restating the mode, position, scale, transform and vrr
   `hyprctl monitors all -j` reports. The real toggle is g815's to confirm.
-- `idle.sh` `--idle`: the rust spec's idle and cold start budgets under the
+- `idle.sh` `--idle`: the rewrite spec's idle and cold start budgets under the
   default bar: the launch stamp to the bar's first commit with the shell's
   `phase` lines between (the bar's configure among them, the compositor's
   share), then 60 s undriven, CPU ticks and voluntary switches (wakeups)
   per thread and the commits made, then 20 s of `strace -f` naming each
-  waker. Rust only.
+  waker.
 - `hotcorner.sh` `--hotcorner`: both hot corner surfaces mapped on the right
   layer, which is all a rig with no synthetic pointer can observe.
 - `hotcorner_relock.sh` `--hotcorner-relock`: locks from the corner, unlocks
@@ -303,7 +319,8 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   own `formalshell-lock` PAM file.
 - `instance.sh` `--instance`: a second daemon taking the lock, exactly one
   survivor, and the survivor being the new pid.
-- `iphone.sh` `--iphone`: IphoneService and the notification filter against
+- `iphone.sh` `--iphone`: `services/info/iphone.rs` and the notification
+  filter against
   PATH-shimmed `omarchy-iphone-bridge`/`omarchy-iphone-ams`, both a
   `tail -F` over a JSONL fixture the drive script paces in real time.
   Connected state and device name; a normal arrival's toast carrying the
@@ -336,7 +353,8 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   top bar, so those runs print each claim as skipped and are read by eye.
 - `keybinds.sh` `--keybinds`: the launcher's binds route rendering rows off
   Hyprland's own expanded bind table.
-- `lights.sh` `--lights`: LightsService against PATH-shimmed `asusctl` and
+- `lights.sh` `--lights`: `services/lights.rs` against PATH-shimmed
+  `asusctl` and
   `busctl` standing in for asusd's Aura object: the startup repaint off the
   palette under the default wallpaper source, effect and speed, a custom
   colour switching the source, the toggle off and back to its level, an
@@ -408,7 +426,7 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   staged apps: one Down from a fresh open scrolls nothing, and four Downs
   into the rows under the grid and four Ups back each leave the cursor's
   item whole inside the viewport (`viewCursor.top`/`bottom`).
-- `menu_budget.sh` `--menu-budget`: the rust spec's launcher budget off the
+- `menu_budget.sh` `--menu-budget`: the rewrite spec's launcher budget off the
   shell's own commit log, the bar's badge spinning throughout five `menu
   toggle` opens: toggle to the launcher's first commit under 50 ms (read
   from the card's first configure where the compositor took over 20 ms to
@@ -416,7 +434,7 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   shell's own hold on any bar frame under 16 ms (each gap split into the
   compositor's callback wait and the shell's turn), no gap between bar
   commits over 33 ms where the compositor kept 60 Hz, and no launcher
-  commit in five seconds open at rest. Rust only; QML prints it as skipped.
+  commit in five seconds open at rest.
 - `menu_actions.sh` `--menu-actions`: the launcher's in-process `@ipc:`
   actions reached through its own rows: the toggle hub's Do Not Disturb,
   Caffeinate and Overnight rows each flipping their service with the hub
@@ -442,10 +460,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   nodes (built by `nix/testvm.nix`, loaded by the leg) fed by real ffmpeg
   writers, a colour pattern on video10 and a GREY one on video11 standing in
   for an IR sensor, alternating a dim frame and a near-black one the way an
-  emitter lights every other frame. The view opened with no `/dev/video*` at all (No camera,
-  no node held), then reopened on the colour camera with non-flat coloured
-  pixels in the feed box and only that node held open by the shell, a real
-  Tab stepping to the grey camera (grey pixels, the other node released),
+  emitter lights every other frame. The view opened with no `/dev/video*`
+  at all (No camera, no node held), then reopened on the colour camera with
+  non-flat coloured pixels in the feed box and only that node held open by
+  the shell, a real Tab stepping to the grey camera (grey pixels, the other node released),
   `mirror previous`/`next` over IPC, and the launcher closed with the shell
   holding no video node, all read off `/proc/<pid>/fd`. On the IR camera
   `mirror status` reports `irFilter`, and ten frames grabbed in a burst
@@ -521,7 +539,8 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   troughs and fields, cards and toasts on a cast under a lit rim.
 - `picker.sh` `--picker`: the wallpaper grid, the pick becoming the
   wallpaper, the select token round trip, the Dark/Light variants, and
-  ThumbnailService's prerendered cache backing every cell (the cache
+  the prerendered thumbnail cache (`fs-menu` `thumbnails`) backing every
+  cell (the cache
   directory's own contents, since a warmed cell and a fallback cell paint
   the same picture).
 - `plugins.sh` `--plugins`: a plugin directory dropped into the config home
@@ -533,14 +552,12 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   TERM, and `monitor restart` re-running the same argv under a new pid.
 - `record.sh` `--record`: `record` start to finished GIF through a real
   wf-recorder child, with the bar's recording cell mid-run.
-- `r0_measure.sh` `--r0-measure <seconds>`: R0's numbers for whichever
-  shell `FS_IMPL` picks, on one timeline: CPU off `/proc/<pid>/stat` over
+- `r0_measure.sh` `--r0-measure <seconds>`: R0's numbers on one
+  timeline: CPU off `/proc/<pid>/stat` over
   60s idle and 60s with a herdr badge spinning, ten panel opens and ten
   scrim fades, the launcher stall (first frame after `menu toggle`, longest
   gap between bar frames), RSS at `<seconds>`, and the launch stamp a cold
   start counts from. Records, never judges: the budgets are read by hand.
-  With `FS_RESULT`/`FS_RS_RESULT` naming prebuilt store paths, nothing is
-  built on the host it runs on (e1504g).
 - `radio.sh` `--radio`: Radio Atlas's mpv tuned with `radio play` to a
   favourite served on loopback, read back as a media source (`media status`
   kind, title and playing, `media players` listing it once, its own Pipewire
@@ -598,7 +615,7 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   answering `working`), agreeing in `debug dump`, `workspaces status` and
   the frame, where the blocked `!` is red and gone once herdr says idle.
 - `spectrum.sh` `--spectrum`: the media panel's own spectrum band, a cava
-  child owned by `panelWants` alone with no `visualizer` cell anywhere in
+  child wanted by the open panel alone with no `visualizer` cell anywhere in
   bar.layout, pgrep proving it appears on open and dies on close.
 - `speedtest.sh` `--speedtest`: `network speedtest` settling both phases in
   the network panel.
@@ -606,14 +623,14 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   run rides (it pins none), three
   windows of the fixture's own app id on the focused workspace and a fourth
   on workspace 2 that must not be offered (the leg pins
-  `switcher.currentWorkspace`, off by default), `switcher next` twice and `prev`
-  once over IPC against `switcher state`, the frame read for the fixture icon
-  in three captions and for the selection fill travelling from the third
-  cell to the second (cell positions off `switcher state`'s `cells`), all
+  `switcher.currentWorkspace`, off by default), `switcher next` twice and
+  `prev` once over IPC against `switcher state`, the frame read for the
+  fixture icon in three captions and for the selection fill travelling
+  from the third cell to the second (cell positions off `switcher state`'s `cells`), all
   three thumbnails holding a captured frame while open (one frame each,
   the selected one refreshed five times a second, never `live`) and none
-  holding any capture source after the commit, then a commit landing focus on the window
-  the card named (`hyprctl activewindow`).
+  holding any capture source after the commit, then a commit landing focus
+  on the window the card named (`hyprctl activewindow`).
 - `switcher_keys.sh` `--switcher-keys`: the same card driven by the
   compositor's own binds and real keys instead of IPC, one `wtype` process
   holding Alt across two taps of Tab and letting go, with the same fourth
@@ -692,19 +709,23 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 
 ## macOS verification loop (mac e2e rig)
 
-Both Linux hosts (g815, e1504g) are reachable again over ssh, and both were
-rebuilt onto HEAD on 2026-08-12 (`nix flake update formalshell` in
-`~/.config/nix`, then `sudo nixos-rebuild switch --flake .#<host>`; both have
-passwordless sudo, and their `formalshell.service` user unit restarts onto the
-new store path as part of the home-manager activation — their nix config
-consumes this repo as `github:FormalSnake/FormalShell`, so a change has to be
-pushed before a rebuild can pick it up). That makes them the place to confirm
-what the VM's llvmpipe/no-desktop-bus environment cannot show — real GPU
-rendering, a real session bus owner, real hardware devices — but it does NOT
-make them a test target: the host-session-safety and lock-screen rules below
-still forbid running the shell, the ThemeEngine or any compositor action
-against a live session there. Rebuild them and look; anything that drives a
-surface goes through the nested rig.
+Both Linux hosts (g815, e1504g) are reachable over ssh with passwordless
+sudo. Their nix config consumes this repo as
+`github:FormalSnake/FormalShell`, so a change has to be pushed before a
+rebuild picks it up: `nix flake update formalshell` in `~/.config/nix`, then
+`sudo nixos-rebuild switch --flake .#<host>` on g815, and for e1504g
+`nixos-rebuild switch --flake .#e1504g --target-host e1504g --sudo` from
+g815 (never build on e1504g). Their `formalshell.service` user unit
+restarts onto the new store path as part of the home-manager activation.
+That makes them the place to confirm what the VM's llvmpipe and
+no-desktop-bus environment cannot show (real GPU rendering, a real session
+bus owner, real hardware devices, e1504g's power-saver budgets), but it does
+NOT make them a test target: the host-session-safety and lock-screen rules
+below still forbid running the shell, the theme engine or any compositor
+action against a live session there. Rebuild them and look; anything that
+drives a surface goes through the nested rig, which on e1504g means
+`dev/smoke.sh` with `FS_RESULT` pointing at a shell built on g815 and copied
+over.
 
 Sessions themselves run from a macbook, which has no Wayland at all, so that
 rig is where verification happens. nix-darwin's `nix.linux-builder.enable` is
@@ -713,16 +734,17 @@ layers, both driven from this repo
 (`docs/superpowers/plans/2026-07-28-mac-e2e-rig.md` has the full design
 rationale):
 
-- **Build layer** — `dev/linux-builder.sh {start|stop|status|register}` boots
+- **Build layer**: `dev/linux-builder.sh {start|stop|status|register}` boots
   the stock `darwin.linux-builder` VM in the background and registers it in
   `/etc/nix/machines`, giving `nix build .#packages.aarch64-linux.<x>` a real
   remote builder from the mac. Its only job is compiling aarch64-linux
-  closures (`formalshell`, quickshell, the testvm image itself); it does not
-  run any part of the shell.
-- **Runtime layer** — `nixosConfigurations.testvm` (`nix/testvm.nix`,
+  closures (`formalshell`, the testvm image itself); it does not run any
+  part of the shell. `dev/vm.sh smoke` builds `formalshell` here and copies
+  the closure into the VM's store before every run.
+- **Runtime layer**: `nixosConfigurations.testvm` (`nix/testvm.nix`,
   `packages.aarch64-darwin.testvm`) is a headless aarch64 NixOS VM booted
-  under HVF, pre-staged with `formalshell`/quickshell/hyprland/sway/matugen
-  so in-VM builds are near no-ops. Inside it, a systemd **user** service runs
+  under HVF, pre-staged with hyprland, sway, matugen and the flake's inputs.
+  Inside it, a systemd **user** service runs
   a headless wlroots parent compositor (sway, `WLR_BACKENDS=headless`,
   `WLR_RENDERER=pixman`) publishing `WAYLAND_DISPLAY` into the systemd user
   environment, the same lookup `dev/smoke.sh` already falls back to on a real
@@ -733,58 +755,58 @@ rationale):
   (software rendering throughout, Mesa llvmpipe for Hyprland's EGL and pixman
   for the parent, the same concession any CI-grade wlroots testing makes).
 
-`dev/vm.sh` is the driver: `start` (build+boot headless, wait for ssh),
-`stop`, `status`, `sync` (rsync the **working tree** — not a commit — into
-`~/formalshell` inside the VM), `run <cmd…>` (ssh with cwd at the repo and
-the session env exported), `smoke [flags…]` (sync, run `dev/smoke.sh`,
-then `scp` the `SMOKE_OK` screenshot plus any dump/status/query JSON
-back to `./artifacts/` on the mac; `--screensaver-gif` additionally rsyncs
-the VM's `docs/media/screensaver-*.gif` straight into the real repo's
-`docs/media/` on the mac, since those are committed output, not scratch
-artifacts — otherwise the next `sync`'s `rsync --delete` would just wipe the
-VM's copies before anyone could commit them), `shell` (interactive ssh). `justfile`
-wraps this as `vm-up`/`vm-down`/`vm-build`/`vm-test`/`vm-lint`/`vm-smoke
-*FLAGS`/`vm-greeter` — the mac-side equivalents of
-`build`/`test`/`lint`/`smoke`/`dev/smoke-greeter.sh` above (`vm-greeter`
-syncs, runs `dev/smoke-greeter.sh` inside, then pulls `artifacts/greeter/`
-back with `dev/vm.sh pull` — greetd's `default_session` is a standing system
-service already up in the VM, not a fresh nested compositor `vm-smoke`
-spins up itself, so it needs no flag of its own).
+`dev/vm.sh` is the driver: `start` (build and boot headless, wait for ssh),
+`stop`, `status`, `sync` (rsync the **working tree**, not a commit, into
+`~/formalshell` inside the VM), `run <cmd...>` (ssh with cwd at the repo and
+the session env exported), `prebuild` (build the shell on the mac and copy
+it in), `smoke [flags...]` (sync, prebuild, run `dev/smoke.sh`, then `scp`
+the `SMOKE_OK` screenshot plus any dump/status/query JSON back to
+`./artifacts/` on the mac; `--screensaver-gif` also rsyncs the VM's
+`docs/media/screensaver-*.gif` straight into the real repo's `docs/media/`,
+since those are committed output and the next `sync`'s `rsync --delete`
+would wipe the VM's copies), `pull <vm-dir> <local-dir>`, `shell`
+(interactive ssh). `FS_VM_SLOT` picks the VM every command talks to. The
+`justfile` wraps this as `vm-up`/`vm-down`/`vm-build`/`vm-lint`/`vm-cargo`/
+`vm-smoke *FLAGS`/`vm-greeter`, the mac-side equivalents of the recipes
+above (`vm-greeter` syncs, runs `dev/smoke-greeter.sh` inside, then pulls
+`artifacts/greeter/` back with `dev/vm.sh pull`; greetd's `default_session`
+is a standing system service already up in the VM, not a fresh nested
+compositor `vm-smoke` spins up itself, so it needs no flag of its own).
 Screenshots and JSON always land on the **mac** filesystem under
-`./artifacts/` (gitignored) — Read-verify them there exactly as you would
-`result/`'s output on a Linux host.
+`./artifacts/` (gitignored); Read-verify them there exactly as you would on
+a Linux host.
 
 The VM has no real desktop bus owner (nothing on the mac plays the role DMS
 plays on the Linux hosts), so `busctl --user status
 org.freedesktop.Notifications` legitimately answers ENXIO/no-owner every
-run; the smoke rig's D-Bus isolation check tolerates that (`|| true` —
-a real "no owner" answer, not a connectivity failure) without changing
-behavior on hosts where a real owner exists.
+run; the smoke rig's D-Bus isolation check tolerates that (`|| true`, a
+real "no owner" answer rather than a connectivity failure) without changing
+behaviour on hosts where a real owner exists.
 
 ## Hard rules
 
 - **Host-session safety**: the owner's live session is NOT a test target.
-  Never run the shell, the ThemeEngine, or any compositor action in an
+  Never run the shell, the theme engine, or any compositor action in an
   environment carrying the host's `HYPRLAND_INSTANCE_SIGNATURE`. All runtime
   testing happens inside nested sessions via `dev/smoke-*.sh` (which scrub and
-  restore the env). If you must run `qs` ad hoc, unset that variable first or
-  export the nested session's own explicitly. Observed failure mode: host
-  compositor config reloads firing during isolated testing (2026-07-27).
-- **Lock-screen safety**: never run a lock surface (`Lock.qml`'s
-  `WlSessionLock`) against anything but a nested test session. All lock
-  testing happens inside the nested Hyprland session `dev/smoke.sh` boots and
-  tears down; a lock bug there is harmless (the whole nested
-  compositor gets killed regardless), but the same bug against a real host
-  session would leave it genuinely locked. This is the same nested-only
-  contract the general host-session-safety rule above already establishes,
-  called out separately here because a stuck lock is a much worse failure
-  mode than a stuck bar.
-- **D-Bus isolation**: the shell's `NotificationService` acquires
-  `org.freedesktop.Notifications` on the session bus via
-  `Quickshell.Services.Notifications.NotificationServer`. The owner's live
-  session bus is owned by DMS on the Linux hosts — NEVER run the shell's
-  notification stack against the host bus, acquiring that name would steal it
-  out from under the real desktop. `dev/smoke.sh` wraps the whole nested
+  restore the env). If you must run `formalshell` or `formalshell-ipc` ad
+  hoc, unset that variable first or export the nested session's own
+  explicitly. Observed failure mode: host compositor config reloads firing
+  during isolated testing (2026-07-27).
+- **Lock-screen safety**: never run a lock surface (the ext-session-lock
+  surface in `crates/formalshell-rs/src/wayland/lock.rs`) against anything
+  but a nested test session. All lock testing happens inside the nested
+  Hyprland session `dev/smoke.sh` boots and tears down; a lock bug there is
+  harmless (the whole nested compositor gets killed regardless), but the
+  same bug against a real host session would leave it genuinely locked.
+  This is the same nested-only contract the host-session-safety rule above
+  already establishes, called out separately because a stuck lock is a much
+  worse failure mode than a stuck bar.
+- **D-Bus isolation**: the shell acquires `org.freedesktop.Notifications` on
+  the session bus (`crates/fs-notifd`). The owner's live session bus is
+  owned by DMS on the Linux hosts. NEVER run the shell's notification server
+  against the host bus: acquiring that name would steal it out from under
+  the real desktop. `dev/smoke.sh` wraps the whole nested
   compositor invocation in `dbus-run-session --`, giving every nested run (and
   `notify-send` fired inside it) a private bus; it asserts `busctl --user status
   org.freedesktop.Notifications`'s owner PID on the **host** bus is unchanged
@@ -801,69 +823,65 @@ behavior on hosts where a real owner exists.
   predates per-widget popouts and doesn't name `panel`. The M6 plan added it
   (`panel.open(name)`, `close()`, `toggle(name)`, `state()`) because
   per-widget popouts otherwise have no summon path for compositor keybinds
-  and no way to be verified headlessly in the smoke rig — treat it as part
+  and no way to be verified headlessly in the smoke rig; treat it as part
   of the IPC contract going forward, alongside `menu`/`osd`/`notifications`/
   `clipboard`/etc. Unknown panel names return an error string, never a
   silent no-op.
 - **Honest unavailable states, never faked data**, as a standing expectation
   for every VM smoke run: a panel/widget with nothing to show from its
   backend renders a single dim cell (`NO ADAPTER`, `NO DEVICES`,
-  `NO LOCATION`, an absent battery bar cell, …) rather than a stubbed value
-  or an invented device. Enabling a real service in `nix/testvm.nix` so a
-  panel has a genuine backend to talk to is the sanctioned way to make a
-  screenshot show more — inventing fake `/sys` entries or synthetic devices
-  is not. The one exception (owner, 2026-09-28): with the iPhone as the
+  `NO LOCATION`, an absent battery bar cell, ...) rather than a stubbed
+  value or an invented device. Enabling a real service in `nix/testvm.nix`
+  so a panel has a genuine backend to talk to is the sanctioned way to make
+  a screenshot show more; inventing fake `/sys` entries or synthetic
+  devices is not. The one exception (owner, 2026-09-28): with the iPhone as the
   active media source, whose audio never reaches this machine, the
   visualizer draws a frame off the track's Deezer bpm
-  (`Visualizer/model.js` `beatFrame`, 120 when Deezer has none) instead of
-  cava.
-- Pure QML/JS. No compiled companion binary. No Node/npm/bun anywhere.
-  Third-party CLIs the shell shells out to (matugen, grim, cava, ttfx, …)
-  are runtime dependencies wired onto the wrapper's PATH in
-  `nix/package.nix`, not companion binaries: nothing here is built from
-  source we maintain, and every one of them has an honest fallback or
-  unavailable state when it isn't installed.
-- **Everything ships in the flake** (owner, 2026-09-28): FormalShell is
-  meant to install on any Hyprland system with first-party Nix support.
-  Every CLI the shell uses is packaged here (nixpkgs or `nix/*.nix`) and on
-  the wrapper's PATH, and every system piece it needs (a daemon, a D-Bus
+  (`fs_media::visualizer::model::beat_frame`, 120 when Deezer has none)
+  instead of cava.
+- One binary, no Node/npm/bun anywhere. Third-party CLIs the shell shells
+  out to (matugen, grim, cava, ttfx, ...) stay child processes, spawned and
+  read on the service thread, never linked in, and every one of them has an
+  honest fallback or unavailable state when it isn't installed.
+- **Everything ships** (owner, 2026-09-28 and 2026-10-07): never tell a
+  user to install something by hand. With Nix, every CLI the shell uses is
+  packaged in the flake (nixpkgs or `nix/*.nix`) and on the wrapper's PATH
+  in `nix/package.nix`, and every system piece it needs (a daemon, a D-Bus
   policy, a firewall port, avahi) is a `services.formalshell.*` option in
-  `nix/nixos-module.nix`. Never tell a user to install something by hand.
-  Without Nix, `install.sh` carries the same guarantee: the distro's
-  package manager for what pacman, apt and dnf all carry, the release
-  tarball (`dev/tarball.sh`) for what they do not. A new runtime CLI goes
-  into `nix/package.nix` and one of those two together.
+  `nix/nixos-module.nix`. Without Nix, `install.sh` carries the same
+  guarantee: its one name table for pacman, apt and dnf covers what those
+  distros carry, and the release tarball (`dev/tarball.sh`) carries the
+  rest. A new runtime CLI goes into `nix/package.nix` and into the name
+  table or the tarball in the same commit.
 - **ttfx is a spec addendum, not a conflict.** Spec §10 says the
-  screensaver renders "TTE-style rain/decrypt/matrix drawn in QML with the
-  shell's mono font and palette — no spawned terminal windows". The
-  screensaver now runs `ttfx` (`nix/ttfx-package.nix`) as a frame source and
-  parses its ANSI stream, still drawing every glyph itself on its own
-  Canvas in the shell's own mono font, with no terminal window anywhere —
-  what moved out of QML is the frame math, and with it the palette, since
-  each ttfx effect carries its own gradient (owner's call: match omarchy
-  exactly, 2026-08-11). `shell/Screensaver/effect.js` stays as the engine
-  for an install with no ttfx on PATH, so the pure-QML/JS guarantee above
-  still holds with nothing installed alongside the shell. `screensaver
-  frameInfo` reports which engine is live.
+  screensaver draws TTE-style rain/decrypt/matrix itself in the shell's
+  mono font, with no spawned terminal windows. The screensaver runs `ttfx`
+  (`nix/ttfx-package.nix`) as a frame source and parses its ANSI stream
+  (`crates/fs-screensaver/src/ttfx.rs`), still drawing every glyph itself
+  in the shell's mono font with no terminal window anywhere. The palette
+  comes from ttfx, since each effect carries its own gradient (owner's
+  call: match omarchy exactly, 2026-08-11). `fs-screensaver`'s own
+  `effect.rs` is the engine for an install with no ttfx on PATH.
+  `screensaver frameInfo` reports which engine is live.
 - Compositor window/workspace ids are **opaque strings** end to end. Never
   parse, compare numerically, or assume stability. Hyprland's window ids are
-  hex addresses and reach its dispatchers verbatim, as an `address:0x…`
-  selector built at the backend's own wire boundary and nowhere else.
+  hex addresses and reach its dispatchers verbatim, as an `address:0x...`
+  selector built in `services/hyprland/lua.rs` and nowhere else.
 - The shell only ever **reads** `~/.config/formalshell/settings.json`; it
   never writes it. Runtime-mutable state goes to
   `$XDG_STATE_HOME/formalshell/state.json`.
 - Chrome defaults (2026-08-25): every number below is the `metamorphosis`
-  table (`shell/Theme/themes/metamorphosis.js`), read through `Theme.box()`;
-  see `docs/DESIGN.md` §1 "Themes" for the schema. Radius `Theme.radius` (10, `theme.radius`
-  in settings.json), 1px `border`, no shadow, no gradient, no blur drawn by
-  the shell (Hyprland blurs behind the translucent bar/panel/launcher cards
+  table (`metamorphosis.json`, compiled into `fs-theme`'s `tables.rs`), read
+  through `fs_theme::Theme::box_style`; see `docs/DESIGN.md` §1 "Themes"
+  for the schema. Radius 10 (`theme.radius` in settings.json), 1px
+  `border`, no shadow, no gradient, no blur drawn by the shell (Hyprland blurs behind the translucent bar/panel/launcher cards
   via layerrules; `theme.surfaceOpacity`, default 0.85), dither only behind
   `wallpaper.dither`/`lock.dither` (both default false), fonts = the
   fontconfig `sans-serif` alias for words and `monospace` for values (Geist
   Sans/Mono by intent, never a hardcoded family), icons by name
-  through `Components/Icon.qml` with the set picked by `theme.icons`
-  (`lucide` default, `nerd`; no raw glyphs in surface files, no SVG icon
-  assets). Nothing in the shell blurs or shadows
+  through `ui::w::icon` and `fs_theme::icons` with the set picked by
+  `theme.icons` (`lucide` default, `nerd`; no raw glyphs in surface code,
+  no SVG icon assets). Nothing in the shell blurs or shadows
   anything: a modal surface sits over a plain 0.5 black scrim that only
   darkens the desktop (the modal namespaces take `ignore_alpha = 0.6`, so
   the scrim falls under the compositor's blur and the card over it stays
@@ -871,56 +889,53 @@ behavior on hosts where a real owner exists.
   the work. The lyrics pane is the one exception (owner, 2026-09-17, M56
   spec P12): depth of field on every line but the lit ones, behind
   `media.lyricsBlur`, and a glow on the chunk being sung. Motion is
-  `docs/DESIGN.md` §1 "Motion": the two clock families
-  behind `Anim`/`CAnim`, and the joined shape a card hanging off the bar
-  draws instead of a `Card`. Never
-  reintroduce a `ScreencopyView`-based capture anywhere (see
-  `LockSurface.qml`'s header comment: it crashes the whole shell outright,
-  a fail-open on a security-critical surface). Two exceptions (owner,
-  2026-09-28 and 2026-09-29): the Spaces preview's per-window thumbnails
-  (`Surfaces/Panels/WorkspacePreview.qml`) and the Alt+Tab switcher's
-  (`Surfaces/Switcher/Switcher.qml`), both the one shared
-  `Components/WindowThumb.qml`, a `ScreencopyView` on each window's toplevel
-  handle, live only while that card is open and holding no capture source
-  once it has closed. The lock surface and everything else stay banned.
+  `docs/DESIGN.md` §1 "Motion": the two clock families in
+  `crates/formalshell-rs/src/motion.rs`, and the joined shape a card hanging
+  off the bar draws instead of a plain card.
+- **Capture rule**: the shell captures windows in exactly two places, the
+  Spaces preview (`wayland/preview.rs`, drawn by
+  `surfaces/panel/workspace_preview.rs`) and the Alt+Tab switcher
+  (`wayland/switcher.rs`, `surfaces/switcher/`), and only while their card
+  is open. Both go through `wayland/capture.rs` (ext-image-copy-capture on
+  each window's foreign-toplevel handle); closing the card drops every
+  frame, session and source it held. The lock surface never captures
+  anything, and no other surface gets window capture. Screenshots and
+  recordings are grim and wf-recorder child processes, not this path.
 - License MIT. Every file substantially ported from DankMaterialShell keeps
   a `// Portions from DankMaterialShell (MIT, Copyright 2025 Avenge Media LLC)`
   header line.
-- ⚠️ Until M45 finishes the sweep, some files still carry raw Nerd Font
-  glyphs (multi-byte codepoints that whole-file rewrites corrupt). Use
-  targeted `Edit` operations on those files; new icon uses go through
-  `Icon { name: ... }` and `shell/Theme/icons.js`, never a raw codepoint.
-- Hyprland is the only supported compositor (owner, 2026-08-25). New
-  compositor work goes in `shell/Compositor/hyprland/` only;
-  `shell/Compositor/BackendBase.qml` stays as the contract every surface is
-  written against, so a second backend would be a new file rather than a
-  sweep.
+- Hyprland is the only supported compositor (owner, 2026-08-25). Compositor
+  work goes in `crates/formalshell-rs/src/services/hyprland/` (the
+  `.socket.sock` and `.socket2.sock` clients, `hyprctl eval` for writes).
 - Lua (`hyprland.lua`) is the only Hyprland config format (owner,
   2026-09-29). Runtime changes go through `hyprctl eval` with the `hl.*` API,
   never `hyprctl keyword`, and nothing the shell or the nix module writes is
   hyprlang. The smoke rig boots from a Lua config too.
-- ⚠️ Quickshell percentage/fraction-shaped properties are 0..1, not 0..100
-  (`UPowerDevice.percentage`, `WifiNetwork.signalStrength` — both confirmed
-  from C++ source: `src/network/wifi.hpp:22`, `src/network/nm/network.cpp:260`).
-  This has already caused two shipped bugs. Verify any such property against
-  its C++ source before rendering it.
+- **Units live in types.** A percentage-shaped value keeps the unit its
+  daemon sends and carries it in a type, converted only through a named
+  method: `fs_upower::Percent` (UPower's 0..100),
+  `fs_network::SignalStrength` (`as_percent`, `as_fraction`), and
+  `fs-audio`'s visual-scale volumes (the cube root of PipeWire's linear channel volume).
+  Mixing 0..1 and 0..100 has already shipped two bugs. A new service value
+  gets the same treatment: read the daemon's own spec or source for its
+  unit, never a raw `f64` crossing a crate boundary.
 - Commits: conventional style, lowercase imperative subject
-  (`feat(compositor): …`), no Co-Authored-By lines, no commit descriptions.
+  (`feat(compositor): ...`), no Co-Authored-By lines, no commit descriptions.
 - Every task ends with its verification commands actually run and their
   output read. No claiming green without evidence.
 
 ## Reference repos
 
-- `github.com/basecamp/omarchy` (branch `quattro`) — architecture/UX
-  reference (single-process shell, unified surfaces, IPC contract patterns).
-  Read, don't copy — treat as read-reference only; check its license before
-  ever porting code from it.
+- `github.com/basecamp/omarchy` (branch `quattro`): architecture and UX
+  reference (single-process shell, unified surfaces, IPC contract
+  patterns). Read, don't copy; check its license before ever porting code
+  from it.
 - `github.com/AvengeMedia/DankMaterialShell` (MIT): Hyprland backend
   prior art and matugen orchestration patterns. MIT, so code can be ported
   directly, but every substantially-ported file needs the attribution
   header above.
-- QuickShell source/docs (`git.outfoxxed.me/quickshell/quickshell`, pinned
-  flake input) — ground truth for toolkit APIs (`Quickshell.Io.Socket`,
-  `IpcHandler`, `Quickshell.Hyprland`, `Singleton`, …). When a QML/JS API's
-  behavior is uncertain, read the C++ source or run the built `qs` binary
-  rather than guessing.
+- The crates the shell is built on (`smithay-client-toolkit`, `calloop`,
+  `vello_cpu`, `parley`, `zbus`, `pipewire`, `pam-sys2`): docs.rs
+  at the version in `crates/Cargo.lock` is ground truth. When an API's
+  behaviour is uncertain, read the crate's source at that version rather
+  than guessing.

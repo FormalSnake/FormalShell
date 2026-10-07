@@ -10,15 +10,14 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/FormalSnake/FormalShell/ci.yml?branch=main&style=for-the-badge&labelColor=161616&color=4a9eda&logo=githubactions&logoColor=white&label=CI)](https://github.com/FormalSnake/FormalShell/actions/workflows/ci.yml)
 [![Nix flake](https://img.shields.io/badge/nix-flake-4a9eda?style=for-the-badge&labelColor=161616&logo=nixos&logoColor=white)](flake.nix)
-[![QuickShell](https://img.shields.io/badge/quickshell-QML-4a9eda?style=for-the-badge&labelColor=161616&logo=qt&logoColor=white)](https://quickshell.org/)
+[![Rust](https://img.shields.io/badge/built_with-rust-4a9eda?style=for-the-badge&labelColor=161616&logo=rust&logoColor=white)](crates/)
 [![Wayland](https://img.shields.io/badge/wayland-hyprland-4a9eda?style=for-the-badge&labelColor=161616&logo=wayland&logoColor=white)](#install)
 [![Status](https://img.shields.io/badge/status-pre--alpha-d35f5f?style=for-the-badge&labelColor=161616)](docs/SWITCHOVER.md)
 [![License](https://img.shields.io/badge/license-MIT-cccccc?style=for-the-badge&labelColor=161616)](LICENSE)
 
-A desktop shell for [Hyprland](https://hypr.land), written in QML on
-[QuickShell](https://quickshell.org/). One process draws the bar, launcher,
-panels, notifications, lock screen, greeter and screensaver, and every colour
-comes from your wallpaper through matugen. Everything is reachable from the
+A desktop shell for [Hyprland](https://hypr.land), written in Rust. One
+process draws the bar, launcher, panels, notifications, lock screen, greeter
+and screensaver, and every colour comes from your wallpaper through matugen. Everything is reachable from the
 keyboard and drivable over IPC.
 
 ![The launcher budding off the bar](docs/media/metamorphosis-launcher.gif)
@@ -137,9 +136,20 @@ and runs `formalshell install`: the systemd user units, the Hyprland files
 own `hypr-user.lua`, which already holds any `hyprland.lua` you had), and,
 after asking, the lock screen's PAM file and a greetd config for the greeter.
 A tool your distro does not carry is skipped and its widget says so.
-`formalshell update` moves to the newest release; `formalshell uninstall`
-puts everything back. Where the distro carries no Hyprland (Debian before
-forky, Fedora), bring Hyprland 0.56 or newer yourself.
+Debian trixie and Fedora carry no Hyprland package, so there you install
+Hyprland 0.56 or newer yourself first.
+
+### Update and uninstall
+
+```sh
+formalshell update      # newest release; rewrites only the files the installer owns
+formalshell uninstall   # removes the units, the Hyprland files, the PAM file and greetd config
+```
+
+`hypr-user.lua` is yours and no update touches it; uninstall moves it back to
+`hyprland.lua` and leaves `~/.config/formalshell` and the shell's state in
+place. Both take `--yes` to answer the sudo prompts, and `update --from
+<tarball>` updates from a local file. On NixOS, bump the flake input instead.
 
 ## Usage
 
@@ -180,15 +190,54 @@ its own state goes to `$XDG_STATE_HOME/formalshell/state.json`.
 
 [`docs/USAGE.md`](docs/USAGE.md) has every config key, IPC verb and bind.
 
+## Plugins
+
+A plugin is an executable in any language, running as its own process. It
+lives in `~/.config/formalshell/plugins/<id>/` beside a `manifest.json`:
+
+```json
+{ "apiVersion": 1, "id": "hello", "kind": "bar", "entry": "hello.sh" }
+```
+
+`kind` is `bar`, `panel` or `overlay`. The shell starts `entry` in the
+plugin's directory and reads one JSON object per line from its stdout, each
+replacing the last: `text`, `icon` (an icon name), `tooltip`, `class`, and
+`rows` for a panel. Clicks, scrolls and row activations arrive on its stdin
+as JSON lines, such as `{"event": "click", "button": "left"}`. A plugin that
+exits shows a dim PLUGIN ERROR cell and is started again after a backoff.
+While a plugin prints nothing, the shell does no work for it.
+
+```sh
+#!/bin/sh
+while :; do
+  printf '{"text": "%s", "icon": "clock"}\n' "$(date +%H:%M)"
+  sleep 60
+done
+```
+
+## IPC
+
+`formalshell-ipc` talks to the running shell over a Unix socket under
+`$XDG_RUNTIME_DIR/formalshell/`. The Hyprland binds use it, and so can your
+scripts.
+
+```sh
+formalshell-ipc show                      # every target and function
+formalshell-ipc call panel toggle audio
+formalshell-ipc call media status         # JSON
+```
+
 ## Development
 
 ```sh
-nix develop   # qs, qmllint, qmltestrunner, matugen, just
-just build
-just test     # headless qmltestrunner over tests/
-just lint     # nix flake check
+just build    # nix build .#formalshell
+just lint     # nix flake check: the Rust tests and per-crate checks
 just smoke --menu --showcase
 ```
+
+The shell is a Cargo workspace under [`crates/`](crates/): `formalshell-rs`
+is the binary with its surfaces and services, and the `fs-*` crates hold the
+logic underneath (theme tables, launcher ranking, audio, network and so on).
 
 `just smoke` boots the shell in a throwaway nested Hyprland session on a
 private D-Bus, drives the surfaces its flags name, screenshots them and tears
@@ -198,7 +247,7 @@ session. Each flag is a file under [`dev/smoke.d/`](dev/smoke.d/). On a Mac,
 
 ## Credits
 
-Built on [QuickShell](https://quickshell.org/). The architecture and much of
+The architecture and much of
 the interaction language come from [Omarchy](https://github.com/basecamp/omarchy)'s
 `quattro` branch. Other inspiration came from
 [Caelestia](https://github.com/caelestia-dots/shell),
