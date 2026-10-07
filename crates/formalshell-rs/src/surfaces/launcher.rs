@@ -46,6 +46,8 @@ pub enum View {
     Picker,
     /// MonitorView.qml: the metric tiles over the process table.
     Monitor,
+    /// MirrorView.qml: one camera's feed.
+    Mirror,
 }
 
 impl View {
@@ -56,6 +58,7 @@ impl View {
             View::AppGrid => "appGrid",
             View::Picker => "picker",
             View::Monitor => "monitor",
+            View::Mirror => "mirror",
         }
     }
 }
@@ -126,9 +129,37 @@ pub struct Model {
     monitor_wants: Option<(crate::services::wants::Want, crate::services::wants::Want)>,
     /// The pid an Enter armed TERM on; the next Enter on it sends it.
     monitor_armed: Option<u64>,
+    /// The camera the mirror shows, by node path.
+    pub mirror_current: String,
+    /// The monitor tiles' history lines, started when the route opens.
+    monitor_history: MonitorHistory,
+}
+
+/// One reading per monitor tick: CPU, memory, GPU, and the network's
+/// receive and send rates. A reading nobody could take is left out.
+#[derive(Default)]
+struct MonitorHistory {
+    sampled: Option<u64>,
+    cpu: std::collections::VecDeque<f64>,
+    mem: std::collections::VecDeque<f64>,
+    gpu: std::collections::VecDeque<f64>,
+    rx: std::collections::VecDeque<f64>,
+    tx: std::collections::VecDeque<f64>,
+}
+
+const HISTORY: usize = 60;
+
+fn push(q: &mut std::collections::VecDeque<f64>, v: Option<f64>) {
+    if let Some(v) = v.filter(|v| v.is_finite()) {
+        if q.len() == HISTORY {
+            q.pop_front();
+        }
+        q.push_back(v);
+    }
 }
 
 pub const MONITOR_ROUTE: &str = "monitor";
+pub const MIRROR_ROUTE: &str = "mirror";
 
 /// WallpaperPickerProvider.qml: the wallpaper route lists `dir`, and in
 /// select mode answers `token` in picker-selection.txt instead of setting
@@ -176,6 +207,8 @@ impl Default for Model {
             monitor_strip_h: 0.0,
             monitor_wants: None,
             monitor_armed: None,
+            mirror_current: String::new(),
+            monitor_history: MonitorHistory::default(),
             placed: false,
             want: String::new(),
             from_keys: true,
@@ -304,6 +337,44 @@ impl Model {
     /// whole content.
     pub fn split(&self) -> bool {
         self.mode == Mode::Menu && matches!(self.level.as_deref(), Some("clipboard" | "share.history"))
+    }
+
+    /// One monitor tick onto the tiles' history lines.
+    pub fn monitor_sample(&mut self, store: &Store) {
+        let m = &store.info.monitor;
+        if m.sampled_ms.is_none() || m.sampled_ms == self.monitor_history.sampled {
+            return;
+        }
+        let h = &mut self.monitor_history;
+        h.sampled = m.sampled_ms;
+        push(&mut h.cpu, m.cpu.aggregate);
+        push(&mut h.mem, m.mem.as_ref().map(|x| x.used_fraction));
+        push(&mut h.gpu, m.gpu_busy());
+        push(&mut h.rx, m.net_available.then(|| m.net.iter().map(|n| n.rx_bytes_per_sec).sum()));
+        push(&mut h.tx, m.net_available.then(|| m.net.iter().map(|n| n.tx_bytes_per_sec).sum()));
+        self.dirty = true;
+    }
+
+    pub fn on_mirror(&self) -> bool {
+        self.mode == Mode::Menu && self.level.as_deref() == Some(MIRROR_ROUTE)
+    }
+
+    /// MirrorService.cycle: false when there is nothing to step to.
+    pub fn mirror_cycle(&mut self, store: &Store, delta: i64) -> bool {
+        let next = fs_system::camera::step(&store.mirror.cameras, &self.mirror_current, delta);
+        if next == self.mirror_current {
+            return false;
+        }
+        self.mirror_current = next;
+        self.dirty = true;
+        true
+    }
+
+    /// The feed box: the body's width, a 4:3 share of its height.
+    pub fn mirror_box(&self, theme: &Theme) -> (f64, f64) {
+        let s = &theme.space;
+        let w = s.popup_width_menu - s.panel_padding * 2.0 - s.sm * 2.0;
+        (w.round(), (w * 3.0 / 4.0).min(self.body_h - s.lg * 2.0).max(1.0).round())
     }
 
     pub fn body_height(&self) -> f64 {
@@ -474,8 +545,11 @@ impl Model {
         let grid_wanted = store.config.bool("menu.appGrid").unwrap_or(true);
         let picker = menu && level == Some(PICKER_ROUTE);
         let monitor = menu && level == Some(MONITOR_ROUTE);
-        let emoji = emoji && !picker && !monitor;
-        let view = if monitor {
+        let mirror = menu && level == Some(MIRROR_ROUTE);
+        let emoji = emoji && !picker && !monitor && !mirror;
+        let view = if mirror {
+            View::Mirror
+        } else if monitor {
             View::Monitor
         } else if picker {
             View::Picker
@@ -499,6 +573,7 @@ impl Model {
             Mode::Input => Vec::new(),
             Mode::Menu if picker => fs_menu::providers::image_rows(&self.picker_listing(store), q),
             Mode::Menu if monitor => monitor_rows(store, q),
+            Mode::Menu if mirror => Vec::new(),
             Mode::Menu if matches!(level, Some("clipboard" | "share.history")) => {
                 let history: Vec<Node> = model::visible_children(nodes, level, cond).into_iter().cloned().collect();
                 if history.is_empty() {
@@ -596,7 +671,7 @@ impl Model {
         let ids: Vec<&str> = self.rows.iter().map(|r| r.id.as_str()).collect();
         let index = nav::rederive(&self.want, self.cursor as i64, &ids, fresh, self.placed);
         self.key = key;
-        self.monitor_strip_h = if view == View::Monitor { ui::measure(&monitor_strip(store, theme), theme.space.popup_width_menu, theme, kit).1 } else { 0.0 };
+        self.monitor_strip_h = if view == View::Monitor { ui::measure(&monitor_strip(store, theme, &self.monitor_history), theme.space.popup_width_menu, theme, kit).1 } else { 0.0 };
         self.picker_switch_h = if self.picker_switch(store) { ui::measure(&picker_switch(self), 400.0, theme, kit).1 } else { 0.0 };
         self.layout(theme, kit);
         self.place(index, false);
@@ -680,6 +755,7 @@ impl Model {
                     y += band + row_h;
                 }
             }
+            View::Mirror => out.columns = 1,
             View::Rows | View::Monitor => {
                 out.columns = 1;
                 let side = s.sm;
@@ -727,7 +803,7 @@ impl Model {
         match self.view {
             View::AppGrid => self.app_count,
             View::Emoji | View::Picker => self.rows.len(),
-            View::Rows | View::Monitor => 0,
+            View::Rows | View::Monitor | View::Mirror => 0,
         }
     }
 
@@ -811,7 +887,7 @@ impl Model {
         };
         let drawn: Vec<Value> = match self.view {
             View::AppGrid => self.rows[..self.app_count].iter().map(|r| json!({"id": r.id, "label": r.label})).collect(),
-            View::Rows | View::Monitor => self.rows.iter().map(|r| json!({"id": r.id, "label": r.label})).collect(),
+            View::Rows | View::Monitor | View::Mirror => self.rows.iter().map(|r| json!({"id": r.id, "label": r.label})).collect(),
             View::Emoji | View::Picker => Vec::new(),
         };
         json!({
@@ -918,6 +994,9 @@ impl Model {
         }
         self.monitor_wants = None;
         self.monitor_armed = None;
+        if self.on_mirror() {
+            crate::services::mirror::command(crate::services::mirror::Cmd::Stream(None));
+        }
         self.open = false;
         self.confirm.clear();
     }
@@ -978,6 +1057,15 @@ impl Model {
         }
         let entering = id.as_deref() == Some(PICKER_ROUTE);
         self.monitor_armed = None;
+        if id.as_deref() == Some(MIRROR_ROUTE) {
+            self.mirror_current.clear();
+            crate::services::mirror::command(crate::services::mirror::Cmd::List);
+        } else if self.level.as_deref() == Some(MIRROR_ROUTE) {
+            crate::services::mirror::command(crate::services::mirror::Cmd::Stream(None));
+        }
+        if id.as_deref() == Some(MONITOR_ROUTE) && self.level.as_deref() != Some(MONITOR_ROUTE) {
+            self.monitor_history = MonitorHistory::default();
+        }
         self.monitor_wants = (id.as_deref() == Some(MONITOR_ROUTE)).then(|| {
             use crate::services::wants::{Source, Want};
             (Want::new(Source::Monitor), Want::new(Source::Processes))
@@ -1111,6 +1199,10 @@ impl Model {
 
     /// One key, through Menu/nav.js's `keyAction`, or into the field.
     pub fn key(&mut self, store: &Store, key: nav::Key, mods: nav::Modifiers, repeat: bool, text: Option<&str>) -> Out {
+        if self.on_mirror() && matches!(key, nav::Key::Tab | nav::Key::Return | nav::Key::Enter) {
+            self.mirror_cycle(store, 1);
+            return Out::None;
+        }
         let ctx = KeyCtx {
             mode: self.key_mode(),
             query: !self.query.is_empty(),
@@ -1282,6 +1374,8 @@ pub struct Shown {
     head: Ui,
     body: Ui,
     preview: Ui,
+    /// The mirror's feed box and the picture inside it, on the surface.
+    pub feed: Option<(IRect, Option<IRect>)>,
     foot: Ui,
     rules: Vec<NodeId>,
     pub output: (f64, f64),
@@ -1306,6 +1400,7 @@ impl Shown {
             head: Ui::new(Some(top)),
             body: Ui::new(Some(top)),
             preview: Ui::new(Some(top)),
+            feed: None,
             foot: Ui::new(Some(top)),
             rules: Vec::new(),
             output,
@@ -1426,6 +1521,15 @@ impl Shown {
         if d.animating {
             self.wake = Some(now);
         }
+        self.feed = (m.view == View::Mirror).then(|| {
+            let (w, h) = m.mirror_box(theme);
+            let feed = IRect::new((fx + pad + s.sm).round() as i32, (body_top + s.lg).round() as i32, w as i32, h as i32);
+            let pic = store.mirror.frame.as_ref().filter(|(id, _)| *id == m.mirror_current).map(|(_, b)| {
+                let (bw, bh) = (b.pixmap.width() as i32, b.pixmap.height() as i32);
+                IRect::new(feed.x + (feed.w - bw) / 2, feed.y + (feed.h - bh) / 2, bw, bh)
+            });
+            (feed, pic)
+        });
         // SplitPreview.qml: the cursor row's whole content beside the list.
         if m.split() && body_h > 0.0 {
             let half = (inner_w / 2.0).round();
@@ -1562,6 +1666,9 @@ fn footer(m: &Model, store: &Store, theme: &Theme) -> El {
 fn body_el(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, scroll: f64, view_h: f64) -> El {
     let s = &theme.space;
     let lay = &m.layout;
+    if m.view == View::Mirror {
+        return mirror_body(m, store, theme);
+    }
     if m.rows.is_empty() {
         let title = match &m.empty {
             Some(n) => n.label.clone(),
@@ -1587,7 +1694,7 @@ fn body_el(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, scroll: f64, 
         }
     }
     if m.monitor_strip_h > 0.0 {
-        items.push((lay.slots.first().map_or(s.lg, |s0| s0.y) - m.monitor_strip_h - s.section_gap, m.monitor_strip_h, monitor_strip(store, theme)));
+        items.push((lay.slots.first().map_or(s.lg, |s0| s0.y) - m.monitor_strip_h - s.section_gap, m.monitor_strip_h, monitor_strip(store, theme, &m.monitor_history)));
     }
     if m.picker_switch_h > 0.0 {
         let top = lay.slots.first().map_or(0.0, |s0| s0.y) - m.picker_switch_h - s.row_gap;
@@ -1684,6 +1791,32 @@ fn body_el(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, scroll: f64, 
     w::column(0.0, col)
 }
 
+/// MirrorView.qml's feed: the picture in its box, or why there is none.
+fn mirror_body(m: &Model, store: &Store, theme: &Theme) -> El {
+    let s = &theme.space;
+    let (w, h) = m.mirror_box(theme);
+    let mi = &store.mirror;
+    let frame = mi.frame.as_ref().filter(|(id, _)| *id == m.mirror_current).map(|(_, b)| b.clone());
+    let feed = match frame {
+        Some(b) => w::picture(Some(b), h).width(Size::Px(w)),
+        None => {
+            let word = if !mi.listed {
+                ""
+            } else if mi.cameras.is_empty() {
+                "No camera"
+            } else if !mi.error.is_empty() {
+                mi.error.as_str()
+            } else {
+                "Starting\u{2026}"
+            };
+            let line = 20.0;
+            w::column(0.0, vec![w::space(((h - line) / 2.0).max(0.0)), w::text(word).ink(Ink::Muted).centred(), w::space(((h - line) / 2.0).max(0.0))])
+                .width(Size::Px(w))
+        }
+    };
+    w::column(0.0, vec![w::space(s.lg), w::row(0.0, vec![w::space(s.sm), feed])])
+}
+
 /// The process table's rows: the filter, busiest first.
 fn monitor_rows(store: &Store, q: &str) -> Vec<Node> {
     use fs_system::monitor::{format, procs};
@@ -1708,7 +1841,7 @@ fn monitor_rows(store: &Store, q: &str) -> Vec<Node> {
 
 /// MonitorView.qml's strip: CPU, Memory, GPU, Disk and Network, each a
 /// label over one figure; a reading nobody has taken yet is a dash.
-fn monitor_strip(store: &Store, theme: &Theme) -> El {
+fn monitor_strip(store: &Store, theme: &Theme, h: &MonitorHistory) -> El {
     use fs_system::monitor::format;
     let s = &theme.space;
     let m = &store.info.monitor;
@@ -1723,18 +1856,26 @@ fn monitor_strip(store: &Store, theme: &Theme) -> El {
     };
     let disk = m.disk.iter().find(|d| d.mount == "/").or_else(|| m.disk.first());
     let rx: Option<f64> = m.net_available.then(|| m.net.iter().map(|n| n.rx_bytes_per_sec).sum());
+    let line = |q: &std::collections::VecDeque<f64>, second: Option<&std::collections::VecDeque<f64>>, ceiling: f64| {
+        w::sparkline(q.iter().copied().collect(), second.map_or_else(Vec::new, |s| s.iter().copied().collect()), ceiling, HISTORY)
+    };
+    let net_ceiling = h.rx.iter().chain(h.tx.iter()).copied().fold(1.0, f64::max);
+    // Disk fill has no history worth drawing: a groove instead.
     let tiles = [
-        ("CPU", format::pct(m.cpu.aggregate)),
-        ("Memory", format::pct(m.mem.as_ref().map(|x| x.used_fraction))),
-        ("GPU", gpu_figure),
-        ("Disk", format::pct(disk.map(|d| d.fraction))),
-        ("Network", format::rate(rx)),
+        ("CPU", format::pct(m.cpu.aggregate), line(&h.cpu, None, 1.0)),
+        ("Memory", format::pct(m.mem.as_ref().map(|x| x.used_fraction)), line(&h.mem, None, 1.0)),
+        ("GPU", gpu_figure, line(&h.gpu, None, 1.0)),
+        ("Disk", format::pct(disk.map(|d| d.fraction)), w::column(0.0, vec![w::space((s.control_height - s.track_thickness).max(0.0)), w::track(disk.map_or(0.0, |d| d.fraction.clamp(0.0, 1.0)))])),
+        ("Network", format::rate(rx), line(&h.rx, Some(&h.tx), net_ceiling)),
     ];
     let cells = tiles
         .into_iter()
-        .map(|(label, figure)| {
-            w::cell(w::column(s.xxs, vec![w::section_label(s, label, None, false), w::text(figure).size(Type::Title).mono().weight(Weight::Semibold)]))
-                .fill()
+        .map(|(label, figure, plot)| {
+            w::cell(w::column(
+                s.xxs,
+                vec![w::section_label(s, label, None, false), w::text(figure).size(Type::Title).mono().weight(Weight::Semibold), plot],
+            ))
+            .fill()
         })
         .collect();
     w::row(s.sm, cells).fill().pad(s.sm, 0.0, s.sm, 0.0)

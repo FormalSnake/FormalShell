@@ -33,7 +33,7 @@ by surface; one line each.
   ported) and the animated album art (needs a video decode path) not ported.
 
 ## Launcher
-- Clipboard split preview, width/height size morph, row add/remove motion.
+- Width/height size morph, row add/remove motion.
 
 ## Headset card
 - Escape only after a click gives it focus; no click-away dismissal (owner

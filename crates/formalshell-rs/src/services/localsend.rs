@@ -169,7 +169,18 @@ pub async fn run(ctx: Ctx) {
             Wake::Recv(Some(RecvEvent::Received { file, .. })) => {
                 let path = std::path::Path::new(&s.dir).join(&file);
                 if path.is_file() {
-                    toast(&ctx, "LOCALSEND RECEIVED", &file, Urgency::Normal);
+                    let open = |key: &str, label: &str, target: &str| notifications::LocalAction {
+                        key: key.into(),
+                        label: label.into(),
+                        argv: vec!["xdg-open".into(), target.into()],
+                    };
+                    let actions = vec![open("open", "Open", &path.to_string_lossy()), open("reveal", "Show in Folder", &s.dir)];
+                    ctx.publish(store::Diff::Notifications(notifications::Diff::Op(Op::NotifyRunning(
+                        "LOCALSEND RECEIVED".into(),
+                        file,
+                        Urgency::Normal,
+                        actions,
+                    ))));
                 }
                 continue;
             }

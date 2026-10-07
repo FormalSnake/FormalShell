@@ -426,6 +426,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   connected hyprland backend in the dump, the bar, `menu toggle` opening
   the launcher, and a wrong then the real password through the package's
   own `formalshell-lock` PAM file.
+- `nix_run.sh` `--nix-run`: a menu.jsonc row carrying `@ipc:nix.run:hello`
+  run through `menu activate`, read off `hyprctl clients` and `pgrep`: a
+  `formalshell-console.run` window running `nix run nixpkgs#hello; read`,
+  and no quake console spawned by it.
 - `nightlight.sh` `--nightlight`: the wlsunset-backed night light on and off,
   honest about a session that cannot gamma-control.
 - `notify.sh` `--notify`: the toast stack collapsed and expanded, critical
