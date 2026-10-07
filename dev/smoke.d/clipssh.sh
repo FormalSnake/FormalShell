@@ -21,6 +21,7 @@
 # would test the refusal rather than the failure path.
 leg_clipssh_flag="--clipssh"
 leg_clipssh_order=135
+leg_clipssh_rust=1
 
 clipssh_shim_dir="$shot_dir/clipssh-shim"
 clipssh_calls_path="$shot_dir/clipssh-calls.txt"

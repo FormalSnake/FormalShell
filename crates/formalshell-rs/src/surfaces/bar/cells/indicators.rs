@@ -35,6 +35,10 @@ fn items(env: &Env) -> Vec<Item> {
             click: None,
         });
     }
+    let clipssh = &env.store.clipssh.target;
+    if !clipssh.is_empty() {
+        out.push(Item { icon: "terminal", tooltip: format!("SENDING CLIPBOARD IMAGE TO {clipssh}"), destructive: false, dim: false, click: None });
+    }
     if env.store.caffeinate.active {
         out.push(Item { icon: "coffee", tooltip: "CAFFEINATE ON".into(), destructive: false, dim: false, click: Some(Action::Caffeinate(false)) });
     }
@@ -52,7 +56,7 @@ pub struct Indicators {
 
 impl Cell for Indicators {
     fn reads(&self) -> &'static [Topic] {
-        &[Topic::Caffeinate, Topic::Recording]
+        &[Topic::Caffeinate, Topic::Recording, Topic::Clipssh]
     }
 
     fn read(&mut self, env: &Env) -> bool {

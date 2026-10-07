@@ -3,8 +3,9 @@
 //! [`Store::apply`].
 
 use crate::services::{
-    appicon, barpaint, brightness, caffeinate, capture, clock, commands, config, devices, display, herdr, hyprland, info, lights,
-    lyrics, media, menu, nightlight, notifications, plugins, recording, screensaver, state, theme, tray, visualizer, wallpaper,
+    appicon, barpaint, brightness, caffeinate, capture, clipboard, clipssh, clock, commands, config, devices, display, herdr,
+    hyprland, info, lights, lyrics, media, menu, nightlight, notifications, plugins, recording, screensaver, state, theme, tray,
+    visualizer, wallpaper,
 };
 
 #[derive(Default)]
@@ -36,6 +37,8 @@ pub struct Store {
     pub nightlight: nightlight::State,
     pub lights: lights::State,
     pub screensaver: screensaver::State,
+    pub clipboard: clipboard::State,
+    pub clipssh: clipssh::State,
 }
 
 /// One service's change, tagged with the slice it applies to.
@@ -68,6 +71,8 @@ pub enum Diff {
     NightLight(nightlight::Diff),
     Lights(lights::Diff),
     Screensaver(screensaver::Diff),
+    Clipboard(clipboard::Diff),
+    Clipssh(clipssh::Diff),
 }
 
 /// The slice a diff changed, for the surfaces that read it.
@@ -103,6 +108,8 @@ pub enum Topic {
     NightLight,
     Lights,
     Screensaver,
+    Clipboard,
+    Clipssh,
 }
 
 impl Store {
@@ -147,6 +154,8 @@ impl Store {
             Diff::Lights(d) => self.lights.apply(d).then_some(Topic::Lights),
             Diff::Capture(e) => self.capture.apply(e).then_some(Topic::Capture),
             Diff::Screensaver(d) => self.screensaver.apply(d).then_some(Topic::Screensaver),
+            Diff::Clipboard(d) => self.clipboard.apply(d).then_some(Topic::Clipboard),
+            Diff::Clipssh(d) => self.clipssh.apply(d).then_some(Topic::Clipssh),
         }
     }
 }

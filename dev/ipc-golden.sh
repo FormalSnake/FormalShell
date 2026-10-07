@@ -12,8 +12,8 @@
 # `airplay`, `visualizer`, `overnight`, `earbuds`, `display`, `hdr` and
 # `workspaces` their own IPC files', `calendar`, `iphone`, `notifications`,
 # `reminder`, `osd`, `nightlight`, `lights`, `switcher`, `screenshot`,
-# `capture` and `record` their own; `probe` covers every type qs converts and
-# the function names that collide with qs's subcommands.
+# `capture`, `record` and `clipboard` their own; `probe` covers every type qs
+# converts and the function names that collide with qs's subcommands.
 set -euo pipefail
 
 dir=$(mktemp -d)
@@ -269,6 +269,13 @@ ShellRoot {
         function show(): string { return "ok" }
         function clear(): string { return "ok: cleared 0" }
         function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "clipboard"
+        function list(): string { return "[]" }
+        function copy(id: string): string { return "ok" }
+        function remove(id: string): string { return "ok" }
+        function clear(): string { return "ok" }
     }
     IpcHandler {
         target: "osd"
@@ -718,6 +725,13 @@ rec call reminder set 25m
 rec call reminder set 25m ''
 rec call reminder clear
 rec show reminder
+rec call clipboard list
+rec call clipboard copy x
+rec call clipboard copy
+rec call clipboard remove x
+rec call clipboard clear
+rec call clipboard nope
+rec show clipboard
 rec call osd volume
 rec call osd volume x
 rec call osd media 'a b'

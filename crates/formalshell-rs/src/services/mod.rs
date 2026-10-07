@@ -9,6 +9,8 @@ pub mod barpaint;
 pub mod brightness;
 pub mod caffeinate;
 pub mod capture;
+pub mod clipboard;
+pub mod clipssh;
 pub mod clock;
 pub mod commands;
 pub mod config;
@@ -73,4 +75,6 @@ pub fn start(ctx: &Ctx) {
     ctx.spawn(notifications::run(ctx.clone()));
     ctx.spawn(menu::run(ctx.clone()));
     ctx.spawn(screensaver::run(ctx.clone()));
+    ctx.spawn(clipboard::run(ctx.clone()));
+    ctx.spawn(clipssh::run(ctx.clone()));
 }

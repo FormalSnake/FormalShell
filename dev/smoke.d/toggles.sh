@@ -3,9 +3,9 @@
 # --toggles: the launcher's toggle hub, proven live rather than by frame
 # alone. `debug query` carries each row's resolved `checked`, so a row's
 # checkmark is readable from outside the process, and `menu status` before
-# and after must be byte identical: the surface stays open at the same level
-# across the toggle, so the row repainted from a @state: snapshot rather than
-# a level being re-entered.
+# and after must be identical but for its own `checked` list: the surface
+# stays open at the same level, cursor and scroll across the toggle, so the
+# row repainted from a @state: snapshot rather than a level being re-entered.
 #
 # Two toggles, and both are needed. The nightlight row's checkmark must agree
 # with `nightlight status` in both samples, whichever way wlsunset went on
@@ -15,6 +15,8 @@
 # actually flips inside an open hub.
 leg_toggles_flag="--toggles"
 leg_toggles_order=230
+leg_toggles_rust=1
+leg_toggles_needs="jq"
 
 toggles_menu_status1_path="$shot_dir/toggles-menu-status-1.json"
 toggles_menu_status2_path="$shot_dir/toggles-menu-status-2.json"
@@ -101,7 +103,7 @@ leg_toggles_assert() {
     || ! grep -qF '"level":"toggles"' "$toggles_menu_status1_path"; then
     fail "menu did not summon to the toggles hub: $(cat "$toggles_menu_status1_path")"
   fi
-  if ! cmp -s "$toggles_menu_status1_path" "$toggles_menu_status2_path"; then
+  if [ "$(jq -c 'del(.checked)' "$toggles_menu_status1_path")" != "$(jq -c 'del(.checked)' "$toggles_menu_status2_path")" ]; then
     diff "$toggles_menu_status1_path" "$toggles_menu_status2_path" >&2 || true
     fail "menu state changed across the toggles (a rebuild or reopen, not a live repaint)"
   fi

@@ -1,4 +1,4 @@
-{ lib, stdenvNoCC, rustCommon, makeWrapper, lucide-font, nerd-fonts, matugen, brightnessctl, ddcutil, wlsunset
+{ lib, stdenvNoCC, rustCommon, makeWrapper, lucide-font, nerd-fonts, noto-fonts-color-emoji, matugen, brightnessctl, ddcutil, wlsunset
 , wireplumber, cava, mpv, curl, util-linux, uxplay, iphone-bridge, openscq30, nothingctl, earbuds, formalshell-eds, git, qrencode, networkmanager
 , wl-clipboard, grim, slurp, wf-recorder, tesseract, ffmpeg-headless, pulseaudio, xdg-utils, tensaku, ttfx }:
 
@@ -43,7 +43,7 @@ rustCommon.craneLib.buildPackage (rustCommon.commonArgs // {
     cp -r --no-preserve=mode ${../branding} $out/share/formalshell-rs/branding
     wrapProgram $out/bin/formalshell-rs \
       --set-default FS_RS_ICON_FONT ${lucide-font}/share/fonts/truetype/lucide.ttf \
-      --set-default FS_RS_FONT_DIRS ${nerd-fonts.symbols-only}/share/fonts \
+      --set-default FS_RS_FONT_DIRS ${nerd-fonts.symbols-only}/share/fonts:${noto-fonts-color-emoji}/share/fonts \
       --set-default FS_TEMPLATE_DIR $out/share/formalshell-rs/templates \
       --set-default FS_BRANDING_DIR $out/share/formalshell-rs/branding \
       --prefix PATH : ${lib.makeBinPath [ matugen brightnessctl ddcutil wlsunset wireplumber cava mpv curl util-linux git formalshell-eds qrencode wl-clipboard grim slurp wf-recorder tesseract ffmpeg-headless pulseaudio xdg-utils ttfx ]} \

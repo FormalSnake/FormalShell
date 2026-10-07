@@ -12,6 +12,7 @@ mod bar;
 mod caffeinate;
 mod calendar;
 mod capture;
+mod clipboard;
 mod console;
 #[cfg(test)]
 mod cli;
@@ -100,6 +101,7 @@ fn registry() ->&'static Registry<App> {
             nightlight::target(),
             lights::target(),
             switcher::target(),
+            clipboard::target(),
         ],
     })
 }

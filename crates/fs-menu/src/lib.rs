@@ -20,4 +20,5 @@ pub mod nav;
 pub mod node;
 pub mod providers;
 pub mod search;
+pub mod thumbnails;
 pub mod toggles;
