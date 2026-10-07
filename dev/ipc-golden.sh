@@ -11,7 +11,7 @@
 # WallpaperIpc.qml's exact signatures, `bar`, `panel`, `media`, `radio`,
 # `airplay`, `visualizer`, `overnight`, `earbuds` and `workspaces` their own
 # IPC files' (WorkspacesIpc.qml's `status` only: peek and close wait for the
-# preview), `calendar` and `iphone` their own; `probe` covers every type qs
+# preview), `calendar`, `iphone`, `console` and `screensaver` their own; `probe` covers every type qs
 # converts and the function names that collide with qs's subcommands.
 set -euo pipefail
 
@@ -122,6 +122,7 @@ ShellRoot {
         target: "monitor"
         function status(): string { return "{}" }
         function gpu(): string { return "{}" }
+        function launch(desktopId: string, card: string): string { return "launch " + desktopId + " " + card }
     }
     IpcHandler {
         target: "plugins"
@@ -156,6 +157,21 @@ ShellRoot {
         function dismiss(id: string): string { return "dismiss " + id }
         function clear(): string { return "ok" }
         function markRead(): string { return "ok" }
+    }
+    IpcHandler {
+        target: "console"
+        function toggle(): string { return "ok" }
+        function show(): string { return "ok" }
+        function hide(): string { return "ok" }
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "screensaver"
+        function start(): string { return "ok" }
+        function stop(): string { return "ok" }
+        function status(): string { return "{}" }
+        function frame(n: int): string { return "frame " + n }
+        function frameInfo(): string { return "{}" }
     }
     IpcHandler {
         target: "probe"
@@ -403,6 +419,8 @@ rec call monitor status
 rec call monitor status x
 rec call monitor gpu
 rec call monitor nope
+rec call monitor launch app card0
+rec call monitor launch app
 rec show monitor
 rec call plugins list
 rec call plugins list x
@@ -438,6 +456,20 @@ rec call iphone clear
 rec call iphone markRead
 rec call iphone nope
 rec show iphone
+rec call console toggle
+rec call console show
+rec call console hide
+rec call console status
+rec call console status x
+rec show console
+rec call screensaver start
+rec call screensaver stop
+rec call screensaver status
+rec call screensaver frame 3
+rec call screensaver frame x
+rec call screensaver frame
+rec call screensaver frameInfo
+rec show screensaver
 
 kill "$qs_pid"
 wait "$qs_pid" 2>/dev/null || true

@@ -21,6 +21,22 @@ pub fn changed(app: &mut App, topic: Topic) {
             }
             app.apply_config();
             theme_inputs(app);
+            app.saver_config();
+            app.hotcorners_sync();
+        }
+        Topic::Screensaver => app.saver_changed(),
+        Topic::HotCorners => app.hotcorners_changed(),
+        Topic::Caffeinate => {
+            app.saver_idle_changed();
+            app.refresh_bar(Some(topic));
+        }
+        Topic::Media => {
+            app.saver_update();
+            app.refresh_bar(Some(topic));
+        }
+        Topic::Hyprland => {
+            app.hotcorners_sync();
+            app.refresh_bar(Some(topic));
         }
         Topic::State => {
             theme_inputs(app);

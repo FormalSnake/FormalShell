@@ -6,10 +6,6 @@
 # session sits well past the timeout without going idle, and after
 # `caffeinate disable` the same timeout fires the screensaver on its own. The
 # inhibitor's surface is read off `hyprctl -j layers` both ways.
-#
-# Under FS_IMPL=rust the screensaver is not ported, so the idle state is read
-# off `caffeinate status`'s own `isIdle`, which comes from the same
-# ext-idle-notify listener (respecting inhibitors) the screensaver reads.
 leg_caffeinate_flag="--caffeinate"
 leg_caffeinate_rust=1
 leg_caffeinate_order=232
@@ -31,11 +27,7 @@ leg_caffeinate_timing() {
 }
 
 leg_caffeinate_drive() {
-  local script="$shot_dir/caffeinate-drive.sh" idle_call="screensaver status" end_line="$ipc call screensaver stop > /dev/null 2>&1"
-  if [ "$fs_impl" = rust ]; then
-    idle_call="caffeinate status"
-    end_line=":"
-  fi
+  local script="$shot_dir/caffeinate-drive.sh"
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 3
@@ -43,14 +35,14 @@ $ipc call caffeinate status > "$caffeinate_on_path" 2>&1
 "$hyprctl_bin" -j layers > "$caffeinate_on_layers" 2>&1
 # Three timeouts' worth of no input at all.
 sleep 9
-$ipc call $idle_call > "$caffeinate_held_path" 2>&1
+$ipc call screensaver status > "$caffeinate_held_path" 2>&1
 $ipc call caffeinate disable > /dev/null 2>&1
 sleep 1
 $ipc call caffeinate status > "$caffeinate_off_path" 2>&1
 "$hyprctl_bin" -j layers > "$caffeinate_off_layers" 2>&1
 sleep 6
-$ipc call $idle_call > "$caffeinate_idle_path" 2>&1
-$end_line
+$ipc call screensaver status > "$caffeinate_idle_path" 2>&1
+$ipc call screensaver stop > /dev/null 2>&1
 $ipc call caffeinate enable > /dev/null 2>&1
 EOF
   hypr_exec_once "bash $script"
@@ -74,10 +66,6 @@ leg_caffeinate_assert() {
     || fail "no formalshell:caffeinate layer surface while caffeinated"
   local held_filter='.isIdle == false and .active == false and .caffeinated == true'
   local idle_filter='.isIdle == true and .active == true'
-  if [ "$fs_impl" = rust ]; then
-    held_filter='.isIdle == false and .active == true'
-    idle_filter='.isIdle == true and .active == false'
-  fi
   jq -e "$held_filter" "$caffeinate_held_path" > /dev/null \
     || fail "the session went idle past the screensaver timeout while caffeinated"
   jq -e '.active == false and .inhibiting == false' "$caffeinate_off_path" > /dev/null \

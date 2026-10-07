@@ -159,7 +159,13 @@ fn stub() -> Registry<()> {
             },
             Target {
                 name: "monitor",
-                functions: vec![f("status", &[], Type::String, |_, _| s("{}")), f("gpu", &[], Type::String, |_, _| s("{}"))],
+                functions: vec![
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                    f("gpu", &[], Type::String, |_, _| s("{}")),
+                    f("launch", &[("desktopId", Type::String), ("card", Type::String)], Type::String, |_, a| {
+                        s(format!("launch {} {}", a[0].str(), a[1].str()))
+                    }),
+                ],
             },
             Target {
                 name: "plugins",
@@ -205,6 +211,25 @@ fn stub() -> Registry<()> {
                     f("dismiss", &[("id", Type::String)], Type::String, |_, a| s(format!("dismiss {}", a[0].str()))),
                     f("clear", &[], Type::String, |_, _| s("ok")),
                     f("markRead", &[], Type::String, |_, _| s("ok")),
+                ],
+            },
+            Target {
+                name: "console",
+                functions: vec![
+                    f("toggle", &[], Type::String, |_, _| s("ok")),
+                    f("show", &[], Type::String, |_, _| s("ok")),
+                    f("hide", &[], Type::String, |_, _| s("ok")),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
+                name: "screensaver",
+                functions: vec![
+                    f("start", &[], Type::String, |_, _| s("ok")),
+                    f("stop", &[], Type::String, |_, _| s("ok")),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                    f("frame", &[("n", Type::Int)], Type::String, |_, a| s(format!("frame {}", a[0].int()))),
+                    f("frameInfo", &[], Type::String, |_, _| s("{}")),
                 ],
             },
             Target {

@@ -5,6 +5,9 @@
 //! callback or an input event belongs to.
 
 mod caffeinate;
+mod console;
+mod hotcorners;
+mod screensaver;
 
 use std::time::Instant;
 
@@ -145,6 +148,9 @@ pub struct App {
     pub runtime: Option<Runtime>,
     pub store: Store,
     caffeinate: caffeinate::Caffeinate,
+    console: console::Console,
+    saver: screensaver::Saver,
+    hotcorners: hotcorners::HotCorners,
     pub bar: Bar,
     bar_surface: Option<Surface>,
     backdrop: Option<Backdrop>,
@@ -207,6 +213,9 @@ impl App {
             runtime: None,
             store,
             caffeinate: caffeinate::Caffeinate::bind(globals, qh),
+            console: console::Console::default(),
+            saver: screensaver::Saver::default(),
+            hotcorners: hotcorners::HotCorners::default(),
             bar,
             bar_surface: None,
             backdrop: None,
@@ -1089,6 +1098,8 @@ impl App {
             h.surface.present(&mut h.card.scene, animating, &qh);
         }
         self.panel_dirty = false;
+        self.present_saver(now);
+        self.present_hotcorners();
         self.present_tooltip(now);
         if let Some((surface, scene, _)) = &mut self.preview {
             surface.present(scene, false, &qh);
@@ -1287,6 +1298,28 @@ impl App {
 
     fn pointer_events(&mut self, events: &[PointerEvent]) {
         for e in events {
+            if self.saver_owns(&e.surface) {
+                let input = match e.kind {
+                    PointerEventKind::Enter { serial } => match self.pointer.clone() {
+                        Some(p) => screensaver::SaverInput::Enter(p, serial, e.position),
+                        None => continue,
+                    },
+                    PointerEventKind::Motion { .. } => screensaver::SaverInput::Motion(e.position),
+                    PointerEventKind::Press { .. } => screensaver::SaverInput::Press,
+                    _ => continue,
+                };
+                self.saver_pointer(input);
+                continue;
+            }
+            if self.hotcorner_owns(&e.surface) {
+                match e.kind {
+                    PointerEventKind::Enter { .. } => self.hotcorner_enter(&e.surface),
+                    PointerEventKind::Leave { .. } => self.hotcorner_leave(&e.surface),
+                    PointerEventKind::Press { .. } => self.hotcorner_press(&e.surface),
+                    _ => {}
+                }
+                continue;
+            }
             let owner = self.owner(&e.surface);
             let (x, y) = e.position;
             match e.kind {
@@ -1526,7 +1559,9 @@ impl CompositorHandler for App {
                 let z = &mut self.zones[i].1;
                 (z.frame_pending, z.mapped, z.callbacks) = (false, true, z.callbacks + 1);
             }
-            Some(Owner::Backdrop) | None => {}
+            Some(Owner::Backdrop) => {}
+            None if self.saver_owns(surface) => self.saver_frame_callback(),
+            None => self.hotcorner_frame(surface),
         }
     }
 
@@ -1556,7 +1591,9 @@ impl LayerShellHandler for App {
             Some(Owner::Menu) => self.menu = None,
             Some(Owner::Scrim) => self.scrim = None,
             Some(Owner::Backdrop) => self.backdrop = None,
-            Some(Owner::Zone(_)) | None => {}
+            Some(Owner::Zone(_)) => {}
+            None if self.saver_owns(layer.wl_surface()) => self.saver_closed(),
+            None => self.hotcorner_closed(layer.wl_surface()),
         }
     }
 
@@ -1608,6 +1645,8 @@ impl LayerShellHandler for App {
                 self.update_backdrop();
             }
             None if self.caffeinate_owns(layer) => self.caffeinate_configure(),
+            None if self.saver_owns(layer.wl_surface()) => self.saver_configure(width, height),
+            None if self.hotcorner_owns(layer.wl_surface()) => self.hotcorner_configure(layer.wl_surface(), width, height),
             None => {}
         }
     }
@@ -1664,6 +1703,10 @@ impl KeyboardHandler for App {
     fn leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: &wl_surface::WlSurface, _: u32) {}
 
     fn press_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, event: KeyEvent) {
+        if self.saver.active {
+            self.saver_pointer(screensaver::SaverInput::Key);
+            return;
+        }
         self.key_event(event);
     }
 
@@ -1701,6 +1744,7 @@ impl App {
         } else {
             self.request_paint();
         }
+        self.hotcorners_sync();
     }
 }
 

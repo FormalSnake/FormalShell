@@ -11,6 +11,7 @@ mod airplay;
 mod bar;
 mod caffeinate;
 mod calendar;
+mod console;
 #[cfg(test)]
 mod cli;
 mod debug;
@@ -25,6 +26,7 @@ mod monitor;
 mod panel;
 mod plugins;
 mod radio;
+mod screensaver;
 pub mod registry;
 mod theme;
 mod tray;
@@ -70,6 +72,8 @@ fn registry() ->&'static Registry<App> {
             gallery::target(),
             calendar::target(),
             iphone::target(),
+            console::target(),
+            screensaver::target(),
         ],
     })
 }

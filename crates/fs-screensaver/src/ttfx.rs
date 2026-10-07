@@ -293,6 +293,13 @@ impl FrameParser {
         self.buf.drain(..consumed);
         frames
     }
+
+    /// At end of stream, whatever followed the last delimiter: the run's
+    /// final frame, which no delimiter closes.
+    pub fn finish(&mut self) -> Option<Frame> {
+        let rest = std::mem::take(&mut self.buf);
+        (!rest.is_empty()).then(|| parse_frame(&String::from_utf8_lossy(&rest)))
+    }
 }
 
 fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {

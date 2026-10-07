@@ -19,6 +19,10 @@ vm-down:
 vm-build:
     ./dev/vm.sh sync
     ./dev/vm.sh run 'git add -A && nix build --print-out-paths .#formalshell'
+# The rust shell's compile errors, without a session.
+vm-build-rs:
+    ./dev/vm.sh sync
+    ./dev/vm.sh run 'git add -A && nix build .#formalshell-rs --out-link result-rs -L 2>&1 | tail -80'
 vm-test:
     ./dev/vm.sh sync
     ./dev/vm.sh run 'nix develop -c env QT_QPA_PLATFORM=offscreen QML_XHR_ALLOW_FILE_READ=1 qmltestrunner -import tests/stubs -input tests'

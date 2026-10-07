@@ -626,6 +626,7 @@ dependencies = [
  "fs-media",
  "fs-mpris",
  "fs-network",
+ "fs-screensaver",
  "fs-system",
  "fs-theme",
  "fs-tray",
