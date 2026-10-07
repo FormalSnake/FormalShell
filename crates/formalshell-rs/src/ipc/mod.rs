@@ -11,6 +11,7 @@ mod airplay;
 mod bar;
 mod caffeinate;
 mod calendar;
+mod capture;
 #[cfg(test)]
 mod cli;
 mod debug;
@@ -25,7 +26,9 @@ mod monitor;
 mod panel;
 mod plugins;
 mod radio;
+mod record;
 pub mod registry;
+mod screenshot;
 mod theme;
 mod tray;
 mod visualizer;
@@ -70,6 +73,9 @@ fn registry() ->&'static Registry<App> {
             gallery::target(),
             calendar::target(),
             iphone::target(),
+            screenshot::target(),
+            capture::target(),
+            record::target(),
         ],
     })
 }

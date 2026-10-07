@@ -7,6 +7,7 @@ pub mod ams;
 pub mod appicon;
 pub mod barpaint;
 pub mod caffeinate;
+pub mod capture;
 pub mod clock;
 pub mod commands;
 pub mod config;

@@ -5,6 +5,7 @@
 //! callback or an input event belongs to.
 
 mod caffeinate;
+mod capture;
 
 use std::time::Instant;
 
@@ -130,6 +131,7 @@ enum Owner {
     Scrim,
     Zone(usize),
     Backdrop,
+    Picker(usize),
 }
 
 pub struct App {
@@ -182,6 +184,8 @@ pub struct App {
     debug_join: Option<(i32, i32)>,
     pub exit: bool,
     started: Instant,
+    pub capture: crate::surfaces::capture::Capture,
+    pickers: capture::Pickers,
 }
 
 impl App {
@@ -235,6 +239,8 @@ impl App {
             debug_join: None,
             exit: false,
             started,
+            capture: Default::default(),
+            pickers: Default::default(),
         };
         app.place_chrome();
         let layer = app.overlay("formalshell:wallpaper", Layer::Background, Anchor::all(), (0, 0), -1);
@@ -1099,6 +1105,7 @@ impl App {
         if let Some((scrim, surface)) = &mut self.scrim {
             surface.present(scrim.alpha(now), scrim.animating(now), &qh);
         }
+        self.present_picker(now);
         self.arm_wake(now);
     }
 
@@ -1190,6 +1197,9 @@ impl App {
         }
         if self.backdrop.as_ref().is_some_and(|b| b.layer.wl_surface() == surface) {
             return Some(Owner::Backdrop);
+        }
+        if let Some(i) = self.picker_owner(surface) {
+            return Some(Owner::Picker(i));
         }
         self.zones.iter().position(|(_, z)| z.layer.wl_surface() == surface).map(Owner::Zone)
     }
@@ -1288,6 +1298,10 @@ impl App {
     fn pointer_events(&mut self, events: &[PointerEvent]) {
         for e in events {
             let owner = self.owner(&e.surface);
+            if let Some(Owner::Picker(i)) = owner {
+                self.picker_pointer(i, e);
+                continue;
+            }
             let (x, y) = e.position;
             match e.kind {
                 PointerEventKind::Enter { serial } => {
@@ -1423,6 +1437,9 @@ impl App {
     /// One key on the keyboard: the open panel's, as KeyCatcher.qml binds
     /// them.
     fn key_event(&mut self, event: KeyEvent) {
+        if self.picker_key_event(&event) {
+            return;
+        }
         let key = match event.keysym {
             Keysym::Escape => Key::Escape,
             Keysym::Tab => Key::Tab(1),
@@ -1526,6 +1543,7 @@ impl CompositorHandler for App {
                 let z = &mut self.zones[i].1;
                 (z.frame_pending, z.mapped, z.callbacks) = (false, true, z.callbacks + 1);
             }
+            Some(Owner::Picker(i)) => self.picker_frame(i),
             Some(Owner::Backdrop) | None => {}
         }
     }
@@ -1556,6 +1574,7 @@ impl LayerShellHandler for App {
             Some(Owner::Menu) => self.menu = None,
             Some(Owner::Scrim) => self.scrim = None,
             Some(Owner::Backdrop) => self.backdrop = None,
+            Some(Owner::Picker(i)) => self.picker_closed(i),
             Some(Owner::Zone(_)) | None => {}
         }
     }
@@ -1607,6 +1626,7 @@ impl LayerShellHandler for App {
                 }
                 self.update_backdrop();
             }
+            Some(Owner::Picker(i)) => self.picker_configure(i, width, height),
             None if self.caffeinate_owns(layer) => self.caffeinate_configure(),
             None => {}
         }
@@ -1673,7 +1693,9 @@ impl KeyboardHandler for App {
 
     fn release_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, _: KeyEvent) {}
 
-    fn update_modifiers(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, _: Modifiers, _: RawModifiers, _: u32) {}
+    fn update_modifiers(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, modifiers: Modifiers, _: RawModifiers, _: u32) {
+        self.pickers.ctrl = modifiers.ctrl;
+    }
 }
 
 impl OutputHandler for App {

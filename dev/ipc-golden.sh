@@ -11,8 +11,9 @@
 # WallpaperIpc.qml's exact signatures, `bar`, `panel`, `media`, `radio`,
 # `airplay`, `visualizer`, `overnight`, `earbuds` and `workspaces` their own
 # IPC files' (WorkspacesIpc.qml's `status` only: peek and close wait for the
-# preview), `calendar` and `iphone` their own; `probe` covers every type qs
-# converts and the function names that collide with qs's subcommands.
+# preview), `calendar`, `iphone`, `screenshot`, `capture` and `record` their
+# own; `probe` covers every type qs converts and the function names that
+# collide with qs's subcommands.
 set -euo pipefail
 
 dir=$(mktemp -d)
@@ -156,6 +157,36 @@ ShellRoot {
         function dismiss(id: string): string { return "dismiss " + id }
         function clear(): string { return "ok" }
         function markRead(): string { return "ok" }
+    }
+    IpcHandler {
+        target: "screenshot"
+        function full(processing: string): string { return "full " + processing }
+        function region(processing: string): string { return "region " + processing }
+        function cancel(): string { return "ok" }
+        function pick(mode: string, processing: string): string { return "pick " + mode + " " + processing }
+        function key(name: string): string { return "key " + name }
+        function pickerStatus(): string { return "{}" }
+        function edit(path: string): string { return "edit " + path }
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "capture"
+        function text(): string { return "ok" }
+        function color(): string { return "ok" }
+        function textAt(geometry: string): string { return "textAt " + geometry }
+        function colorAt(geometry: string): string { return "colorAt " + geometry }
+        function cancel(): string { return "ok" }
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "record"
+        function start(scope: string, audio: string): string { return "start " + scope + " " + audio }
+        function startCapped(scope: string, audio: string, maxHeight: string): string { return "startCapped " + scope + " " + audio + " " + maxHeight }
+        function startAt(geometry: string, audio: string): string { return "startAt " + geometry + " " + audio }
+        function stop(): string { return "ok" }
+        function toggle(scope: string, audio: string): string { return "toggle " + scope + " " + audio }
+        function gif(path: string): string { return "gif " + path }
+        function status(): string { return "{}" }
     }
     IpcHandler {
         target: "probe"
@@ -438,6 +469,28 @@ rec call iphone clear
 rec call iphone markRead
 rec call iphone nope
 rec show iphone
+rec call screenshot full ''
+rec call screenshot full
+rec call screenshot pick smart default
+rec call screenshot pick smart
+rec call screenshot key ctrl-return
+rec call screenshot pickerStatus
+rec call screenshot edit '/tmp/a b.png'
+rec call screenshot status
+rec show screenshot
+rec call capture text
+rec call capture textAt '0,0 10x10'
+rec call capture colorAt
+rec call capture status x
+rec show capture
+rec call record start screen desktop
+rec call record start screen
+rec call record startCapped region none 720
+rec call record startAt '0,0 1x1' none
+rec call record toggle '' ''
+rec call record gif ''
+rec call record stop
+rec show record
 
 kill "$qs_pid"
 wait "$qs_pid" 2>/dev/null || true

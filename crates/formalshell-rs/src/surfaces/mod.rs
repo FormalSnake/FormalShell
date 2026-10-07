@@ -2,6 +2,7 @@
 //! change to the surfaces that read that slice.
 
 pub mod bar;
+pub mod capture;
 pub mod card;
 pub mod panel;
 pub mod shoulders;
@@ -27,6 +28,7 @@ pub fn changed(app: &mut App, topic: Topic) {
             app.refresh_bar(Some(topic));
         }
         Topic::Plugins => app.apply_config(),
+        Topic::Capture => capture::events(app),
         Topic::Theme => app.set_bar_theme(),
         Topic::Tray => {
             app.tray_changed();

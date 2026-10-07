@@ -1,6 +1,5 @@
 //! Whether a screen recording is running, for the bar's recording indicator.
-//! The recorder child and its verbs belong to the capture milestone, which
-//! publishes here; until it does nothing is recording.
+//! `surfaces::capture::record` owns the recorder and writes this slice.
 
 #[derive(Default)]
 pub struct State {
@@ -9,7 +8,6 @@ pub struct State {
     pub elapsed_ms: u64,
 }
 
-#[allow(dead_code)]
 pub enum Diff {
     Active { active: bool, elapsed_ms: u64 },
 }
