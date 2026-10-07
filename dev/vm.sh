@@ -84,12 +84,42 @@ vm_run() {
   return "$status"
 }
 
+# A qcow2 never gives guest-freed blocks back on this host, so past
+# FS_VM_COMPACT_GB allocated (default 20) the image is rewritten with
+# `qemu-img convert`, when the mac has room for the copy plus 15 GB spare.
+# Runs with the VM stopped and the slot lock held. Prints nothing and leaves
+# the image alone on any failure; the old file survives until the new one
+# has booted (see cmd_start).
+compact_disk() {
+  [ -f "$disk_image" ] || return 0
+  local used_kb free_kb limit_kb=$(( ${FS_VM_COMPACT_GB:-20} * 1024 * 1024 ))
+  used_kb=$(du -k "$disk_image" | awk '{print $1}')
+  [ "$used_kb" -gt "$limit_kb" ] || return 0
+  free_kb=$(df -k "$work_dir" | awk 'NR==2 {print $4}')
+  if [ "$free_kb" -lt $(( used_kb + 15 * 1024 * 1024 )) ]; then
+    echo "testvm: $((used_kb / 1048576)) GB image, but only $((free_kb / 1048576)) GB free; not compacting" >&2
+    return 0
+  fi
+  echo "testvm: compacting $disk_image ($((used_kb / 1048576)) GB)" >&2
+  rm -f "$disk_image.new"
+  if nix shell nixpkgs#qemu -c qemu-img convert -O qcow2 "$disk_image" "$disk_image.new" \
+    && nix shell nixpkgs#qemu -c qemu-img check "$disk_image.new" >/dev/null; then
+    mv "$disk_image" "$disk_image.old"
+    mv "$disk_image.new" "$disk_image"
+    echo "testvm: compacted to $(( $(du -k "$disk_image" | awk '{print $1}') / 1048576 )) GB" >&2
+  else
+    echo "testvm: compaction failed, keeping the old image" >&2
+    rm -f "$disk_image.new"
+  fi
+}
+
 cmd_start() {
   if is_running; then
     echo "testvm already running (pid $(cat "$pid_file"))"
     return 0
   fi
   mkdir -p "$keys_dir" "$work_dir"
+  compact_disk
   if [ ! -f "$priv_key" ]; then
     ssh-keygen -t ed25519 -N "" -C "formalshell-testvm" -f "$priv_key" >/dev/null
     echo "generated ssh keypair: $priv_key"
@@ -122,8 +152,14 @@ cmd_start() {
 
   if ! wait_for_ssh 60; then
     echo "testvm: ssh did not come up after 5 minutes; see $log_file" >&2
+    if [ -f "$disk_image.old" ]; then
+      cmd_stop
+      mv -f "$disk_image.old" "$disk_image"
+      echo "testvm: restored the uncompacted image" >&2
+    fi
     exit 1
   fi
+  rm -f "$disk_image.old"
   echo "testvm ssh is up on 127.0.0.1:${ssh_port}"
 }
 
