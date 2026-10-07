@@ -33,9 +33,6 @@ by surface; one line each.
 - Radio Atlas: its icon buttons carry no hover tooltips (the launcher's card
   routes none to the tooltip group either).
 
-## Launcher
-- Width/height size morph, row add/remove motion.
-
 ## Headset card
 - Escape only after a click gives it focus; no click-away dismissal (owner
   to decide).

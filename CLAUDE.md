@@ -401,6 +401,13 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   open-to-rest time printed before any of it is asserted. Which row that
   line is on comes out of a `debug dump`, so the same probes hold on a frame
   ring's top band; a top edge carrying neither prints them as skipped.
+- `menu_morph.sh` `--menu-morph`: the card opened on the root at a tenth
+  speed, then re-levelled onto the clipboard's split route, its left edge read
+  off one header row per frame: the root and the rest frames on the
+  `popupWidthMenu` and `popupWidthMenuSplit` edges, a frame between them.
+- `menu_rows.sh` `--menu-rows`: the toggle hub filtered at a tenth speed, a
+  frame of the rows' band that matches neither settled list: rows that kept
+  their place slide, new ones fade in, gone ones fade out.
 - `mic.sh` `--mic`: the opt-in mic cell rendering its honest no-device state
   on a machine with no capture device.
 - `mirror.sh` `--mirror`: the launcher's camera mirror against two v4l2loopback
