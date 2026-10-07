@@ -11,9 +11,9 @@
 # WallpaperIpc.qml's exact signatures, `bar`, `panel`, `media`, `radio`,
 # `airplay`, `visualizer`, `overnight`, `earbuds`, `display`, `hdr` and
 # `workspaces` their own IPC files' (WorkspacesIpc.qml's `status` only: peek
-# and close wait for the preview), `calendar` and `iphone` their own; `probe`
-# covers every type qs
-# converts and the function names that collide with qs's subcommands.
+# and close wait for the preview), `calendar`, `iphone`, `notifications` and
+# `reminder` their own; `probe` covers every type qs converts and the
+# function names that collide with qs's subcommands.
 set -euo pipefail
 
 dir=$(mktemp -d)
@@ -181,6 +181,28 @@ ShellRoot {
         function disable(): string { return "ok" }
         function setOutput(output: string, enabled: bool): string { return "setOutput " + output + " " + enabled }
         function rule(output: string): string { return "rule " + output }
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "notifications"
+        function status(): string { return "{}" }
+        function dndState(): string { return "off" }
+        function toggleDnd(): string { return "on" }
+        function setDnd(on: bool): string { return on ? "on" : "off" }
+        function showHistory(): string { return "ok" }
+        function clear(): string { return "ok" }
+        function clearPending(): string { return "ok" }
+        function markAllSeen(): string { return "ok" }
+        function dismissAll(): string { return "ok" }
+        function dismissOne(): string { return "none" }
+        function invokeLast(): string { return "ok" }
+        function expand(state: string): string { return "expand " + state }
+    }
+    IpcHandler {
+        target: "reminder"
+        function set(duration: string, message: string): string { return "set " + duration + " " + message }
+        function show(): string { return "ok" }
+        function clear(): string { return "ok: cleared 0" }
         function status(): string { return "{}" }
     }
     IpcHandler {
@@ -494,6 +516,20 @@ rec call hdr rule DP-1
 rec call hdr status
 rec call hdr status x
 rec show hdr
+rec call notifications status
+rec call notifications setDnd true
+rec call notifications setDnd 1
+rec call notifications setDnd
+rec call notifications dismissOne
+rec call notifications expand on
+rec call notifications expand
+rec call notifications nope
+rec show notifications
+rec call reminder set 12s 'SMOKE REMINDER FIXTURE'
+rec call reminder set 25m
+rec call reminder set 25m ''
+rec call reminder clear
+rec show reminder
 
 kill "$qs_pid"
 wait "$qs_pid" 2>/dev/null || true

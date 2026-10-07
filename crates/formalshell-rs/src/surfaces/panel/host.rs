@@ -113,6 +113,9 @@ pub struct Host {
     scale: f64,
     /// The input region last set, so it is sent only on a change.
     region: Option<IRect>,
+    /// The frame's height, the most the output leaves it and whether the
+    /// content was cut to that, as of the last layout.
+    pub fit: std::cell::Cell<(f64, f64, bool)>,
 }
 
 const PRIME_MS: u64 = 75;
@@ -158,6 +161,7 @@ impl Host {
             wake: None,
             scale,
             region: None,
+            fit: std::cell::Cell::new((0.0, 0.0, false)),
         }
     }
 
@@ -271,6 +275,7 @@ impl Host {
         };
         let max_content = (max_frame - s.panel_padding * 2.0 - head - gap).max(0.0);
         let height = s.panel_padding * 2.0 + head + gap + content_h.min(max_content);
+        self.fit.set((height, max_frame, content_h > max_content));
         (width, height, content_h)
     }
 

@@ -1258,6 +1258,8 @@ mod tests {
     // --- notification model hooks --------------------------------------------
 
     #[test]
+    // The groupKey half lives in tests/iphone_notifications.rs, which has the
+    // notification model to key them with.
     fn phone_and_local_entries_keep_their_sources_apart() {
         let a = phone_entry(&phone(), 1000.0);
         let b = local("9", "Alex", "different", 1000.0);

@@ -20,6 +20,7 @@ pub mod appmenu;
 pub mod audio;
 pub mod bluetooth;
 pub mod calendar;
+pub mod center;
 pub mod display;
 pub mod dualsense;
 pub mod earbuds;

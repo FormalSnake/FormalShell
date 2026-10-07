@@ -21,6 +21,7 @@ mod iphone;
 #[cfg(test)]
 mod golden;
 mod media;
+mod notifications;
 mod overnight;
 mod monitor;
 mod network;
@@ -75,6 +76,8 @@ fn registry() ->&'static Registry<App> {
             gallery::target(),
             calendar::target(),
             iphone::target(),
+            notifications::target(),
+            notifications::reminder(),
         ],
     })
 }

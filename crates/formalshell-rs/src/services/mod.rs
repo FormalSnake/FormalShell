@@ -16,6 +16,7 @@ pub mod herdr;
 pub mod hyprland;
 pub mod icons;
 pub mod media;
+pub mod notifications;
 pub mod overnight;
 pub mod info;
 pub mod plugins;
@@ -54,4 +55,5 @@ pub fn start(ctx: &Ctx) {
     devices::start(ctx);
     display::start(ctx);
     ctx.spawn(tray::run(ctx.clone()));
+    ctx.spawn(notifications::run(ctx.clone()));
 }

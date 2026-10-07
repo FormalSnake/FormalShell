@@ -3,8 +3,8 @@
 //! [`Store::apply`].
 
 use crate::services::{
-    appicon, barpaint, caffeinate, clock, commands, config, devices, display, herdr, hyprland, info, media, plugins, recording, state,
-    theme, tray, visualizer, wallpaper,
+    appicon, barpaint, caffeinate, clock, commands, config, devices, display, herdr, hyprland, info, media, notifications, plugins,
+    recording, state, theme, tray, visualizer, wallpaper,
 };
 
 #[derive(Default)]
@@ -28,6 +28,7 @@ pub struct Store {
     pub caffeinate: caffeinate::State,
     pub plugins: plugins::State,
     pub recording: recording::State,
+    pub notifications: notifications::State,
 }
 
 /// One service's change, tagged with the slice it applies to.
@@ -52,6 +53,7 @@ pub enum Diff {
     Plugins(plugins::Diff),
     #[allow(dead_code)]
     Recording(recording::Diff),
+    Notifications(notifications::Diff),
 }
 
 /// The slice a diff changed, for the surfaces that read it.
@@ -79,6 +81,7 @@ pub enum Topic {
     /// What a plugin shows changed.
     PluginOutput,
     Recording,
+    Notifications,
 }
 
 impl Store {
@@ -107,6 +110,7 @@ impl Store {
             }),
             Diff::Recording(d) => self.recording.apply(d).then_some(Topic::Recording),
             Diff::Caffeinate(d) => self.caffeinate.apply(d).then_some(Topic::Caffeinate),
+            Diff::Notifications(d) => self.notifications.apply(d).then_some(Topic::Notifications),
         }
     }
 }
