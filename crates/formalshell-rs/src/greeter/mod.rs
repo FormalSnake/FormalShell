@@ -364,6 +364,7 @@ fn shots(dir: &Path, settings: &Value, env: &theme::Env) {
         let mut failed = Conversation::new(vec![]);
         failed.submit(Zeroizing::new("test".into()));
         failed.receive(Response::Error { error_type: greetd::ErrorType::AuthError, description: "pam_authenticate: AUTH_ERR".into() });
+        failed.receive(Response::Error { error_type: greetd::ErrorType::Error, description: "unable to send message: Connection refused".into() });
         let states: [(&str, &Conversation, &str, bool); 4] = [
             ("user", &user, "test", true),
             ("password", &asking, "hunter2", true),
