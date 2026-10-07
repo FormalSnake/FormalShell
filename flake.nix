@@ -114,6 +114,7 @@
           # The runtime layer: darwin-runnable headless aarch64-linux test VM
           # (nix/testvm.nix). Driven by dev/vm.sh.
           testvm = self.nixosConfigurations.testvm.config.system.build.vm;
+          testvm-greeter-rs = self.nixosConfigurations.testvm-greeter-rs.config.system.build.vm;
         }))
         (forAllSystems (system: pkgs: rec {
           formalshell-eds = pkgs.callPackage ./nix/eds-package.nix { };
@@ -126,13 +127,16 @@
           localsend-cli = pkgs.callPackage ./nix/localsend-cli.nix { };
           openscq30 = pkgs.callPackage ./nix/openscq30.nix { };
           nothingctl = pkgs.callPackage ./nix/nothingctl.nix { };
-          formalshell-rs = pkgs.callPackage ./nix/formalshell-rs.nix { rustCommon = rustCommonFor pkgs; inherit lucide-font iphone-bridge openscq30 nothingctl formalshell-eds; inherit (pkgs) earbuds; };
+          formalshell-rs = pkgs.callPackage ./nix/formalshell-rs.nix { rustCommon = rustCommonFor pkgs; inherit lucide-font iphone-bridge openscq30 nothingctl formalshell-eds tensaku ttfx; inherit (pkgs) earbuds; };
           formalshell = pkgs.callPackage ./nix/package.nix {
             quickshell = qsFor system;
             inherit formalshell-eds tensaku ttfx clipssh lucide-font iphone-bridge localsend-cli openscq30 nothingctl;
             inherit (pkgs) uxplay earbuds;
           };
           formalshell-greeter = pkgs.callPackage ./nix/greeter-package.nix { quickshell = qsFor system; };
+          formalshell-greeter-rs = pkgs.writeShellScriptBin "formalshell-greeter-rs" ''
+            exec ${pkgs.lib.getExe formalshell-rs} greeter "$@"
+          '';
           default = formalshell;
         }));
 
@@ -146,6 +150,7 @@
 
       nixosConfigurations = {
         testvm = import ./nix/testvm.nix { inherit self nixpkgs quickshell; };
+        testvm-greeter-rs = import ./nix/testvm.nix { inherit self nixpkgs quickshell; greeterImplementation = "rust"; };
       };
 
       checks = nixpkgs.lib.recursiveUpdate

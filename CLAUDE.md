@@ -272,7 +272,9 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   layer, which is all a rig with no synthetic pointer can observe.
 - `hotcorner_relock.sh` `--hotcorner-relock`: locks from the corner, unlocks
   by typing, proves the corner stays quiet while the pointer sits in it and
-  fires again only after a leave plus the 400ms cooldown.
+  fires again only after a leave plus the 400ms cooldown. Then the same on
+  the screensaver corner: dismissed with the cursor parked in it, quiet for
+  3s after the overlay unmaps, firing again after a leave.
 - `instance.sh` `--instance`: a second daemon taking the lock, exactly one
   survivor, and the survivor being the new pid.
 - `iphone.sh` `--iphone`: IphoneService and the notification filter against

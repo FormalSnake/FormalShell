@@ -15,8 +15,9 @@
 # aliases, what a plug or unplug does to a run in flight) live in
 # tests/tst_display_priority.qml, since this session has one head.
 leg_screensaver_flag="--screensaver"
+leg_screensaver_rust=1
 leg_screensaver_order=230
-leg_screensaver_needs="mpv ffmpeg jq convert"
+leg_screensaver_needs="mpv ffmpeg jq convert wtype"
 
 # Shared with dev/smoke.d/visualizer.sh, which the scaffold sources on every
 # run: the VM's mpv is pre-wrapped with mpvScripts.mpris baked into its
@@ -69,6 +70,11 @@ ss_solid_info_path="$shot_dir/screensaver-solid-frameinfo.json"
 ss_solid_path="$shot_dir/screensaver-solid.png"
 ss_solid_mask_path="$shot_dir/screensaver-solid-mask.png"
 ss_final_status_path="$shot_dir/screensaver-final-status.json"
+ss_chain_locked_path="$shot_dir/screensaver-chain-locked.txt"
+ss_chain_status_path="$shot_dir/screensaver-chain-status.json"
+ss_chain_unlocked_path="$shot_dir/screensaver-chain-unlocked.txt"
+ss_chain_path="$shot_dir/screensaver-chain-locked.png"
+ss_settings_path="$iso_home/.config/formalshell/settings.json"
 
 leg_screensaver_fixture() {
   local effect_json="" ascii_json="" ascii_path
@@ -107,7 +113,8 @@ leg_screensaver_timing() {
   # stop, which is where the extra ten come from.
   local t0
   t0=$(screensaver_t0)
-  leg_timing $((90 + t0 - 4)) $((110 + t0 - 4))
+  # The lock chain after it adds about fifteen more.
+  leg_timing $((105 + t0 - 4)) $((125 + t0 - 4))
 }
 
 leg_screensaver_drive() {
@@ -130,6 +137,11 @@ EOF
   # rides the manual activation because its start time is deterministic.
   write_script "$script" <<EOF
 #!/usr/bin/env bash
+# Merged into the run's settings and written back through the same inode,
+# so the shell's own file watch sees it.
+settings_set() {
+  "$jq_bin" "\$1" "$ss_settings_path" > "$shot_dir/ss-settings.json" && cat "$shot_dir/ss-settings.json" > "$ss_settings_path"
+}
 sleep $((t0 + 4))
 $ipc call screensaver status > "$ss_guard_status_path" 2>&1
 if [ -f "$ss_pid_path" ]; then
@@ -156,6 +168,14 @@ done
 # effect is the banner itself, so this frame is the same picture whichever
 # effect the reroll happened to land on. A pin also suspends cycling, so
 # nothing rerolls out from under grim.
+#
+# Unless the run pinned an effect, wipe is set first: a reroll can land on
+# one that never finishes inside ttfx's 600-frame pin cap (thunderstorm,
+# binarypath), and that run's last counted frame is no banner at all.
+if [ -z "${SCREENSAVER_EFFECT:-}" ]; then
+  settings_set '.screensaver.effect = "wipe"'
+  sleep 1
+fi
 $ipc call screensaver frame 0 > /dev/null 2>&1
 sleep 3
 $ipc call screensaver frameInfo > "$ss_solid_info_path" 2>&1
@@ -169,6 +189,23 @@ sleep 3
 $ipc call screensaver stop > /dev/null 2>&1
 sleep 1
 $ipc call screensaver status > "$ss_final_status_path" 2>&1
+# screensaver.lockAfterSeconds: two seconds of the screensaver showing chain
+# into the lock, which the real password then lifts.
+settings_set '.screensaver.lockAfterSeconds = 2'
+sleep 1
+$ipc call screensaver start > /dev/null 2>&1
+sleep 4
+$ipc call lock isLocked > "$ss_chain_locked_path" 2>&1
+$ipc call screensaver status > "$ss_chain_status_path" 2>&1
+"$grim_bin" "$ss_chain_path" > /dev/null 2>&1
+$ipc call screensaver stop > /dev/null 2>&1
+"$wtype_bin" "formalshell-test"
+"$wtype_bin" -k Return
+for i in \$(seq 1 40); do
+  $ipc call lock isLocked > "$ss_chain_unlocked_path" 2>&1
+  grep -q '^false\$' "$ss_chain_unlocked_path" && break
+  sleep 0.25
+done
 EOF
   hypr_exec_once "bash $play_script"
   hypr_exec_once "bash $script"
@@ -314,5 +351,12 @@ leg_screensaver_assert() {
   echo "SMOKE_SCREENSAVER_BANNER $ss_solid_path"
   if [ ! -s "$ss_final_status_path" ] || ! grep -q '"active":false' "$ss_final_status_path"; then
     fail "screensaver did not report active:false after the final stop, got: $(cat "$ss_final_status_path" 2>/dev/null)"
+  fi
+  if ! grep -q '^true$' "$ss_chain_locked_path" 2>/dev/null || ! grep -q '"active":true' "$ss_chain_status_path" 2>/dev/null; then
+    fail "screensaver.lockAfterSeconds did not chain the showing screensaver into the lock, isLocked: $(cat "$ss_chain_locked_path" 2>/dev/null), status: $(cat "$ss_chain_status_path" 2>/dev/null)"
+  fi
+  echo "SMOKE_SCREENSAVER_CHAIN $ss_chain_path"
+  if ! grep -q '^false$' "$ss_chain_unlocked_path" 2>/dev/null; then
+    fail "the chained lock did not lift for the real password, got: $(cat "$ss_chain_unlocked_path" 2>/dev/null)"
   fi
 }

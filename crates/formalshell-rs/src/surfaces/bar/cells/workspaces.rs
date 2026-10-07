@@ -189,7 +189,7 @@ fn workspace(w: &Workspace) -> workspaces::Workspace {
     }
 }
 
-fn window(w: &Window) -> workspaces::Window {
+pub(crate) fn window(w: &Window) -> workspaces::Window {
     workspaces::Window {
         id: w.id.clone(),
         workspace_id: w.workspace_id.clone(),

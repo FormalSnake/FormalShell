@@ -28,6 +28,7 @@ pub mod gallery;
 pub mod github;
 pub mod host;
 pub mod iphone;
+pub mod media;
 pub mod monitor;
 pub mod network;
 pub mod power;
@@ -36,6 +37,7 @@ pub mod systemupdate;
 pub mod tailscale;
 pub mod usage;
 pub mod weather;
+pub mod workspace_preview;
 
 use fs_theme::theme::Theme;
 
@@ -90,6 +92,12 @@ pub trait Panel {
     fn width(&self, v: &View) -> f64 {
         v.theme.space.popup_width_default
     }
+    /// Whether the card takes the keyboard. One that does not (a preview a
+    /// pointer opened) takes input over its own rect alone, so whatever it
+    /// hangs off keeps the pointer around it.
+    fn takes_keyboard(&self) -> bool {
+        true
+    }
     /// The header row; off for a strip rather than a sheet.
     fn header(&self) -> bool {
         true
@@ -101,6 +109,10 @@ pub trait Panel {
     fn body(&self, v: &View) -> El;
     /// A fresh open: where the cursor starts, what resets.
     fn opened(&mut self) {}
+    /// The card starts closing, or is handed over to another panel: what
+    /// the panel holds open while it shows (a process it wants running)
+    /// lets go now, not when the exit lands.
+    fn closed(&mut self) {}
     /// Right after the card is built, with the store and the services in
     /// reach: what a panel asks for once as it opens (a probe, a refresh).
     fn start(&mut self, _fx: &mut Effect) {}
@@ -113,13 +125,21 @@ pub trait Panel {
     fn take_cursor(&mut self) -> Option<String> {
         None
     }
+    /// When the body next reads differently with nothing published (a
+    /// playing track's elapsed second).
+    fn wake(&self, _v: &View) -> Option<std::time::Instant> {
+        None
+    }
+    /// Escape, before it closes the panel: true when the panel took it (an
+    /// open menu shutting).
+    fn escape(&mut self) -> bool {
+        false
+    }
     /// An IPC verb aimed at this panel (`calendar select`); `None` when the
     /// panel answers none.
     fn call(&mut self, _verb: &str, _arg: &str) -> Option<String> {
         None
     }
-    /// Closed, or handed over to another panel.
-    fn closed(&mut self) {}
     /// A text field holds the keyboard: every key goes to [`Panel::edit`].
     fn editing(&self) -> bool {
         false
@@ -131,6 +151,12 @@ pub trait Panel {
     fn activate(&mut self, _stop: &str, _fx: &mut Effect) {}
     /// Left or Right on a stop that carries a value, when `steps` is on.
     fn step(&mut self, _stop: &str, _direction: i32, _fx: &mut Effect) {}
+    /// Tab or Shift+Tab (`direction` -1) from the stop under the cursor:
+    /// the stop to land on when the panel walks sections (Panel.qml's
+    /// `sectionCount`), or none to only reveal the cursor.
+    fn tab(&mut self, _stop: Option<&str>, _direction: i32) -> Option<String> {
+        None
+    }
     /// `x` on a stop.
     fn delete(&mut self, _stop: &str, _fx: &mut Effect) {}
     /// A printable key no binding took.
@@ -180,6 +206,7 @@ pub fn build(name: &str) -> Option<Box<dyn Panel>> {
         "audio" => Box::new(audio::Audio::default()),
         "calendar" => Box::new(calendar::Calendar::new(true)),
         "iphone" => Box::new(iphone::Iphone::default()),
+        "media" => Box::new(media::Media::default()),
         "weather" => Box::new(weather::Weather::default()),
         "network" => Box::new(network::Network::default()),
         "bluetooth" => Box::new(bluetooth::Bluetooth),

@@ -538,9 +538,8 @@ impl App {
         let has_wallpaper = !self.store.state.data.wallpaper.is_empty();
         let shared = Shared {
             now: Local::now(),
-            dots: self.lock.password.chars().count(),
+            prompt: view::Prompt::password(self.lock.password.chars().count(), !self.lock.checking),
             error: &self.lock.error,
-            checking: self.lock.checking,
             has_wallpaper,
             backdrop: self.lock.backdrop.as_ref(),
             picture: self.store.wallpaper.picture.as_ref().filter(|p| has_wallpaper && p.path == self.store.state.data.wallpaper),
@@ -548,6 +547,7 @@ impl App {
             media: None,
             enter: (self.lock.fade.value(now).clamp(0.0, 1.0) as f32, self.lock.rise.value(now)),
             blanked,
+            palette_ink: false,
         };
         let active = self.lock_media();
         let mpris = active.as_ref().and_then(|a| self.store.media.mpris.iter().find(|p| p.id == a.id));

@@ -14,7 +14,12 @@
 # valid in the local store. Combined with the formalshell/quickshell
 # packages also being staged below, `nix build .#formalshell` inside the VM
 # needs neither the network nor a shared store to be a no-op.
-{ self, nixpkgs, quickshell }:
+#
+# greeterImplementation picks services.formalshell-greeter.implementation.
+# The slot VMs keep "qml"; testvm-greeter-rs (dev/vm.sh with
+# FS_VM_ATTR=testvm-greeter-rs) boots the Rust greeter in a smaller VM of
+# its own, so trying it never restarts a slot another run is using.
+{ self, nixpkgs, quickshell, greeterImplementation ? "qml" }:
 
 nixpkgs.lib.nixosSystem {
   system = "aarch64-linux";
@@ -28,7 +33,6 @@ nixpkgs.lib.nixosSystem {
     ({ pkgs, lib, config, ... }:
       let
         quickshellPkg = quickshell.packages.aarch64-linux.default;
-        greeterPkg = self.packages.aarch64-linux.formalshell-greeter;
 
         # Only job: get WAYLAND_DISPLAY into the systemd --user environment,
         # the exact lookup dev/smoke.sh falls back to
@@ -76,7 +80,7 @@ nixpkgs.lib.nixosSystem {
           host.pkgs = nixpkgs.legacyPackages.aarch64-darwin;
           graphics = false;
           cores = 6;
-          memorySize = 8192;
+          memorySize = if greeterImplementation == "qml" then 8192 else 4096;
           diskSize = 40960;
           useNixStoreImage = true;
           writableStore = true;
@@ -164,7 +168,7 @@ nixpkgs.lib.nixosSystem {
         # deployment on real hardware needs none of them.
         services.formalshell-greeter = {
           enable = true;
-          package = greeterPkg;
+          implementation = greeterImplementation;
           extraEnvironment = {
             WLR_BACKENDS = "headless";
             WLR_RENDERER = "pixman";

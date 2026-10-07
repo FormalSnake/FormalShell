@@ -6,12 +6,16 @@
 
 mod caffeinate;
 pub mod capture;
+mod console;
 mod headset;
 mod hotcorners;
 mod launcher;
 pub mod lock;
 mod osd;
 mod polkit;
+mod picker;
+mod preview;
+mod screensaver;
 pub mod switcher;
 mod toasts;
 
@@ -54,6 +58,19 @@ use crate::surfaces::card::{Card, Ends, Scrim, Target};
 use crate::surfaces::panel::{self, host::{Host, Key, Out, Place}};
 use crate::surfaces::tooltip;
 use crate::surfaces::tray_menu::{Hit, Menu, Outcome};
+
+/// One axis of a scroll in wheel notches: the steps a wheel reports, or a
+/// continuous axis at 15 units to the notch, the libinput/Qt ratio a
+/// touchpad's swipe is read at.
+fn notches(axis: &smithay_client_toolkit::seat::pointer::AxisScroll) -> f64 {
+    if axis.value120 != 0 {
+        axis.value120 as f64 / 120.0
+    } else if axis.discrete != 0 {
+        axis.discrete as f64
+    } else {
+        axis.absolute / 15.0
+    }
+}
 
 fn edge_anchor(edge: Edge) -> Anchor {
     match edge {
@@ -146,6 +163,7 @@ enum Owner {
     /// The launcher's scrim: 0 the top line's band, 1 the rest.
     LauncherScrim(u8),
     Switcher,
+    Picker(usize),
 }
 
 pub struct App {
@@ -161,13 +179,16 @@ pub struct App {
     pub runtime: Option<Runtime>,
     pub store: Store,
     caffeinate: caffeinate::Caffeinate,
+    console: console::Console,
+    saver: screensaver::Saver,
     pub lock: lock::Lock,
     hot: hotcorners::HotCorners,
     polkit: Option<polkit::Dialog>,
     osd: osd::Osd,
     headset: headset::Headset,
-    capture: capture::Capture,
+    thumbnails: capture::Capture,
     pub switcher: switcher::State,
+    peek: preview::State,
     pub bar: Bar,
     bar_surface: Option<Surface>,
     backdrop: Option<Backdrop>,
@@ -220,6 +241,8 @@ pub struct App {
     mods: fs_menu::nav::Modifiers,
     menu_buttons: Option<crate::services::menu::BaseInputs>,
     menu_launches: Option<serde_json::Value>,
+    pub capture: crate::surfaces::capture::Capture,
+    pickers: picker::Pickers,
 }
 
 impl App {
@@ -245,13 +268,16 @@ impl App {
             runtime: None,
             store,
             caffeinate: caffeinate::Caffeinate::bind(globals, qh),
+            console: console::Console::default(),
+            saver: screensaver::Saver::default(),
             lock: lock::Lock::bind(globals, qh),
             hot: Default::default(),
             polkit: None,
             osd: osd::Osd::default(),
             headset: headset::Headset::default(),
-            capture: capture::Capture::bind(globals, qh),
+            thumbnails: capture::Capture::bind(globals, qh),
             switcher: switcher::State::default(),
+            peek: preview::State::default(),
             bar,
             bar_surface: None,
             backdrop: None,
@@ -290,6 +316,8 @@ impl App {
             mods: Default::default(),
             menu_buttons: None,
             menu_launches: None,
+            capture: Default::default(),
+            pickers: Default::default(),
         };
         app.place_chrome();
         let layer = app.overlay("formalshell:wallpaper", Layer::Background, Anchor::all(), (0, 0), -1);
@@ -775,7 +803,8 @@ impl App {
             return;
         }
         let layer = self.overlay("formalshell:panel", Layer::Overlay, Anchor::all(), (0, 0), -1);
-        layer.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
+        let keyboard = if module.takes_keyboard() { KeyboardInteractivity::Exclusive } else { KeyboardInteractivity::None };
+        layer.set_keyboard_interactivity(keyboard);
         layer.commit();
         let mut surface = Surface::new("panel", layer, &self.shm, self.started);
         surface.wait_map = true;
@@ -1113,6 +1142,8 @@ impl App {
     }
 
     pub fn present(&mut self) {
+        self.preview_present();
+        crate::surfaces::capture::flush(self);
         let now = Instant::now();
         self.tick_notifications();
         if self.panel.as_ref().is_some_and(|p| p.finished(now)) {
@@ -1170,6 +1201,7 @@ impl App {
         self.panel_dirty = false;
         self.present_launcher(now);
         self.switcher_present();
+        self.present_saver(now);
         self.present_tooltip(now);
         self.present_toasts(now);
         self.osd_present(now);
@@ -1183,6 +1215,7 @@ impl App {
         if let Some((scrim, surface)) = &mut self.scrim {
             surface.present(scrim.alpha(now), scrim.animating(now), &qh);
         }
+        self.present_picker(now);
         self.present_polkit();
         self.present_lock();
         self.arm_wake(now);
@@ -1231,7 +1264,7 @@ impl App {
     fn arm_wake(&mut self, now: Instant) {
         let hosts = [&self.panel, &self.outgoing];
         let notifications = self.store.notifications.wake().map(|at| crate::services::notifications::instant_at(at, now));
-        let at = [self.bar.wake(now), self.tips.wake(), notifications, self.osd_wake(), self.headset.wake(), self.switcher_deadline()]
+        let at = [self.bar.wake(now), self.tips.wake(), notifications, self.osd_wake(), self.headset.wake(), self.switcher_deadline(), self.preview_deadline()]
             .into_iter()
             .chain(hosts.iter().filter_map(|h| h.as_ref()).flat_map(|h| [h.prime_until, h.wake.filter(|w| *w > now)]))
             .flatten()
@@ -1292,6 +1325,9 @@ impl App {
         }
         if self.switcher.owns(surface) {
             return Some(Owner::Switcher);
+        }
+        if let Some(i) = self.picker_owner(surface) {
+            return Some(Owner::Picker(i));
         }
         self.zones.iter().position(|(_, z)| z.layer.wl_surface() == surface).map(Owner::Zone)
     }
@@ -1387,11 +1423,29 @@ impl App {
             Some(ask) => self.tips.show(ask, now),
             None => self.tips.hide(None, now),
         }
+        self.preview_pointer(owner == Some(Owner::Bar), owner == Some(Owner::Panel), at);
     }
 
     fn pointer_events(&mut self, events: &[PointerEvent]) {
         for e in events {
+            if self.saver_owns(&e.surface) {
+                let input = match e.kind {
+                    PointerEventKind::Enter { serial } => match self.pointer.clone() {
+                        Some(p) => screensaver::SaverInput::Enter(p, serial, e.position),
+                        None => continue,
+                    },
+                    PointerEventKind::Motion { .. } => screensaver::SaverInput::Motion(e.position),
+                    PointerEventKind::Press { .. } => screensaver::SaverInput::Press,
+                    _ => continue,
+                };
+                self.saver_pointer(input);
+                continue;
+            }
             let owner = self.owner(&e.surface);
+            if let Some(Owner::Picker(i)) = owner {
+                self.picker_pointer(i, e);
+                continue;
+            }
             if self.launcher_pointer(e, owner) {
                 continue;
             }
@@ -1462,19 +1516,20 @@ impl App {
                     };
                     self.click(o, i, button, (x, y));
                 }
-                PointerEventKind::Axis { vertical, .. } => {
+                PointerEventKind::Axis { vertical, horizontal, .. } => {
+                    if owner == Some(Owner::Panel) {
+                        let (dx, dy) = (notches(&horizontal), notches(&vertical));
+                        if let Some(h) = self.panel.as_mut().filter(|_| dx != 0.0 || dy != 0.0) {
+                            h.scroll(x, y, dx, dy, &self.store, self.runtime.as_ref());
+                        }
+                        self.panel_dirty = true;
+                        continue;
+                    }
                     let v = if vertical.discrete != 0 { vertical.discrete as f64 } else { vertical.absolute };
                     if v == 0.0 {
                         continue;
                     }
                     let up = v < 0.0;
-                    if owner == Some(Owner::Panel) {
-                        if let Some(h) = &mut self.panel {
-                            h.wheel(x, y, up, &self.store, self.runtime.as_ref());
-                        }
-                        self.panel_dirty = true;
-                        continue;
-                    }
                     if let Some(i) = self.bar.hit(x, y).filter(|_| owner == Some(Owner::Bar)) {
                         let action = self.bar.wheel(i, up, &self.store);
                         let anchor = self.bar.slot_anchor(i);
@@ -1551,7 +1606,7 @@ impl App {
     }
 
     fn key_event_from(&mut self, event: KeyEvent, repeat: bool) {
-        if self.lock_key(&event) || self.polkit_key(&event) || self.launcher_key(&event, repeat) || self.headset_key(&event) || self.switcher_key(event.keysym) {
+        if self.lock_key(&event) || self.polkit_key(&event) || self.picker_key_event(&event) || self.launcher_key(&event, repeat) || self.headset_key(&event) || self.switcher_key(event.keysym) {
             return;
         }
         let editing = self.panel.as_ref().is_some_and(|h| h.editing());
@@ -1674,11 +1729,13 @@ impl CompositorHandler for App {
             }
             Some(Owner::Switcher) => self.switcher_frame(),
             Some(o @ (Owner::Launcher | Owner::LauncherScrim(_))) => self.launcher_frame(o, now),
+            Some(Owner::Picker(i)) => self.picker_frame(i),
             Some(Owner::Backdrop) => {
                 if let Some(b) = &mut self.backdrop {
                     b.step(now, &self.qh);
                 }
             }
+            None if self.saver_owns(surface) => self.saver_frame_callback(),
             None => {
                 if !self.polkit_frame(surface) {
                     self.lock_frame(surface);
@@ -1721,6 +1778,8 @@ impl LayerShellHandler for App {
             Some(Owner::Backdrop) => self.backdrop = None,
             Some(Owner::Launcher) => self.launcher_closed(),
             Some(Owner::Switcher) => self.switcher_close(),
+            Some(Owner::Picker(i)) => self.picker_closed(i),
+            None if self.saver_owns(layer.wl_surface()) => self.saver_closed(),
             Some(Owner::Zone(_) | Owner::LauncherScrim(_)) | None => {}
         }
     }
@@ -1781,7 +1840,9 @@ impl LayerShellHandler for App {
             }
             Some(o @ (Owner::Launcher | Owner::LauncherScrim(_))) => self.launcher_configure(o, width, height),
             Some(Owner::Switcher) => self.switcher_configure(width, height),
+            Some(Owner::Picker(i)) => self.picker_configure(i, width, height),
             None if self.caffeinate_owns(layer) => self.caffeinate_configure(),
+            None if self.saver_owns(layer.wl_surface()) => self.saver_configure(width, height),
             None if self.hot_corner_owns(layer) => self.hot_corner_configure(layer),
             None if self.polkit_owns(layer) => self.polkit_configure(width, height),
             None => {}
@@ -1848,6 +1909,10 @@ impl KeyboardHandler for App {
     }
 
     fn press_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, event: KeyEvent) {
+        if self.saver.active && !self.lock.locked {
+            self.saver_pointer(screensaver::SaverInput::Key);
+            return;
+        }
         self.key_event(event);
     }
 

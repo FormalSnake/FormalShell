@@ -122,6 +122,9 @@ pub enum Paint {
     /// A rounded rect's fill under a border drawn inside its edge.
     Framed { fill: Rgba, radius: f32, border: Rgba, width: f32 },
     Text { text: ShapedText, color: Rgba },
+    /// A line under a real Gaussian blur of `blur` px (the lyrics pane's
+    /// depth of field), placed the way `Text` is.
+    Blur { text: ShapedText, color: Rgba, blur: f32 },
     /// A blurred copy of a line under its crisp one (Components/InkGlow.qml):
     /// the glyphs offset by `x`, `y` and smeared over `blur` pixels.
     Glow { text: ShapedText, color: Rgba, x: f32, y: f32, blur: f32 },
@@ -133,6 +136,9 @@ pub enum Paint {
     /// Casts under a rounded rect, cut out of the rect's own shape so a
     /// translucent fill over them shows the desktop and not the shadow.
     Casts { rect: Rect, radius: f64, layers: Vec<Cast>, cutout: BezPath },
+    /// A row of terminal cells (the screensaver's): plain rects and glyph
+    /// outlines placed at their own origins, each in its own colour.
+    Cells { rects: Vec<(Rect, Rgba)>, glyphs: Vec<(std::sync::Arc<BezPath>, f64, f64, Rgba)> },
 }
 
 pub struct Node {
@@ -299,6 +305,9 @@ fn paint_eq(a: &Paint, b: &Paint) -> bool {
     match (a, b) {
         (Paint::Rect { fill: f1, radius: r1 }, Paint::Rect { fill: f2, radius: r2 }) => f1 == f2 && r1 == r2,
         (Paint::Text { text: t1, color: c1 }, Paint::Text { text: t2, color: c2 }) => c1 == c2 && t1.same_as(t2),
+        (Paint::Blur { text: t1, color: c1, blur: b1 }, Paint::Blur { text: t2, color: c2, blur: b2 }) => {
+            c1 == c2 && b1 == b2 && t1.same_as(t2)
+        }
         (
             Paint::Framed { fill: f1, radius: r1, border: b1, width: w1 },
             Paint::Framed { fill: f2, radius: r2, border: b2, width: w2 },
@@ -317,6 +326,11 @@ fn paint_eq(a: &Paint, b: &Paint) -> bool {
         ) => r1 == r2 && a1 == a2 && c1 == c2 && l1.len() == l2.len() && l1.iter().zip(l2).all(|(a, b)| a.same(b)),
         (Paint::Face { from: f1, to: t1, radius: r1 }, Paint::Face { from: f2, to: t2, radius: r2 }) => {
             f1 == f2 && t1 == t2 && r1 == r2
+        }
+        (Paint::Cells { rects: r1, glyphs: g1 }, Paint::Cells { rects: r2, glyphs: g2 }) => {
+            r1 == r2
+                && g1.len() == g2.len()
+                && g1.iter().zip(g2).all(|(a, b)| std::sync::Arc::ptr_eq(&a.0, &b.0) && (a.1, a.2, a.3) == (b.1, b.2, b.3))
         }
         _ => false,
     }

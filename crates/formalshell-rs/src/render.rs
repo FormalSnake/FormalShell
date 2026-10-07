@@ -137,6 +137,30 @@ impl Renderer {
                         }
                     }
                 }
+                Paint::Blur { text, color: ink, blur } => {
+                    self.ctx.set_transform(origin);
+                    let f = vello_cpu::filter_effects::Filter::from_function(vello_cpu::filter_effects::FilterFunction::Blur { radius: *blur });
+                    self.ctx.push_filter_layer(f);
+                    self.ctx.set_paint(color(*ink));
+                    for glyph in &text.glyphs {
+                        let p = (node.bounds.x + glyph.x, node.bounds.y + glyph.y);
+                        self.ctx.set_transform(at * Affine::translate((p.0 as f64, p.1 as f64)));
+                        self.ctx.fill_path(&glyph.path);
+                    }
+                    self.ctx.pop_layer();
+                }
+                Paint::Cells { rects, glyphs } => {
+                    self.ctx.set_transform(at);
+                    for (r, ink) in rects {
+                        self.ctx.set_paint(color(*ink));
+                        self.ctx.fill_rect(r);
+                    }
+                    for (path, x, y, ink) in glyphs {
+                        self.ctx.set_paint(color(*ink));
+                        self.ctx.set_transform(at * Affine::translate((*x, *y)));
+                        self.ctx.fill_path(path);
+                    }
+                }
                 Paint::Text { text, color: ink } => {
                     for glyph in &text.glyphs {
                         let p = (node.bounds.x + glyph.x, node.bounds.y + glyph.y);

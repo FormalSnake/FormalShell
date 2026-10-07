@@ -10,11 +10,10 @@
 # `theme` and `wallpaper` carry DebugIpc.qml's, ThemeIpc.qml's and
 # WallpaperIpc.qml's exact signatures, `bar`, `panel`, `media`, `radio`,
 # `airplay`, `visualizer`, `overnight`, `earbuds`, `display`, `hdr` and
-# `workspaces` their own IPC files' (WorkspacesIpc.qml's `status` only: peek
-# and close wait for the preview), `calendar`, `iphone`, `notifications`,
-# `reminder`, `osd`, `nightlight`, `lights`, `switcher`, `clipboard` and `picker` their own;
-# `probe` covers every type qs converts and the function names that collide
-# with qs's subcommands.
+# `workspaces` their own IPC files', `calendar`, `iphone`, `notifications`,
+# `reminder`, `osd`, `nightlight`, `lights`, `switcher`, `screenshot`,
+# `capture`, `record`, `clipboard` and `picker` their own; `probe` covers every type qs
+# converts and the function names that collide with qs's subcommands.
 set -euo pipefail
 
 dir=$(mktemp -d)
@@ -75,6 +74,7 @@ ShellRoot {
         function select(id: string): string { return "select " + id }
         function players(): string { return "[]" }
         function status(): string { return "{}" }
+        function lyrics(): string { return "{}" }
     }
     IpcHandler {
         target: "radio"
@@ -118,6 +118,8 @@ ShellRoot {
     }
     IpcHandler {
         target: "workspaces"
+        function peek(n: int): string { return "peek " + n }
+        function close(): string { return "ok" }
         function status(): string { return "{}" }
     }
     IpcHandler {
@@ -137,6 +139,7 @@ ShellRoot {
         function kill(pid: string, signal: string): string { return "kill " + pid + " " + signal }
         function restart(pid: string): string { return "restart " + pid }
         function gpu(): string { return "{}" }
+        function launch(desktopId: string, card: string): string { return "launch " + desktopId + " " + card }
     }
     IpcHandler {
         target: "plugins"
@@ -199,6 +202,36 @@ ShellRoot {
         function dismiss(id: string): string { return "dismiss " + id }
         function clear(): string { return "ok" }
         function markRead(): string { return "ok" }
+    }
+    IpcHandler {
+        target: "screenshot"
+        function full(processing: string): string { return "full " + processing }
+        function region(processing: string): string { return "region " + processing }
+        function cancel(): string { return "ok" }
+        function pick(mode: string, processing: string): string { return "pick " + mode + " " + processing }
+        function key(name: string): string { return "key " + name }
+        function pickerStatus(): string { return "{}" }
+        function edit(path: string): string { return "edit " + path }
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "capture"
+        function text(): string { return "ok" }
+        function color(): string { return "ok" }
+        function textAt(geometry: string): string { return "textAt " + geometry }
+        function colorAt(geometry: string): string { return "colorAt " + geometry }
+        function cancel(): string { return "ok" }
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "record"
+        function start(scope: string, audio: string): string { return "start " + scope + " " + audio }
+        function startCapped(scope: string, audio: string, maxHeight: string): string { return "startCapped " + scope + " " + audio + " " + maxHeight }
+        function startAt(geometry: string, audio: string): string { return "startAt " + geometry + " " + audio }
+        function stop(): string { return "ok" }
+        function toggle(scope: string, audio: string): string { return "toggle " + scope + " " + audio }
+        function gif(path: string): string { return "gif " + path }
+        function status(): string { return "{}" }
     }
     IpcHandler {
         target: "display"
@@ -278,6 +311,21 @@ ShellRoot {
         function brightness(level: string): string { return "brightness " + level }
         function refresh(): string { return "ok" }
         function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "console"
+        function toggle(): string { return "ok" }
+        function show(): string { return "ok" }
+        function hide(): string { return "ok" }
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "screensaver"
+        function start(): string { return "ok" }
+        function stop(): string { return "ok" }
+        function status(): string { return "{}" }
+        function frame(n: int): string { return "frame " + n }
+        function frameInfo(): string { return "{}" }
     }
     IpcHandler {
         target: "probe"
@@ -504,6 +552,8 @@ rec call panel state
 rec show panel
 rec call media status
 rec call media status x
+rec call media lyrics
+rec call media lyrics x
 rec show media
 rec call overnight toggle
 rec call overnight status x
@@ -518,6 +568,10 @@ rec call earbuds set eq-bass -- -2
 rec call earbuds set '[noise,anc]'
 rec show earbuds
 rec show earbuds set
+rec call workspaces peek 2
+rec call workspaces peek x
+rec call workspaces peek
+rec call workspaces close
 rec call workspaces status
 rec call workspaces status x
 rec show workspaces
@@ -543,6 +597,8 @@ rec call monitor kill 42
 rec call monitor kill 42 TERM
 rec call monitor restart 42
 rec call monitor nope
+rec call monitor launch app card0
+rec call monitor launch app
 rec show monitor
 rec call plugins list
 rec call plugins list x
@@ -611,6 +667,42 @@ rec call iphone clear
 rec call iphone markRead
 rec call iphone nope
 rec show iphone
+rec call console toggle
+rec call console show
+rec call console hide
+rec call console status
+rec call console status x
+rec show console
+rec call screensaver start
+rec call screensaver stop
+rec call screensaver status
+rec call screensaver frame 3
+rec call screensaver frame x
+rec call screensaver frame
+rec call screensaver frameInfo
+rec show screensaver
+rec call screenshot full ''
+rec call screenshot full
+rec call screenshot pick smart default
+rec call screenshot pick smart
+rec call screenshot key ctrl-return
+rec call screenshot pickerStatus
+rec call screenshot edit '/tmp/a b.png'
+rec call screenshot status
+rec show screenshot
+rec call capture text
+rec call capture textAt '0,0 10x10'
+rec call capture colorAt
+rec call capture status x
+rec show capture
+rec call record start screen desktop
+rec call record start screen
+rec call record startCapped region none 720
+rec call record startAt '0,0 1x1' none
+rec call record toggle '' ''
+rec call record gif ''
+rec call record stop
+rec show record
 rec call display scale DP-1 1.5
 rec call display scale DP-1 x
 rec call display scale DP-1

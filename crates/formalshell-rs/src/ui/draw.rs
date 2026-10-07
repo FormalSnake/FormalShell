@@ -54,7 +54,7 @@ fn icon(cx: &mut Cx, name: &str, size: Type) -> ShapedText {
 }
 
 /// The text cut to `max` with an ellipsis, or whole.
-fn elided(cx: &mut Cx, s: &str, font: &Font, max: f64) -> ShapedText {
+pub(super) fn elided(cx: &mut Cx, s: &str, font: &Font, max: f64) -> ShapedText {
     let whole = shape(cx, s, font);
     if whole.width as f64 <= max + 0.5 || s.is_empty() {
         return whole;
@@ -210,7 +210,13 @@ pub fn measure(cx: &mut Cx, el: &El, avail: f64) -> (f64, f64) {
             let ls = wrapped(cx, text, font, inner, *lines);
             (inner, ls.iter().map(|l| l.line_height() as f64).sum())
         }
-        Kind::Picture { size, .. } => (*size, *size),
+        Kind::Picture { size, .. } | Kind::Cover { size, .. } => (*size, *size),
+        Kind::Strip { size, .. } => *size,
+        Kind::Lyrics(v) => (inner, v.height),
+        Kind::Spectrum { columns, .. } => {
+            let n = *columns as f64;
+            (n * s.track_thickness + (n - 1.0).max(0.0) * s.xxs, s.control_height)
+        }
         Kind::Icon { name, size, .. } => {
             let t = icon(cx, name, *size);
             (px(cx, *size) as f64, t.line_height() as f64)
@@ -274,7 +280,7 @@ pub fn measure(cx: &mut Cx, el: &El, avail: f64) -> (f64, f64) {
         }
     };
     let w = match el.kind {
-        Kind::Grid { .. } | Kind::Track { .. } | Kind::Input { .. } | Kind::Sparkline(_) | Kind::Matrix { .. } | Kind::Flow(_) => avail,
+        Kind::Grid { .. } | Kind::Track { .. } | Kind::Input { .. } | Kind::Sparkline(_) | Kind::Matrix { .. } | Kind::Flow(_) | Kind::Lyrics(_) => avail,
         _ => width_of(el, avail, nw + ps + pe),
     };
     (w, nh + pt + pb)
@@ -402,6 +408,8 @@ pub fn paint(cx: &mut Cx, el: &El, rect: Rect, path: &str) {
                 }
                 let (cw, ch) = measure(cx, c, w);
                 let cw = if c.width == Size::Fill { w } else { cw };
+                // The lyrics pane stands as tall as the column beside it.
+                let ch = if matches!(c.kind, Kind::Lyrics(_)) { ch.max(inner.height()) } else { ch };
                 let y = if el.top { inner.y0 } else { inner.y0 + (inner.height() - ch) / 2.0 };
                 paint(cx, c, Rect::new(x, y, x + cw, y + ch), &child_path(path, c, i));
                 x += w + gap;
@@ -450,6 +458,7 @@ pub fn paint(cx: &mut Cx, el: &El, rect: Rect, path: &str) {
             p.finish();
             cx.done(last);
         }
+        Kind::Strip { inset, scroll, tiles, .. } => super::strip::paint(cx, el, inner, *inset, *scroll, tiles, path),
         Kind::Picture { pic, .. } => {
             let alpha = cx.alpha;
             let r = irect(inner);
@@ -462,6 +471,26 @@ pub fn paint(cx: &mut Cx, el: &El, rect: Rect, path: &str) {
             p.finish();
             cx.done(last);
         }
+        Kind::Cover { pic, size } => {
+            let t = cx.theme;
+            let radius = t.cover_radius(*size) as f32;
+            let bw = t.border_width;
+            let (well, line) = (cx.a(t.colors.get("muted")), cx.a(t.colors.get("border")));
+            let alpha = cx.alpha;
+            let r = irect(inner);
+            let mut p = cx.painter(path);
+            p.framed(r, well, radius, Rgba::TRANSPARENT, 0.0);
+            if let Some(image) = &pic.0 {
+                let (w, h) = (image.pixmap.width() as i32, image.pixmap.height() as i32);
+                p.image(image, (r.x + (r.w - w) / 2, r.y + (r.h - h) / 2), alpha);
+            }
+            p.framed(r, Rgba::TRANSPARENT, radius, line, bw as f32);
+            let last = p.last();
+            p.finish();
+            cx.done(last);
+        }
+        Kind::Spectrum { style, columns, live } => super::spectrum::paint(cx, inner, style, *columns, *live, path),
+        Kind::Lyrics(v) => super::lyrics::paint(cx, inner, v, path),
         Kind::Icon { name, size, ink } => {
             let t = icon(cx, name, *size);
             let color = cx.a(resolve(cx, *ink));
@@ -544,7 +573,7 @@ pub fn paint(cx: &mut Cx, el: &El, rect: Rect, path: &str) {
         Kind::Shoulders { edge, span, depth, run } => shoulders(cx, inner, *edge, *span, *depth, *run, path),
     }
     if let Some(on) = &el.on
-        && !matches!(el.kind, Kind::Cell { .. } | Kind::Button { .. } | Kind::Switch { .. } | Kind::Track { .. } | Kind::Group { .. } | Kind::Segmented { .. })
+        && !matches!(el.kind, Kind::Cell { .. } | Kind::Button { .. } | Kind::Switch { .. } | Kind::Track { .. } | Kind::Group { .. } | Kind::Segmented { .. } | Kind::Strip { .. })
     {
         cx.hit(Hit { rect: irect(inner), path: path.into(), on: Some(on.clone()), tip: el.tip.clone(), stop: None, what: HitWhat::Click });
     } else if el.on.is_none() && el.tip.is_some() && !matches!(el.kind, Kind::Cell { .. } | Kind::Button { .. }) {

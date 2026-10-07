@@ -135,6 +135,7 @@ impl Host {
         let mut module = module;
         module.opened();
         let start = module.cursor_start();
+        let keyboard = module.takes_keyboard();
         Self {
             module,
             card,
@@ -155,7 +156,7 @@ impl Host {
             content_h: 0.0,
             viewport: IRect::default(),
             handoff: None,
-            prime_until: Some(Instant::now() + std::time::Duration::from_millis(PRIME_MS)),
+            prime_until: keyboard.then(|| Instant::now() + std::time::Duration::from_millis(PRIME_MS)),
             pressed: None,
             dragging: None,
             wake: None,
@@ -334,10 +335,15 @@ impl Host {
         self.draw(store, theme, kit, now);
     }
 
-    /// Input everywhere while open, nowhere once closing.
+    /// Input everywhere while open (a click outside closes), over the
+    /// card's resting rect alone for a card that takes no keyboard, and
+    /// nowhere once closing.
     pub fn sync_region(&mut self, compositor: &smithay_client_toolkit::compositor::CompositorState) {
-        let size = self.card.scene.size;
-        let want = if self.open { size } else { IRect::default() };
+        let want = match (self.open, self.module.takes_keyboard()) {
+            (false, _) => IRect::default(),
+            (true, true) => self.card.scene.size,
+            (true, false) => self.card.rest_rect(),
+        };
         if self.region == Some(want) {
             return;
         }
@@ -384,6 +390,7 @@ impl Host {
         let v = View { store, theme, output: self.place.output, cursor: self.cursor.key.as_deref().filter(|_| self.cursor.active) };
         let head = if self.module.header() { Some(self.header(&v, &s)) } else { None };
         let body = self.module.body(&v);
+        let module_wake = self.module.wake(&v);
 
         let scene = &mut self.card.scene;
         if let Some(head) = head {
@@ -450,6 +457,9 @@ impl Host {
             }
         }
         self.cursor.travels = false;
+        if let Some(w) = module_wake {
+            self.wake = Some(self.wake.map_or(w, |x: Instant| x.min(w)));
+        }
         if d.animating {
             self.wake = Some(now);
         }
@@ -541,8 +551,16 @@ impl Host {
             return if fx.close { Out::Close } else { Out::None };
         }
         match name {
+            Key::Escape if self.module.escape() => {}
             Key::Escape => return Out::Close,
-            Key::Tab(_) => {
+            Key::Tab(d) => {
+                if let Some(k) = self.module.tab(self.cursor.key.as_deref(), d) {
+                    if let Some(i) = self.body.stop_index(&k) {
+                        self.cursor.index = i;
+                    }
+                    self.cursor.travels = self.cursor.active;
+                    self.cursor.key = Some(k);
+                }
                 self.cursor.active = true;
                 self.cursor.keyed = true;
             }
@@ -611,7 +629,7 @@ impl Host {
         // A row the pointer reaches takes the cursor, without the ring.
         if let Some((true, h)) = &hit
             && let Some(stop) = &h.stop
-            && self.cursor.key.as_ref() != Some(stop)
+            && (self.cursor.key.as_ref() != Some(stop) || !self.cursor.active)
         {
             self.cursor.key = Some(stop.clone());
             self.cursor.active = true;
@@ -679,8 +697,26 @@ impl Host {
         if fx.close { Out::Close } else { Out::None }
     }
 
-    /// A wheel notch: a track under it steps, anything else scrolls.
-    pub fn wheel(&mut self, x: f64, y: f64, up: bool, store: &Store, runtime: Option<&Runtime>) {
+    /// A scroll of `dx`, `dy` wheel notches: a scroll region under the
+    /// pointer takes both axes (a pane the host moves a control height a
+    /// notch, as WheelHandler's angleDelta over 120 does), a track under it
+    /// steps on a vertical one, and anything else scrolls the body
+    /// vertically.
+    pub fn scroll(&mut self, x: f64, y: f64, dx: f64, dy: f64, store: &Store, runtime: Option<&Runtime>) {
+        let point = IRect::new(x.floor() as i32, y.floor() as i32, 1, 1);
+        if self.viewport.intersects(&point)
+            && let Some(h) = self.body.scroll_hit(x, y).cloned()
+            && let Some(on) = h.on.clone()
+        {
+            self.body.scroll(&h.path, -dy * store.theme.theme.space.control_height);
+            let mut fx = Self::effect(store, runtime);
+            self.module.event(&Event { on, what: What::Scroll(dx, dy) }, &mut fx);
+            return;
+        }
+        if dy == 0.0 {
+            return;
+        }
+        let up = dy < 0.0;
         if let Some((_, h)) = self.hit_at(x, y)
             && h.what == ui::HitWhat::Track
             && let Some(on) = h.on.clone()

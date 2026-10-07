@@ -87,6 +87,9 @@ pub struct State {
     /// Each entry's picture, keyed by its id; none means the bell.
     pub icons: HashMap<String, icons::Raw>,
     local_serial: u64,
+    /// Actions picked on the shell's own entries, `(id, key)`, for the
+    /// surface that posted them to act on.
+    pub local_invoked: Vec<(String, String)>,
     /// state.json's dnd as last seen, so a setDnd answered here before its
     /// write lands is not rolled back by the old value.
     dnd_seen: Option<bool>,
@@ -273,17 +276,27 @@ impl State {
     /// NotificationService.notify(): a shell-authored entry, which earns the
     /// DND bypass at urgency 2 on its own `local` marker.
     pub fn notify(&mut self, summary: &str, body: &str, urgency: Urgency) {
+        self.notify_with(summary, body, urgency, Vec::new(), String::new());
+    }
+
+    /// The same with actions and an image; the id comes back so the
+    /// caller can match an invoked action to its entry.
+    pub fn notify_with(&mut self, summary: &str, body: &str, urgency: Urgency, actions: Vec<Action>, image: String) -> String {
         self.local_serial += 1;
+        let id = format!("local-{}", self.local_serial);
         let notif = Notif {
-            id: format!("local-{}", self.local_serial),
+            id: id.clone(),
             app_name: "formalshell".into(),
             summary: summary.into(),
             body: body.into(),
             urgency,
+            actions,
+            image,
             local: true,
             ..Default::default()
         };
         self.model = model::add(&self.model, &notif, now_ms(), &AddOpts::default());
+        id
     }
 
     pub fn dismiss_popup(&mut self, id: &str) {
@@ -338,6 +351,10 @@ impl State {
     }
 
     pub fn invoke_action(&mut self, id: &str, key: &str) {
+        if id.starts_with("local-") {
+            self.local_invoked.push((id.to_owned(), key.to_owned()));
+            return;
+        }
         match self.find(id).filter(|e| e.source == "iphone").and_then(|e| e.phone.as_ref()) {
             Some(phone) => phone_invoke(phone, key == "positive"),
             None => invoke(id, key),
@@ -354,7 +371,11 @@ impl State {
     pub fn invoke_last(&mut self) {
         let Some(target) = model::invoke_target(&self.model).cloned() else { return };
         if target.actions.iter().any(|a| a.key == "default") {
-            invoke(&target.id, "default");
+            if target.id.starts_with("local-") {
+                self.local_invoked.push((target.id.clone(), "default".into()));
+            } else {
+                invoke(&target.id, "default");
+            }
         }
         if self.model.popups.iter().any(|p| p.id == target.id) {
             self.dismiss_popup(&target.id);

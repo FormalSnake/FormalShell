@@ -1,4 +1,5 @@
 mod fontconfig;
+mod greeter;
 mod instance;
 mod ipc;
 mod motion;
@@ -25,6 +26,11 @@ use runtime::{Msg, Publisher, Runtime};
 use wayland::App;
 
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(1).is_some_and(|a| a == "greeter") {
+        greeter::main(&args[2..]);
+        return;
+    }
     // Every `t=` in the log counts from here; this line puts that zero on the
     // wall clock, so a cold start reads against the launcher's own stamp.
     let started = Instant::now();

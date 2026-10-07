@@ -11,8 +11,9 @@ use smithay_client_toolkit::compositor::FrameCallbackData;
 use smithay_client_toolkit::dispatch2::Dispatch2;
 use smithay_client_toolkit::reexports::client::globals::{BindError, GlobalList};
 use smithay_client_toolkit::reexports::client::protocol::wl_buffer::WlBuffer;
+use smithay_client_toolkit::reexports::client::protocol::wl_callback::WlCallback;
 use smithay_client_toolkit::reexports::client::protocol::wl_shm;
-use smithay_client_toolkit::reexports::client::{Connection, Proxy, QueueHandle};
+use smithay_client_toolkit::reexports::client::{Connection, Dispatch, Proxy, QueueHandle};
 use smithay_client_toolkit::reexports::protocols::wp::alpha_modifier::v1::client::wp_alpha_modifier_surface_v1::WpAlphaModifierSurfaceV1;
 use smithay_client_toolkit::reexports::protocols::wp::alpha_modifier::v1::client::wp_alpha_modifier_v1::WpAlphaModifierV1;
 use smithay_client_toolkit::reexports::protocols::wp::single_pixel_buffer::v1::client::wp_single_pixel_buffer_manager_v1::WpSinglePixelBufferManagerV1;
@@ -139,7 +140,10 @@ impl<R: Role> Surface<R> {
         }
     }
 
-    pub fn present(&mut self, scene: &mut Scene, animating: bool, qh: &QueueHandle<App>) {
+    pub fn present<D>(&mut self, scene: &mut Scene, animating: bool, qh: &QueueHandle<D>)
+    where
+        D: Dispatch<WlCallback, FrameCallbackData> + 'static,
+    {
         if !self.configured || self.frame_pending {
             return;
         }

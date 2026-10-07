@@ -239,6 +239,7 @@ impl App {
     pub fn thumbs_changed(&mut self, owner: Owner) {
         match owner {
             Owner::Switcher => self.switcher.dirty = true,
+            Owner::Preview => self.preview_thumbs_changed(),
         }
     }
 

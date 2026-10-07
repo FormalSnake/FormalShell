@@ -17,6 +17,7 @@
 # seconds to converge. Before that fix a loud track pegged every band.
 leg_visualizer_styles_flag="--visualizer-styles"
 leg_visualizer_styles_order=222
+leg_visualizer_styles_rust=1
 leg_visualizer_styles_needs="mpv ffmpeg convert"
 
 visualizer_styles_track_path="$shot_dir/visualizer-styles-tone.flac"

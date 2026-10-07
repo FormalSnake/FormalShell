@@ -68,6 +68,7 @@ impl App {
     fn action_active(&self, action: &Action) -> bool {
         match action {
             Action::Lock => self.lock.locked && !self.lock_external(),
+            Action::Screensaver => self.saver.active || self.saver_mapped(),
             _ => false,
         }
     }
@@ -213,6 +214,7 @@ impl App {
             Action::Lock => {
                 let _ = self.lock();
             }
+            Action::Screensaver => self.saver_start(),
             other => eprintln!("HotCorners: {} has no surface in this shell yet", other.as_str()),
         }
     }
