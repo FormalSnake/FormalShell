@@ -146,6 +146,84 @@ pub struct NetworkManager {
     settings: SettingsRootProxy<'static>,
 }
 
+/// What a [`Snapshot`] is built from, kept between bursts so a signal that
+/// carries its whole change is applied without a read.
+struct Reading {
+    wifi_enabled: bool,
+    profiles: Vec<(OwnedObjectPath, Profile)>,
+    devices: Vec<ReadDevice>,
+}
+
+enum ReadDevice {
+    Plain(Device),
+    Wifi(WifiDevice),
+}
+
+impl Reading {
+    fn snapshot(&self) -> Snapshot {
+        let mut devices = Vec::new();
+        let mut networks = Vec::new();
+        for device in &self.devices {
+            match device {
+                ReadDevice::Plain(d) => devices.push(d.clone()),
+                ReadDevice::Wifi(wifi) => {
+                    networks.extend(wifi_networks(wifi, &self.profiles));
+                    devices.push(wifi.device.clone());
+                }
+            }
+        }
+        networks.sort_by(|a, b| {
+            (b.connected(), b.known, b.signal)
+                .cmp(&(a.connected(), a.known, a.signal))
+                .then_with(|| a.ssid.cmp(&b.ssid))
+        });
+        Snapshot { wifi_enabled: self.wifi_enabled, devices, networks }
+    }
+
+    /// One signal applied in place. False when it says more than this
+    /// reading can take from it, and NetworkManager has to be read again.
+    fn apply(&mut self, msg: &zbus::Message) -> bool {
+        let header = msg.header();
+        let (Some(member), Some(path)) = (header.member(), header.path()) else { return false };
+        if member.as_str() != "PropertiesChanged" {
+            return false;
+        }
+        // org.freedesktop.DBus.Properties carries the interface in its body;
+        // NetworkManager's own older signal of the same name is sent on it.
+        let sent_on = header.interface().map(|i| i.as_str().to_owned()).unwrap_or_default();
+        let (interface, changed) = if sent_on == "org.freedesktop.DBus.Properties" {
+            match msg.body().deserialize::<(String, HashMap<String, OwnedValue>, Vec<String>)>() {
+                Ok((interface, changed, invalidated)) if invalidated.is_empty() => (interface, changed),
+                _ => return false,
+            }
+        } else {
+            match msg.body().deserialize::<HashMap<String, OwnedValue>>() {
+                Ok(changed) => (sent_on, changed),
+                Err(_) => return false,
+            }
+        };
+        for key in changed.keys() {
+            match (interface.as_str(), key.as_str()) {
+                (ACCESS_POINT_INTERFACE, "Strength" | "LastSeen") | (WIRELESS_INTERFACE, "LastScan") => {}
+                _ => return false,
+            }
+        }
+        let Some(strength) = get::<u8>(&changed, "Strength") else { return true };
+        let path = path.as_str();
+        let ap = self.devices.iter_mut().find_map(|d| match d {
+            ReadDevice::Wifi(w) => w.access_points.iter_mut().find(|ap| ap.path.as_str() == path),
+            ReadDevice::Plain(_) => None,
+        });
+        match ap {
+            Some(ap) => {
+                ap.signal = SignalStrength::from_percent(strength);
+                true
+            }
+            None => false,
+        }
+    }
+}
+
 struct AccessPoint {
     path: OwnedObjectPath,
     ssid: String,
@@ -181,37 +259,32 @@ impl NetworkManager {
     }
 
     pub async fn snapshot(&self) -> zbus::Result<Snapshot> {
+        Ok(self.read().await?.snapshot())
+    }
+
+    async fn read(&self) -> zbus::Result<Reading> {
         let wifi_enabled = self.manager.wireless_enabled().await?;
         let profiles = self.profiles().await?;
         let mut devices = Vec::new();
-        let mut networks = Vec::new();
         for path in self.manager.get_devices().await? {
             let Some(device) = self.read_device(path).await? else {
                 continue;
             };
             if device.kind != DeviceKind::Wifi || !device.managed() {
-                devices.push(device);
+                devices.push(ReadDevice::Plain(device));
                 continue;
             }
-            let wifi = self.read_wifi(device).await?;
-            networks.extend(wifi_networks(&wifi, &profiles));
-            devices.push(wifi.device);
+            devices.push(ReadDevice::Wifi(self.read_wifi(device).await?));
         }
-        networks.sort_by(|a, b| {
-            (b.connected(), b.known, b.signal)
-                .cmp(&(a.connected(), a.known, a.signal))
-                .then_with(|| a.ssid.cmp(&b.ssid))
-        });
-        Ok(Snapshot {
-            wifi_enabled,
-            devices,
-            networks,
-        })
+        Ok(Reading { wifi_enabled, profiles, devices })
     }
 
     /// The current snapshot, then a new one after every settled burst of
     /// NetworkManager signals that changed it. The match rule is installed
-    /// before the first read, so no change slips between the two.
+    /// before the first read, so no change slips between the two. A burst
+    /// that only moves access points' strength (every scan sends one per
+    /// access point) is applied from the signals themselves; anything else
+    /// reads NetworkManager again, once per burst.
     ///
     /// Poll it for as long as it lives: zbus stops dispatching on the
     /// connection once the stream's queue fills, which stalls every call.
@@ -221,11 +294,12 @@ impl NetworkManager {
             .sender(SERVICE)?
             .build();
         let messages = MessageStream::for_match_rule(rule, &self.conn, None).await?;
-        let first = self.snapshot().await?;
-        let state = (self.clone(), messages, first.clone());
-        let later = stream::unfold(state, |(nm, mut messages, mut last)| async move {
+        let reading = self.read().await?;
+        let first = reading.snapshot();
+        let state = (self.clone(), messages, reading, first.clone());
+        let later = stream::unfold(state, |(nm, mut messages, mut reading, mut last)| async move {
             loop {
-                messages.next().await?.ok()?;
+                let mut reread = !reading.apply(&messages.next().await?.ok()?);
                 loop {
                     let burst = future::or(async { Some(messages.next().await) }, async {
                         Timer::after(QUIET).await;
@@ -233,19 +307,24 @@ impl NetworkManager {
                     })
                     .await;
                     match burst {
-                        Some(Some(_)) => {}
+                        Some(Some(Ok(msg))) => reread |= !reading.apply(&msg),
+                        Some(Some(Err(_))) => reread = true,
                         Some(None) => return None,
                         None => break,
                     }
                 }
                 // A read can race a device or access point disappearing; the
                 // signal that follows brings the next attempt.
-                let Ok(now) = nm.snapshot().await else {
-                    continue;
-                };
+                if reread {
+                    let Ok(now) = nm.read().await else {
+                        continue;
+                    };
+                    reading = now;
+                }
+                let now = reading.snapshot();
                 if now != last {
                     last = now.clone();
-                    return Some((now, (nm, messages, last)));
+                    return Some((now, (nm, messages, reading, last)));
                 }
             }
         });
@@ -776,6 +855,33 @@ mod tests {
             ssid: ssid.into(),
             key_mgmt: Some("wpa-psk".into()),
         }
+    }
+
+    fn changed(path: &str, interface: &str, props: &[(&str, Value<'_>)]) -> zbus::Message {
+        let props: HashMap<&str, Value<'_>> = props.iter().cloned().collect();
+        zbus::Message::signal(path, "org.freedesktop.DBus.Properties", "PropertiesChanged")
+            .unwrap()
+            .build(&(interface, props, Vec::<String>::new()))
+            .unwrap()
+    }
+
+    #[test]
+    fn a_strength_burst_applies_without_a_read_and_anything_else_asks_for_one() {
+        let wifi = WifiDevice {
+            device: device(),
+            access_points: vec![ap(1, "home", 40), ap(2, "cafe", 55)],
+            active_ap: None,
+            active: None,
+        };
+        let mut reading = Reading { wifi_enabled: true, profiles: Vec::new(), devices: vec![ReadDevice::Wifi(wifi)] };
+        let ap1 = "/org/freedesktop/NetworkManager/AccessPoint/1";
+        assert!(reading.apply(&changed(ap1, ACCESS_POINT_INTERFACE, &[("Strength", Value::U8(90)), ("LastSeen", Value::I32(7))])));
+        assert!(reading.apply(&changed("/org/freedesktop/NetworkManager/Devices/3", WIRELESS_INTERFACE, &[("LastScan", Value::I64(9))])));
+        let snap = reading.snapshot();
+        assert_eq!((snap.networks[0].ssid.as_str(), snap.networks[0].signal.as_percent()), ("home", 90));
+        assert!(!reading.apply(&changed(ap1, ACCESS_POINT_INTERFACE, &[("Ssid", Value::from(vec![b'x']))])));
+        assert!(!reading.apply(&changed("/org/freedesktop/NetworkManager/AccessPoint/9", ACCESS_POINT_INTERFACE, &[("Strength", Value::U8(10))])));
+        assert!(!reading.apply(&changed("/org/freedesktop/NetworkManager/Devices/3", DEVICE_INTERFACE, &[("State", Value::U32(100))])));
     }
 
     #[test]

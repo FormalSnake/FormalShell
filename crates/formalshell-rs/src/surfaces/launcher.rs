@@ -1055,7 +1055,6 @@ impl Model {
     /// prefill at the root.
     pub fn open(&mut self, store: &Store, route: Option<&str>) {
         self.abandon_select();
-        self.ask_fresh(store);
         let route = route.filter(|r| !r.is_empty());
         let prefill = route.filter(|r| r.starts_with(':')).unwrap_or("").to_owned();
         let mut target = None;
@@ -1075,9 +1074,11 @@ impl Model {
         self.key.clear();
     }
 
-    /// What every open asks the service for: the conditions, the binds and
-    /// the apps, each landing as its own diff.
-    fn ask_fresh(&self, store: &Store) {
+    /// The conditions and the binds, asked for once the bar is up and after
+    /// every close, so the next open finds them ready instead of spawning a
+    /// shell per condition while its card comes up. The apps follow their
+    /// own entry watch and launch counts.
+    pub fn ask_fresh(&self, store: &Store) {
         let conds: Vec<(String, String, bool)> = store
             .menu
             .nodes()
@@ -1090,7 +1091,6 @@ impl Model {
             .collect();
         index::ask(Ask::Conds(conds));
         index::ask(Ask::Binds);
-        index::ask(Ask::Apps(launches(store)));
     }
 
     pub fn open_select(&mut self, prompt: &str, options: Vec<String>, token: &str) {

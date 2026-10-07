@@ -12,7 +12,6 @@ use std::time::Duration;
 pub use pool::Pool;
 pub use service::Ctx;
 
-use crate::ipc::Request;
 use crate::store::Diff;
 
 /// At most two blocking threads, each gone after this long with no work.
@@ -33,8 +32,6 @@ pub fn lower_priority() {
 /// What reaches the UI thread.
 pub enum Msg {
     Diff(Diff),
-    /// One IPC call; the UI thread answers on `reply`.
-    Call(Request, async_channel::Sender<String>),
 }
 
 /// The sending half of the UI thread's channel. Cheap to clone and `Send`,

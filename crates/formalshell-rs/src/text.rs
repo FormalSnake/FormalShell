@@ -5,6 +5,7 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use parley::fontique::Blob;
@@ -124,6 +125,8 @@ struct Shared {
     /// fontconfig and the font collection, loaded on a thread of their own
     /// while the compositor answers the bar's first configure.
     loading: Mutex<Option<std::thread::JoinHandle<Inner>>>,
+    /// Draws waiting on the lock; warming stands aside while there are any.
+    urgent: AtomicUsize,
 }
 
 #[derive(Hash, PartialEq, Eq)]
@@ -150,12 +153,34 @@ const SHAPED_LIMIT: usize = 4096;
 impl Text {
     pub fn new() -> Self {
         let loading = std::thread::Builder::new().name("fs-fonts".into()).spawn(Inner::new).expect("spawn the font loader");
-        Self(Arc::new(Shared { inner: Mutex::new(None), loading: Mutex::new(Some(loading)) }))
+        Self(Arc::new(Shared { inner: Mutex::new(None), loading: Mutex::new(Some(loading)), urgent: AtomicUsize::new(0) }))
     }
 
+    /// A shape a draw is waiting on, ahead of any warming.
     pub fn shape(&mut self, source: &str, style: TextStyle) -> ShapedText {
+        self.0.urgent.fetch_add(1, Ordering::SeqCst);
+        self.shape_now(source, style, true)
+    }
+
+    /// Shapes each string ahead of its first draw, one lock per string,
+    /// standing aside before each while a draw is waiting: a mutex lets the
+    /// thread that just let go take it straight back, and this loop would
+    /// otherwise starve the UI thread for its whole list.
+    pub fn warm(&self, jobs: &[(String, TextStyle)]) {
+        for (source, style) in jobs {
+            while self.0.urgent.load(Ordering::SeqCst) > 0 {
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+            self.shape_now(source, *style, false);
+        }
+    }
+
+    fn shape_now(&self, source: &str, style: TextStyle, urgent: bool) -> ShapedText {
         let asked = std::time::Instant::now();
         let mut guard = self.0.inner.lock().unwrap_or_else(|e| e.into_inner());
+        if urgent {
+            self.0.urgent.fetch_sub(1, Ordering::SeqCst);
+        }
         if guard.is_none() {
             let loading = self.0.loading.lock().unwrap_or_else(|e| e.into_inner()).take();
             *guard = Some(loading.and_then(|h| h.join().ok()).unwrap_or_else(Inner::new));
@@ -174,14 +199,6 @@ impl Text {
         }
         inner.shaped.insert(key, shaped.clone());
         shaped
-    }
-
-    /// Shapes each string ahead of its first draw, one lock per string.
-    pub fn warm(&self, jobs: &[(String, TextStyle)]) {
-        let mut text = self.clone();
-        for (source, style) in jobs {
-            text.shape(source, *style);
-        }
     }
 }
 

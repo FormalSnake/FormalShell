@@ -245,6 +245,11 @@ pub struct App {
     launcher_styles: Vec<crate::text::TextStyle>,
     /// The launcher's faces are warmed once, after the bar is on screen.
     faces_warmed: bool,
+    /// The launcher card's pool, buffers and canvas while it is shut.
+    launch_kept: Option<crate::surface::Kept>,
+    /// The launcher's conditions and binds were asked for once its tree
+    /// first arrived; every close asks again.
+    fresh_asked: bool,
     /// The network the launcher's password step is for, and the identity
     /// an enterprise one was given first (WifiService.pendingSsid).
     wifi_pending: Option<(String, String)>,
@@ -328,6 +333,8 @@ impl App {
             launcher_warm: false,
             launcher_styles: Vec::new(),
             faces_warmed: false,
+            launch_kept: None,
+            fresh_asked: false,
             wifi_pending: None,
             mods: Default::default(),
             menu_buttons: None,
@@ -447,7 +454,9 @@ impl App {
             layer.set_exclusive_zone(t);
         }
         layer.commit();
-        self.bar_surface = Some(Surface::new("bar", layer, &self.shm, self.started));
+        let mut surface = Surface::new("bar", layer, &self.shm, self.started);
+        surface.presize(self.bar.scene.size.w, self.bar.scene.size.h);
+        self.bar_surface = Some(surface);
         self.bar_dirty = true;
 
         self.zones.clear();
@@ -1164,24 +1173,25 @@ impl App {
 
     pub fn receive(&mut self, msg: Msg) {
         let t0 = Instant::now();
-        let what = match msg {
-            Msg::Diff(diff) => {
-                let topic = self.store.apply(diff);
-                if let Some(topic) = topic {
-                    surfaces::changed(self, topic);
-                }
-                format!("diff {topic:?}")
-            }
-            Msg::Call(request, reply) => {
-                let what = format!("{request:?}");
-                self.log(&what);
-                let _ = reply.try_send(ipc::dispatch(self, &request));
-                what
-            }
-        };
-        if t0.elapsed().as_millis() >= 8 {
-            eprintln!("event loop: slow receive t={}ms {what} us={}", self.started.elapsed().as_millis(), t0.elapsed().as_micros());
+        let Msg::Diff(diff) = msg;
+        let topic = self.store.apply(diff);
+        if let Some(topic) = topic {
+            surfaces::changed(self, topic);
         }
+        if t0.elapsed().as_millis() >= 8 {
+            eprintln!("event loop: slow receive t={}ms diff {topic:?} us={}", self.started.elapsed().as_millis(), t0.elapsed().as_micros());
+        }
+    }
+
+    /// One IPC call, answered here on the UI loop.
+    pub fn call(&mut self, request: &ipc::Request) -> String {
+        let t0 = Instant::now();
+        self.log(&format!("{request:?}"));
+        let reply = ipc::dispatch(self, request);
+        if t0.elapsed().as_millis() >= 8 {
+            eprintln!("event loop: slow call t={}ms {request:?} us={}", self.started.elapsed().as_millis(), t0.elapsed().as_micros());
+        }
+        reply
     }
 
     /// What an input on a cell asks for. `anchor` is that cell's centre
@@ -1289,7 +1299,9 @@ impl App {
         if !self.faces_warmed && self.bar_surface.as_ref().is_some_and(|s| s.mapped) {
             self.faces_warmed = true;
             crate::phase("bar mapped");
+            crate::thread_ticks();
             self.warm_faces();
+            self.prefault_launcher();
             self.launcher_warm = true;
         }
         self.step_menu(now);
@@ -1947,13 +1959,23 @@ impl LayerShellHandler for App {
                 self.bar.resize(w, h);
                 let size = self.bar.scene.size;
                 if let Some(s) = &mut self.bar_surface {
-                    if !s.configured {
+                    let first = !s.configured;
+                    if first {
                         crate::phase("bar configured");
                     }
                     s.configure(size.w, size.h);
+                    // The frame drawn while this configure was on its way
+                    // goes out now, ahead of anything else this turn holds.
+                    if first && s.drawn_ahead() && size == current {
+                        s.present(&mut self.bar.scene, false, &self.qh);
+                    }
                 }
                 self.set_input_region();
-                self.refresh_bar(None);
+                // The size the bar was laid out and drawn at ahead of this
+                // configure needs nothing more; only a new one is re-read.
+                if size != current {
+                    self.refresh_bar(None);
+                }
             }
             Some(o @ (Owner::Overflow | Owner::Menu)) => {
                 let Some(p) = self.popout_of(o) else { return };

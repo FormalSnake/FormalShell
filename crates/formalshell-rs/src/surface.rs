@@ -94,9 +94,88 @@ pub struct Surface<R: Role = LayerSurface> {
     /// Everything the renderer has drawn since its canvas was cleared: all
     /// a buffer cut from a clean pool lacks.
     drawn: Option<IRect>,
+    /// Set, a frame is drawn in bands across loop turns, each turn stopping
+    /// once it has run this long, so a large first frame never holds
+    /// another surface's due frame (the bar's) behind it.
+    pub raster_budget: Option<std::time::Duration>,
+    /// The frame being drawn: all its damage, and the bands still to draw.
+    raster: Vec<IRect>,
+    left: std::collections::VecDeque<IRect>,
+    react_us: u128,
+    render_us: u128,
+    slices: u32,
+}
+
+/// Rows per band of a sliced frame.
+const BAND: i32 = 96;
+
+fn bands(rect: IRect) -> impl Iterator<Item = IRect> {
+    (rect.y..rect.bottom()).step_by(BAND as usize).map(move |y| IRect::new(rect.x, y, rect.w, BAND.min(rect.bottom() - y)))
+}
+
+/// A closed window's pool, buffers and canvas, kept for the next window of
+/// the same kind so its first frames write into pages already faulted in
+/// rather than fresh memfd and heap pages, a fault per 4 KiB.
+pub struct Kept {
+    pool: SlotPool,
+    buffers: Vec<ShmBuffer>,
+    renderer: Renderer,
+    pool_clean: bool,
+    drawn: Option<IRect>,
+}
+
+/// linux/mman.h, Linux 5.14: fault the range in writable without touching
+/// its contents, so it can run beside a writer.
+const MADV_POPULATE_WRITE: libc::c_int = 23;
+
+impl Kept {
+    /// A clean pool two `size` buffers deep and a canvas of `size`, both
+    /// faulted in on the blocking pool while nothing draws from them.
+    pub fn prefaulted(shm: &Shm, size: (i32, i32), runner: &crate::runtime::Pool) -> Option<Self> {
+        let bytes = size.0.max(1) as usize * size.1.max(1) as usize * 4 * 2;
+        let mut pool = SlotPool::new(bytes, shm).ok()?;
+        let slot = pool.new_slot(bytes).ok()?;
+        let data = pool.raw_data_mut(&slot);
+        let (at, len) = (data.as_mut_ptr() as usize, data.len());
+        drop(slot);
+        let mut renderer = Renderer::new(size.0.max(1) as u16, size.1.max(1) as u16);
+        let canvas = renderer.canvas_bytes_mut();
+        let (canvas_at, canvas_len) = (canvas.as_mut_ptr() as usize, canvas.len());
+        runner.submit(move || {
+            // SAFETY: madvise only faults the pages in; a range unmapped
+            // meanwhile (a resized pool) answers ENOMEM and nothing else.
+            unsafe {
+                libc::madvise(at as *mut libc::c_void, len, MADV_POPULATE_WRITE);
+                libc::madvise(canvas_at as *mut libc::c_void, canvas_len, MADV_POPULATE_WRITE);
+            }
+        });
+        Some(Self { pool, buffers: Vec::new(), renderer, pool_clean: true, drawn: None })
+    }
 }
 
 impl<R: Role> Surface<R> {
+    /// The pool, buffers and canvas, for [`Surface::adopt`] on the next
+    /// window of this kind.
+    pub fn keep(self) -> Kept {
+        Kept { pool: self.pool, buffers: self.buffers, renderer: self.renderer, pool_clean: self.pool_clean, drawn: self.drawn }
+    }
+
+    /// Takes over a kept pool, buffers and canvas. What the last window
+    /// drew is cleared off the canvas and stale in every buffer, so each
+    /// takes the clear canvas there on its first use.
+    pub fn adopt(&mut self, mut kept: Kept) {
+        if let Some(old) = kept.drawn {
+            kept.renderer.clear(old);
+            for b in &mut kept.buffers {
+                b.stale.push(old);
+            }
+        }
+        self.pool = kept.pool;
+        self.buffers = kept.buffers;
+        self.renderer = kept.renderer;
+        self.pool_clean = kept.pool_clean;
+    }
+
     pub fn new(name: &'static str, layer: R, shm: &Shm, started: Instant) -> Self {
         Self {
             name,
@@ -116,7 +195,61 @@ impl<R: Role> Surface<R> {
             landed_at: None,
             pool_clean: true,
             drawn: None,
+            raster_budget: None,
+            raster: Vec::new(),
+            left: std::collections::VecDeque::new(),
+            react_us: 0,
+            render_us: 0,
+            slices: 0,
         }
+    }
+
+    /// Sizes the canvas ahead of the compositor's first configure, so the
+    /// first frame is drawn while it is on its way.
+    pub fn presize(&mut self, width: i32, height: i32) {
+        self.renderer.resize(width.max(1) as u16, height.max(1) as u16);
+    }
+
+    /// A whole frame is drawn and waits only to be committed.
+    pub fn drawn_ahead(&self) -> bool {
+        !self.raster.is_empty() && self.left.is_empty()
+    }
+
+    /// Draws the scene's damage into the canvas, as part of the frame in
+    /// progress. False while a sliced frame still has bands left.
+    fn draw(&mut self, scene: &mut Scene) -> bool {
+        if self.raster.is_empty() {
+            // From the callback that let this frame go to the start of drawing it.
+            self.react_us = self.landed_at.take().map_or(0, |at| at.elapsed().as_micros());
+            self.render_us = 0;
+            self.slices = 0;
+        }
+        // Damage that came in while a sliced frame was being drawn joins it.
+        for rect in scene.take_damage() {
+            self.raster.push(rect);
+            match self.raster_budget {
+                Some(_) => self.left.extend(bands(rect)),
+                None => self.left.push_back(rect),
+            }
+        }
+        let t0 = Instant::now();
+        while let Some(rect) = self.left.pop_front() {
+            self.renderer.render(scene, rect);
+            if self.raster_budget.is_some_and(|budget| t0.elapsed() >= budget) && !self.left.is_empty() {
+                self.render_us += t0.elapsed().as_micros();
+                self.slices += 1;
+                return false;
+            }
+        }
+        self.render_us += t0.elapsed().as_micros();
+        self.slices += 1;
+        true
+    }
+
+    /// A sliced frame is part drawn: the owner holds its scene still and
+    /// presents again on the next loop turn.
+    pub fn rastering(&self) -> bool {
+        !self.left.is_empty()
     }
 
     /// A frame callback landed.
@@ -137,6 +270,8 @@ impl<R: Role> Surface<R> {
             self.pool_clean &= self.buffers.is_empty();
             self.buffers.clear();
             self.drawn = None;
+            self.raster.clear();
+            self.left.clear();
         }
     }
 
@@ -144,7 +279,7 @@ impl<R: Role> Surface<R> {
     where
         D: Dispatch<WlCallback, FrameCallbackData> + 'static,
     {
-        if !self.configured || self.frame_pending {
+        if self.frame_pending {
             return;
         }
         // A scene resized ahead of the compositor's configure (the bar
@@ -152,15 +287,23 @@ impl<R: Role> Surface<R> {
         if (self.renderer.width() as i32, self.renderer.height() as i32) != (scene.size.w, scene.size.h) {
             return;
         }
+        // A presized canvas draws the first frame while the configure is on
+        // its way; the configure then only has it copied and committed.
+        if !self.configured {
+            if self.commits == 0 && scene.has_damage() {
+                self.draw(scene);
+            }
+            return;
+        }
         // An animation whose frame changed nothing (a card still wholly
         // behind its line) still needs the next callback to carry on.
         let request = animating || (self.wait_map && !self.mapped);
         // A scene that starts out clear still owes the compositor one
         // buffer before the surface can map.
-        if self.commits == 0 && !scene.has_damage() {
+        if self.commits == 0 && !scene.has_damage() && self.raster.is_empty() {
             scene.touch(IRect::new(0, 0, 1, 1));
         }
-        if !scene.has_damage() {
+        if !scene.has_damage() && self.raster.is_empty() {
             if request && self.commits > 0 {
                 let surface = self.layer.role_surface();
                 surface.frame(qh, FrameCallbackData(surface.clone()));
@@ -170,14 +313,11 @@ impl<R: Role> Surface<R> {
             }
             return;
         }
-        let damage = scene.take_damage();
-        // From the callback that let this frame go to the start of drawing it.
-        let react_us = self.landed_at.take().map_or(0, |at| at.elapsed().as_micros());
-        let t0 = Instant::now();
-        for rect in &damage {
-            self.renderer.render(scene, *rect);
+        if !self.draw(scene) {
+            return;
         }
-        let render_us = t0.elapsed().as_micros();
+        let damage = std::mem::take(&mut self.raster);
+        let (react_us, render_us) = (self.react_us, self.render_us);
         self.drawn = damage.iter().fold(self.drawn, |u, r| Some(u.map_or(*r, |u| u.union(r))));
 
         let t1 = Instant::now();
@@ -243,7 +383,7 @@ impl<R: Role> Surface<R> {
         let area: i64 = damage.iter().map(IRect::area).sum();
         let rects: Vec<String> = damage.iter().map(|r| format!("{},{},{}x{}", r.x, r.y, r.w, r.h)).collect();
         eprintln!(
-            "commit surface={} n={} t={}ms render_us={} copy_us={} rects={} px={} damage=[{}] buffer={} frame_callbacks={} request={} last_wait_us={} react_us={}",
+            "commit surface={} n={} t={}ms render_us={} copy_us={} rects={} px={} damage=[{}] buffer={} frame_callbacks={} request={} last_wait_us={} react_us={} slices={}",
             self.name,
             self.commits,
             self.started.elapsed().as_millis(),
@@ -257,6 +397,7 @@ impl<R: Role> Surface<R> {
             request as u8,
             self.waited_us,
             react_us,
+            self.slices,
         );
     }
 
