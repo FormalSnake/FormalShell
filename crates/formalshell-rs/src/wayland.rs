@@ -483,8 +483,11 @@ impl App {
     /// with them.
     pub fn refresh_bar(&mut self, topic: Option<Topic>) {
         let now = Instant::now();
-        if matches!(topic, None | Some(Topic::Hyprland) | Some(Topic::Config)) && self.chrome_hidden() != self.bar.hidden {
-            self.place_chrome();
+        if matches!(topic, None | Some(Topic::Hyprland) | Some(Topic::Config)) {
+            if self.chrome_hidden() != self.bar.hidden {
+                self.place_chrome();
+            }
+            self.sync_hot_corners();
         }
         self.bar.update_paint(&self.store);
         self.request_paint();

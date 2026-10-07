@@ -40,7 +40,6 @@ by surface; one line each.
 ## Lock and auth
 - Polkit card's slide-in off the top line and its identity avatar.
 - Lock wake from idle blank is instant, not a fade.
-- Hot corners don't hide under fullscreen.
 
 ## Media
 - Lyrics resync button in the header, not the pane corner; unlit rows lack
