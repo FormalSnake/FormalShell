@@ -30,6 +30,11 @@ vm-lint:
 vm-ipc-golden:
     @./dev/vm.sh sync >&2
     @./dev/vm.sh run bash dev/ipc-golden.sh
+# cargo inside the VM against the synced tree, in the rust package's own
+# build environment (the mac has no pipewire or wayland to link).
+vm-cargo *ARGS:
+    @./dev/vm.sh sync >&2
+    ./dev/vm.sh run 'git add -A && cd crates && nix develop ..#formalshell-rs -c cargo {{ARGS}}'
 vm-smoke *FLAGS:
     ./dev/vm.sh smoke {{FLAGS}}
 # nix/testvm.nix's services.greetd needs a rebuilt VM (`vm-down && vm-up`)
