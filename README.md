@@ -138,8 +138,8 @@ own `hypr-user.lua`, which already holds any `hyprland.lua` you had), and,
 after asking, the lock screen's PAM file and a greetd config for the greeter.
 A tool your distro does not carry is skipped and its widget says so.
 `formalshell update` moves to the newest release; `formalshell uninstall`
-puts everything back. A release with no Hyprland package (Debian before
-trixie) is refused.
+puts everything back. Where the distro carries no Hyprland (Debian before
+forky, Fedora), bring Hyprland 0.56 or newer yourself.
 
 ## Usage
 
