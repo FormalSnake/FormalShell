@@ -17,12 +17,10 @@ vm-up:
 vm-down:
     ./dev/vm.sh stop
 vm-build:
-    ./dev/vm.sh sync
-    ./dev/vm.sh run 'git add -A && nix build --print-out-paths .#formalshell'
+    ./dev/vm.sh prebuild
 # The rust shell's own package, which dev/smoke.sh builds the same way.
 vm-build-rs:
-    ./dev/vm.sh sync
-    ./dev/vm.sh run 'git add -A && nix build -L --print-out-paths .#formalshell-rs'
+    FS_IMPL=rust ./dev/vm.sh prebuild
 vm-test:
     ./dev/vm.sh sync
     ./dev/vm.sh run 'nix develop -c env QT_QPA_PLATFORM=offscreen QML_XHR_ALLOW_FILE_READ=1 qmltestrunner -import tests/stubs -input tests'

@@ -205,11 +205,42 @@ cmd_run() {
 # sync, run the smoke rig with the given flags, then pull the SMOKE_OK
 # screenshot plus any other stdout (the dump/status/query JSON the smoke
 # script cats inline) back to ./artifacts/ on the mac.
+# Builds the shell on the mac (through the linux-builder) and copies the
+# closure into the VM's store, then prints FS_RESULT/FS_RS_RESULT assignments
+# for the VM-side command. A closure the VM already holds copies as a no-op,
+# and nothing compiles in the guest, whose freed blocks never shrink the
+# qcow2 on the mac. FS_BUILD_IN_VM=1 skips this and lets smoke.sh build in
+# the VM. FS_IMPL=rust adds the Rust shell. Needs the VM up and the caller
+# holding the slot lock.
+prebuild_env() {
+  [ -z "${FS_BUILD_IN_VM:-}" ] || return 0
+  local attrs=(formalshell) paths=() out var attr
+  [ "${FS_IMPL:-qml}" != rust ] || attrs+=(formalshell-rs)
+  git -C "$repo_root" add -A >/dev/null 2>&1 || true  # flakes only see tracked files
+  for attr in "${attrs[@]}"; do
+    out=$(nix build --no-link --print-out-paths "$repo_root#packages.aarch64-linux.$attr") || return 1
+    paths+=("$out")
+    case "$attr" in
+      formalshell) var=FS_RESULT ;;
+      *) var=FS_RS_RESULT ;;
+    esac
+    printf '%s=%s ' "$var" "$out"
+  done
+  NIX_SSHOPTS="${ssh_opts[*]}" nix copy --no-check-sigs --to ssh-ng://test@localhost "${paths[@]}" >&2 || return 1
+}
+
+cmd_prebuild() {
+  local env
+  env=$(prebuild_env) || exit 1
+  printf '%s\n' "$env"
+}
+
 cmd_smoke() {
   local script="./dev/smoke.sh"
   cmd_sync
-  local out status=0
-  out=$(vm_run "${FS_IMPL:+FS_IMPL=$FS_IMPL }$script $*" 2>&1) || status=$?
+  local out status=0 prebuilt
+  prebuilt=$(prebuild_env) || { echo "testvm: building the shell on the mac failed" >&2; exit 1; }
+  out=$(vm_run "${FS_IMPL:+FS_IMPL=$FS_IMPL }${prebuilt}$script $*" 2>&1) || status=$?
   echo "$out"
   if [ "$status" -ne 0 ]; then
     echo "testvm: smoke run failed (exit $status)" >&2
@@ -297,7 +328,7 @@ cmd_shell() {
 # holder's session. Anything that touches the VM's checkout or sessions goes
 # through the lock.
 case "${1:-}" in
-  sync|run|smoke|pull)
+  sync|run|smoke|pull|prebuild)
     if [ -z "${FS_VM_LOCK_HELD:-}" ]; then
       exec "$(dirname "$0")/vm-lock.sh" "$0" "$@"
     fi
@@ -312,9 +343,10 @@ case "${1:-}" in
   run) shift; cmd_run "$@" ;;
   smoke) shift; cmd_smoke "$@" ;;
   pull) shift; cmd_pull "$@" ;;
+  prebuild) cmd_prebuild ;;
   shell) cmd_shell ;;
   *)
-    echo "usage: $0 {start|stop|status|sync|run <cmd...>|smoke [flags...]|pull <vm-dir> <local-dir>|shell}" >&2
+    echo "usage: $0 {start|stop|status|sync|run <cmd...>|smoke [flags...]|pull <vm-dir> <local-dir>|prebuild|shell}" >&2
     exit 1
     ;;
 esac
