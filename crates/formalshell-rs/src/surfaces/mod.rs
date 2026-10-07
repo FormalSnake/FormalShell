@@ -30,6 +30,7 @@ pub fn changed(app: &mut App, topic: Topic) {
     }
     app.switcher_changed(topic);
     app.atlas_changed(topic);
+    app.overlay_changed(topic);
     app.preview_changed(topic);
     match topic {
         Topic::Menu => app.launcher_store_changed(),

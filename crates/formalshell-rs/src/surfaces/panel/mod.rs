@@ -31,6 +31,7 @@ pub mod iphone;
 pub mod media;
 pub mod monitor;
 pub mod network;
+pub mod plugin;
 pub mod power;
 pub mod standin;
 pub mod systemupdate;
@@ -215,6 +216,9 @@ pub fn known(name: &str) -> Option<&'static str> {
 }
 
 pub fn build(name: &str) -> Option<Box<dyn Panel>> {
+    if name.starts_with(plugin::PREFIX) {
+        return Some(Box::new(plugin::PluginPanel::new(plugin::intern(name))));
+    }
     let id = known(name)?;
     Some(match id {
         "appmenu" => Box::new(appmenu::AppMenu),

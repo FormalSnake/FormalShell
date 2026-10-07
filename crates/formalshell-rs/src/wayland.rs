@@ -13,6 +13,7 @@ mod hotcorners;
 mod launcher;
 pub mod lock;
 mod osd;
+mod plugin_overlay;
 mod polkit;
 mod picker;
 mod preview;
@@ -187,6 +188,7 @@ pub struct App {
     pub lock: lock::Lock,
     hot: hotcorners::HotCorners,
     polkit: Option<polkit::Dialog>,
+    plugin_overlay: Option<plugin_overlay::Window>,
     osd: osd::Osd,
     headset: headset::Headset,
     thumbnails: capture::Capture,
@@ -290,6 +292,7 @@ impl App {
             lock: lock::Lock::bind(globals, qh),
             hot: Default::default(),
             polkit: None,
+            plugin_overlay: None,
             osd: osd::Osd::default(),
             headset: headset::Headset::default(),
             thumbnails: capture::Capture::bind(globals, qh),
@@ -610,7 +613,7 @@ impl App {
     /// The open panel by its `panel` name; the gallery is no panel's.
     pub fn panel_open(&self) -> Option<&str> {
         let tray = self.overflow.as_ref().filter(|p| p.name == "trayoverflow" && p.card.is_open());
-        tray.map(|_| "trayoverflow").or_else(|| self.panel.as_ref().filter(|p| p.is_open()).map(|p| p.id()).and_then(panel::known))
+        tray.map(|_| "trayoverflow").or_else(|| self.panel.as_ref().filter(|p| p.is_open()).map(|p| p.id()).and_then(|id| panel::known(id).or_else(|| id.starts_with(panel::plugin::PREFIX).then_some(id))))
     }
 
     pub fn gallery_open(&self) -> bool {
@@ -681,6 +684,7 @@ impl App {
         joins.extend(self.launcher_joins());
         joins.extend(self.atlas_joins());
         joins.extend(self.polkit_joins());
+        joins.extend(self.overlay_joins());
         joins.extend(self.popup_joins());
         let edge = self.bar.edge();
         if !joins.iter().any(|j| j.0 == edge)
@@ -830,6 +834,7 @@ impl App {
             return;
         }
         self.atlas_close();
+        self.overlay_close();
         if name == "trayoverflow" {
             if let Some(h) = &mut self.panel {
                 h.close(now);
@@ -1346,6 +1351,7 @@ impl App {
         }
         self.present_picker(now);
         self.present_polkit(now);
+        self.present_overlay(now);
         self.present_lock();
         self.arm_wake(now);
     }
@@ -1585,6 +1591,9 @@ impl App {
             if self.atlas_pointer(e) {
                 continue;
             }
+            if self.overlay_pointer(e) {
+                continue;
+            }
             if self.launcher_pointer(e, owner) {
                 continue;
             }
@@ -1758,7 +1767,7 @@ impl App {
     }
 
     fn key_event_from(&mut self, event: KeyEvent, repeat: bool) {
-        if self.lock_key(&event) || self.polkit_key(&event) || self.picker_key_event(&event) || self.atlas_key(&event) || self.launcher_key(&event, repeat) || self.headset_key(&event) || self.switcher_key(event.keysym) {
+        if self.lock_key(&event) || self.polkit_key(&event) || self.overlay_key(&event) || self.picker_key_event(&event) || self.atlas_key(&event) || self.launcher_key(&event, repeat) || self.headset_key(&event) || self.switcher_key(event.keysym) {
             return;
         }
         let editing = self.panel.as_ref().is_some_and(|h| h.editing());
@@ -1901,7 +1910,7 @@ impl CompositorHandler for App {
             }
             None if self.saver_owns(surface) => self.saver_frame_callback(),
             None => {
-                if !self.polkit_frame(surface) {
+                if !self.polkit_frame(surface) && !self.overlay_frame(surface) {
                     self.lock_frame(surface);
                 }
             }
@@ -2024,6 +2033,7 @@ impl LayerShellHandler for App {
             None if self.saver_owns(layer.wl_surface()) => self.saver_configure(width, height),
             None if self.hot_corner_owns(layer) => self.hot_corner_configure(layer),
             None if self.polkit_owns(layer) => self.polkit_configure(layer, width, height),
+            None if self.overlay_owns(layer) => self.overlay_configure(layer, width, height),
             None => {}
         }
     }

@@ -3413,11 +3413,22 @@ Exactly eight keys are legal:
   enough to see it. An explicit placement wins, and a plugin named somewhere
   is never appended twice.
 - **`service`** has no surface. It starts with the shell and keeps running.
-- **`panel`** and **`overlay`** resolve and count in `plugins status`, and with
-  `keepLoaded: true` they start with the shell. The shell has no card for them
-  yet, so `panel open plugin:<id>` answers `error: unknown panel`.
+- **`panel`** is a card on the panel host, opened with `panel open
+  plugin:<id>` or `panel toggle plugin:<id>` like a builtin panel. The header
+  carries `name` and the card's width follows `width`. The body is the rows the
+  plugin printed, with the same keyboard cursor as any panel: arrows walk the
+  rows, Enter or Space activates one, Escape closes the card.
+- **`overlay`** is the same rows on a centred modal card over a scrim, summoned
+  with `panel open plugin:<id>`, taking the keyboard while open. Escape or a
+  click outside closes it.
 
-Bar and service plugins start with the shell. The shell starts `entry` with
+A plugin that is not `keepLoaded` runs only while its card is open: the shell
+starts it on open and ends it on close, so its rows start from nothing each
+time. `plugin:<id>` answers `error: unknown panel` for an id that is not a
+panel or overlay plugin.
+
+Bar and service plugins, and `keepLoaded` panels and overlays, start with the
+shell. The shell starts `entry` with
 the plugin directory as its working directory and talks JSON, one object per
 line, both ways.
 
@@ -3431,22 +3442,53 @@ are skipped.
 | `icon` | string | an icon name from the active set (`lucide` by default) |
 | `tooltip` | string | the hover text |
 | `class` | string | `warning` tints the cell, `critical` and `urgent` mark it destructive |
-| `rows` | array | for a panel: `{"id", "text", "icon", "detail"}` objects, rows with no `id` are dropped |
+| `rows` | array | for a panel or overlay: the row objects below |
 
 A bar cell with neither `text` nor `icon` is hidden, and one that has not
 printed anything yet takes no room.
+
+**Rows.** A panel or overlay shows `rows` top to bottom. Each row is an object:
+
+| Key | Type | Meaning |
+| --- | --- | --- |
+| `type` | string | `row` (default), `button`, `toggle` or `label`; a row of any other type is dropped |
+| `id` | string | names the row in the `activate` event; every type but `label` needs one, and a row without one is dropped |
+| `text` | string | the row's words |
+| `icon` | string | an icon name from the active set, left of the text |
+| `detail` | string | `row` only: a dim value at the end |
+| `checked` | bool | `toggle` only: the switch's state, default false |
+
+`row` is an icon, the text and the detail. `button` is a button carrying the
+text, with the icon beside it when there is one. `toggle` is a row with a
+switch at the end. `label` is a dim section heading with no keyboard stop and
+no `id`. Every other type is one keyboard stop and one click target. Before the
+first line a panel reads Loading, a plugin that printed no rows reads No rows,
+and an exited plugin reads PLUGIN ERROR with its reason.
+
+```json
+{"rows": [
+  {"type": "label", "text": "Fans"},
+  {"id": "profile", "icon": "gauge", "text": "Profile", "detail": "balanced"},
+  {"type": "toggle", "id": "turbo", "icon": "zap", "text": "Turbo", "checked": false},
+  {"type": "button", "id": "refresh", "text": "Refresh"}
+]}
+```
 
 **stdin, what the shell tells the plugin.**
 
 ```json
 {"event": "click", "button": "left"}
 {"event": "scroll", "direction": "up"}
-{"event": "activate", "row": "r1"}
+{"event": "activate", "id": "profile"}
+{"event": "activate", "id": "turbo", "checked": true}
 ```
 
 `button` is `left`, `right` or `middle`, `direction` is `up` or `down`, and
-`activate` carries the `id` of the panel row that was activated. A plugin that
-does not read stdin never hears about them.
+`activate` carries the `id` of the row that was activated, by Enter, Space or
+a click. On a toggle it also carries `checked`, the state the user asked for.
+The shell does not flip the switch itself: the plugin prints its rows again
+with the new `checked`, or without it to refuse. A plugin that does not read
+stdin never hears about any of them.
 
 ```sh
 #!/usr/bin/env bash

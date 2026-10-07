@@ -476,6 +476,16 @@ plugin that exits or cannot start is the dim PLUGIN ERROR cell and is
 restarted on a doubling backoff. While it prints nothing, the shell only
 keeps a read parked on its stdout.
 
+One process manager serves every kind. A `panel` plugin is a
+`surfaces::panel::plugin::PluginPanel` on the ordinary panel host: its
+`plugin:<id>` name is interned (panel names are `&'static str`), the title
+and width come from the manifest, and the body is built from `ui::w` widgets
+over the rows in `store.plugins.runs`. An `overlay` plugin draws the same
+body on a modal card (`wayland/plugin_overlay.rs`, modelled on the polkit
+dialog). Opening a card sends `services::plugins::shown(id, true)`, which
+starts a plugin that is not `keepLoaded`, and closing it ends the process and
+clears its rows.
+
 `bar.modules` entries of type `command` are separate: `services::commands`
 runs the argv every `interval` ms and kills a run past `timeout`.
 

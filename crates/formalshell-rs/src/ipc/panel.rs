@@ -3,6 +3,7 @@
 //! strip's end.
 
 use fs_chrome::bar::{layout, panels};
+use fs_chrome::plugins::Kind;
 
 use super::registry::{Function, Target, Type, Value};
 use crate::surfaces::panel;
@@ -25,14 +26,22 @@ pub fn target() -> Target<App> {
     }
 }
 
-fn known(name: &str) -> Option<&'static str> {
-    panel::known(name)
+fn known(app: &App, name: &str) -> Option<&'static str> {
+    panel::known(name).or_else(|| panel::plugin::find(&app.store, name).map(|_| panel::plugin::intern(name)))
+}
+
+fn is_overlay(app: &App, name: &str) -> bool {
+    panel::plugin::find(&app.store, name).is_some_and(|p| p.kind == Kind::Overlay)
 }
 
 fn open(app: &mut App, args: &[Value]) -> Value {
-    let Some(name) = known(args[0].str()) else { return text(format!("error: unknown panel '{}'", args[0].str())) };
+    let Some(name) = known(app, args[0].str()) else { return text(format!("error: unknown panel '{}'", args[0].str())) };
     if name == "radio" {
         app.atlas_show();
+        return text("ok");
+    }
+    if is_overlay(app, name) {
+        app.overlay_show(name);
         return text("ok");
     }
     app.set_panel(name, true, None);
@@ -41,14 +50,19 @@ fn open(app: &mut App, args: &[Value]) -> Value {
 
 fn close(app: &mut App, _: &[Value]) -> Value {
     app.atlas_close();
+    app.overlay_close();
     app.close_panels();
     text("ok")
 }
 
 fn toggle(app: &mut App, args: &[Value]) -> Value {
-    let Some(name) = known(args[0].str()) else { return text(format!("error: unknown panel '{}'", args[0].str())) };
+    let Some(name) = known(app, args[0].str()) else { return text(format!("error: unknown panel '{}'", args[0].str())) };
     if name == "radio" {
         app.atlas_toggle();
+        return text("ok");
+    }
+    if is_overlay(app, name) {
+        app.overlay_toggle(name);
         return text("ok");
     }
     let open = app.panel_open() != Some(name);
@@ -72,6 +86,9 @@ fn toggle_at(app: &mut App, args: &[Value]) -> Value {
 fn state(app: &mut App, _: &[Value]) -> Value {
     if app.atlas_open() {
         return text("radio");
+    }
+    if let Some(key) = app.overlay_open() {
+        return text(key);
     }
     text(app.panel_open().unwrap_or(""))
 }
