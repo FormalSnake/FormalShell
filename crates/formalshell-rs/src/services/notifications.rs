@@ -64,6 +64,15 @@ pub enum Diff {
     DropPhone(i64),
 }
 
+/// A shell-authored toast's action: its key, its label, and the argv the
+/// compositor spawns when it is picked.
+#[derive(Clone, Debug)]
+pub struct LocalAction {
+    pub key: String,
+    pub label: String,
+    pub argv: Vec<String>,
+}
+
 pub enum Op {
     SetDnd(bool),
     DismissGroup(Vec<String>),
@@ -72,6 +81,8 @@ pub enum Op {
     Invoke(String, String),
     /// NotificationService.notify() for a service on its own thread.
     Notify(String, String, Urgency),
+    /// The same with actions, each a command run when it is picked.
+    NotifyRunning(String, String, Urgency, Vec<LocalAction>),
 }
 
 #[derive(Default)]
@@ -90,6 +101,8 @@ pub struct State {
     /// Actions picked on the shell's own entries, `(id, key)`, for the
     /// surface that posted them to act on.
     pub local_invoked: Vec<(String, String)>,
+    /// Commands behind shell-authored toasts' actions, by entry id.
+    local_commands: HashMap<String, Vec<LocalAction>>,
     /// state.json's dnd as last seen, so a setDnd answered here before its
     /// write lands is not rolled back by the old value.
     dnd_seen: Option<bool>,
@@ -171,6 +184,11 @@ impl State {
                     }
                     Op::Invoke(id, key) => self.invoke_action(&id, &key),
                     Op::Notify(summary, body, urgency) => self.notify(&summary, &body, urgency),
+                    Op::NotifyRunning(summary, body, urgency, actions) => {
+                        let shown = actions.iter().map(|a| Action { key: a.key.clone(), label: a.label.clone() }).collect();
+                        let id = self.notify_with(&summary, &body, urgency, shown, String::new());
+                        self.local_commands.insert(id, actions);
+                    }
                 }
                 true
             }
@@ -352,6 +370,10 @@ impl State {
 
     pub fn invoke_action(&mut self, id: &str, key: &str) {
         if id.starts_with("local-") {
+            if let Some(a) = self.local_commands.get(id).and_then(|acts| acts.iter().find(|a| a.key == key)) {
+                super::hyprland::spawn(&a.argv);
+                return;
+            }
             self.local_invoked.push((id.to_owned(), key.to_owned()));
             return;
         }
