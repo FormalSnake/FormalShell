@@ -251,6 +251,22 @@ impl Scene {
         }
     }
 
+    /// Moves a node under `transform` (a deform over what a painter laid
+    /// out), damaging where it was and where it lands.
+    pub fn set_transform(&mut self, id: NodeId, transform: Affine) {
+        let node = &self.nodes[id.0];
+        if node.transform == transform {
+            return;
+        }
+        let (bounds, old, visible) = (node.bounds, node.transform, node.visible);
+        self.nodes[id.0].transform = transform;
+        if visible {
+            let r = Rect::new(bounds.x as f64, bounds.y as f64, bounds.right() as f64, bounds.bottom() as f64);
+            self.mark(Self::cover(r, old, 1.0));
+            self.mark(Self::cover(r, transform, 1.0));
+        }
+    }
+
     pub fn set_visible(&mut self, id: NodeId, visible: bool) {
         if self.nodes[id.0].visible != visible {
             self.nodes[id.0].visible = visible;

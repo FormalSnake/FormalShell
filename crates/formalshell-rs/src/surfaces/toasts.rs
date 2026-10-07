@@ -7,6 +7,13 @@
 //! Collapsed is the depth stack (the front card, two levels peeking behind
 //! it as empty chrome), expanded the plain column, both laid out by
 //! fs-info's `toast_stack`. The card is NotificationRow.qml.
+//!
+//! Each group keeps its slot across draws, so a card retargets rather than
+//! snaps: x, y, width and height ride the table's `restack` clock (y behind
+//! its rank's share of `restack.stagger`), presence rides `arrive` in and
+//! `restack` out, and a row slides in from past its screen edge under the
+//! velocity deform. A group that left keeps its slot, its card and its last
+//! place while it fades.
 
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
@@ -15,9 +22,9 @@ use fs_info::notifications::{self as model, Group, Urgency};
 use fs_info::toast_stack::{self, StackParams};
 use fs_theme::theme::Theme;
 use smithay_client_toolkit::shell::WaylandSurface;
-use vello_cpu::kurbo::Rect;
+use vello_cpu::kurbo::{Affine, Rect};
 
-use crate::motion::{Animated, Curve};
+use crate::motion::{Animated, Curve, Deform, DeformEdge, EFFECTS};
 use crate::scene::{Bitmap, IRect, NodeId, Scene};
 use crate::services::notifications::now_ms;
 use crate::store::Store;
@@ -26,6 +33,9 @@ use crate::surfaces::bar::cell::{Kit, Painter};
 use crate::ui::{self, El, Ink, Type, Ui, Variant, Weight, w};
 
 const MAX_PEEK_LEVELS: usize = 2;
+
+/// Deform.qml's default `amount`, which Toasts.qml leaves alone.
+const DEFORM_AMOUNT: f64 = 0.15;
 
 /// How often the relative times ("2m ago") recompute, off their own clock.
 pub const REL_EVERY: std::time::Duration = std::time::Duration::from_secs(30);
@@ -44,13 +54,46 @@ pub enum Act {
 struct Slot {
     nodes: Vec<NodeId>,
     ui: Ui,
-    height: f64,
+    /// The card as it last drew, kept for the fade of a group that left.
+    el: El,
+    critical: bool,
+    /// Where it is drawn this frame, for the pointer.
     rect: IRect,
     z: i64,
     members: Vec<String>,
+    x: Animated,
+    y: Animated,
+    width: Animated,
+    height: Animated,
+    /// 0 off the stack, 1 shown: opacity, and the row's slide.
+    presence: Animated,
+    /// The card's words over the peek level's bare chrome.
+    content: Animated,
     /// The bubble unfolding off its own top edge on `arrive`; 1 at once
     /// for the row.
     reveal: Animated,
+    /// The group is gone and the card is fading where it was.
+    departing: bool,
+    deform: Deform,
+    deform_running: bool,
+    last_tick: Option<Instant>,
+    /// The card's own widgets still crossfading (a button's ink).
+    ui_animating: bool,
+}
+
+impl Slot {
+    fn moving(&self, now: Instant) -> bool {
+        [&self.x, &self.y, &self.width, &self.height, &self.presence].iter().any(|a| a.running(now))
+    }
+
+    fn animating(&self, now: Instant) -> bool {
+        self.moving(now) || self.content.running(now) || self.reveal.running(now) || !self.deform.at_rest || self.ui_animating
+    }
+
+    /// Faded out and no longer anything to draw.
+    fn gone(&self, now: Instant) -> bool {
+        self.departing && !self.presence.running(now)
+    }
 }
 
 pub struct Toasts {
@@ -66,6 +109,8 @@ pub struct Toasts {
     fitted: HashMap<String, Option<Bitmap>>,
     /// When the relative times were last recomputed.
     pub rel_at: Instant,
+    /// The last draw ran with a clock still running.
+    pub was_animating: bool,
 }
 
 /// Where the stack hangs: the bar's own edge cleared, `screenPadding` in.
@@ -162,6 +207,7 @@ impl Toasts {
             pressed: None,
             fitted: HashMap::new(),
             rel_at: Instant::now(),
+            was_animating: false,
         }
     }
 
@@ -183,16 +229,35 @@ impl Toasts {
         if spec.newest_first {
             column.reverse();
         }
-        self.slots.retain(|k, slot| {
-            let keep = by_key.contains_key(k);
-            if !keep {
+
+        let motion = theme.motion();
+        let restack = (motion.restack * scale, Curve::from_table(&motion.restack_curve));
+        let arrive = (motion.arrive * scale, Curve::from_table(&motion.arrive_curve));
+        let effects = motion.families.effects * scale;
+
+        // A group that left fades where it was; one back before its fade
+        // ended takes its slot again.
+        for (k, slot) in self.slots.iter_mut() {
+            let live = by_key.contains_key(k);
+            if !live && !slot.departing {
+                slot.departing = true;
+                slot.presence.set_on(now, 0.0, restack.0, restack.1);
+            } else if live && slot.departing {
+                slot.departing = false;
+                slot.presence.set_on(now, 1.0, arrive.0, arrive.1);
+            }
+        }
+        let gone: Vec<String> = self.slots.iter().filter(|(_, sl)| sl.gone(now)).map(|(k, _)| k.clone()).collect();
+        for k in gone {
+            if let Some(mut slot) = self.slots.remove(&k) {
                 for id in slot.nodes.drain(..) {
+                    // Damages where the deform last put it, past its bounds.
+                    self.scene.set_transform(id, Affine::IDENTITY);
                     self.scene.remove(id);
                 }
                 slot.ui.hide(&mut self.scene);
             }
-            keep
-        });
+        }
 
         let width = if is_bubble { s.popup_width_bubble } else { s.popup_width_narrow };
         let clock = now_ms();
@@ -239,52 +304,122 @@ impl Toasts {
             IRect::new(x0.round() as i32, y0.round() as i32, width.round() as i32, stack_h.round() as i32)
         };
 
-        // Back to front, so the front card's chrome covers the peeks.
-        let mut order: Vec<(&String, toast_stack::Geom)> = stack_order
-            .iter()
-            .filter_map(|k| {
-                let slot = layout.by_key.get(k)?;
-                let g = if expanded { slot.expanded.or(slot.collapsed) } else { slot.collapsed };
-                Some((k, g?))
-            })
-            .collect();
-        order.sort_by_key(|(_, g)| g.z);
-        let mut anchor: Option<NodeId> = None;
-        for (k, g) in order {
-            let critical = by_key[k].urgency == Urgency::Critical;
-            let b = theme.box_style("notification", Some(if critical { "critical" } else { "rest" }));
+        // The restack's window shared out over the cards still live, each
+        // waiting its own rank's share.
+        let stagger = (motion.restack_stagger * scale / by_key.len().max(1) as f64).round();
+        for k in &stack_order {
+            let Some(geom) = layout.by_key.get(k) else { continue };
+            let Some(g) = (if expanded { geom.expanded.or(geom.collapsed) } else { geom.collapsed }) else { continue };
             let h = heights[k];
-            let rect = IRect::new((x0 + g.x).round() as i32, (y0 + g.y).round() as i32, g.width.round() as i32, h.round() as i32);
+            let (gx, gy) = (x0 + g.x, y0 + g.y);
+            let content = if g.content_visible { 1.0 } else { 0.0 };
             let slot = self.slots.entry(k.clone()).or_insert_with(|| {
-                let motion = theme.motion();
-                let mut reveal = Animated::new(0.0, Curve::from_table(&motion.arrive_curve));
+                let mut reveal = Animated::new(0.0, arrive.1);
                 if is_bubble {
-                    reveal.set(now, 1.0, motion.arrive * scale);
+                    reveal.set(now, 1.0, arrive.0);
                 } else {
                     reveal.jump(1.0);
                 }
-                Slot { nodes: Vec::new(), ui: Ui::new(None), height: h, rect, z: g.z, members: Vec::new(), reveal }
+                let mut presence = Animated::new(0.0, arrive.1);
+                presence.set(now, 1.0, arrive.0);
+                Slot {
+                    nodes: Vec::new(),
+                    ui: Ui::new(None),
+                    el: cards[k].clone(),
+                    critical: false,
+                    rect: IRect::default(),
+                    z: g.z,
+                    members: Vec::new(),
+                    x: Animated::new(gx, restack.1),
+                    y: Animated::new(gy, restack.1),
+                    width: Animated::new(g.width, restack.1),
+                    height: Animated::new(h, restack.1),
+                    presence,
+                    content: Animated::new(content, EFFECTS),
+                    reveal,
+                    departing: false,
+                    deform: Deform::new(),
+                    deform_running: false,
+                    last_tick: None,
+                    ui_animating: false,
+                }
             });
+            slot.x.set(now, gx, restack.0);
+            slot.y.set_after(now, gy, restack.0, stagger * g.rank as f64);
+            slot.width.set(now, g.width, restack.0);
+            // A card still arriving takes its content in the frame it is
+            // measured in, so nothing grows and slides at once.
+            if slot.presence.running(now) {
+                slot.height.jump(h);
+            } else {
+                slot.height.set(now, h, restack.0);
+            }
+            slot.content.set(now, content, effects);
             slot.z = g.z;
-            slot.height = h;
-            slot.rect = rect;
+            slot.el = cards[k].clone();
+            slot.critical = by_key[k].urgency == Urgency::Critical;
             slot.members = by_key[k].member_ids.clone();
+        }
+
+        // Back to front, so the front card's chrome covers the peeks.
+        let mut order: Vec<(i64, String)> = self.slots.iter().map(|(k, sl)| (sl.z, k.clone())).collect();
+        order.sort();
+        let mut anchor: Option<NodeId> = None;
+        let edge = if spec.right { DeformEdge::Right } else { DeformEdge::Left };
+        for (_, k) in order {
+            let slot = self.slots.get_mut(&k).expect("ordered from the map");
+            let b = theme.box_style("notification", Some(if slot.critical { "critical" } else { "rest" }));
+            let presence = slot.presence.value(now);
+            let w = slot.width.value(now);
+            // A row travels its own width plus the gap it sits in, in from
+            // past the anchored edge; a bubble unfolds where it lands.
+            let slide = if is_bubble { 0.0 } else { (1.0 - presence) * (w + s.screen_padding) * f64::from(spec.slide_sign) };
+            let (fx, fy, fh) = (slot.x.value(now) + slide, slot.y.value(now), slot.height.value(now));
+
+            let dt = slot.last_tick.map_or(0.0, |t| now.saturating_duration_since(t).as_secs_f64());
+            slot.last_tick = Some(now);
+            let running = !is_bubble && theme.motion_enabled && (slot.moving(now) || !slot.deform.at_rest);
+            if running {
+                if !slot.deform_running {
+                    slot.deform.unsample();
+                }
+                slot.deform.step_at(dt, (fx, fy, w, fh), DEFORM_AMOUNT, edge);
+            }
+            slot.deform_running = running;
+            let pivot = (if edge == DeformEdge::Right { fx + w } else { fx }, fy + fh / 2.0);
+            let matrix = slot.deform.about(pivot);
+
+            let rect = IRect::new(fx.round() as i32, fy.round() as i32, w.round() as i32, fh.round() as i32);
+            slot.rect = rect;
+            let alpha = presence.clamp(0.0, 1.0) as f32;
             let radius = theme.box_radius(&b, rect.h as f64);
             let shown = IRect::new(rect.x, rect.y, rect.w, (rect.h as f64 * slot.reveal.value(now).clamp(0.0, 1.0)).round() as i32);
             // The box opens out with the unfold, so its cast opens with it
             // rather than being cut to the card's own rect.
             let reach = fs_theme::style::geometry::cast_pad(&b.casts).ceil() as i32;
             let around = IRect::new(rect.x - reach, rect.y - reach, rect.w + reach * 2, shown.h + reach * 2);
+            // The painter compares against an untransformed node, and the
+            // deform goes back on once it has laid the box out.
+            for id in &slot.nodes {
+                self.scene.set_transform(*id, Affine::IDENTITY);
+            }
             let mut p = Painter::new(&mut self.scene, &mut slot.nodes, Some(around)).after(anchor);
-            ui::boxes::paint(&mut p, shown, &b, radius, 1.0, 0.0);
+            ui::boxes::paint(&mut p, shown, &b, radius, alpha, 0.0);
             p.finish();
+            for id in &slot.nodes {
+                self.scene.set_transform(*id, matrix);
+            }
             anchor = slot.nodes.last().copied().or(anchor);
-            if g.content_visible {
+            let content = slot.content.value(now).clamp(0.0, 1.0) as f32 * alpha;
+            if content > 0.0 {
                 slot.ui.motion_scale = 1.0;
                 let pad = s.panel_padding;
-                let inner = Rect::new(rect.x as f64 + pad, rect.y as f64 + pad, (rect.x + rect.w) as f64 - pad, (rect.y + rect.h) as f64 - pad);
-                slot.ui.draw(&cards[k], inner, Some(shown), 1.0, theme, kit, &mut self.scene, now);
+                // Laid out at the card's own width, so a peek level's words
+                // never reflow while its chrome narrows.
+                let inner = Rect::new(fx + pad, fy + pad, fx + width - pad, fy + fh - pad);
+                slot.ui_animating = slot.ui.draw(&slot.el, inner, Some(shown), content, theme, kit, &mut self.scene, now).animating;
             } else {
+                slot.ui_animating = false;
                 slot.ui.hide(&mut self.scene);
             }
         }
@@ -310,7 +445,8 @@ impl Toasts {
 
     /// The card under a point, front first, and what in it.
     fn hit(&self, x: f64, y: f64) -> Option<(String, String)> {
-        let mut over: Vec<(&String, &Slot)> = self.slots.iter().filter(|(_, s)| Self::contains(s.rect, x, y)).collect();
+        let mut over: Vec<(&String, &Slot)> =
+            self.slots.iter().filter(|(_, s)| !s.departing && Self::contains(s.rect, x, y)).collect();
         over.sort_by_key(|(_, s)| std::cmp::Reverse(s.z));
         let (k, slot) = over.into_iter().next()?;
         let on = slot.ui.hit(x, y).and_then(|h| h.on.clone()).unwrap_or_else(|| "body".into());
@@ -335,7 +471,13 @@ impl Toasts {
     /// Members of every group on screen, which hold while the stack is
     /// expanded.
     pub fn members(&self) -> HashSet<String> {
-        self.slots.values().flat_map(|s| s.members.iter().cloned()).collect()
+        self.slots.values().filter(|s| !s.departing).flat_map(|s| s.members.iter().cloned()).collect()
+    }
+
+    /// Any card on the stack, a group that left included until its fade
+    /// has run.
+    pub fn holds_cards(&self) -> bool {
+        !self.slots.is_empty()
     }
 
     pub fn press(&mut self, x: f64, y: f64) {
@@ -361,7 +503,7 @@ impl Toasts {
     }
 
     pub fn animating(&self, now: Instant) -> bool {
-        !self.surface.mapped || self.slots.values().any(|s| s.reveal.running(now))
+        !self.surface.mapped || self.slots.values().any(|s| s.animating(now))
     }
 }
 

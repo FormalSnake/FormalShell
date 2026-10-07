@@ -8,11 +8,6 @@ by surface; one line each.
 - Calendar: the life-progress prompt needs the launcher's input answer routed back to the
   panel (`wayland/launcher.rs`'s resolved tokens), which the R4b launcher agent holds.
 
-## Notifications
-- Restack and arrive motion for row toasts: needs the departing-slot model Toasts.qml
-  keeps (a leaving card holds its frozen geometry while it fades), the staggered
-  restack springs, the arrive translate and the velocity deform, about 300 lines.
-
 ## Lock and auth
 - Polkit card's slide-in off the top line: the dialog is one full-output
   surface with the scrim baked in; the Drawer/join pipeline (Card, scrim

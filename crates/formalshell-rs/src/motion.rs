@@ -171,6 +171,29 @@ impl Animated {
         self.duration = Duration::from_secs_f64(duration_ms.max(0.0) / 1000.0);
     }
 
+    /// `set` on another curve (a Behavior whose `Anim` picks its kind off
+    /// the direction it is heading).
+    pub fn set_on(&mut self, now: Instant, target: f64, duration_ms: f64, curve: Curve) {
+        if target == self.target {
+            return;
+        }
+        self.set(now, target, duration_ms);
+        self.curve = curve;
+    }
+
+    /// `set` behind a `PauseAnimation`: the value holds where it is for
+    /// `delay_ms`, then travels on the full duration.
+    pub fn set_after(&mut self, now: Instant, target: f64, duration_ms: f64, delay_ms: f64) {
+        if target == self.target {
+            return;
+        }
+        self.set(now, target, duration_ms);
+        self.start = now + Duration::from_secs_f64(delay_ms.max(0.0) / 1000.0);
+        if self.duration.is_zero() && delay_ms > 0.0 {
+            self.duration = Duration::from_nanos(1);
+        }
+    }
+
     /// The `Behavior` disabled: the value lands at once.
     pub fn jump(&mut self, target: f64) {
         self.target = target;
@@ -196,7 +219,15 @@ pub struct Deform {
     v01: f64,
     v11: f64,
     pub at_rest: bool,
-    sampled: Option<(f64, f64, f64)>,
+    sampled: Option<(f64, f64, f64, f64)>,
+}
+
+/// Deform.qml's `edge`: the side the frame is anchored to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DeformEdge {
+    Top,
+    Left,
+    Right,
 }
 
 impl Deform {
@@ -209,16 +240,28 @@ impl Deform {
         self.sampled = None;
     }
 
-    /// One frame: `x`, `y` the frame's scene position, `h` its height.
+    /// One frame of a top-edge drawer: `x`, `y` the frame's scene
+    /// position, `h` its height.
     pub fn step(&mut self, dt: f64, x: f64, y: f64, h: f64, amount: f64) {
-        let Some((px, py, ph)) = self.sampled.filter(|_| (0.001..=0.1).contains(&dt)) else {
-            self.sampled = Some((x, y, h));
+        self.step_at(dt, (x, y, 0.0, h), amount, DeformEdge::Top);
+    }
+
+    /// One frame of a frame at `(x, y, w, h)` anchored to `edge`: a size
+    /// change reads as travel away from that edge.
+    pub fn step_at(&mut self, dt: f64, (x, y, w, h): (f64, f64, f64, f64), amount: f64, edge: DeformEdge) {
+        let Some((px, py, pw, ph)) = self.sampled.filter(|_| (0.001..=0.1).contains(&dt)) else {
+            self.sampled = Some((x, y, w, h));
             self.settle(0.0);
             return;
         };
-        let vx = (x - px) / dt;
-        let vy = (y - py) / dt + (h - ph) / dt;
-        self.sampled = Some((x, y, h));
+        let (dw, dh) = ((w - pw) / dt, (h - ph) / dt);
+        let (mut vx, mut vy) = ((x - px) / dt, (y - py) / dt);
+        match edge {
+            DeformEdge::Top => vy += dh,
+            DeformEdge::Left => vx += dw,
+            DeformEdge::Right => vx -= dw,
+        }
+        self.sampled = Some((x, y, w, h));
 
         let speed = (vx * vx + vy * vy).sqrt();
         if self.at_rest && speed < DEAD_BAND {
@@ -264,6 +307,12 @@ impl Deform {
             *self = Self { sampled: self.sampled, ..Self::new() };
         }
     }
+
+    /// The spring's matrix about `pivot`, in the coordinates the pivot is in.
+    pub fn about(&self, pivot: (f64, f64)) -> vello_cpu::kurbo::Affine {
+        use vello_cpu::kurbo::Affine;
+        Affine::translate(pivot) * Affine::new([self.m00, self.m01, self.m01, self.m11, 0.0, 0.0]) * Affine::translate((-pivot.0, -pivot.1))
+    }
 }
 
 #[cfg(test)]
@@ -276,6 +325,36 @@ mod tests {
         assert!(peak > 1.0 && peak < 1.1, "{peak}");
         assert_eq!(SPATIAL.ease(1.0), 1.0);
         assert_eq!(SPATIAL.ease(0.0), 0.0);
+    }
+
+    #[test]
+    fn a_toast_sliding_in_squashes_and_comes_to_rest() {
+        let start = Instant::now();
+        let mut slide = Animated::new(400.0, SPATIAL);
+        slide.set(start, 0.0, SPATIAL_MS);
+        let (mut deform, mut peak, mut rested_at) = (Deform::new(), 0.0_f64, None);
+        for frame in 0..240 {
+            let now = start + Duration::from_millis(frame * 16);
+            deform.step_at(0.016, (1500.0 + slide.value(now), 900.0, 380.0, 90.0), 0.15, DeformEdge::Right);
+            peak = peak.max((deform.m00 - 1.0).abs());
+            if deform.at_rest && !slide.running(now) && rested_at.is_none() {
+                rested_at = Some(frame);
+            }
+        }
+        assert!(peak > 0.01, "the slide never deformed the card: {peak}");
+        assert!(rested_at.is_some(), "the springs never came to rest");
+        assert_eq!((deform.m00, deform.m01, deform.m11), (1.0, 0.0, 1.0));
+    }
+
+    #[test]
+    fn a_delayed_set_holds_then_travels() {
+        let now = Instant::now();
+        let mut y = Animated::new(10.0, SPATIAL);
+        y.set_after(now, 20.0, 100.0, 50.0);
+        assert_eq!(y.value(now + Duration::from_millis(40)), 10.0);
+        assert!(y.running(now + Duration::from_millis(40)));
+        assert_eq!(y.value(now + Duration::from_millis(200)), 20.0);
+        assert!(!y.running(now + Duration::from_millis(200)));
     }
 
     #[test]

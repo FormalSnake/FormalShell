@@ -94,11 +94,13 @@ impl App {
         }
     }
 
-    /// Mapped while anything is popped up and the centre is shut: the
-    /// centre suppresses the stack for as long as it is open.
+    /// Mapped while anything is popped up or still fading out, and the
+    /// centre is shut: the centre suppresses the stack for as long as it is
+    /// open.
     pub(crate) fn present_toasts(&mut self, now: Instant) {
         let n = &self.store.notifications;
-        let want = !n.model.popups.is_empty() && !n.center_open;
+        let fading = self.toasts.as_ref().is_some_and(|t| t.holds_cards());
+        let want = (!n.model.popups.is_empty() || fading) && !n.center_open;
         if !want {
             if self.toasts.take().is_some() {
                 self.log("toasts unmapped");
@@ -121,10 +123,14 @@ impl App {
             t.rel_at = now;
             self.toasts_dirty = true;
         }
-        if (self.toasts_dirty || t.animating(now)) && t.surface.mapped {
+        // One draw past the last running frame, so what rests on screen is
+        // every clock's end value rather than its last sample.
+        let animating = t.animating(now);
+        if (self.toasts_dirty || animating || t.was_animating) && t.surface.mapped {
             t.draw(&self.store, theme, &mut self.bar.kit, &insets, self.motion_scale, now);
             t.sync_region(&self.compositor);
             self.toasts_dirty = false;
+            t.was_animating = animating;
         }
         let animating = t.animating(now);
         t.surface.present(&mut t.scene, animating, &qh);
