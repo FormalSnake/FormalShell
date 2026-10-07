@@ -14,11 +14,9 @@ by surface; one line each.
   panel (`wayland/launcher.rs`'s resolved tokens), which the R4b launcher agent holds.
 
 ## Notifications
-- Desktop-entry step in the icon order; iPhone source mark on cards; the
-  30 s relative-time refresh; two-line wrapping of summary and body;
-  restack and arrive motion for row toasts; centre header shows the host's
-  close button (QML has none); bell pending dot and count; bubble's
-  pantheon shadow draws outside the unfold clip while arriving.
+- Restack and arrive motion for row toasts: needs the departing-slot model Toasts.qml
+  keeps (a leaving card holds its frozen geometry while it fades), the staggered
+  restack springs, the arrive translate and the velocity deform, about 300 lines.
 
 ## Lock and auth
 - Polkit card's slide-in off the top line and its identity avatar.

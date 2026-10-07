@@ -398,7 +398,9 @@ impl Host {
         if !actions.is_empty() {
             parts.push(w::row(s.xs, actions));
         }
-        parts.push(w::icon_button("x").tip("Close").on("close").key("close"));
+        if self.module.closable() {
+            parts.push(w::icon_button("x").tip("Close").on("close").key("close"));
+        }
         w::row(0.0, parts).fill()
     }
 

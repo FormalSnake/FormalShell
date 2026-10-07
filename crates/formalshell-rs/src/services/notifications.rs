@@ -13,6 +13,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use fs_info::notifications::{self as model, Action, AddOpts, Notif, Patch, Urgency};
 use fs_info::reminders;
+use fs_system::compositor::appicon::{DesktopEntry, Window, by_class};
 use fs_js as js;
 use fs_devices::iphone;
 use fs_notifd::{CloseReason, Config, Event, Image, ImageData, Server};
@@ -21,6 +22,7 @@ use serde_json::{Value, json};
 use super::icons;
 use super::state::{self, Field};
 use crate::runtime::Ctx;
+use crate::services::appicon::{applications_dirs, scan_launchable};
 use crate::store;
 
 /// Omarchy's duration bands: low 5s, normal 8s, a sender's own timeout
@@ -583,6 +585,28 @@ fn image_of(n: &fs_notifd::Notification) -> (String, Option<Arc<ImageData>>) {
     }
 }
 
+/// The desktop entries the sender's icon is looked up in, rescanned when an
+/// applications directory moved.
+static ENTRIES: std::sync::Mutex<(Vec<Option<std::time::SystemTime>>, Vec<DesktopEntry>)> =
+    std::sync::Mutex::new((Vec::new(), Vec::new()));
+
+/// NotificationCard.qml's `entry`: the `desktop-entry` hint's entry, else the
+/// entry the sender's name heuristically matches, and its icon.
+fn sender_icon(desktop_id: &str, app_name: &str) -> Option<String> {
+    let dirs = applications_dirs();
+    let stamp: Vec<_> = dirs.iter().map(|d| std::fs::metadata(d).and_then(|m| m.modified()).ok()).collect();
+    let mut cached = ENTRIES.lock().ok()?;
+    if cached.0 != stamp || cached.1.is_empty() {
+        cached.1 = scan_launchable(&dirs);
+        cached.0 = stamp;
+    }
+    let by = |name: &str| {
+        let win = Window { app_id: name.to_owned(), ..Window::default() };
+        (!name.is_empty()).then(|| by_class(Some(&win), &cached.1)).flatten()
+    };
+    by(desktop_id).or_else(|| by(app_name)).map(|e| e.icon.clone())
+}
+
 /// icon.js's order, resolved to pixels: the notification's own image, its
 /// app icon, then nothing (the card's bell). A themed name no theme
 /// carries resolves to nothing rather than to a broken picture.
@@ -595,7 +619,7 @@ fn resolve_icon(image: &str, app_icon: &str, desktop_entry: &str, app_name: &str
             app_name: app_name.into(),
         },
         |name| if icons::lookup(name, "").is_some() { format!("image://icon/{name}") } else { String::new() },
-        |_, _| None,
+        sender_icon,
     );
     if source.starts_with("image://notification/") {
         let d = pixels?;

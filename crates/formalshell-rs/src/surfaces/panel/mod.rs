@@ -132,6 +132,11 @@ pub trait Panel {
     }
     /// When the body next reads differently with nothing published (a
     /// playing track's elapsed second).
+    /// Whether the header carries the host's close button.
+    fn closable(&self) -> bool {
+        true
+    }
+
     fn wake(&self, _v: &View) -> Option<std::time::Instant> {
         None
     }

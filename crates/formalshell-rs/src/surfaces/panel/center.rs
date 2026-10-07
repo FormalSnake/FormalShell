@@ -36,14 +36,15 @@ fn row(v: &View, g: &Group, unread: bool, now: i64) -> El {
         let d = s.md;
         head.push(El::new(Kind::Swatch { color: v.theme.colors.get("primary"), w: d, h: d, radius: d / 2.0, border: false }));
     }
-    head.push(w::icon(if critical { "triangle-alert" } else { "bell" }).ink(if critical { Ink::Destructive } else { Ink::Muted }));
+    let mark = w::icon(if critical { "triangle-alert" } else { "bell" }).ink(if critical { Ink::Destructive } else { Ink::Muted });
+    head.push(if e.source == "iphone" { mark.badge("smartphone") } else { mark });
     head.push(w::section_label(s, &e.app_name, None, false));
     head.push(w::caption(meta).mono().fill());
     head.push(w::icon_button("x").tip("Dismiss").on(format!("dismiss:{key}")));
-    let mut parts = vec![w::row(s.icon_gap, head), w::text(e.summary.clone()).weight(Weight::Medium).elide().fill()];
+    let mut parts = vec![w::row(s.icon_gap, head), w::para(e.summary.clone(), Type::Body, Weight::Medium, Ink::Fg, 2)];
     let body = model::sanitize_body(&e.body, &e.app_name, &e.app_icon);
     if !body.is_empty() {
-        parts.push(w::text(body).size(Type::BodySmall).ink(Ink::Muted).elide().fill());
+        parts.push(w::para(body, Type::BodySmall, Weight::Normal, Ink::Muted, 2));
     }
     let actions = model::button_actions(e);
     if !actions.is_empty() {
@@ -97,6 +98,15 @@ impl Panel for Center {
 
     fn width(&self, v: &View) -> f64 {
         v.theme.space.popup_width_wide
+    }
+
+    fn closable(&self) -> bool {
+        false
+    }
+
+    /// The relative times recompute off a slow clock, never off the reducer's tick.
+    fn wake(&self, _: &View) -> Option<std::time::Instant> {
+        Some(std::time::Instant::now() + std::time::Duration::from_secs(30))
     }
 
     fn actions(&self, v: &View) -> Vec<El> {

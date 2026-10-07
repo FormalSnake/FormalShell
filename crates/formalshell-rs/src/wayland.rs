@@ -1320,7 +1320,7 @@ impl App {
     fn arm_wake(&mut self, now: Instant) {
         let hosts = [&self.panel, &self.outgoing];
         let notifications = self.store.notifications.wake().map(|at| crate::services::notifications::instant_at(at, now));
-        let at = [self.bar.wake(now), self.tips.wake(), notifications, self.osd_wake(), self.headset.wake(), self.switcher_deadline(), self.preview_deadline()]
+        let at = [self.bar.wake(now), self.tips.wake(), notifications, self.osd_wake(), self.headset.wake(), self.switcher_deadline(), self.preview_deadline(), self.toasts.as_ref().map(|t| t.rel_at + surfaces::toasts::REL_EVERY)]
             .into_iter()
             .chain(hosts.iter().filter_map(|h| h.as_ref()).flat_map(|h| [h.prime_until, h.wake.filter(|w| *w > now)]))
             .flatten()
