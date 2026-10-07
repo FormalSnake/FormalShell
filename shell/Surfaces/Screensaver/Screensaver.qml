@@ -41,6 +41,10 @@ Item {
     // suppress the NEXT idle cycle once real activity resets things.
     property bool _suppressed: false
 
+    // An overlay went away at the end of its exit fade, which is when a hot
+    // corner it covered gets the pointer back.
+    signal surfaceUnmapped()
+
     readonly property int lockAfterSeconds: Core.Config.get("screensaver.lockAfterSeconds", 0)
     readonly property bool guardMediaPlayback: Core.Config.get("screensaver.guardMediaPlayback", true)
 
@@ -296,6 +300,10 @@ Item {
                 // the two disagree, and activation is the one that means
                 // "this screensaver is running".
                 visible: root.active || content.opacity > 0
+                onVisibleChanged: {
+                    if (!visible)
+                        root.surfaceUnmapped();
+                }
                 color: root.canvasBackground
 
                 WlrLayershell.namespace: "formalshell:screensaver"

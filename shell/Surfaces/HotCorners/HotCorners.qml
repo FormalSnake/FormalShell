@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import Quickshell.Wayland
 import qs.Compositor
 import qs.Core as Core
@@ -45,7 +46,9 @@ Item {
     // the fire. A signal on the controller rather than a read from each
     // window, because the Variants delegates below are not enumerable from
     // here.
-    signal actionEnded(string action)
+    // `cursorKnown` false leaves every corner of the action counting the
+    // cursor as still inside it, so only a real leave re-arms one.
+    signal actionEnded(string action, real endedAt, real cursorX, real cursorY, bool cursorKnown)
 
     // When each action last ended, by name. It lives here and not in the
     // window that fired, because the windows do not outlive an output list
@@ -55,9 +58,32 @@ Item {
     // screen. `Arm.adopt` reads it at construction.
     readonly property var endedAt: ({})
 
+    // Whether the cursor is still in a corner at an action's end is the
+    // compositor's to say: hover reads false for as long as the action's
+    // surface covered the corner, so a cursor parked there looked like one
+    // that had left.
     function _actionEnded(action) {
         root.endedAt[action] = Date.now();
-        root.actionEnded(action);
+        cursorQuery.action = action;
+        cursorQuery.at = root.endedAt[action];
+        cursorQuery.running = true;
+    }
+
+    Process {
+        id: cursorQuery
+        property string action: ""
+        property real at: 0
+        command: ["hyprctl", "-j", "cursorpos"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var pos = null;
+                try {
+                    pos = JSON.parse(text);
+                } catch (e) {}
+                var known = !!pos && typeof pos.x === "number" && typeof pos.y === "number";
+                root.actionEnded(cursorQuery.action, cursorQuery.at, known ? pos.x : 0, known ? pos.y : 0, known);
+            }
+        }
     }
 
     // Unlock is the only edge WlSessionLock reports: setLocked() emits
@@ -78,9 +104,10 @@ Item {
     Connections {
         target: root.screensaver
         ignoreUnknownSignals: true
-        function onActiveChanged() {
-            if (root.screensaver && !root.screensaver.active)
-                root._actionEnded("screensaver");
+        // The end of the exit fade, not the start: the overlay covers the
+        // corner until it unmaps.
+        function onSurfaceUnmapped() {
+            root._actionEnded("screensaver");
         }
     }
 
@@ -181,10 +208,16 @@ Item {
 
                 Connections {
                     target: root
-                    function onActionEnded(action) {
+                    function onActionEnded(action, endedAt, cursorX, cursorY, cursorKnown) {
                         if (action !== win.modelData.action)
                             return;
-                        win.arm = Arm.onActionEnd(win.arm, Date.now(), hover.containsMouse);
+                        const s = win.modelData.screen;
+                        const size = root.config.size;
+                        const left = win.edges.left ? s.x : s.x + s.width - size;
+                        const top = win.edges.top ? s.y : s.y + s.height - size;
+                        const inside = !cursorKnown || (cursorX >= left && cursorX < left + size
+                            && cursorY >= top && cursorY < top + size);
+                        win.arm = Arm.onActionEnd(win.arm, endedAt, inside);
                     }
                 }
 
