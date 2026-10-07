@@ -38,8 +38,6 @@
 leg_earbuds_flag="--earbuds"
 leg_earbuds_order=176
 leg_earbuds_needs="jq"
-# The panel is R3 in the rust shell: `panel open earbuds` hangs the stand-in
-# card, which holds the service the same way, so every IPC half runs.
 leg_earbuds_rust=1
 
 earbuds_dir="$shot_dir/earbuds"

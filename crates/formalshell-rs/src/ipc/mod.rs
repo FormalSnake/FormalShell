@@ -14,6 +14,7 @@ mod calendar;
 #[cfg(test)]
 mod cli;
 mod debug;
+mod display;
 mod earbuds;
 mod gallery;
 mod iphone;
@@ -21,8 +22,10 @@ mod iphone;
 mod golden;
 mod media;
 mod menu;
+mod notifications;
 mod overnight;
 mod monitor;
+mod network;
 mod panel;
 mod plugins;
 mod radio;
@@ -64,14 +67,19 @@ fn registry() ->&'static Registry<App> {
             tray::target(),
             overnight::target(),
             earbuds::target(),
+            display::target(),
+            display::hdr(),
             workspaces::target(),
             monitor::target(),
+            network::target(),
             plugins::target(),
             caffeinate::target(),
             gallery::target(),
             menu::target(),
             calendar::target(),
             iphone::target(),
+            notifications::target(),
+            notifications::reminder(),
         ],
     })
 }

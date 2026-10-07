@@ -11,11 +11,13 @@ pub mod clock;
 pub mod commands;
 pub mod config;
 pub mod devices;
+pub mod display;
 pub mod herdr;
 pub mod hyprland;
 pub mod icons;
 pub mod media;
 pub mod menu;
+pub mod notifications;
 pub mod overnight;
 pub mod info;
 pub mod plugins;
@@ -52,6 +54,8 @@ pub fn start(ctx: &Ctx) {
     ctx.spawn(wants::run(ctx.clone()));
     ctx.spawn(plugins::run(ctx.clone()));
     devices::start(ctx);
+    display::start(ctx);
     ctx.spawn(tray::run(ctx.clone()));
     ctx.spawn(menu::run(ctx.clone()));
+    ctx.spawn(notifications::run(ctx.clone()));
 }

@@ -1,5 +1,5 @@
 { lib, stdenvNoCC, rustCommon, makeWrapper, lucide-font, nerd-fonts, matugen, brightnessctl
-, wireplumber, cava, mpv, curl, util-linux, uxplay, iphone-bridge, openscq30, nothingctl, earbuds, formalshell-eds, git }:
+, wireplumber, cava, mpv, curl, util-linux, uxplay, iphone-bridge, openscq30, nothingctl, earbuds, formalshell-eds, git, qrencode, networkmanager }:
 
 rustCommon.craneLib.buildPackage (rustCommon.commonArgs // {
   inherit (rustCommon) cargoArtifacts cargoVendorDir;
@@ -43,8 +43,8 @@ rustCommon.craneLib.buildPackage (rustCommon.commonArgs // {
       --set-default FS_RS_ICON_FONT ${lucide-font}/share/fonts/truetype/lucide.ttf \
       --set-default FS_RS_FONT_DIRS ${nerd-fonts.symbols-only}/share/fonts \
       --set-default FS_TEMPLATE_DIR $out/share/formalshell-rs/templates \
-      --prefix PATH : ${lib.makeBinPath [ matugen brightnessctl wireplumber cava mpv curl util-linux git formalshell-eds ]} \
-      --suffix PATH : ${lib.makeBinPath ([ uxplay iphone-bridge ] ++ lib.optionals (lib.meta.availableOn stdenvNoCC.hostPlatform earbuds) [ earbuds openscq30 ] ++ lib.optional (lib.meta.availableOn stdenvNoCC.hostPlatform nothingctl) nothingctl)}
+      --prefix PATH : ${lib.makeBinPath [ matugen brightnessctl wireplumber cava mpv curl util-linux git formalshell-eds qrencode ]} \
+      --suffix PATH : ${lib.makeBinPath ([ uxplay iphone-bridge networkmanager ] ++ lib.optionals (lib.meta.availableOn stdenvNoCC.hostPlatform earbuds) [ earbuds openscq30 ] ++ lib.optional (lib.meta.availableOn stdenvNoCC.hostPlatform nothingctl) nothingctl)}
   '';
 
   meta = {

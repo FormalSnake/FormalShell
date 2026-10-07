@@ -3,8 +3,8 @@
 //! [`Store::apply`].
 
 use crate::services::{
-    appicon, barpaint, caffeinate, clock, commands, config, devices, herdr, hyprland, info, media, menu, plugins, recording, state,
-    theme, tray, visualizer, wallpaper,
+    appicon, barpaint, caffeinate, clock, commands, config, devices, display, herdr, hyprland, info, media, menu, notifications,
+    plugins, recording, state, theme, tray, visualizer, wallpaper,
 };
 
 #[derive(Default)]
@@ -17,6 +17,7 @@ pub struct Store {
     pub media: media::State,
     pub visualizer: visualizer::State,
     pub devices: devices::State,
+    pub display: display::State,
     pub commands: commands::State,
     pub bar_paint: barpaint::State,
     pub wallpaper: wallpaper::State,
@@ -28,6 +29,7 @@ pub struct Store {
     pub plugins: plugins::State,
     pub recording: recording::State,
     pub menu: menu::State,
+    pub notifications: notifications::State,
 }
 
 /// One service's change, tagged with the slice it applies to.
@@ -40,6 +42,7 @@ pub enum Diff {
     Media(media::Diff),
     Visualizer(visualizer::Diff),
     Devices(devices::Diff),
+    Display(display::Diff),
     Commands(commands::Diff),
     BarPaint(barpaint::Diff),
     Wallpaper(wallpaper::Diff),
@@ -52,6 +55,7 @@ pub enum Diff {
     #[allow(dead_code)]
     Recording(recording::Diff),
     Menu(menu::Diff),
+    Notifications(notifications::Diff),
 }
 
 /// The slice a diff changed, for the surfaces that read it.
@@ -65,6 +69,7 @@ pub enum Topic {
     Media,
     Visualizer,
     Devices,
+    Display,
     Commands,
     BarPaint,
     Wallpaper,
@@ -79,6 +84,7 @@ pub enum Topic {
     PluginOutput,
     Recording,
     Menu,
+    Notifications,
 }
 
 impl Store {
@@ -93,6 +99,7 @@ impl Store {
             Diff::Media(d) => self.media.apply(d).then_some(Topic::Media),
             Diff::Visualizer(d) => self.visualizer.apply(d).then_some(Topic::Visualizer),
             Diff::Devices(d) => self.devices.apply(d).then_some(Topic::Devices),
+            Diff::Display(d) => self.display.apply(d).then_some(Topic::Display),
             Diff::Commands(d) => self.commands.apply(d).then_some(Topic::Commands),
             Diff::BarPaint(d) => self.bar_paint.apply(d).then_some(Topic::BarPaint),
             Diff::Wallpaper(d) => self.wallpaper.apply(d).then_some(Topic::Wallpaper),
@@ -107,6 +114,7 @@ impl Store {
             Diff::Recording(d) => self.recording.apply(d).then_some(Topic::Recording),
             Diff::Menu(d) => self.menu.apply(d).then_some(Topic::Menu),
             Diff::Caffeinate(d) => self.caffeinate.apply(d).then_some(Topic::Caffeinate),
+            Diff::Notifications(d) => self.notifications.apply(d).then_some(Topic::Notifications),
         }
     }
 }

@@ -1,29 +1,43 @@
-//! BellWidget.qml: do-not-disturb off state.json. The pending count is the
-//! notification server's, and this shell holds no notifications yet, so
-//! none are pending.
+//! BellWidget.qml: do-not-disturb and the pending count. A click opens or
+//! shuts the notification centre, a right click flips DND.
 
 use crate::store::Topic;
-use crate::surfaces::bar::cell::{Cell, Env, Look, View};
+use crate::surfaces::bar::cell::{Action, Button, Cell, Env, Look, View};
 
 #[derive(Default)]
 pub struct Bell {
     dnd: bool,
+    pending: usize,
 }
 
 impl Cell for Bell {
     fn reads(&self) -> &'static [Topic] {
-        &[Topic::State]
+        &[Topic::State, Topic::Notifications]
     }
 
     fn read(&mut self, env: &Env) -> bool {
-        let dnd = env.store.state.data.dnd;
-        let changed = dnd != self.dnd;
-        self.dnd = dnd;
+        let n = &env.store.notifications.model;
+        let next = (n.dnd, n.pending.len());
+        let changed = next != (self.dnd, self.pending);
+        (self.dnd, self.pending) = next;
         changed
     }
 
     fn view(&self, look: &Look) -> View {
-        let tooltip = if self.dnd { "NOTIFICATIONS / DND ON" } else { "NOTIFICATIONS / NONE PENDING" };
+        let tooltip = if self.dnd {
+            "NOTIFICATIONS / DND ON".to_owned()
+        } else if self.pending > 0 {
+            format!("NOTIFICATIONS / {} PENDING", self.pending)
+        } else {
+            "NOTIFICATIONS / NONE PENDING".to_owned()
+        };
         View::icon(if self.dnd { "bell-off" } else { "bell" }, look).tooltip(tooltip)
+    }
+
+    fn click(&mut self, button: Button, _: (f64, f64), _: &Env) -> Action {
+        match button {
+            Button::Right => Action::Dnd(!self.dnd),
+            _ => Action::Center,
+        }
     }
 }

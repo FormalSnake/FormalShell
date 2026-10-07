@@ -229,13 +229,7 @@ impl Panel for Iphone {
                     .iter()
                     .map(|(glyph, verb)| Opt::new("").icon(if *verb == "toggle" { toggle } else { glyph }))
                     .collect();
-                let group = w::group(options, 0, false);
-                let group = match group.kind {
-                    crate::ui::el::Kind::Group { options, index, exclusive, .. } => {
-                        El { kind: crate::ui::el::Kind::Group { options, index, exclusive, cursor_index: self.np_index }, ..group }
-                    }
-                    _ => group,
-                };
+                let group = w::group(options, 0, false).ring(self.np_index);
                 lines.push(group.hug().pad_start(s.control_padding_x).stop("np").on("np"));
                 np.push(w::column(s.xxs, lines));
             }

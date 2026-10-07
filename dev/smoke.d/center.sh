@@ -36,6 +36,7 @@
 # whatever the run carries.
 leg_center_flag="--center"
 leg_center_order=40
+leg_center_rust=1
 leg_center_needs="notify-send jq wlrctl convert"
 
 # The band the entrance is read in: the output's trailing 560 columns, whole

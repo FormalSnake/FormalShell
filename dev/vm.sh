@@ -160,6 +160,9 @@ cmd_sync() {
   # sync); the flake only needs the files tracked, not the history.
   # /.claude holds every agent worktree with its own cargo target, tens of
   # gigabytes that filled the VM's 40G disk.
+  # Every leg builds the shell inside the VM, and those store paths fill
+  # the same disk in a night of parallel runs, so collect them first.
+  vm_run 'used=$(df --output=pcent / | tail -1 | tr -dc 0-9); [ "$used" -lt 85 ] || { sudo nix-collect-garbage >/dev/null 2>&1; df -h / | tail -1; }'
   rsync -az --delete \
     --exclude 'result*' \
     --exclude '/.git' \

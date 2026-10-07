@@ -231,12 +231,10 @@ pub fn measure(cx: &mut Cx, el: &El, avail: f64) -> (f64, f64) {
         }
         Kind::Switch { .. } => (s.control_height, s.control_height),
         Kind::Track { .. } => (inner, s.track_thickness),
-        Kind::Group { options, .. } => {
-            let widest = options
-                .iter()
-                .map(|o| button_metrics(cx, &o.label, &o.icon, s.md).0)
-                .fold(s.control_height - s.xs * 2.0, f64::max);
-            (widest * options.len() as f64 + s.xs * (options.len() + 1) as f64, s.control_height + s.xs * 2.0)
+        Kind::Group { options, wrap, .. } => {
+            let widest = group_natural(cx, options);
+            let rows = if *wrap { group_grid(widest, options.len(), inner, s.xs).0 } else { 1 };
+            (widest * options.len() as f64 + s.xs * (options.len() + 1) as f64, s.control_height * rows as f64 + s.xs * (rows + 1) as f64)
         }
         Kind::Segmented { options, .. } => {
             let seg = segment_width(cx, options);
@@ -264,12 +262,16 @@ pub fn measure(cx: &mut Cx, el: &El, avail: f64) -> (f64, f64) {
         }
         Kind::Swatch { w, h, .. } => (*w, *h),
         Kind::Sparkline(_) => (inner, s.control_height),
+        Kind::Matrix { rows } => {
+            let side = matrix_module(inner, rows.len()) * rows.len() as f64;
+            (inner, side)
+        }
         Kind::Shoulders { edge, span, depth, run } => {
             if edge.is_vertical() { (*depth, span + run * 2.0) } else { (span + run * 2.0, *depth) }
         }
     };
     let w = match el.kind {
-        Kind::Grid { .. } | Kind::Track { .. } | Kind::Input { .. } | Kind::Sparkline(_) => avail,
+        Kind::Grid { .. } | Kind::Track { .. } | Kind::Input { .. } | Kind::Sparkline(_) | Kind::Matrix { .. } => avail,
         _ => width_of(el, avail, nw + ps + pe),
     };
     (w, nh + pt + pb)
@@ -473,10 +475,10 @@ pub fn paint(cx: &mut Cx, el: &El, rect: Rect, path: &str) {
         Kind::Button { variant, text, icon, enabled, square } => {
             button(cx, el, inner, *variant, text, icon, *enabled, *square, path, None, stop_key, None)
         }
-        Kind::Switch { checked } => switch(cx, el, inner, *checked, path, stop_key),
+        Kind::Switch { checked, enabled } => switch(cx, el, inner, *checked, *enabled, path, stop_key),
         Kind::Track { value, notch, interactive } => track(cx, el, inner, *value, *notch, *interactive, path, stop_key),
-        Kind::Group { options, index, exclusive, cursor_index } => {
-            group(cx, el, inner, options, *index, *exclusive, *cursor_index, path, stop_key)
+        Kind::Group { options, index, exclusive, cursor_index, wrap } => {
+            group(cx, el, inner, options, *index, *exclusive, *cursor_index, *wrap, path, stop_key)
         }
         Kind::Segmented { options, index } => segmented(cx, el, inner, options, *index, path, stop_key),
         Kind::Input { text, placeholder, focused, error } => input(cx, inner, text, placeholder, *focused, error.as_deref(), path),
@@ -534,6 +536,7 @@ pub fn paint(cx: &mut Cx, el: &El, rect: Rect, path: &str) {
             cx.done(last);
         }
         Kind::Sparkline(series) => sparkline(cx, inner, series, path),
+        Kind::Matrix { rows } => matrix(cx, inner, rows, path),
         Kind::Shoulders { edge, span, depth, run } => shoulders(cx, inner, *edge, *span, *depth, *run, path),
     }
     if let Some(on) = &el.on
@@ -711,7 +714,7 @@ fn button(
     }
 }
 
-fn switch(cx: &mut Cx, el: &El, r: Rect, checked: bool, path: &str, stop: Option<String>) {
+fn switch(cx: &mut Cx, el: &El, r: Rect, checked: bool, enabled: bool, path: &str, stop: Option<String>) {
     let t = cx.theme;
     let s = t.space.clone();
     let inset = t.border_width * 2.0;
@@ -734,14 +737,17 @@ fn switch(cx: &mut Cx, el: &El, r: Rect, checked: bool, path: &str, stop: Option
     let tri = irect(tr);
     let tr_radius = t.box_radius(&track, tri.h as f64);
     let kn_radius = t.box_radius(&knob, size);
-    let alpha = cx.alpha;
+    // Switch.qml dims a disabled switch the way Button does.
+    let alpha = if enabled { cx.alpha } else { cx.alpha * 0.5 };
     let mut p = cx.painter(path);
     boxes::paint(&mut p, tri, &track, tr_radius, alpha, 0.0);
     boxes::paint(&mut p, kr, &knob, kn_radius, alpha, 0.0);
     let last = p.last();
     p.finish();
     cx.done(last);
-    cx.hit(Hit { rect: irect(r), path: path.into(), on: el.on.clone(), tip: el.tip.clone(), stop, what: HitWhat::Switch(checked) });
+    if enabled {
+        cx.hit(Hit { rect: irect(r), path: path.into(), on: el.on.clone(), tip: el.tip.clone(), stop, what: HitWhat::Switch(checked) });
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -796,13 +802,31 @@ fn cx_border(t: &fs_theme::theme::Theme) -> i32 {
     t.border_width.round().max(1.0) as i32
 }
 
+/// ButtonGroup.qml's `_naturalButtonWidth`: the widest whole label.
+fn group_natural(cx: &mut Cx, options: &[super::el::Opt]) -> f64 {
+    let s = cx.theme.space.clone();
+    options.iter().map(|o| button_metrics(cx, &o.label, &o.icon, s.md).0).fold(s.control_height - s.xs * 2.0, f64::max)
+}
+
+/// ButtonGroup.qml's wrap: as many columns as fit the widest button, then
+/// the fewest rows that hold every option and the fewest columns filling
+/// them. (rows, columns).
+fn group_grid(natural: f64, count: usize, width: f64, pad: f64) -> (usize, usize) {
+    if count == 0 {
+        return (1, 1);
+    }
+    let fit = (((width - pad) / (natural + pad)).floor() as usize).max(1);
+    let rows = count.div_ceil(fit);
+    (rows, count.div_ceil(rows).max(1))
+}
+
 #[allow(clippy::too_many_arguments)]
-fn group(cx: &mut Cx, el: &El, r: Rect, options: &[super::el::Opt], index: usize, exclusive: bool, cursor_index: usize, path: &str, stop: Option<String>) {
+fn group(cx: &mut Cx, el: &El, r: Rect, options: &[super::el::Opt], index: usize, exclusive: bool, cursor_index: usize, wrap: bool, path: &str, stop: Option<String>) {
     let t = cx.theme;
     let s = t.space.clone();
     let trough = t.box_style("trough", None);
     let ri = irect(r);
-    let tr_radius = t.box_radius(&trough, ri.h as f64);
+    let tr_radius = t.box_radius(&trough, if wrap { s.control_height + s.xs * 2.0 } else { ri.h as f64 });
     let radius = t.radii.sm.max(tr_radius - s.xs);
     let alpha = cx.alpha;
     let mut p = cx.painter(path);
@@ -811,11 +835,14 @@ fn group(cx: &mut Cx, el: &El, r: Rect, options: &[super::el::Opt], index: usize
     p.finish();
     cx.done(last);
     let n = options.len().max(1);
-    let bw = ((r.width() - s.xs * 2.0 - s.xs * (n - 1) as f64) / n as f64).max(0.0);
-    let bh = (r.height() - s.xs * 2.0).max(0.0);
+    let cols = if wrap { group_grid(group_natural(cx, options), options.len(), r.width(), s.xs).1 } else { n };
+    let bw = ((r.width() - s.xs * 2.0 - s.xs * (cols - 1) as f64) / cols as f64).max(0.0);
+    let bh = if wrap { s.control_height } else { (r.height() - s.xs * 2.0).max(0.0) };
     let (on, _) = cx.cursor(stop.as_deref());
     for (i, o) in options.iter().enumerate() {
-        let x = r.x0 + s.xs + (bw + s.xs) * i as f64;
+        let (row, col) = (i / cols, i % cols);
+        let x = r.x0 + s.xs + (bw + s.xs) * col as f64;
+        let y = r.y0 + s.xs + (bh + s.xs) * row as f64;
         let variant = if exclusive && i == index {
             Variant::Selected
         } else if !exclusive && o.active {
@@ -823,7 +850,7 @@ fn group(cx: &mut Cx, el: &El, r: Rect, options: &[super::el::Opt], index: usize
         } else {
             Variant::Ghost
         };
-        let b = Rect::new(x, r.y0 + s.xs, x + bw, r.y0 + s.xs + bh);
+        let b = Rect::new(x, y, x + bw, y + bh);
         let child = El::new(Kind::Button { variant, text: o.label.clone(), icon: o.icon.clone(), enabled: o.enabled, square: false });
         let child = El { on: el.on.clone(), ..child };
         button(cx, &child, b, variant, &o.label, &o.icon, o.enabled, false, &format!("{path}/{i}"), Some(radius), stop.clone(), Some((i, on && i == cursor_index)));
@@ -987,6 +1014,51 @@ fn points(values: &[f64], w: f64, h: f64, ceiling: f64, capacity: usize) -> Vec<
             (x, y)
         })
         .collect()
+}
+
+/// The largest whole module `n` of which fit across `width`.
+fn matrix_module(width: f64, n: usize) -> f64 {
+    if n == 0 { 0.0 } else { (width / n as f64).floor().max(1.0) }
+}
+
+/// NetworkPanel.qml's QR canvas: the quiet zone in whichever of
+/// foreground and background is lighter, the modules in the darker, one
+/// rect per run of set modules along a row.
+fn matrix(cx: &mut Cx, r: Rect, rows: &[String], path: &str) {
+    let n = rows.len();
+    let m = matrix_module(r.width(), n);
+    if m <= 0.0 {
+        return;
+    }
+    let side = m * n as f64;
+    let x0 = (r.x0 + ((r.width() - side) / 2.0).floor()).round();
+    let y0 = r.y0.round();
+    let (fg, bg) = (cx.theme.colors.get("foreground"), cx.theme.colors.get("background"));
+    let light = |c: Rgba| c.r.max(c.g).max(c.b) + c.r.min(c.g).min(c.b);
+    let (module, quiet) = if light(fg) < light(bg) { (fg, bg) } else { (bg, fg) };
+    let (module, quiet) = (cx.a(module), cx.a(quiet));
+    let mut p = cx.painter(path);
+    p.rect(irect(Rect::new(x0, y0, x0 + side, y0 + side)), quiet, 0.0);
+    for (y, row) in rows.iter().enumerate() {
+        let bits = row.as_bytes();
+        let mut x = 0;
+        while x < bits.len() {
+            if bits[x] != b'1' {
+                x += 1;
+                continue;
+            }
+            let start = x;
+            while x < bits.len() && bits[x] == b'1' {
+                x += 1;
+            }
+            let rx = x0 + start as f64 * m;
+            let ry = y0 + y as f64 * m;
+            p.rect(irect(Rect::new(rx, ry, rx + (x - start) as f64 * m, ry + m)), module, 0.0);
+        }
+    }
+    let last = p.last();
+    p.finish();
+    cx.done(last);
 }
 
 fn sparkline(cx: &mut Cx, r: Rect, series: &super::el::Series, path: &str) {

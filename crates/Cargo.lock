@@ -623,10 +623,12 @@ dependencies = [
  "fs-chrome",
  "fs-devices",
  "fs-info",
+ "fs-js",
  "fs-media",
  "fs-menu",
  "fs-mpris",
  "fs-network",
+ "fs-notifd",
  "fs-system",
  "fs-theme",
  "fs-tray",
@@ -695,6 +697,7 @@ dependencies = [
 name = "fs-devices"
 version = "0.1.1"
 dependencies = [
+ "fs-info",
  "fs-js",
  "percent-encoding",
  "regex",

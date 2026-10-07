@@ -25,12 +25,16 @@
 # shell's own motion.
 leg_notify_flag="--notify"
 leg_notify_order=30
+leg_notify_rust=1
 leg_notify_needs="notify-send convert jq"
 
 toasts_expanded_path="$shot_dir/toasts-expanded.png"
 toasts_expand_status_path="$shot_dir/toasts-expand-status.txt"
 notify_layers_collapsed_path="$shot_dir/toasts-layers-collapsed.json"
 notify_layers_expanded_path="$shot_dir/toasts-layers-expanded.json"
+# What the server says it is, off the session's own private bus: the rust
+# server has to answer exactly what Quickshell's NotificationServer does.
+notify_server_info_path="$shot_dir/notify-server-info.txt"
 notify_icon_dir="$iso_home/.local/share/icons/hicolor/48x48/apps"
 notify_icon_file="$notify_icon_dir/formalshell-notify-fixture.png"
 # A real freedesktop icon name, so what the card resolves is a themed lookup
@@ -81,6 +85,9 @@ sleep 1
 sleep 1
 "$notify_send_bin" -u critical 'Crit' 'Now'
 sleep 2
+{ busctl --user call org.freedesktop.Notifications /org/freedesktop/Notifications org.freedesktop.Notifications GetServerInformation
+  busctl --user call org.freedesktop.Notifications /org/freedesktop/Notifications org.freedesktop.Notifications GetCapabilities
+} > "$notify_server_info_path" 2>&1
 "$hyprctl_bin" -j layers > "$notify_layers_collapsed_path" 2>&1
 $ipc call notifications expand on > "$toasts_expand_status_path" 2>&1
 sleep 2
@@ -124,6 +131,14 @@ leg_notify_assert() {
   if [ ! -f "$toasts_expanded_path" ]; then
     fail "no toasts-expanded screenshot produced"
   fi
+  cat "$notify_server_info_path" 2>/dev/null || true
+  # The QML shell's own answer (Quickshell's NotificationServer), recorded
+  # 2026-10-07; the rust server is held to it byte for byte.
+  grep -qxF 'ssss "quickshell" "quickshell" "" "1.2"' "$notify_server_info_path" \
+    || fail "GetServerInformation is not the QML shell's answer: $(head -n 1 "$notify_server_info_path")"
+  grep -qxF 'as 4 "persistence" "body" "actions" "icon-static"' "$notify_server_info_path" \
+    || fail "GetCapabilities is not the QML shell's answer: $(tail -n 1 "$notify_server_info_path")"
+  echo "SMOKE_NOTIFY_SERVER_INFO $notify_server_info_path"
   echo "SMOKE_TOASTS_EXPANDED $toasts_expanded_path"
   echo "SMOKE_TOASTS_LAYERS_COLLAPSED $notify_layers_collapsed_path"
   echo "SMOKE_TOASTS_LAYERS_EXPANDED $notify_layers_expanded_path"

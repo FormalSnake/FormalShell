@@ -24,6 +24,7 @@ pub struct State {
     pub audio: Audio,
     pub power: Power,
     pub earbuds: earbuds::Earbuds,
+    pub lights: power::Lights,
 }
 
 pub enum Diff {
@@ -32,6 +33,7 @@ pub enum Diff {
     Audio(Audio),
     Power(Power),
     Earbuds(earbuds::Diff),
+    Lights(power::Lights),
 }
 
 fn set<T: PartialEq>(slot: &mut T, v: T) -> bool {
@@ -48,6 +50,7 @@ impl State {
             Diff::Audio(v) => set(&mut self.audio, v),
             Diff::Power(v) => set(&mut self.power, v),
             Diff::Earbuds(d) => self.earbuds.apply(d),
+            Diff::Lights(v) => set(&mut self.lights, v),
         }
     }
 }
@@ -57,6 +60,7 @@ pub fn start(ctx: &Ctx) {
     ctx.spawn(network::run(ctx.clone()));
     ctx.spawn(audio::run(ctx.clone()));
     ctx.spawn(power::run(ctx.clone()));
+    ctx.spawn(power::lights(ctx.clone()));
     earbuds::start(ctx);
 }
 

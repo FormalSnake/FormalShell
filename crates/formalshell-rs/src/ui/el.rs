@@ -150,9 +150,10 @@ pub enum Kind {
     Icon { name: String, size: Type, ink: Ink },
     Cell { state: CellState, interactive: bool, child: Box<El> },
     Button { variant: Variant, text: String, icon: String, enabled: bool, square: bool },
-    Switch { checked: bool },
+    Switch { checked: bool, enabled: bool },
     Track { value: f64, notch: Option<f64>, interactive: bool },
-    Group { options: Vec<Opt>, index: usize, exclusive: bool, cursor_index: usize },
+    /// `wrap`: rows of equal buttons when every whole label cannot fit one.
+    Group { options: Vec<Opt>, index: usize, exclusive: bool, cursor_index: usize, wrap: bool },
     Segmented { options: Vec<String>, index: usize },
     Input { text: String, placeholder: String, focused: bool, error: Option<String> },
     Separator { vertical: bool, inset: f64, bleed: f64 },
@@ -166,6 +167,9 @@ pub enum Kind {
     Para { text: String, font: Font, ink: Ink, lines: usize },
     /// A bitmap fitted at its own size in a `size` square; blank without one.
     Picture { pic: Pic, size: f64 },
+    /// A square of modules, one string of `1`s and `0`s per row (a QR
+    /// code), centred at the largest whole module that fits.
+    Matrix { rows: Vec<String> },
 }
 
 /// One element: what it is, how wide it sits, and how it is addressed.
@@ -198,7 +202,7 @@ impl El {
         let width = match &kind {
             Kind::Column { .. } | Kind::Separator { vertical: false, .. } | Kind::Track { .. } | Kind::Group { .. } => Size::Fill,
             Kind::Cell { state, .. } if !state.chip => Size::Fill,
-            Kind::Input { .. } | Kind::Para { .. } => Size::Fill,
+            Kind::Input { .. } | Kind::Para { .. } | Kind::Matrix { .. } => Size::Fill,
             _ => Size::Hug,
         };
         Self { kind, width, pad: [0.0; 4], key: None, stop: false, on: None, tip: None, centred: false, top: false, mid: false, gauge: None }
@@ -322,8 +326,24 @@ impl El {
     }
 
     pub fn enabled(mut self, on: bool) -> Self {
-        if let Kind::Button { enabled, .. } = &mut self.kind {
+        if let Kind::Button { enabled, .. } | Kind::Switch { enabled, .. } = &mut self.kind {
             *enabled = on;
+        }
+        self
+    }
+
+    /// A group's keyboard ring, on an option other than the selected one.
+    pub fn ring(mut self, at: usize) -> Self {
+        if let Kind::Group { cursor_index, .. } = &mut self.kind {
+            *cursor_index = at;
+        }
+        self
+    }
+
+    /// A group breaks into rows rather than cut a label.
+    pub fn wrap(mut self) -> Self {
+        if let Kind::Group { wrap, .. } = &mut self.kind {
+            *wrap = true;
         }
         self
     }
