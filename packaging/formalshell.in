@@ -1,7 +1,0 @@
-#!/bin/sh
-# The nerd symbols and emoji fonts are system fonts here, found through
-# fontconfig, so only the lucide file is named.
-export FS_RS_ICON_FONT="${FS_RS_ICON_FONT-@FONTDIR@/lucide.ttf}"
-export FS_TEMPLATE_DIR="${FS_TEMPLATE_DIR-@SHAREDIR@/templates}"
-export FS_BRANDING_DIR="${FS_BRANDING_DIR-@SHAREDIR@/branding}"
-exec @LIBEXECDIR@/formalshell-rs "$@"

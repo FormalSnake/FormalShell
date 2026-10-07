@@ -1,2 +1,0 @@
-# zig build links it; build.zig has no PIE option.
-hardening-no-pie [usr/bin/formalshell-eds]

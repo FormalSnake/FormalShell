@@ -67,8 +67,8 @@ rustCommon.craneLib.buildPackage (rustCommon.commonArgs // {
     ln -s formalshell-rs $out/bin/formalshell
 
     # Liveness probe for the home-manager module's formalshell-watchdog timer
-    # (packaging/formalshell-watchdog.in has the why).
-    substitute ${../packaging/formalshell-watchdog.in} $out/bin/formalshell-watchdog \
+    # (nix/formalshell-watchdog.in has the why).
+    substitute ${./formalshell-watchdog.in} $out/bin/formalshell-watchdog \
       --subst-var-by IPC $out/bin/formalshell-ipc \
       --subst-var-by TIMEOUT ${lib.getExe' coreutils "timeout"} \
       --subst-var-by SYSTEMCTL ${lib.getExe' systemd "systemctl"}

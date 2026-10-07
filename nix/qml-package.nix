@@ -138,7 +138,7 @@ stdenvNoCC.mkDerivation {
     # timeout here means that loop is stuck. Two timeouts in a row restart
     # the service; "no running instance" exits fast with 255 and is a
     # stopped shell, not a hung one, so it clears the strike and does nothing.
-    substitute ${../packaging/formalshell-watchdog.in} $out/bin/formalshell-watchdog \
+    substitute ${./formalshell-watchdog.in} $out/bin/formalshell-watchdog \
       --subst-var-by QS ${lib.getExe' quickshell "qs"} \
       --subst-var-by SHAREDIR $out/share/formalshell \
       --subst-var-by TIMEOUT ${lib.getExe' coreutils "timeout"} \

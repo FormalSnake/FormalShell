@@ -1,2 +1,0 @@
-# The post-install note tells the user which units to enable; nothing is run.
-maintainer-script-calls-systemctl [postinst:*]

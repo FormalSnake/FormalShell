@@ -42,7 +42,7 @@ let
   # poll interval rather than by opening energy_uj to everyone: the counter
   # is root-only because of the PLATYPUS side channel, which needs
   # fine-grained reads a three-second average does not give.
-  powerPoll = pkgs.writeShellScript "formalshell-power-poll" (builtins.readFile ../packaging/formalshell-power-poll.sh);
+  powerPoll = pkgs.writeShellScript "formalshell-power-poll" (builtins.readFile ./formalshell-power-poll.sh);
 in
 {
   options.services.formalshell = {

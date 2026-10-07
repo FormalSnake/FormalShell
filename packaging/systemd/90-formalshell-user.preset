@@ -1,2 +1,0 @@
-enable formalshell.service
-enable formalshell-watchdog.timer
