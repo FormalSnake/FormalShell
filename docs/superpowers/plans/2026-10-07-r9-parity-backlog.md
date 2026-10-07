@@ -50,7 +50,7 @@ by surface; one line each.
 - `media outputs`/`output` and pipewire `stream:` rows.
 
 ## Launcher
-- Clipboard split preview, width/height size morph, row add/remove motion.
+- Width/height size morph, row add/remove motion.
 
 ## Headset card
 - Escape only after a click gives it focus; no click-away dismissal (owner
