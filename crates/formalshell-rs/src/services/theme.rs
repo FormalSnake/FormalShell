@@ -1011,12 +1011,17 @@ printf '%s' 'return {{}}' > '{state}/formalshell-colors.lua.tmp'"##,
     fn no_wallpaper_publishes_the_fallback_for_the_mode() {
         let (env, log) = rig("static");
         let theme_json = env.theme_json();
-        // The dconf pair and the reload are children that outlive the
+        // The palette is published before the Hyprland colours are written,
+        // and the chrome writes on its own task, so the files are waited on
+        // too. The dconf pair and the reload are children that outlive the
         // publish, and dropping the runtime drops them, so the run is held
         // until they have logged.
+        let (hypr_colors, hypr_chrome) = (env.hypr_colors(), env.hypr_chrome());
         let (seen, _) = drive(env.clone(), vec![(Duration::ZERO, inputs(json!({}), "", "light"))], |s, _| {
             s.present.contains(&true)
                 && !s.palettes.is_empty()
+                && hypr_colors.exists()
+                && hypr_chrome.exists()
                 && log_lines(&log, "dconf").len() >= 2
                 && !log_lines(&log, "hyprctl reload").is_empty()
         });
