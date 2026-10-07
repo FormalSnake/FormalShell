@@ -41,6 +41,8 @@ use crate::surfaces::lock::{self as view, NowPlaying, Shared, TKey, View};
 pub enum LockMsg {
     Pam(u64, Outcome),
     Avatar(Option<Bitmap>),
+    /// The polkit dialog's identity picture.
+    PolkitAvatar(Option<Bitmap>),
     Backdrop(Bitmap),
     /// The track's cover, for the art URL it was decoded from.
     Art(String, Option<Bitmap>),
@@ -322,6 +324,11 @@ impl App {
             LockMsg::Avatar(a) => {
                 self.lock.avatar = a;
                 self.lock.dirty = true;
+            }
+            LockMsg::PolkitAvatar(a) => {
+                if let Some(d) = &mut self.polkit {
+                    d.set_avatar(a);
+                }
             }
             LockMsg::Art(url, art) => {
                 self.lock.art = Some((url, art));

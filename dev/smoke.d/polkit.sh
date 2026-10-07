@@ -16,7 +16,7 @@
 # scale goes back and the conversation proper starts.
 leg_polkit_flag="--polkit"
 leg_polkit_order=280
-leg_polkit_needs="pkexec wtype"
+leg_polkit_needs="pkexec wtype convert"
 leg_polkit_rust=1
 
 polkit_active_path="$shot_dir/polkit-active.png"
@@ -57,6 +57,13 @@ polkit_t0() {
 # it. Read by eye: `--menu-emerge` is where that travel is measured, and
 # repeating its probes here would pin this leg to the launcher's geometry.
 polkit_open_frames=10
+
+leg_polkit_fixture() {
+  # One flat colour nothing else on the card paints, at the default
+  # avatar.path: the identity row shows it when the dialog asks for this
+  # session's own account.
+  $convert_bin -size 256x256 xc:'#1FB86A' "png:$iso_home/.face"
+}
 
 leg_polkit_timing() {
   local t0
