@@ -175,6 +175,9 @@ fn stub() -> Registry<()> {
                     }),
                     f("restart", &[("pid", Type::String)], Type::String, |_, a| s(format!("restart {}", a[0].str()))),
                     f("gpu", &[], Type::String, |_, _| s("{}")),
+                    f("launch", &[("desktopId", Type::String), ("card", Type::String)], Type::String, |_, a| {
+                        s(format!("launch {} {}", a[0].str(), a[1].str()))
+                    }),
                 ],
             },
             Target {
@@ -284,6 +287,21 @@ fn stub() -> Registry<()> {
                 ],
             },
             Target {
+                name: "screenshot",
+                functions: vec![
+                    f("full", &[("processing", Type::String)], Type::String, |_, a| s(format!("full {}", a[0].str()))),
+                    f("region", &[("processing", Type::String)], Type::String, |_, a| s(format!("region {}", a[0].str()))),
+                    f("cancel", &[], Type::String, |_, _| s("ok")),
+                    f("pick", &[("mode", Type::String), ("processing", Type::String)], Type::String, |_, a| {
+                        s(format!("pick {} {}", a[0].str(), a[1].str()))
+                    }),
+                    f("key", &[("name", Type::String)], Type::String, |_, a| s(format!("key {}", a[0].str()))),
+                    f("pickerStatus", &[], Type::String, |_, _| s("{}")),
+                    f("edit", &[("path", Type::String)], Type::String, |_, a| s(format!("edit {}", a[0].str()))),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
                 name: "display",
                 functions: vec![
                     f("scale", &[("output", Type::String), ("scale", Type::Real)], Type::String, |_, a| {
@@ -307,6 +325,37 @@ fn stub() -> Registry<()> {
                         s(format!("setOutput {} {}", a[0].str(), a[1].bool()))
                     }),
                     f("rule", &[("output", Type::String)], Type::String, |_, a| s(format!("rule {}", a[0].str()))),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
+                name: "capture",
+                functions: vec![
+                    f("text", &[], Type::String, |_, _| s("ok")),
+                    f("color", &[], Type::String, |_, _| s("ok")),
+                    f("textAt", &[("geometry", Type::String)], Type::String, |_, a| s(format!("textAt {}", a[0].str()))),
+                    f("colorAt", &[("geometry", Type::String)], Type::String, |_, a| s(format!("colorAt {}", a[0].str()))),
+                    f("cancel", &[], Type::String, |_, _| s("ok")),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
+                name: "record",
+                functions: vec![
+                    f("start", &[("scope", Type::String), ("audio", Type::String)], Type::String, |_, a| {
+                        s(format!("start {} {}", a[0].str(), a[1].str()))
+                    }),
+                    f("startCapped", &[("scope", Type::String), ("audio", Type::String), ("maxHeight", Type::String)], Type::String, |_, a| {
+                        s(format!("startCapped {} {} {}", a[0].str(), a[1].str(), a[2].str()))
+                    }),
+                    f("startAt", &[("geometry", Type::String), ("audio", Type::String)], Type::String, |_, a| {
+                        s(format!("startAt {} {}", a[0].str(), a[1].str()))
+                    }),
+                    f("stop", &[], Type::String, |_, _| s("ok")),
+                    f("toggle", &[("scope", Type::String), ("audio", Type::String)], Type::String, |_, a| {
+                        s(format!("toggle {} {}", a[0].str(), a[1].str()))
+                    }),
+                    f("gif", &[("path", Type::String)], Type::String, |_, a| s(format!("gif {}", a[0].str()))),
                     f("status", &[], Type::String, |_, _| s("{}")),
                 ],
             },
@@ -358,6 +407,15 @@ fn stub() -> Registry<()> {
                 ],
             },
             Target {
+                name: "console",
+                functions: vec![
+                    f("toggle", &[], Type::String, |_, _| s("ok")),
+                    f("show", &[], Type::String, |_, _| s("ok")),
+                    f("hide", &[], Type::String, |_, _| s("ok")),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
                 name: "lights",
                 functions: vec![
                     f("toggle", &[], Type::String, |_, _| s("ok")),
@@ -368,6 +426,16 @@ fn stub() -> Registry<()> {
                     f("brightness", &[("level", Type::String)], Type::String, |_, a| s(format!("brightness {}", a[0].str()))),
                     f("refresh", &[], Type::String, |_, _| s("ok")),
                     f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
+                name: "screensaver",
+                functions: vec![
+                    f("start", &[], Type::String, |_, _| s("ok")),
+                    f("stop", &[], Type::String, |_, _| s("ok")),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                    f("frame", &[("n", Type::Int)], Type::String, |_, a| s(format!("frame {}", a[0].int()))),
+                    f("frameInfo", &[], Type::String, |_, _| s("{}")),
                 ],
             },
             Target {
@@ -492,6 +560,9 @@ fn signatures_match_qml() {
         super::menu::target(),
         super::calendar::target(),
         super::iphone::target(),
+        super::screenshot::target(),
+        super::capture::target(),
+        super::record::target(),
         super::display::target(),
         super::display::hdr(),
         super::notifications::target(),
@@ -501,6 +572,8 @@ fn signatures_match_qml() {
         super::nightlight::target(),
         super::lights::target(),
         super::switcher::target(),
+        super::console::target(),
+        super::screensaver::target(),
     ] {
         let defs: Vec<String> = real.functions.iter().map(|f| f.definition()).collect();
         let qml = stub.targets.iter().find(|t| t.name == real.name).expect("a stub target");

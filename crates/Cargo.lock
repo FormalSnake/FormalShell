@@ -628,6 +628,7 @@ dependencies = [
  "fs-mpris",
  "fs-network",
  "fs-notifd",
+ "fs-screensaver",
  "fs-system",
  "fs-theme",
  "fs-tray",

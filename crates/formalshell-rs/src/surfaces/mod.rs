@@ -2,6 +2,7 @@
 //! change to the surfaces that read that slice.
 
 pub mod bar;
+pub mod capture;
 pub mod card;
 pub mod headset;
 pub mod launcher;
@@ -37,6 +38,12 @@ pub fn changed(app: &mut App, topic: Topic) {
             app.apply_config();
             theme_inputs(app);
             lights_palette(app);
+            app.saver_config();
+        }
+        Topic::Screensaver => app.saver_changed(),
+        Topic::Caffeinate => {
+            app.saver_idle_changed();
+            app.refresh_bar(Some(topic));
         }
         Topic::State => {
             app.launcher_inputs();
@@ -56,6 +63,7 @@ pub fn changed(app: &mut App, topic: Topic) {
             app.launcher_devices();
             app.refresh_bar(Some(topic));
         }
+        Topic::Capture => capture::events(app),
         Topic::Tray => {
             app.launcher_tray();
             app.tray_changed();
@@ -67,6 +75,7 @@ pub fn changed(app: &mut App, topic: Topic) {
         }
         Topic::Media => {
             app.launcher_devices();
+            app.saver_update();
             app.refresh_bar(Some(topic));
         }
         _ => app.refresh_bar(Some(topic)),

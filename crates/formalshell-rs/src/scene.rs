@@ -136,6 +136,9 @@ pub enum Paint {
     /// Casts under a rounded rect, cut out of the rect's own shape so a
     /// translucent fill over them shows the desktop and not the shadow.
     Casts { rect: Rect, radius: f64, layers: Vec<Cast>, cutout: BezPath },
+    /// A row of terminal cells (the screensaver's): plain rects and glyph
+    /// outlines placed at their own origins, each in its own colour.
+    Cells { rects: Vec<(Rect, Rgba)>, glyphs: Vec<(std::sync::Arc<BezPath>, f64, f64, Rgba)> },
 }
 
 pub struct Node {
@@ -323,6 +326,11 @@ fn paint_eq(a: &Paint, b: &Paint) -> bool {
         ) => r1 == r2 && a1 == a2 && c1 == c2 && l1.len() == l2.len() && l1.iter().zip(l2).all(|(a, b)| a.same(b)),
         (Paint::Face { from: f1, to: t1, radius: r1 }, Paint::Face { from: f2, to: t2, radius: r2 }) => {
             f1 == f2 && t1 == t2 && r1 == r2
+        }
+        (Paint::Cells { rects: r1, glyphs: g1 }, Paint::Cells { rects: r2, glyphs: g2 }) => {
+            r1 == r2
+                && g1.len() == g2.len()
+                && g1.iter().zip(g2).all(|(a, b)| std::sync::Arc::ptr_eq(&a.0, &b.0) && (a.1, a.2, a.3) == (b.1, b.2, b.3))
         }
         _ => false,
     }

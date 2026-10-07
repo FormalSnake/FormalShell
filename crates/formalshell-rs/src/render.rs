@@ -149,6 +149,18 @@ impl Renderer {
                     }
                     self.ctx.pop_layer();
                 }
+                Paint::Cells { rects, glyphs } => {
+                    self.ctx.set_transform(at);
+                    for (r, ink) in rects {
+                        self.ctx.set_paint(color(*ink));
+                        self.ctx.fill_rect(r);
+                    }
+                    for (path, x, y, ink) in glyphs {
+                        self.ctx.set_paint(color(*ink));
+                        self.ctx.set_transform(at * Affine::translate((*x, *y)));
+                        self.ctx.fill_path(path);
+                    }
+                }
                 Paint::Text { text, color: ink } => {
                     self.ctx.set_paint(color(*ink));
                     for glyph in &text.glyphs {

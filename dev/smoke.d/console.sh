@@ -8,6 +8,7 @@
 # respawned its terminal would produce three perfectly good frames and throw
 # the session away, which is the whole feature.
 leg_console_flag="--console"
+leg_console_rust=1
 leg_console_order=90
 leg_console_needs="foot"
 

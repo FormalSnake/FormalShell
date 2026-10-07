@@ -27,6 +27,7 @@ fs-network = { path = "../fs-network" }
 fs-js = { path = "../fs-js" }
 fs-upower = { path = "../fs-upower" }
 fs-info = { version = "0.1.1", path = "../fs-info" }
+fs-screensaver = { path = "../fs-screensaver" }
 fs-notifd = { path = "../fs-notifd" }
 fs-auth = { path = "../fs-auth" }
 zeroize = "1.8"

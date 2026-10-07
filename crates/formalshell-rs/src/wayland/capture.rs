@@ -165,17 +165,17 @@ impl App {
     /// frames coming; otherwise each takes one frame and waits for
     /// [`App::capture_refresh`].
     pub fn capture_set(&mut self, owner: Owner, wants: &[(String, (u32, u32))], live: bool) {
-        self.capture.thumbs.retain(|t| t.owner != owner || wants.iter().any(|(id, _)| *id == t.id));
+        self.thumbnails.thumbs.retain(|t| t.owner != owner || wants.iter().any(|(id, _)| *id == t.id));
         for (id, size) in wants {
             let size = (size.0.max(1), size.1.max(1));
-            if let Some(t) = self.capture.thumbs.iter_mut().find(|t| t.owner == owner && t.id == *id) {
+            if let Some(t) = self.thumbnails.thumbs.iter_mut().find(|t| t.owner == owner && t.id == *id) {
                 t.size = size;
                 t.live = live;
                 continue;
             }
-            let key = self.capture.next_key;
-            self.capture.next_key += 1;
-            self.capture.thumbs.push(Thumb {
+            let key = self.thumbnails.next_key;
+            self.thumbnails.next_key += 1;
+            self.thumbnails.thumbs.push(Thumb {
                 owner,
                 id: id.clone(),
                 key,
@@ -201,27 +201,27 @@ impl App {
 
     /// One more frame for a thumbnail that is not live.
     pub fn capture_refresh(&mut self, owner: Owner, id: &str) {
-        let Some(key) = self.capture.thumbs.iter().find(|t| t.owner == owner && t.id == id).map(|t| t.key) else { return };
-        if let Some(t) = self.capture.thumb_mut(key) {
+        let Some(key) = self.thumbnails.thumbs.iter().find(|t| t.owner == owner && t.id == id).map(|t| t.key) else { return };
+        if let Some(t) = self.thumbnails.thumb_mut(key) {
             t.want = true;
         }
         self.capture_frame(key);
     }
 
     pub fn capture_image(&self, owner: Owner, id: &str) -> Option<&Bitmap> {
-        self.capture.thumbs.iter().find(|t| t.owner == owner && t.id == id).and_then(|t| t.image.as_ref())
+        self.thumbnails.thumbs.iter().find(|t| t.owner == owner && t.id == id).and_then(|t| t.image.as_ref())
     }
 
     /// How many of `owner`'s thumbnails hold a capture source.
     pub fn capture_sourced(&self, owner: Owner) -> usize {
-        self.capture.thumbs.iter().filter(|t| t.owner == owner && t.session.is_some()).count()
+        self.thumbnails.thumbs.iter().filter(|t| t.owner == owner && t.session.is_some()).count()
     }
 
     /// A source and a session for a thumbnail whose window has a handle
     /// mapped; one that has none yet waits for its mapping to land.
     fn capture_start(&mut self, key: u64) {
         let qh = self.qh.clone();
-        let c = &mut self.capture;
+        let c = &mut self.thumbnails;
         let (Some(sources), Some(copy)) = (c.sources.clone(), c.copy.clone()) else { return };
         let Some(id) = c.thumbs.iter().find(|t| t.key == key).filter(|t| t.session.is_none()).map(|t| t.id.clone()) else { return };
         let Some(handle) = c.handle_for(&id).cloned() else { return };
@@ -237,10 +237,10 @@ impl App {
     /// buffer it takes and while one is wanted and none is in flight.
     fn capture_frame(&mut self, key: u64) {
         let qh = self.qh.clone();
-        if self.capture.pool.is_none() {
-            self.capture.pool = SlotPool::new(4096, &self.shm).ok();
+        if self.thumbnails.pool.is_none() {
+            self.thumbnails.pool = SlotPool::new(4096, &self.shm).ok();
         }
-        let c = &mut self.capture;
+        let c = &mut self.thumbnails;
         let Some(pool) = c.pool.as_mut() else { return };
         let Some(t) = c.thumbs.iter_mut().find(|t| t.key == key) else { return };
         let (Some(session), Some(((w, h), format))) = (t.session.clone(), t.constraints) else { return };
@@ -260,7 +260,7 @@ impl App {
 
     /// The pixels a ready frame left in the buffer, fitted on the pool.
     fn capture_ready(&mut self, key: u64) {
-        let c = &mut self.capture;
+        let c = &mut self.thumbnails;
         let Some(pool) = c.pool.as_mut() else { return };
         let Some(t) = c.thumbs.iter_mut().find(|t| t.key == key) else { return };
         if let Some(f) = t.frame.take() {
@@ -281,9 +281,9 @@ impl App {
                     }
                 });
             }
-            self.capture.landed = Some(tx);
+            self.thumbnails.landed = Some(tx);
         }
-        let Some(tx) = self.capture.landed.clone() else { return };
+        let Some(tx) = self.thumbnails.landed.clone() else { return };
         let job = move || {
             let image = fit(&pixels, (w, h), opaque, size);
             let _ = tx.send(Landed { key, image });
@@ -292,13 +292,13 @@ impl App {
             Some(rt) => rt.pool().submit(job),
             None => job(),
         }
-        if self.capture.thumbs.iter().any(|t| t.key == key && t.live) {
+        if self.thumbnails.thumbs.iter().any(|t| t.key == key && t.live) {
             self.capture_frame(key);
         }
     }
 
     fn capture_landed(&mut self, l: Landed) {
-        let Some(t) = self.capture.thumb_mut(l.key) else { return };
+        let Some(t) = self.thumbnails.thumb_mut(l.key) else { return };
         t.image = Some(l.image);
         let owner = t.owner;
         self.thumbs_changed(owner);
@@ -343,7 +343,7 @@ fn fit(bgra: &[u8], from: (u32, u32), opaque: bool, to: (u32, u32)) -> Bitmap {
 impl Dispatch2<ExtImageCopyCaptureSessionV1, App> for ThumbKey {
     fn event(&self, app: &mut App, _: &ExtImageCopyCaptureSessionV1, event: ext_image_copy_capture_session_v1::Event, _: &Connection, _: &QueueHandle<App>) {
         let key = self.0;
-        let Some(t) = app.capture.thumb_mut(key) else { return };
+        let Some(t) = app.thumbnails.thumb_mut(key) else { return };
         match event {
             ext_image_copy_capture_session_v1::Event::BufferSize { width, height } => t.pending.0 = (width, height),
             ext_image_copy_capture_session_v1::Event::ShmFormat { format: WEnum::Value(f) } => t.pending.1.push(f),
@@ -374,7 +374,7 @@ impl Dispatch2<ExtImageCopyCaptureFrameV1, App> for ThumbKey {
             ext_image_copy_capture_frame_v1::Event::Ready => app.capture_ready(key),
             ext_image_copy_capture_frame_v1::Event::Failed { reason } => {
                 frame.destroy();
-                let Some(t) = app.capture.thumb_mut(key) else { return };
+                let Some(t) = app.thumbnails.thumb_mut(key) else { return };
                 t.frame = None;
                 match reason {
                     // The session sends its new constraints and a `done`,
@@ -398,10 +398,10 @@ impl Dispatch2<HyprlandToplevelWindowMappingHandleV1, App> for MapAsk {
         match event {
             window_mapping::Event::WindowAddress { address_hi, address } => {
                 let id = format!("{:x}", ((address_hi as u64) << 32) | address as u64);
-                if let Some(slot) = app.capture.handles.iter_mut().find(|(h, _)| *h == self.0) {
+                if let Some(slot) = app.thumbnails.handles.iter_mut().find(|(h, _)| *h == self.0) {
                     slot.1 = Some(id.clone());
                 }
-                let waiting: Vec<u64> = app.capture.thumbs.iter().filter(|t| t.id == id && t.session.is_none()).map(|t| t.key).collect();
+                let waiting: Vec<u64> = app.thumbnails.thumbs.iter().filter(|t| t.id == id && t.session.is_none()).map(|t| t.key).collect();
                 for key in waiting {
                     app.capture_start(key);
                 }
@@ -414,20 +414,20 @@ impl Dispatch2<HyprlandToplevelWindowMappingHandleV1, App> for MapAsk {
 
 impl ForeignToplevelListHandler for App {
     fn foreign_toplevel_list_state(&mut self) -> &mut ForeignToplevelList {
-        &mut self.capture.toplevels
+        &mut self.thumbnails.toplevels
     }
 
     fn new_toplevel(&mut self, _: &Connection, qh: &QueueHandle<Self>, handle: ExtForeignToplevelHandleV1) {
-        if let Some(m) = &self.capture.mapping {
+        if let Some(m) = &self.thumbnails.mapping {
             m.get_window_for_toplevel(&handle, qh, MapAsk(handle.clone()));
         }
-        self.capture.handles.push((handle, None));
+        self.thumbnails.handles.push((handle, None));
     }
 
     fn update_toplevel(&mut self, _: &Connection, _: &QueueHandle<Self>, _: ExtForeignToplevelHandleV1) {}
 
     fn toplevel_closed(&mut self, _: &Connection, _: &QueueHandle<Self>, handle: ExtForeignToplevelHandleV1) {
-        self.capture.handles.retain(|(h, _)| *h != handle);
+        self.thumbnails.handles.retain(|(h, _)| *h != handle);
     }
 }
 

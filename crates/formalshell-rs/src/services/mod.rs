@@ -8,6 +8,7 @@ pub mod appicon;
 pub mod barpaint;
 pub mod brightness;
 pub mod caffeinate;
+pub mod capture;
 pub mod clock;
 pub mod commands;
 pub mod config;
@@ -30,6 +31,7 @@ pub mod polkit;
 pub mod proc;
 pub mod radio;
 pub mod recording;
+pub mod screensaver;
 pub mod sleep;
 pub mod state;
 mod watch;
@@ -70,4 +72,5 @@ pub fn start(ctx: &Ctx) {
     ctx.spawn(tray::run(ctx.clone()));
     ctx.spawn(notifications::run(ctx.clone()));
     ctx.spawn(menu::run(ctx.clone()));
+    ctx.spawn(screensaver::run(ctx.clone()));
 }

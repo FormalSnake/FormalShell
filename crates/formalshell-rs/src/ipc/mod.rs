@@ -11,6 +11,8 @@ mod airplay;
 mod bar;
 mod caffeinate;
 mod calendar;
+mod capture;
+mod console;
 #[cfg(test)]
 mod cli;
 mod debug;
@@ -33,8 +35,11 @@ mod osd;
 mod panel;
 mod plugins;
 mod radio;
+mod record;
+mod screensaver;
 mod switcher;
 pub mod registry;
+mod screenshot;
 mod theme;
 mod tray;
 mod visualizer;
@@ -84,6 +89,11 @@ fn registry() ->&'static Registry<App> {
             menu::target(),
             calendar::target(),
             iphone::target(),
+            console::target(),
+            screensaver::target(),
+            screenshot::target(),
+            capture::target(),
+            record::target(),
             notifications::target(),
             notifications::reminder(),
             osd::target(),
@@ -99,6 +109,7 @@ pub fn dispatch(app: &mut App, request: &Request) -> String {
 }
 
 pub fn start(ctx: &Ctx) {
+    monitor::warm();
     ctx.spawn(serve(ctx.clone()));
 }
 
