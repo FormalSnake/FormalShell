@@ -8,6 +8,7 @@ pub mod card;
 pub mod headset;
 pub mod launcher;
 pub mod lock;
+pub mod modal;
 pub mod osd;
 pub mod panel;
 pub mod popup;

@@ -1,7 +1,6 @@
-//! The launcher's window on the App: its overlay surface, the two
-//! single-pixel scrim surfaces under it (Scrim.qml's band over the top
-//! line's own inset, riding `1 - attach`, and the rest of the output), the
-//! keyboard and pointer routed to it, and the `menu` verbs.
+//! The launcher's window on the App: a modal card on the overlay layer
+//! (`surfaces::modal`), the keyboard and pointer routed to it, and the
+//! `menu` verbs. `new_modal` builds any modal card's three surfaces.
 
 use std::time::Instant;
 
@@ -18,6 +17,7 @@ use crate::services::menu::{self as index, Ask};
 use crate::surface::{PixelSurface, Surface};
 use crate::surfaces::card::Ends;
 use crate::surfaces::launcher::{Out, Shown};
+use crate::surfaces::modal::{Modal, Part};
 
 const WIFI_PASSWORD: &str = "wifi-password";
 const WIFI_IDENTITY: &str = "wifi-identity";
@@ -29,10 +29,6 @@ pub struct Window {
     /// The Wi-Fi route keeps the scanner awake while it is the level
     /// (Menu.qml's `_wantsWifiScan`).
     scan: Option<crate::services::devices::network::Hold>,
-    /// The top line's own band, and everything under it.
-    band: Option<PixelSurface>,
-    dim: PixelSurface,
-    tone: f64,
     pressed: Option<String>,
 }
 
@@ -57,13 +53,10 @@ impl App {
         }
     }
 
-    /// The window for an open, created fresh unless one is already up.
-    fn show_launcher(&mut self) {
-        self.launcher_resolve = true;
-        if self.launch.as_ref().is_some_and(|w| w.shown.open) {
-            return;
-        }
-        self.launch = None;
+    /// A modal card's three surfaces on `layer` under `namespace`: the
+    /// card's own full-output one holding the keyboard, the band over the
+    /// top line's inset (none on a bare edge) and the dim under the rest.
+    pub(super) fn new_modal(&self, names: [&'static str; 3], namespace: &'static str, layer: Layer, deform_amount: f64) -> Modal {
         let theme = &self.store.theme.theme;
         let output = self.output_size();
         let inset = self.top_inset();
@@ -71,10 +64,10 @@ impl App {
         let ft = if framed { self.bar.frame_thickness() } else { 0.0 };
         let ends = Ends { along: output.0, inset_start: ft, inset_end: ft, radius: if framed { theme.frame_radius } else { 0.0 } };
         let band = (inset > 0.0).then(|| {
-            let ls = self.overlay("formalshell:menu", Layer::Overlay, Anchor::TOP | Anchor::LEFT | Anchor::RIGHT, (0, inset as u32), -1);
-            PixelSurface::new("menu-scrim-band", ls, &self.pixels, &self.qh, self.started)
+            let ls = self.overlay(namespace, layer, Anchor::TOP | Anchor::LEFT | Anchor::RIGHT, (0, inset as u32), -1);
+            PixelSurface::new(names[1], ls, &self.pixels, &self.qh, self.started)
         });
-        let ls = self.layer_shell.create_layer_surface(&self.qh, self.compositor.create_surface(&self.qh), Layer::Overlay, Some("formalshell:menu"), None);
+        let ls = self.layer_shell.create_layer_surface(&self.qh, self.compositor.create_surface(&self.qh), layer, Some(namespace), None);
         ls.set_anchor(Anchor::all());
         ls.set_size(0, 0);
         ls.set_margin(inset as i32, 0, 0, 0);
@@ -84,21 +77,31 @@ impl App {
             ls.set_input_region(Some(region.wl_region()));
         }
         ls.commit();
-        let dim = PixelSurface::new("menu-scrim", ls, &self.pixels, &self.qh, self.started);
-        let layer = self.overlay("formalshell:menu", Layer::Overlay, Anchor::all(), (0, 0), -1);
-        layer.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
-        layer.commit();
-        let mut surface = Surface::new("menu", layer, &self.shm, self.started);
+        let dim = PixelSurface::new(names[2], ls, &self.pixels, &self.qh, self.started);
+        let card = self.overlay(namespace, layer, Anchor::all(), (0, 0), -1);
+        card.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
+        card.commit();
+        let mut surface = Surface::new(names[0], card, &self.shm, self.started);
         surface.wait_map = true;
-        let shown = Shown::new(theme, surface, output, inset, ends, self.motion_scale, self.cast);
-        let tone = f64::from(theme.box_style("scrim", None).fill.a);
-        self.launch = Some(Window { shown, scan: None, band, dim, tone, pressed: None });
+        Modal::new(theme, surface, band, dim, output, inset, ends, self.motion_scale, self.cast, deform_amount)
+    }
+
+    /// The window for an open, created fresh unless one is already up.
+    fn show_launcher(&mut self) {
+        self.launcher_resolve = true;
+        if self.launch.as_ref().is_some_and(|w| w.shown.modal.open) {
+            return;
+        }
+        self.launch = None;
+        let modal = self.new_modal(["menu", "menu-scrim-band", "menu-scrim"], "formalshell:menu", Layer::Overlay, Shown::DEFORM_AMOUNT);
+        let shown = Shown::new(modal, self.output_size(), self.motion_scale);
+        self.launch = Some(Window { shown, scan: None, pressed: None });
         self.log("menu mapped");
     }
 
     fn hide_launcher(&mut self) {
         if let Some(w) = &mut self.launch {
-            w.shown.close(Instant::now());
+            w.shown.modal.close(Instant::now());
             self.log("menu closing");
         }
         self.sync_join();
@@ -603,7 +606,7 @@ impl App {
     pub(super) fn present_launcher(&mut self, now: Instant) {
         self.launcher_answers();
         if let Some(w) = &mut self.launch {
-            let want = self.launcher.open && w.shown.open && self.launcher.level.as_deref() == Some("wifi");
+            let want = self.launcher.open && w.shown.modal.open && self.launcher.level.as_deref() == Some("wifi");
             if want != w.scan.is_some() {
                 w.scan = want.then(crate::services::devices::network::Hold::new);
             }
@@ -633,14 +636,14 @@ impl App {
         let Some(w) = &mut self.launch else { return };
         let animating = w.shown.animating(now);
         let t1 = Instant::now();
-        if self.launcher.dirty || animating || !w.shown.surface.mapped {
-            w.shown.sync_region(&self.compositor);
+        if self.launcher.dirty || animating || !w.shown.modal.surface.mapped {
+            w.shown.modal.sync_region(&self.compositor);
             w.shown.layout(&mut self.launcher, &self.store, theme, &mut self.bar.kit, now);
             self.launcher.dirty = false;
         }
         let laid = t1.elapsed();
         let animating = w.shown.animating(now);
-        w.shown.surface.present(&mut w.shown.card.scene, animating, &qh);
+        w.shown.modal.present(animating, now, &qh);
         if t0.elapsed().as_millis() >= 8 {
             eprintln!(
                 "event loop: slow launcher t={}ms resolve_us={} layout_us={} total_us={}",
@@ -650,71 +653,28 @@ impl App {
                 t0.elapsed().as_micros()
             );
         }
-        let pose = w.shown.card.pose(now);
-        let attach = w.shown.card.attach(now);
-        if let Some(b) = &mut w.band {
-            b.present(w.tone * pose * (1.0 - attach), animating, &qh);
-        }
-        w.dim.present(w.tone * pose, animating, &qh);
         if animating {
             self.sync_join();
         }
     }
 
     pub(super) fn launcher_owner(&self, surface: &smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface) -> Option<Owner> {
-        let w = self.launch.as_ref()?;
-        if w.shown.surface.layer.wl_surface() == surface {
-            return Some(Owner::Launcher);
-        }
-        if w.dim.layer.wl_surface() == surface {
-            return Some(Owner::LauncherScrim(1));
-        }
-        if w.band.as_ref().is_some_and(|b| b.layer.wl_surface() == surface) {
-            return Some(Owner::LauncherScrim(0));
-        }
-        None
+        self.launch.as_ref()?.shown.modal.part(surface).map(Owner::Launcher)
     }
 
-    pub(super) fn launcher_frame(&mut self, owner: Owner, now: Instant) {
+    pub(super) fn launcher_frame(&mut self, part: Part, now: Instant) {
         let Some(w) = &mut self.launch else { return };
-        match owner {
-            Owner::Launcher => {
-                let s = &mut w.shown.surface;
-                s.landed(now);
-                if s.mapped {
-                    w.shown.card.tick(now);
-                } else {
-                    s.mapped = true;
-                    w.shown.card.mapped(now);
-                }
-                self.launcher.dirty = true;
-                self.sync_join();
-            }
-            Owner::LauncherScrim(i) => {
-                let s = if i == 0 { w.band.as_mut() } else { Some(&mut w.dim) };
-                if let Some(s) = s {
-                    (s.frame_pending, s.mapped, s.callbacks) = (false, true, s.callbacks + 1);
-                }
-            }
-            _ => {}
+        if w.shown.modal.frame(part, now) {
+            self.launcher.dirty = true;
+            self.sync_join();
         }
     }
 
-    pub(super) fn launcher_configure(&mut self, owner: Owner, width: i32, height: i32) {
+    pub(super) fn launcher_configure(&mut self, part: Part, width: i32, height: i32) {
         let Some(w) = &mut self.launch else { return };
-        match owner {
-            Owner::Launcher => {
-                let size = w.shown.card.scene.size;
-                w.shown.surface.configure(size.w, size.h);
-                self.launcher.dirty = true;
-            }
-            Owner::LauncherScrim(0) => {
-                if let Some(b) = &mut w.band {
-                    b.configure(width, height);
-                }
-            }
-            Owner::LauncherScrim(_) => w.dim.configure(width, height),
-            _ => {}
+        w.shown.modal.configure(part, width, height);
+        if part == Part::Card {
+            self.launcher.dirty = true;
         }
     }
 
@@ -727,7 +687,7 @@ impl App {
     /// One key while the launcher holds the keyboard. False when it is not
     /// up, so the key goes on to the panel.
     pub(super) fn launcher_key(&mut self, event: &KeyEvent, repeat: bool) -> bool {
-        if !self.launcher.open || self.launch.as_ref().is_none_or(|w| !w.shown.open) {
+        if !self.launcher.open || self.launch.as_ref().is_none_or(|w| !w.shown.modal.open) {
             return false;
         }
         let key = match event.keysym {
@@ -757,7 +717,7 @@ impl App {
 
     /// The pointer over the launcher's window. True when it took the event.
     pub(super) fn launcher_pointer(&mut self, e: &PointerEvent, owner: Option<Owner>) -> bool {
-        if owner != Some(Owner::Launcher) {
+        if owner != Some(Owner::Launcher(Part::Card)) {
             return false;
         }
         let Some(w) = &mut self.launch else { return true };
@@ -778,11 +738,11 @@ impl App {
                 }
             }
             PointerEventKind::Press { .. } => {
-                w.pressed = w.shown.hit(x, y).and_then(|h| h.on).or_else(|| (!w.shown.on_card(x, y)).then(|| "outside".into()));
+                w.pressed = w.shown.hit(x, y).and_then(|h| h.on).or_else(|| (!w.shown.modal.on_card(x, y)).then(|| "outside".into()));
             }
             PointerEventKind::Release { .. } => {
                 let pressed = w.pressed.take();
-                let on = w.shown.hit(x, y).and_then(|h| h.on).or_else(|| (!w.shown.on_card(x, y)).then(|| "outside".into()));
+                let on = w.shown.hit(x, y).and_then(|h| h.on).or_else(|| (!w.shown.modal.on_card(x, y)).then(|| "outside".into()));
                 if pressed.is_none() || pressed != on {
                     return true;
                 }
@@ -819,7 +779,7 @@ impl App {
     }
 
     pub(super) fn launcher_joins(&self) -> Vec<(Edge, f64, f64, f64)> {
-        self.launch.as_ref().map_or_else(Vec::new, |w| w.shown.card.joins.iter().map(|j| (j.edge, j.x, j.width, j.reach)).collect())
+        self.launch.as_ref().map_or_else(Vec::new, |w| w.shown.modal.joins().collect())
     }
 
     /// The tray route's rows, off the tray the bar already holds.

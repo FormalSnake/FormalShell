@@ -8,12 +8,6 @@ by surface; one line each.
 - Calendar: the life-progress prompt needs the launcher's input answer routed back to the
   panel (`wayland/launcher.rs`'s resolved tokens), which the R4b launcher agent holds.
 
-## Lock and auth
-- Polkit card's slide-in off the top line: the dialog is one full-output
-  surface with the scrim baked in; the Drawer/join pipeline (Card, scrim
-  band and dim surfaces, bar join) is launcher-specific and would need to
-  be generalised first.
-
 ## Media
 - Header Radio button (needs the Radio Atlas surface, Globe and search, not
   ported) and the animated album art (needs a video decode path) not ported.
