@@ -188,7 +188,9 @@ impl Panel for WorkspacePreview {
         if ev.on == "mini"
             && let What::Scroll(dx, dy) = ev.what
         {
-            let step = fx.store.theme.theme.space.control_height;
+            // Qt turns the rig's continuous axis into 72 px a notch where a wheel's
+            // 120 angle units give one control height; the QML card steps that far.
+            let step = fx.store.theme.theme.space.control_height * 2.25;
             let mut shared = self.shared.borrow_mut();
             let laid = &shared.laid;
             let wide = laid.content.0 > laid.view.0;

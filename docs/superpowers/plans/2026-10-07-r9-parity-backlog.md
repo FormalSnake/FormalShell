@@ -28,7 +28,6 @@ by surface; one line each.
 - Calendar: life-progress prompt, month-swap slide.
 - App menu populated state (hero, actions, windows) never rendered in a leg.
 - `--pantheon --systemupdate` never opens its panel (check QML too).
-- Spaces preview: one sideways notch scrolls 32 px in Rust, 72 px in QML.
 
 ## Notifications
 - Desktop-entry step in the icon order; iPhone source mark on cards; the
