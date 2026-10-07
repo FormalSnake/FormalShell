@@ -638,7 +638,7 @@ fn stop_radius(cx: &Cx, el: &El, h: f64) -> f64 {
     }
 }
 
-/// Cell.qml's box over its states, with the cursor and the hover wash.
+/// A cell's box over its states, with the cursor and the hover wash.
 #[allow(clippy::too_many_arguments)]
 fn cell(cx: &mut Cx, el: &El, r: Rect, state: CellState, interactive: bool, child: &El, path: &str, stop: Option<String>) {
     let t = cx.theme;
@@ -817,7 +817,7 @@ fn switch(cx: &mut Cx, el: &El, r: Rect, checked: bool, enabled: bool, path: &st
     let tri = irect(tr);
     let tr_radius = t.box_radius(&track, tri.h as f64);
     let kn_radius = t.box_radius(&knob, size);
-    // Switch.qml dims a disabled switch the way Button does.
+    // A disabled switch dims the way a button does.
     let alpha = if enabled { cx.alpha } else { cx.alpha * 0.5 };
     let mut p = cx.painter(path);
     boxes::paint(&mut p, tri, &track, tr_radius, alpha, 0.0);
@@ -882,13 +882,13 @@ fn cx_border(t: &fs_theme::theme::Theme) -> i32 {
     t.border_width.round().max(1.0) as i32
 }
 
-/// ButtonGroup.qml's `_naturalButtonWidth`: the widest whole label.
+/// The widest whole label.
 fn group_natural(cx: &mut Cx, options: &[super::el::Opt]) -> f64 {
     let s = cx.theme.space.clone();
     options.iter().map(|o| button_metrics(cx, &o.label, &o.icon, s.md).0).fold(s.control_height - s.xs * 2.0, f64::max)
 }
 
-/// ButtonGroup.qml's wrap: as many columns as fit the widest button, then
+/// Button group wrap: as many columns as fit the widest button, then
 /// the fewest rows that hold every option and the fewest columns filling
 /// them. (rows, columns).
 fn group_grid(natural: f64, count: usize, width: f64, pad: f64) -> (usize, usize) {
@@ -1047,7 +1047,7 @@ fn marquee(cx: &mut Cx, r: Rect, text: &str, ink: Ink, path: &str) {
     let loop_w = t.width as f64 + gap;
     let mut scroll = 0.0;
     if overflow && look.motion {
-        // MarqueeText.qml: hold, then one whole loop at a steady speed.
+        // Hold, then one whole loop at a steady speed.
         let hold = look.marquee_hold / 1000.0;
         let run = loop_w / look.marquee_px.max(1.0);
         let born = cx.born(path);
@@ -1101,7 +1101,7 @@ fn matrix_module(width: f64, n: usize) -> f64 {
     if n == 0 { 0.0 } else { (width / n as f64).floor().max(1.0) }
 }
 
-/// NetworkPanel.qml's QR canvas: the quiet zone in whichever of
+/// The QR canvas: the quiet zone in whichever of
 /// foreground and background is lighter, the modules in the darker, one
 /// rect per run of set modules along a row.
 fn matrix(cx: &mut Cx, r: Rect, rows: &[String], path: &str) {

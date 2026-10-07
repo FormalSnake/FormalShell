@@ -1,4 +1,4 @@
-//! `gallery`, GalleryIpc.qml's verbs over the dev sheet.
+//! `gallery`: the verbs over the dev sheet.
 
 use super::registry::{Function, Target, Type, Value};
 use crate::wayland::App;

@@ -1,9 +1,8 @@
-//! The single-instance lock (InstanceLock.qml): one shell per Wayland
+//! The single-instance lock: one shell per Wayland
 //! session, the newest winning. A socket keyed on `WAYLAND_DISPLAY` answers
 //! every connection with `formalshell <pid>`; a new shell that hears that
 //! line asks for `takeover <pid>`, waits for the old one to close its end,
-//! and binds in its place. The wire lines are the QML shell's, so either
-//! build replaces the other.
+//! and binds in its place.
 //!
 //! Taken before the Wayland connection: the old shell's surfaces and IPC
 //! socket have to be gone before this one makes its own. A replaced shell
@@ -15,7 +14,7 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-/// How long a new shell waits on the old one, as InstanceLock.qml's poll.
+/// How long a new shell waits on the old one.
 const TAKEOVER_WAIT: Duration = Duration::from_secs(2);
 
 fn log(line: &str) {

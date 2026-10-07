@@ -19,7 +19,6 @@
 # the spectrum.
 leg_media_progress_flag="--media-progress"
 leg_media_progress_order=171
-leg_media_progress_rust=1
 leg_media_progress_needs="mpv ffmpeg convert"
 
 media_progress_track_a="$shot_dir/progress-track-a.flac"
@@ -216,7 +215,7 @@ media_progress_rect() {
 # panel is the position track, since it is the widest thing the panel draws
 # in the primary hue. Taking the run rather than the row keeps the elapsed
 # and total readouts either side of it out of the count. The fill is the
-# strong end of that hue and the groove the 0.2-alpha wash Track.qml paints
+# strong end of that hue and the groove the 0.2-alpha wash the track paints
 # behind it.
 media_progress_fill() {
   local body rect

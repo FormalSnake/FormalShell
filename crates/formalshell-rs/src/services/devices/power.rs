@@ -1,8 +1,8 @@
-//! UPower through fs-upower: the laptop battery Battery.qml reads off the
+//! UPower through fs-upower: the laptop battery the bar reads off the
 //! display device, `OnBattery`, and the DualSense battery. hid-playstation's
 //! `ps-controller-battery-<MAC>` supply is one of UPower's own devices, so
 //! the controller arrives and changes on UPower's signals rather than on
-//! DualsenseService.qml's 30 second sysfs poll.
+//! a 30 second sysfs poll.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -87,7 +87,7 @@ fn status_word(s: fs_upower::DeviceState) -> &'static str {
     }
 }
 
-/// First match wins, as the QML probe's `head -n1` did.
+/// First match wins.
 fn dualsense(devices: &BTreeMap<String, Device>) -> Option<Supply> {
     let d = devices.values().find(|d| d.native_path.starts_with("ps-controller-battery-") && d.is_present)?;
     let supply = dualsense::parse_supply(Some(&d.percentage.rounded().to_string()), Some(status_word(d.state)));
@@ -142,7 +142,7 @@ pub async fn run(ctx: Ctx) {
 
 /// The DualSense's lightbar colour and lit player LEDs, which sysfs alone
 /// holds and nothing signals. Read while the DualSense panel is open, on
-/// open and then every 30 seconds (DualsenseService.qml's probe).
+/// open and then every 30 seconds.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Lights {
     pub lightbar: Option<String>,

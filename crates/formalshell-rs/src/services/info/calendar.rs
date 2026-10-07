@@ -1,4 +1,4 @@
-//! Calendar events for the panel (CalendarEventsService.qml): local `.ics`
+//! Calendar events for the panel: local `.ics`
 //! files under `calendar.icsDir` and EDS through `formalshell-eds events`,
 //! merged by UID. Both refresh every five minutes and when the panel opens.
 //! The first failed `formalshell-eds` run switches that backend off for the

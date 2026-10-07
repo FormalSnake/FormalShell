@@ -1,7 +1,6 @@
 //! Whether a clipboard capture is nothing but emoji, counted in grapheme
 //! clusters, so the launcher can draw it as a picture rather than as a line
-//! of body text. Hand-rolled over code points, with the same tables the QML
-//! shell shipped.
+//! of body text. Hand-rolled over code points.
 
 /// A capture this many clusters long or longer reads as text, not a picture.
 pub const MAX_CLUSTERS: usize = 8;

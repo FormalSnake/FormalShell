@@ -1,4 +1,4 @@
-//! `caffeinate`, CaffeinateIpc.qml: toggle, enable and disable the idle
+//! `caffeinate`: toggle, enable and disable the idle
 //! inhibitor, and `status` (`inhibiting` is the surface's own word that the
 //! Wayland inhibitor is up, not a restatement of `active`).
 

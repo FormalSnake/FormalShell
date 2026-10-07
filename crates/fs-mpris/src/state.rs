@@ -46,7 +46,7 @@ pub struct Metadata {
 }
 
 impl Metadata {
-    /// Artists joined the way Quickshell's `trackArtist` does.
+    /// Artists joined with a comma and a space.
     pub fn artist(&self) -> String {
         self.artists.join(", ")
     }
@@ -72,7 +72,7 @@ pub struct PlayerState {
     pub can_seek: bool,
     pub can_control: bool,
     pub can_raise: bool,
-    /// False when reading `Position` fails (Quickshell's `positionSupported`).
+    /// False when reading `Position` fails.
     pub position_supported: bool,
     base_us: i64,
     base_at: Instant,
@@ -107,19 +107,18 @@ impl PlayerState {
         self.status == PlaybackStatus::Playing
     }
 
-    /// Quickshell's `canTogglePlaying`: the capability of the verb the toggle
-    /// would issue next.
+    /// The capability of the verb the toggle would issue next.
     pub fn can_toggle_playing(&self) -> bool {
         if self.is_playing() { self.can_pause } else { self.can_play }
     }
 
-    /// Quickshell gates seeking on `CanControl && CanSeek`.
+    /// Seeking needs both `CanControl` and `CanSeek`.
     pub fn can_seek_now(&self) -> bool {
         self.can_control && self.can_seek
     }
 
-    /// Track length; Quickshell falls back to the position when the player
-    /// publishes no `mpris:length`.
+    /// Track length; falls back to the position when the player publishes no
+    /// `mpris:length`.
     pub fn length(&self, now: Instant) -> Duration {
         match self.metadata.length_us {
             Some(us) if us > 0 => micros(us),

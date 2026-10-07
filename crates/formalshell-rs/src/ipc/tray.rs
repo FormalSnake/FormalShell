@@ -1,4 +1,4 @@
-//! `tray`, TrayIpc.qml's verbs: the items and where the tray lives, an
+//! `tray`: the items and where the tray lives, an
 //! item's Activate, and the shell-owned menu opened and walked headlessly.
 //! Opening and closing the second bar is `panel open|close|toggle
 //! trayoverflow`, so there is no verb for it here.

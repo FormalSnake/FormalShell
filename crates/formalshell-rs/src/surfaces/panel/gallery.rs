@@ -1,7 +1,7 @@
-//! Surfaces/Gallery/Gallery.qml: the dev sheet, every shared widget drawn
+//! The dev sheet, every shared widget drawn
 //! against the live theme. A panel as wide as the output, opened by the
 //! `gallery` target rather than `panel`. The controls column takes the
-//! place of the QML sheet's AuthPrompt sample, which lands with the lock
+//! place of an auth prompt sample, which lands with the lock
 //! (R6), so every control a panel builds from is on the sheet.
 
 use fs_chrome::types::Edge;

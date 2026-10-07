@@ -1,4 +1,4 @@
-//! `bluetooth`, BluetoothIpc.qml: the radio for compositor keybinds and the
+//! `bluetooth`: the radio for compositor keybinds and the
 //! rig (`toggle`, `power on|off`, `status`) and the headless path for the
 //! panel's TRUSTED toggle (`trust`, `untrust`). No adapter is an honest
 //! "error: no bluetooth adapter", and `status` stays JSON either way.
@@ -71,7 +71,7 @@ fn quote(s: &str) -> String {
     serde_json::to_string(s).unwrap_or_default()
 }
 
-/// The keys in the order the QML handler's `JSON.stringify` writes them.
+/// The keys in the order the golden replies carry them.
 fn status(app: &mut App, _: &[Value]) -> Value {
     let bt = &app.store.devices.bluetooth;
     let Some(powered) = bt.powered else {

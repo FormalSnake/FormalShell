@@ -1,6 +1,6 @@
 // Portions from omarchy-iphone (MIT, Copyright (c) 2026 kbbahaPro)
 
-//! The iPhone (IphoneService.qml's bridge half): one long-lived
+//! The iPhone's bridge half: one long-lived
 //! `omarchy-iphone-bridge listen` child turning ancs4linux's signals into
 //! JSONL, restarted on a doubling backoff, and the verbs the panel drives it
 //! with: invoke, dismiss, clear, pair. No bridge on PATH is

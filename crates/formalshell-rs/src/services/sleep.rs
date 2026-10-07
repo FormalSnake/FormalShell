@@ -1,5 +1,4 @@
-//! logind's sleep hook for the lock (LockService.qml's `sleepMonitor` and
-//! `sleepInhibitor`): a `delay` inhibitor held while the session is awake,
+//! logind's sleep hook for the lock: a `delay` inhibitor held while the session is awake,
 //! so PrepareForSleep(true) reaches the lock before the machine sleeps. The
 //! lock lets it go once its surface is secure (or the wait gave up), and a
 //! fresh one is taken on PrepareForSleep(false).

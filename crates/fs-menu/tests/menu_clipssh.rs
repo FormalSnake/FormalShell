@@ -1,6 +1,5 @@
 // The clipssh route's pure half: ~/.clipssh/aliases parsing (clipssh's own
-// `name=user@host` format), row building and clipssh's output contract. The
-// Shift+Enter hint tests of the QML file belong to the action bar's own port.
+// `name=user@host` format), row building and clipssh's output contract.
 
 use fs_menu::node::Kind;
 use fs_menu::providers::{ClipsshAlias, ClipsshOutcome, clipssh_aliases, clipssh_outcome, clipssh_rows};

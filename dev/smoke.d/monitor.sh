@@ -9,15 +9,15 @@
 # status`, taken in the same breath, carries real CPU and memory numbers off
 # the VM's own /proc.
 #
-# Under FS_IMPL=rust the cell is also read off `bar room`, whole on the
+# The cell is also read off `bar room`, whole on the
 # strip.
 #
 # monitor_done_path is this leg's own finish marker: --processes types into
 # the same launcher route and waits on it rather than summoning over this
 # leg's frames.
 leg_monitor_flag="--monitor"
-leg_monitor_rust=1
 leg_monitor_order=140
+leg_monitor_needs="jq"
 
 monitor_done_path="$shot_dir/monitor-drive.done"
 monitor_status_path="$shot_dir/monitor-status.json"
@@ -34,12 +34,6 @@ monitor_view_png="$shot_dir/monitor-view.png"
 monitor_dump_path="$shot_dir/dump.json"
 monitor_room_path="$shot_dir/monitor-room.json"
 
-leg_monitor_validate() {
-  if [ "$fs_impl" = rust ]; then
-    leg_monitor_needs="jq"
-  fi
-}
-
 leg_monitor_fixture() {
   # `monitor` is an opt-in builtin (absent from DEFAULT_LAYOUT), so naming
   # it here is the whole install of the bar cell. Leading the right region
@@ -53,21 +47,18 @@ leg_monitor_timing() {
 }
 
 leg_monitor_drive() {
-  local script="$shot_dir/monitor-drive.sh" room_line=""
+  local script="$shot_dir/monitor-drive.sh"
   local menu_lines="sleep 1
 $ipc call menu summon monitor > \"$monitor_menu_reply_path\" 2>&1
 sleep 3
 $ipc call menu status > \"$monitor_menu_status_path\" 2>&1
 \"$grim_bin\" \"$monitor_view_png\" > /dev/null 2>&1"
-  if [ "$fs_impl" = rust ]; then
-    room_line="$ipc call bar room > \"$monitor_room_path\" 2>&1"
-  fi
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 6
 $ipc call monitor status > "$monitor_status_path" 2>&1
 $ipc call monitor gpu > "$monitor_gpu_path" 2>&1
-$room_line
+$ipc call bar room > "$monitor_room_path" 2>&1
 $ipc call debug dump > "$monitor_dump_path" 2>&1
 "$grim_bin" "$monitor_bar_png" > /dev/null 2>&1
 sleep 1
@@ -137,10 +128,8 @@ leg_monitor_assert() {
     fail "no monitor-panel screenshot produced"
   fi
   echo "SMOKE_MONITOR_PANEL $monitor_panel_png"
-  if [ "$fs_impl" = rust ]; then
-    jq -e '.[].cells[] | select(.name == "monitor" and .whole == true and .width > 0)' "$monitor_room_path" > /dev/null \
-      || fail "the monitor cell is not whole on the strip: $(cat "$monitor_room_path" 2>/dev/null)"
-  fi
+  jq -e '.[].cells[] | select(.name == "monitor" and .whole == true and .width > 0)' "$monitor_room_path" > /dev/null \
+    || fail "the monitor cell is not whole on the strip: $(cat "$monitor_room_path" 2>/dev/null)"
   if ! grep -q '^ok$' "$monitor_menu_reply_path" 2>/dev/null; then
     fail "menu summon monitor did not answer ok, got: $(cat "$monitor_menu_reply_path" 2>/dev/null)"
   fi

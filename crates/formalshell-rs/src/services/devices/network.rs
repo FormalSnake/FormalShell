@@ -1,6 +1,6 @@
-//! NetworkManager through fs-network: what NetworkWidget.qml reads (wired or
+//! NetworkManager through fs-network: what the network cell reads (wired or
 //! Wi-Fi connected, the network the Wi-Fi device is on, the radio switch)
-//! and what NetworkPanel.qml and NetworkIpc.qml drive, WifiService.qml's
+//! and what the network panel and IPC drive, the
 //! action bookkeeping and the panel's speed test included.
 //!
 //! One action is in flight at a time (`connect`, `disconnect`, `forget`).
@@ -23,7 +23,7 @@ use crate::services::info;
 use crate::services::wants::Source;
 use crate::store;
 
-/// WifiService.qml's `actionTimeout`.
+/// How long a panel action may stay unsettled.
 const ACTION_TIMEOUT: Duration = Duration::from_secs(15);
 /// How often a held scanner asks the radio for a fresh scan.
 const SCAN_EVERY: Duration = Duration::from_secs(10);
@@ -348,7 +348,7 @@ fn nm() -> Option<NetworkManager> {
     INNER.with_borrow(|i| i.nm.clone())
 }
 
-/// WifiService.qml's `checkActionCompletion`, for the two actions that
+/// The completion check for the two actions that
 /// settle on what NetworkManager shows rather than on a call's result.
 fn settle(i: &mut Inner) {
     let Some((kind, ssid)) = i.action.clone() else { return };
@@ -521,7 +521,7 @@ pub fn rescan(ctx: &Ctx) {
     });
 }
 
-/// NetworkWidget.qml's right click: `Networking.wifiEnabled` flipped.
+/// The network cell's right click: `Networking.wifiEnabled` flipped.
 pub fn toggle_wifi(ctx: &Ctx) {
     let Some(nm) = nm() else { return };
     ctx.spawn(async move {
@@ -601,7 +601,7 @@ async fn holds(ctx: Ctx) {
     }
 }
 
-// ---- Speed test (NetworkPanel.qml's `_startSpeedTest` chain).
+// ---- Speed test.
 
 /// False when a test is already running.
 pub fn speed_start(ctx: &Ctx) -> bool {
@@ -751,7 +751,7 @@ async fn speed_run() {
     INNER.with_borrow_mut(|i| i.speed_stop = None);
 }
 
-// ---- Share and reveal (NetworkPanel.qml's QR share and password rows).
+// ---- Share and reveal (the panel's QR share and password rows).
 
 /// One nmcli read serves both: the connection the default route runs when
 /// it is wireless, else the first connected Wi-Fi device. Exit 2 is no

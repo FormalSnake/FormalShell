@@ -1,4 +1,4 @@
-//! GithubPanel.qml: the signed-in account as the hero with the total
+//! The signed-in account as the hero with the total
 //! awaiting it, then Pull requests and Issues sections of rows, each the
 //! repo slug in mono over the title. The cursor spans both lists, pull
 //! requests first, and Enter or a click opens the row's url through

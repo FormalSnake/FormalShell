@@ -4,7 +4,7 @@
 # to finished GIF. `record start screen desktop` answers with the destination
 # path synchronously, `record status` has to report active:true against that
 # exact path, and the bar is screenshotted mid recording (record-active.png),
-# the only state Indicators.qml's recording cell exists in. `record stop`
+# the only state the recording cell exists in. `record stop`
 # then polls until `active` goes false (SIGTERM asks wf-recorder to finalize
 # the container rather than truncate it) and until `finalizing` settles too
 # (RecordingService's own trim/loudnorm pass), so the ffprobe read lands on
@@ -24,7 +24,6 @@
 # UNAVAILABLE leg, which resolves on an empty device glob and costs nothing.
 leg_record_flag="--record"
 leg_record_order=210
-leg_record_rust=1
 leg_record_needs="file ffprobe"
 
 record_start_reply_path="$shot_dir/record-start-reply.txt"

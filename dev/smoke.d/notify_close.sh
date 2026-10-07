@@ -22,7 +22,6 @@
 # client sends the surface a pointer enter.
 leg_notify_close_flag="--notify-close"
 leg_notify_close_order=32
-leg_notify_close_rust=1
 leg_notify_close_needs="notify-send convert wlrctl"
 
 notify_close_bare_path="$shot_dir/notify-close-bare.png"

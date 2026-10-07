@@ -3,12 +3,12 @@
 # --shoulders proves the join (M54 D6): a card hanging off the bar and the
 # bar's own inward line are one silhouette, not a card parked against a line.
 # The bar opens a gap of the card's rect plus a fillet's radius at either end,
-# and Components/Shoulders.qml draws a concave quarter arc into each of those
+# and the shoulders component draws a concave quarter arc into each of those
 # two ends, running from the card's side out to the line.
 #
 # Nothing consumes Shoulders until M54 Task 3, so the leg publishes the join
 # itself over `debug join <edge> <x> <width>` and the shell's own preview
-# surface (Surfaces/Debug/JoinPreview.qml) hangs one card at that rect. The
+# surface hangs one card at that rect. The
 # card's depth is that file's business; everything asserted here is along the
 # bar.
 #
@@ -34,7 +34,6 @@
 # between the open and closed frames for a reason that has nothing to do with
 # the join.
 leg_shoulders_flag="--shoulders"
-leg_shoulders_rust=1
 leg_shoulders_order=74
 leg_shoulders_needs="convert jq"
 

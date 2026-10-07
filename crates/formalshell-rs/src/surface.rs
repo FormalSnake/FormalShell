@@ -422,7 +422,7 @@ impl<R: Role> Surface<R> {
             surface.damage_buffer(rect.x, rect.y, rect.w, rect.h);
         }
         // Until the first callback the surface may not be on screen yet,
-        // and an enter waits for it (Presence.qml's `mapped`).
+        // and an enter waits for it.
         if request {
             surface.frame(qh, FrameCallbackData(surface.clone()));
             self.frame_pending = true;
@@ -600,7 +600,7 @@ macro_rules! ignore_events {
 
 ignore_events!(WlSubcompositor, WlSubsurface, WpViewporter, WpViewport, WpSinglePixelBufferManagerV1, WpAlphaModifierV1, WpAlphaModifierSurfaceV1, WlBuffer);
 
-/// The desktop's own layer (Background.qml): the theme's background colour,
+/// The desktop's own layer: the theme's background colour,
 /// or the wallpaper's ready pixels over the whole output. A new wallpaper
 /// crossfades in over `reveal`; nothing draws at rest, and frame callbacks
 /// are asked for only while a fade runs.

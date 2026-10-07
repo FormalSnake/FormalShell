@@ -1,4 +1,4 @@
-//! RegionPicker.qml's surface, one per screen: the frozen frame under a
+//! The region picker's surface, one per screen: the frozen frame under a
 //! scrim with a hole for the selection, the selection's border and size
 //! readout, the key legend, the toolbar and the card naming windows the
 //! compositor gave no box. Only the frame stays while the capture grims it.

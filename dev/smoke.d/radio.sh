@@ -17,7 +17,6 @@
 # after it.
 leg_radio_flag="--radio"
 leg_radio_order=175
-leg_radio_rust=1
 leg_radio_needs="ffmpeg wtype pactl mpv"
 
 need_pactl() {
@@ -133,19 +132,16 @@ leg_radio_assert() {
   if grep -q '"kind":"stream"' "$radio_players_path"; then
     fail "the radio's own stream is listed again as an app with no MPRIS"
   fi
-  # The rust shell has no `media outputs`/`media output` until the audio graph lands.
-  if [ "$fs_impl" != rust ]; then
-    cat "$radio_outputs_path"; echo
-    if ! grep -q "\"id\":\"$radio_sink\"" "$radio_outputs_path"; then
-      fail "media outputs does not list the second sink"
-    fi
-    if ! grep -q "^ok$" "$radio_output_path"; then
-      fail "media output did not answer ok, got: $(cat "$radio_output_path")"
-    fi
-    if ! grep -q "\"output\":\"$radio_sink\"" "$radio_routed_path" \
-      || ! grep -q "\"output\":\"$radio_sink\"" "$radio_routed_media_path"; then
-      fail "the radio did not move to $radio_sink: $(cat "$radio_routed_path") $(cat "$radio_routed_media_path")"
-    fi
+  cat "$radio_outputs_path"; echo
+  if ! grep -q "\"id\":\"$radio_sink\"" "$radio_outputs_path"; then
+    fail "media outputs does not list the second sink"
+  fi
+  if ! grep -q "^ok$" "$radio_output_path"; then
+    fail "media output did not answer ok, got: $(cat "$radio_output_path")"
+  fi
+  if ! grep -q "\"output\":\"$radio_sink\"" "$radio_routed_path" \
+    || ! grep -q "\"output\":\"$radio_sink\"" "$radio_routed_media_path"; then
+    fail "the radio did not move to $radio_sink: $(cat "$radio_routed_path") $(cat "$radio_routed_media_path")"
   fi
   cat "$radio_stopped_path"; echo
   if ! grep -q '"available":false' "$radio_stopped_path"; then

@@ -27,7 +27,6 @@
 leg_menu_flag="--menu"
 leg_menu_order=20
 leg_menu_needs="jq wtype"
-leg_menu_rust=1
 
 # This leg's own clock. The launcher covers the whole output, so under
 # --wallpaper it starts after that leg's last frame (t=14) rather than
@@ -75,7 +74,7 @@ leg_menu_timing() {
 }
 
 leg_menu_drive() {
-  # `qs ipc call`'s CLI11 parser splits any positional argument that starts
+  # `ipc call`'s CLI11 parser splits any positional argument that starts
   # with "[" and ends with "]" into several comma-joined arguments (its
   # vector-literal shorthand), so the select list carries a leading space to
   # defeat that check. JSON.parse tolerates the whitespace.

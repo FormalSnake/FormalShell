@@ -1,3 +1,0 @@
-BarPaint BarPaint.qml
-singleton BarPaintService BarPaintService.qml
-singleton ThemeEngine ThemeEngine.qml

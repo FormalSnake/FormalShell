@@ -26,7 +26,6 @@
 leg_installed_flag="--installed <distro>"
 leg_installed_order=5
 leg_installed_needs="wtype jq convert"
-leg_installed_rust=1
 
 installed_home=$HOME
 installed_src=$HOME/install-check

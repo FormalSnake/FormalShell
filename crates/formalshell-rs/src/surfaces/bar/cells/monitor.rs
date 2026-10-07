@@ -1,4 +1,4 @@
-//! MonitorWidget.qml: an activity icon and "C42% M63% G10%" in the dim ink
+//! An activity icon and "C42% M63% G10%" in the dim ink
 //! (CPU, memory and, where a card reports a busy figure, GPU). The panel
 //! and launcher view open from the click; the figures only run while this
 //! cell is on a bar.

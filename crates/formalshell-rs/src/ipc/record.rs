@@ -1,4 +1,4 @@
-//! `record`, RecordIpc.qml: thin over `surfaces::capture::record`, so a
+//! `record`: thin over `surfaces::capture::record`, so a
 //! keybind, a menu row and the smoke rig all drive one implementation.
 
 use super::registry::{Function, Target, Type, Value};

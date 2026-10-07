@@ -10,9 +10,9 @@
 # combine it is the oldest group and therefore the one the popup cap evicts
 # into pending: --notify's frames need all four of its cards alive.
 # Combining also leaves the critical popup sticky in the popup layer, which
-# is what makes the suppression claim readable: Center.qml is a fixed
+# is what makes the suppression claim readable: the centre is a fixed
 # right-anchored card wherever notifications.position puts the toast stack,
-# so Toasts.qml drops its whole stack for as long as the centre is open and
+# so the toast stack drops out for as long as the centre is open and
 # center.png shows the centre alone.
 #
 # `notifications status` brackets a showHistory round trip (the IPC stand-in
@@ -36,7 +36,6 @@
 # whatever the run carries.
 leg_center_flag="--center"
 leg_center_order=40
-leg_center_rust=1
 leg_center_needs="notify-send jq wlrctl convert"
 
 # The band the entrance is read in: the output's trailing 560 columns, whole

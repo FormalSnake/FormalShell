@@ -29,7 +29,7 @@ pub struct Action {
 /// One live notification as the sender last described it.
 ///
 /// The raw image hints are decoded into `image` and dropped from `hints`,
-/// as Quickshell does, so a replace never keeps a large pixel buffer twice.
+/// so a replace never keeps a large pixel buffer twice.
 #[derive(Debug)]
 pub struct Notification {
     pub id: u32,
@@ -101,7 +101,7 @@ fn urgency_of(v: &OwnedValue) -> Urgency {
     }
 }
 
-/// Image precedence is Quickshell's: `image-data`, then `image_data`, then
+/// Image precedence: `image-data`, then `image_data`, then
 /// `icon_data`, and only without decodable pixels `image-path` / `image_path`.
 fn image_from_hints(hints: &HashMap<String, OwnedValue>) -> Option<Image> {
     for name in ["image-data", "image_data", "icon_data"] {
@@ -128,7 +128,7 @@ impl Notification {
             hints.remove(name);
         }
 
-        // An odd-length list is a malformed action set: Quickshell drops all of it.
+        // An odd-length list is a malformed action set, dropped whole.
         let actions = if actions.len() % 2 == 0 {
             actions.chunks(2).map(|p| Action { key: p[0].clone(), label: p[1].clone() }).collect()
         } else {

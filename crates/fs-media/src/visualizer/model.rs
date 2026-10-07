@@ -8,7 +8,7 @@
 //! bad line from cava must never freeze the widget on a stale render.
 //!
 //! The sine in `beat_frame`'s hash is the platform libm's, not V8's, so the
-//! last bit of a frame can differ from the QML build's.
+//! last bit of a frame can differ from a V8 evaluation of the same hash.
 
 use serde_json::Value;
 

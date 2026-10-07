@@ -466,7 +466,7 @@ impl State {
         self.emit(Event::Node(node));
     }
 
-    /// Quickshell's `PwNode::shouldUseDevice`.
+    /// Whether the node takes its volume from the device route.
     fn device_route(&self, id: u32) -> Option<(u32, i32)> {
         let hw = self.hw.get(&id)?;
         let (device, route) = (hw.device?, hw.route_device?);
@@ -739,7 +739,7 @@ impl State {
         }
     }
 
-    /// Quickshell's `changeConfiguredSink`: only an audio node of the right
+    /// Only an audio node of the right
     /// direction, and nothing written when the name is already configured.
     fn set_default(&mut self, key: &str, name: Option<String>, sink: bool) {
         let configured = if sink {
@@ -827,7 +827,7 @@ fn parse_volume_props(pod: &Pod) -> Option<VolumeProps> {
     volume_props(&value_of(pod)?)
 }
 
-/// Quickshell's `PwVolumeProps::parseSpaPod`, the default channel layouts
+/// Parses the SPA pod's volume props, the default channel layouts
 /// included.
 fn volume_props(value: &Value) -> Option<VolumeProps> {
     let Value::Object(object) = value else {

@@ -1,4 +1,4 @@
-//! herdr agent state for the Spaces badges (HerdrService.qml). `herdr agent
+//! herdr agent state for the Spaces badges. `herdr agent
 //! list` is polled per client every two seconds, since herdr has no unscoped
 //! change event; which client a window has is answered by a `ps` walk down
 //! from the window's pid whenever the window list changes. No herdr, an

@@ -144,7 +144,7 @@ pub struct Ui {
     pub cursor: Option<String>,
     pub ring: bool,
     /// The container draws one travelling halo for every row, so rows do
-    /// not draw their own (Panel.qml's `ownsCursorHalo`).
+    /// not draw their own.
     pub halo_owned: bool,
     /// `debug motionScale` over the theme's clocks.
     pub motion_scale: f64,

@@ -1,4 +1,4 @@
-//! TailscaleWidget.qml: one network icon, dim while stopped. Hidden until
+//! One network icon, dim while stopped. Hidden until
 //! the first poll resolves with the CLI present. The tooltip words the poll
 //! state the status belongs to, never a daemon state nobody observed.
 

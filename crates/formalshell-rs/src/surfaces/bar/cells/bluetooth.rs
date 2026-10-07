@@ -1,4 +1,4 @@
-//! BluetoothWidget.qml: the default adapter's state as one icon; right
+//! The default adapter's state as one icon; right
 //! click flips its radio.
 
 use crate::services::devices::{self, Op};

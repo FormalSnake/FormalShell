@@ -3,19 +3,16 @@
 # --bar-layout points bar.layout at a left region led by six bar.modules
 # entries, swapped ahead of the reordered builtins (activeWindow before
 # workspaces, away from the default): one `command` module printing known
-# Waybar-JSON, four more each exercising one of CommandModule.qml's failure
+# Waybar-JSON, four more each exercising one of the command module's failure
 # paths (non-zero exit, malformed JSON, a run outliving its timeout, a binary
 # that does not exist), one printing an empty SUCCESS payload (a real answer
-# that must render NO cell rather than an empty bordered box), and a `qml`
-# module whose fixture imports qs.Core and reads Theme, proving a loaded user
-# component shares the shell's own engine.
+# that must render NO cell rather than an empty bordered box).
 #
 # No drive step decides any of that: Bar/layout.js resolves it from
 # settings.json at startup, so the frame is the whole claim. Every other leg
 # leaves the `bar` key out entirely, which is itself the no-config-fallback
 # proof.
 leg_bar_layout_flag="--bar-layout"
-leg_bar_layout_rust=1
 leg_bar_layout_order=190
 
 bar_layout_path="$shot_dir/bar-layout.png"
@@ -24,7 +21,6 @@ bar_cmd_fail_path="$shot_dir/bar-cmd-fail.sh"
 bar_cmd_badjson_path="$shot_dir/bar-cmd-badjson.sh"
 bar_cmd_timeout_path="$shot_dir/bar-cmd-timeout.sh"
 bar_cmd_empty_path="$shot_dir/bar-cmd-empty.sh"
-bar_qml_fixture_path="$shot_dir/bar-qml-fixture.qml"
 bar_gh_shim_dir="$shot_dir/gh-shim"
 
 leg_bar_layout_fixture() {
@@ -60,18 +56,7 @@ EOF
 sleep 5
 printf '{"text": "too late"}'
 EOF
-  cat > "$bar_qml_fixture_path" <<'EOF'
-import QtQuick
-import qs.Core
-
-Text {
-    text: "QML OK"
-    color: Theme.color.foreground
-    font.family: Theme.fontFamily
-    font.pixelSize: Theme.fontSize.body
-}
-EOF
-  # A canned `gh api graphql` answer in the exact shape GithubPanel.qml's
+  # A canned `gh api graphql` answer in the exact shape the GitHub panel's
   # combined query returns, so the leading `github` cell proves the whole
   # poll -> parse -> "3/2" path without network or auth. Real gh behaviour
   # (auth, exit code 4) stays host-trial territory. Exported onto this
@@ -93,7 +78,7 @@ EOF
   # assertion honest if that default ever changes: the VM is a NixOS box with
   # no distributor-logo icon theme, which is exactly the path that has to
   # reach the bundled font-logos table for a real logo.
-  settings_fragment ', "bar": {"launcherIcon": "distro", "layout": {"left": ["launcher", "github", "custom:cmdfixture", "custom:cmdfail", "custom:cmdbadjson", "custom:cmdtimeout", "custom:cmdmissing", "custom:cmdempty", "custom:qmlfixture", "activeWindow", "workspaces"]}, "modules": [{"id": "cmdfixture", "type": "command", "command": ["bash", "'"$bar_cmd_fixture_path"'"], "interval": 2000}, {"id": "cmdfail", "type": "command", "command": ["bash", "'"$bar_cmd_fail_path"'"], "interval": 20000}, {"id": "cmdbadjson", "type": "command", "command": ["bash", "'"$bar_cmd_badjson_path"'"], "interval": 20000}, {"id": "cmdtimeout", "type": "command", "command": ["bash", "'"$bar_cmd_timeout_path"'"], "interval": 20000, "timeout": 1000}, {"id": "cmdmissing", "type": "command", "command": ["'"$shot_dir"'/no-such-formalshell-smoke-binary"], "interval": 20000}, {"id": "cmdempty", "type": "command", "command": ["bash", "'"$bar_cmd_empty_path"'"], "interval": 20000}, {"id": "qmlfixture", "type": "qml", "source": "'"$bar_qml_fixture_path"'"}]}'
+  settings_fragment ', "bar": {"launcherIcon": "distro", "layout": {"left": ["launcher", "github", "custom:cmdfixture", "custom:cmdfail", "custom:cmdbadjson", "custom:cmdtimeout", "custom:cmdmissing", "custom:cmdempty", "activeWindow", "workspaces"]}, "modules": [{"id": "cmdfixture", "type": "command", "command": ["bash", "'"$bar_cmd_fixture_path"'"], "interval": 2000}, {"id": "cmdfail", "type": "command", "command": ["bash", "'"$bar_cmd_fail_path"'"], "interval": 20000}, {"id": "cmdbadjson", "type": "command", "command": ["bash", "'"$bar_cmd_badjson_path"'"], "interval": 20000}, {"id": "cmdtimeout", "type": "command", "command": ["bash", "'"$bar_cmd_timeout_path"'"], "interval": 20000, "timeout": 1000}, {"id": "cmdmissing", "type": "command", "command": ["'"$shot_dir"'/no-such-formalshell-smoke-binary"], "interval": 20000}, {"id": "cmdempty", "type": "command", "command": ["bash", "'"$bar_cmd_empty_path"'"], "interval": 20000}}]}'
 }
 
 leg_bar_layout_timing() {

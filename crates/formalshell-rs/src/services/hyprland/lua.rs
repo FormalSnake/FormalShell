@@ -1,4 +1,4 @@
-//! The `hl.*` Lua each write sends, worded as HyprlandBackend.qml words it.
+//! The `hl.*` Lua each write sends.
 //! Window ids reach this module as the backend's opaque strings; the
 //! `address:0x...` selector is built here and nowhere else.
 
@@ -75,7 +75,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn worded_as_the_qml_backend() {
+    fn worded_as_the_ipc_contract() {
         assert_eq!(focus_workspace("2"), "hl.dsp.focus({ workspace = 2 })");
         assert_eq!(focus_workspace("name"), "hl.dsp.focus({ workspace = \"name\" })");
         assert_eq!(focus_window("55d0c1b0"), "hl.dsp.focus({ window = \"address:0x55d0c1b0\" })");

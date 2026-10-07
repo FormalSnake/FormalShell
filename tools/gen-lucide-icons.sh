@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Generates shell/Theme/icons/lucide.js from the pinned Lucide release's
+# Generates crates/fs-theme/icons/lucide.js from the pinned Lucide release's
 # lucide.css (name-to-codepoint map: `.icon-NAME::before { content:
 # "\eXXX"; }`, where the escape's hex digits ARE the codepoint, "e" included,
 # not a fixed "\e" prefix followed by three digits). The output is
@@ -12,7 +12,7 @@ set -euo pipefail
 version="${1:-1.34.0}"
 url="https://github.com/lucide-icons/lucide/releases/download/${version}/lucide-font-${version}.zip"
 repo_root=$(cd "$(dirname "$0")/.." && pwd)
-out="$repo_root/shell/Theme/icons/lucide.js"
+out="$repo_root/crates/fs-theme/icons/lucide.js"
 
 workdir=$(mktemp -d)
 trap 'rm -rf "$workdir"' EXIT
@@ -27,8 +27,8 @@ if [ ! -f "$css" ]; then
 fi
 
 # Codepoints are re-emitted as JS ES6 code point escapes (\u{XXX}) rather
-# than the raw UTF-8 character, matching shell/Menu/providers.js's own icon
-# table: a generated table never carries a raw codepoint, so it never falls
+# than the raw UTF-8 character, like the other icon tables beside it:
+# a generated table never carries a raw codepoint, so it never falls
 # under CLAUDE.md's glyph-corruption-on-rewrite hazard in the first place.
 # Plain index()/substr(), no gawk-only match() array capture, the same
 # portability dev/gen-emoji.sh's awk already relies on.

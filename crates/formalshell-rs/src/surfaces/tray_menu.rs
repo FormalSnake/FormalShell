@@ -1,4 +1,4 @@
-//! TrayMenu.qml: a tray item's dbusmenu tree in a card of the `menu` role.
+//! A tray item's dbusmenu tree in a card of the `menu` role.
 //! Submenus expand in place as indented rows (one surface, no cascade), a
 //! check rides the trailing slot of a ticked row and a chevron the slot of a
 //! submenu, separators are one `border` rule with an `sm` gap either side.

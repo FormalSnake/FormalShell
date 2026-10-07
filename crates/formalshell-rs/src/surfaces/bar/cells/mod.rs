@@ -73,10 +73,7 @@ pub fn build(entry: &Entry, region_entries: &[Entry]) -> Vec<Box<dyn Cell>> {
             Builtin::Chevron => Box::new(chevron::Chevron::new(entry.region, region_entries)),
             _ => Box::new(absent::Absent),
         },
-        EntryKind::Module { id, module } => match module.get("type").and_then(|t| t.as_str()) {
-            Some("command") => Box::new(command::Command::new(id)),
-            _ => Box::new(command::Command::qml(id)),
-        },
+        EntryKind::Module { id, .. } => Box::new(command::Command::new(id)),
         EntryKind::Plugin { id, .. } => Box::new(plugin::Plugin::new(id)),
     };
     vec![cell]

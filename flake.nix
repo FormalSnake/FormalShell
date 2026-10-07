@@ -3,15 +3,6 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    quickshell = {
-      # The GitHub mirror of git.outfoxxed.me/quickshell/quickshell, same
-      # tree, pinned to the same rev the lock has carried all along. The
-      # upstream host times out from GitHub CI runners (every push since
-      # 2026-08-18 ~11:00 failed on the fetch), and flakes have no fallback
-      # URL. Bump by editing the rev here.
-      url = "github:quickshell-mirror/quickshell/43d4fa9e883cb03239b3d578c9c57070f4fbd281";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     # Only the nixos-module-eval check uses it.
     home-manager = {
       url = "github:nix-community/home-manager";
@@ -20,45 +11,19 @@
     crane.url = "github:ipetkov/crane";
   };
 
-  outputs = { self, nixpkgs, quickshell, home-manager, crane }:
+  outputs = { self, nixpkgs, home-manager, crane }:
     let
       # One dependency build per system, shared by every Rust derivation.
       rustCommonFor = pkgs: pkgs.callPackage ./nix/rust-common.nix { inherit crane; };
       systems = [ "x86_64-linux" "aarch64-linux" ];
-      # darwin gets no packages (quickshell is linux-only) but runs the pure
-      # QML/JS unit tests and hosts the dev loop driving a linux VM for e2e —
-      # see docs/superpowers/plans/2026-07-28-mac-e2e-rig.md
+      # darwin gets no shell package but runs the pure crates' tests and
+      # hosts the dev loop driving a linux VM for e2e (see
+      # docs/superpowers/plans/2026-07-28-mac-e2e-rig.md).
       darwinSystems = [ "aarch64-darwin" ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system:
         f system nixpkgs.legacyPackages.${system});
       forDarwin = f: nixpkgs.lib.genAttrs darwinSystems (system:
         f system nixpkgs.legacyPackages.${system});
-      qsFor = system: quickshell.packages.${system}.default;
-      qmlTests = pkgs: pkgs.runCommand "formalshell-qml-tests" {
-        nativeBuildInputs = [ pkgs.qt6.qtdeclarative ];
-        QML2_IMPORT_PATH = "${pkgs.qt6.qtdeclarative}/lib/qt-6/qml";
-      } ''
-        cp -r ${./.}/shell shell; cp -r ${./.}/tests tests
-        # The one file tst_menu_hints.qml reads out of docs/, copied by
-        # itself: the rest of that tree is screenshots and recorded GIFs.
-        mkdir -p docs/examples/hyprland
-        cp ${./docs/examples/hyprland/formalshell.lua} docs/examples/hyprland/formalshell.lua
-        # QML_XHR_ALLOW_FILE_READ: tst_menu_emoji.qml XHR-loads
-        # shell/Menu/emoji.json, outside the test's own directory subtree.
-        # -import tests/stubs: resolves the `qs.Core` module for the tests
-        # that instantiate real shell components (tst_cell_geometry.qml).
-        QT_QPA_PLATFORM=offscreen QML_XHR_ALLOW_FILE_READ=1 qmltestrunner -import tests/stubs -input tests
-        touch $out
-      '';
-      # Primitive adoption (M48): a surface may not draw chrome a
-      # shell/Components primitive already draws. dev/check-primitives.py
-      # carries the rule, the scanned trees and the exemption marker.
-      primitivesCheck = pkgs: pkgs.runCommand "formalshell-primitives" {
-        nativeBuildInputs = [ pkgs.python3 ];
-      } ''
-        python3 ${./.}/dev/check-primitives.py 2>&1 | tee $out.log
-        touch $out
-      '';
       # Evaluates (never builds) the NixOS config README.md documents, with
       # no explicit `package` anywhere, so a module default that stops
       # resolving fails CI. The drvPath is embedded as a string without its
@@ -156,14 +121,12 @@
       };
 
       nixosConfigurations = {
-        testvm = import ./nix/testvm.nix { inherit self nixpkgs quickshell; };
+        testvm = import ./nix/testvm.nix { inherit self nixpkgs; };
       };
 
       checks = nixpkgs.lib.recursiveUpdate
-        (forDarwin (system: pkgs: { qml-tests = qmlTests pkgs; primitives = primitivesCheck pkgs; rust-tests = pkgs.callPackage ./nix/rust-tests.nix { rustCommon = rustCommonFor pkgs; }; fs-auth = pkgs.callPackage ./nix/fs-auth-test.nix { inherit crane; }; }))
+        (forDarwin (system: pkgs: { rust-tests = pkgs.callPackage ./nix/rust-tests.nix { rustCommon = rustCommonFor pkgs; }; fs-auth = pkgs.callPackage ./nix/fs-auth-test.nix { inherit crane; }; }))
         (forAllSystems (system: pkgs: {
-        qml-tests = qmlTests pkgs;
-        primitives = primitivesCheck pkgs;
         rust-tests = pkgs.callPackage ./nix/rust-tests.nix { rustCommon = rustCommonFor pkgs; };
         fs-tray = pkgs.callPackage ./nix/fs-tray.nix { rustCommon = rustCommonFor pkgs; };
         fs-notifd = pkgs.callPackage ./nix/fs-notifd-check.nix { rustCommon = rustCommonFor pkgs; };
@@ -174,38 +137,20 @@
         fs-network = pkgs.callPackage ./nix/fs-network.nix { rustCommon = rustCommonFor pkgs; };
         nixos-module-eval = nixosModuleEval system pkgs;
         fs-mpris = pkgs.callPackage ./nix/fs-mpris.nix { rustCommon = rustCommonFor pkgs; };
-
-        qmllint = pkgs.runCommand "formalshell-qmllint" {
-          nativeBuildInputs = [ pkgs.qt6.qtdeclarative ];
-        } ''
-          cd ${./.}
-          qmllint -I ${qsFor system}/lib/qt-6/qml -I ${pkgs.qt6.qtdeclarative}/lib/qt-6/qml --bare $(find shell greeter -name '*.qml') 2>&1 | tee $out.log
-          touch $out
-        '';
       }));
 
       devShells = nixpkgs.lib.recursiveUpdate
         (forDarwin (system: pkgs: {
           default = pkgs.mkShell {
-            packages = [
-              pkgs.qt6.qtdeclarative # qmltestrunner for the pure QML/JS tests
-              pkgs.just
-            ];
-            QML2_IMPORT_PATH = "${pkgs.qt6.qtdeclarative}/lib/qt-6/qml";
+            packages = [ pkgs.just ];
           };
         }))
         (forAllSystems (system: pkgs: {
         default = pkgs.mkShell {
           packages = [
-            (qsFor system)
-            pkgs.qt6.qtdeclarative # qmllint, qmltestrunner, qmlls
             pkgs.matugen
             pkgs.just
           ];
-          QML2_IMPORT_PATH = "${pkgs.qt6.qtdeclarative}/lib/qt-6/qml";
-          shellHook = ''
-            [ -f .qmlls.ini ] || touch .qmlls.ini
-          '';
         };
       }));
     };

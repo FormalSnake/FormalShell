@@ -1,8 +1,8 @@
 //! greetd-ipc(7): a native-endian u32 length, then that many bytes of JSON,
 //! one response for every request. The socket is `$GREETD_SOCK`.
 //!
-//! [`Conversation`] is greeter.qml's dispatch on Greetd.state with the
-//! socket taken out: it is fed responses and hands back the next request.
+//! [`Conversation`] is the dispatch on greetd's state with the socket
+//! taken out: it is fed responses and hands back the next request.
 
 use std::io::{self, Read, Write};
 
@@ -120,7 +120,7 @@ impl Conversation {
         Self { phase: Phase::Inactive, message: String::new(), echo: false, error: String::new(), command, pending: None }
     }
 
-    /// greeter.qml's `_promptLabel`.
+    /// The label for the current prompt.
     pub fn label(&self) -> &str {
         match self.phase {
             Phase::Asking if !self.message.is_empty() => &self.message,

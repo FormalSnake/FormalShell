@@ -110,7 +110,6 @@
 # by that much, with the frames agreeing.
 leg_lyrics_flag="--lyrics"
 leg_lyrics_order=175
-leg_lyrics_rust=1
 leg_lyrics_needs="mpv ffmpeg convert jq wlrctl pipewire"
 
 need_pipewire() {

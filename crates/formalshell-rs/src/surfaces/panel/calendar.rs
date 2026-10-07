@@ -1,4 +1,4 @@
-//! CalendarPanel.qml: a hero naming today, a month grid of day cells under
+//! A hero naming today, a month grid of day cells under
 //! a weekday row with the ISO week numbers in a gutter, the selected day's
 //! events as rows, and the year and life progress tracks. Wide, for the
 //! seven day columns.

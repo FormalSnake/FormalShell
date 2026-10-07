@@ -1,4 +1,4 @@
-//! `visualizer`, VisualizerIpc.qml: the spectrum's style picked at runtime,
+//! `visualizer`: the spectrum's style picked at runtime,
 //! for exploring the styles without an edit to settings.json. The override is
 //! in memory only, `style config` drops it.
 

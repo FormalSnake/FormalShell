@@ -8,7 +8,7 @@ use fs_menu::node::{DesktopEntry, Entries, Node, Tree};
 use fs_menu::providers::{ProviderFn, TrayItem, apply_providers, panels_provider, tray_provider};
 use serde_json::Value;
 
-/// A file under the repo root, read as the QML tests read them over XHR.
+/// A file under the repo root.
 pub fn read_repo(path: &str) -> String {
     let full = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..").join(path);
     std::fs::read_to_string(&full).unwrap_or_else(|e| panic!("{}: {e}", full.display()))
@@ -24,7 +24,7 @@ pub fn tree_of(value: Value) -> Tree {
 }
 
 pub fn default_menu() -> Entries {
-    entries_from_value(&parse_jsonc(&read_repo("shell/Menu/default-menu.jsonc")).expect("default-menu.jsonc"))
+    entries_from_value(&parse_jsonc(&read_repo("crates/fs-menu/data/default-menu.jsonc")).expect("default-menu.jsonc"))
         .expect("default-menu entries")
 }
 
@@ -33,8 +33,8 @@ pub fn default_menu() -> Entries {
 pub fn real_tree() -> Tree {
     let mut tree = build_tree(&default_menu(), &Entries::new());
     let mut fns: HashMap<String, ProviderFn> = HashMap::new();
-    fns.insert("panels".into(), Box::new(|| panels_provider("/fake/shell/dir")));
-    fns.insert("tray".into(), Box::new(|| tray_provider(&[] as &[TrayItem], "/fake/shell/dir")));
+    fns.insert("panels".into(), Box::new(|| panels_provider("formalshell-ipc")));
+    fns.insert("tray".into(), Box::new(|| tray_provider(&[] as &[TrayItem], "formalshell-ipc")));
     apply_providers(&mut tree, &fns);
     tree
 }

@@ -29,7 +29,6 @@
 # as much as the first half of the travel, so a capture asked for once the
 # call has returned lands past it (panel_emerge.sh's finding).
 leg_deform_flag="--deform"
-leg_deform_rust=1
 leg_deform_order=77
 leg_deform_needs="convert"
 

@@ -1,4 +1,4 @@
-//! LyricsService.qml: synced lyrics for the active track, looked up a second
+//! Synced lyrics for the active track, looked up a second
 //! after the track changes whether or not the media panel is open, so the
 //! panel opens on its final width.
 //!

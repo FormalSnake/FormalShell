@@ -24,7 +24,7 @@ fn default_win() -> Window {
     default_window(Local::now())
 }
 
-// Months in these tests are 1-based (the QML cases were 0-based).
+// Months in these tests are 1-based.
 
 // Folding inserts CRLF + a single fold-marker whitespace character AT a split
 // point in the octet stream: it does not replace or add to whatever

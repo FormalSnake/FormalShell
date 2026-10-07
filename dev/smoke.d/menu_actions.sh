@@ -13,7 +13,6 @@
 leg_menu_actions_flag="--menu-actions"
 leg_menu_actions_order=223
 leg_menu_actions_needs="jq wtype"
-leg_menu_actions_rust=1
 
 leg_menu_actions_timing() {
   leg_timing 30 60

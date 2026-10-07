@@ -53,7 +53,7 @@ impl App {
         });
     }
 
-    /// Quickshell.screens: every output's logical box, in announce order.
+    /// Every output's logical box, in announce order.
     pub fn capture_screens(&self) -> Vec<Screen> {
         self.outputs
             .outputs()

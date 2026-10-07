@@ -1,4 +1,4 @@
-//! Indicators.qml: the things running in the background, a rail of cells
+//! The things running in the background, a rail of cells
 //! that each exist only while their thing runs, each with its own hover,
 //! tooltip and click. The loud ones lead. A service joins by adding one
 //! [`Indicator`] to [`rail`].
@@ -33,8 +33,8 @@ impl Item {
 pub struct Indicator {
     reads: &'static [Topic],
     item: fn(&Env) -> Option<Item>,
-    /// Hover and click (Cell.qml's `interactive`): a cell with nothing to
-    /// do on a click still washes under the pointer, as the QML one does.
+    /// Hover and click: a cell with nothing to
+    /// do on a click still washes under the pointer.
     interactive: bool,
     click: Action,
     shown: Option<Item>,

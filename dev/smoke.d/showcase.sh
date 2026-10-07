@@ -11,7 +11,6 @@
 # fail under it and keep their frames in the VM's shot_dir; it is a camera,
 # not a test.
 leg_showcase_flag="--showcase"
-leg_showcase_rust=1
 leg_showcase_order=5
 leg_showcase_needs="convert"
 leg_showcase_fixture_window=keep

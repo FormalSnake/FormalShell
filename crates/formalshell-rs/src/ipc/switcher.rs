@@ -1,4 +1,4 @@
-//! `switcher`, SwitcherIpc.qml: the whole summon path for the window
+//! `switcher`: the whole summon path for the window
 //! switcher. `switcher.enabled: false` answers every verb with the error
 //! string rather than accepting a call that would do nothing.
 

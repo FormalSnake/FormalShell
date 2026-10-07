@@ -47,8 +47,7 @@
 # enough that several samples land inside it, but a card growing around its
 # cells is still only measurably narrow while its cells are measuring
 # themselves, which is the first frame or two of it.
-# tests/tst_overflow_quiet.qml is where the gate itself is pinned. Do not
-# tighten the sampling to chase it; the lanes below already lock in step
+# Do not tighten the sampling to chase it; the lanes below already lock in step
 # under load.
 #
 # The quiet claim only means anything if the band is quiet at rest, so the
@@ -56,7 +55,6 @@
 # any of it is believed: a cell repainting on its own would otherwise read as
 # layout motion that is not there.
 leg_chevron_quiet_flag="--chevron-quiet"
-leg_chevron_quiet_rust=1
 leg_chevron_quiet_order=181
 leg_chevron_quiet_needs="convert jq"
 

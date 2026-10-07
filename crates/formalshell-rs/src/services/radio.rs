@@ -1,6 +1,6 @@
 // Portions from omarchy-radio-atlas (MIT, Copyright 2026 Akshar Patel)
 
-//! RadioService.qml: the one mpv child, what it is playing, the saved
+//! The one mpv child, what it is playing, the saved
 //! favourites, recents, volume and output, and every Radio Browser request,
 //! Radio Atlas's (`Cmd::Atlas`) answered into the store's atlas inbox.
 //!
@@ -48,7 +48,7 @@ pub struct State {
     pub error: String,
     pub player_error: String,
     pub local_error: String,
-    /// The launcher's station search (RadioSearchProvider.qml): the query
+    /// The launcher's station search: the query
     /// the answer is for, and the stations, `None` when every mirror failed.
     pub search: Option<(String, Option<Vec<Station>>)>,
     /// `pactl`'s sinks, for the atlas's output picker.
@@ -160,7 +160,7 @@ pub enum Ask {
 pub enum Reply {
     /// `None` when every mirror failed.
     Rows(u64, Option<Vec<Station>>),
-    /// RadioService.qml's `randomTuned` (the picked list) and `randomFailed`.
+    /// The picked list, or why picking failed.
     Random(Result<Vec<Station>, String>),
     Countries(std::sync::Arc<crate::surfaces::atlas::globe::Countries>),
 }
@@ -759,7 +759,7 @@ impl Radio {
         self.ctx.publish(store::Diff::Atlas(reply));
     }
 
-    /// RadioService.qml's `_refreshWorld` and `_refreshCountry`: the list
+    /// The world and country refresh: the list
     /// fetched again and written to its cache, a country's only when every
     /// row is that country's. A background refresh already running is not
     /// started twice.

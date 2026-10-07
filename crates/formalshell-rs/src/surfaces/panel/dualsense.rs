@@ -1,4 +1,4 @@
-//! DualsensePanel.qml: a read-only readout, the header's "Read only" chip
+//! A read-only readout, the header's "Read only" chip
 //! saying so, since the owner's host units own the lightbar and LED writes.
 //! No controller is the dim "No controller" row; past it the hero carries
 //! the battery as its readout and rail, and a Status row holds the lightbar

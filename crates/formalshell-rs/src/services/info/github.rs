@@ -1,5 +1,5 @@
 //! Open PRs the user authored and open issues assigned to them, off one
-//! `gh api graphql` run (GithubPanel.qml's poll). gh missing hides the
+//! `gh api graphql` run. gh missing hides the
 //! cell; a failed auth reads as NO AUTH, any other failure as NO GH.
 
 use serde_json::Value;

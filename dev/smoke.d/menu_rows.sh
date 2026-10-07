@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
-# --menu-rows: RowListView.qml's transitions in the launcher's row list. On a
+# --menu-rows: the row list's transitions in the launcher's row list. On a
 # re-rank inside one level a row that kept its place in the list slides to
 # its new slot, one that arrived fades in, and one that left fades out where
 # it stood. The toggle hub is the level: its six rows filter down to the two
@@ -13,7 +13,6 @@
 # step only ever shows one or the other.
 leg_menu_rows_flag="--menu-rows"
 leg_menu_rows_order=127
-leg_menu_rows_rust=1
 leg_menu_rows_needs="convert"
 
 menu_rows_frames=16

@@ -52,8 +52,7 @@ impl Profile {
 pub struct ProfilesState {
     pub active: Profile,
     /// In the order the daemon lists them. `Performance` is absent on
-    /// hardware that does not offer it, which is what
-    /// `PowerProfiles.hasPerformanceProfile` meant in Quickshell.
+    /// hardware that does not offer it.
     pub available: Vec<Profile>,
 }
 
@@ -82,8 +81,8 @@ impl PowerProfiles {
         read_state(&self.daemon).await
     }
 
-    /// Refuses `Performance` locally when the daemon does not list it, the
-    /// way Quickshell's `setProfile` did, instead of surfacing the bus error.
+    /// Refuses `Performance` locally when the daemon does not list it, instead
+    /// of surfacing the bus error.
     pub async fn set_active(&self, profile: Profile) -> zbus::Result<()> {
         if profile == Profile::Performance && !self.state().await?.has_performance() {
             return Err(zbus::Error::Failure(

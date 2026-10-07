@@ -13,7 +13,7 @@ pub const ADAPTER_IFACE: &str = "org.bluez.Adapter1";
 pub const DEVICE_IFACE: &str = "org.bluez.Device1";
 pub const BATTERY_IFACE: &str = "org.bluez.Battery1";
 
-/// Quickshell's BluetoothAdapterState, read off `PowerState` when BlueZ
+/// The adapter state, read off `PowerState` when BlueZ
 /// reports one (5.65+) and off `Powered` otherwise.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum AdapterState {
@@ -38,8 +38,8 @@ pub struct Adapter {
     pub pairable: bool,
 }
 
-/// `info.name` is BlueZ's `Alias` (what the user sees, and the field
-/// Quickshell calls `name`), `info.device_name` is BlueZ's own `Name`.
+/// `info.name` is BlueZ's `Alias` (what the user sees),
+/// `info.device_name` is BlueZ's own `Name`.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Device {
     pub info: bluetooth::Device,
@@ -213,8 +213,7 @@ impl State {
         self.devices.values().map(Entry::view).collect()
     }
 
-    /// The first adapter by object path, which is what Quickshell calls
-    /// `defaultAdapter`.
+    /// The first adapter by object path, which is the default adapter.
     pub fn default_adapter(&self) -> Option<&Adapter> {
         self.adapters.values().next()
     }

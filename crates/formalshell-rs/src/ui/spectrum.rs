@@ -1,8 +1,8 @@
-//! VisualizerCanvas.qml: fs-media's style draws its shape list for the
+//! The spectrum element: fs-media's style draws its shape list for the
 //! frame, and each shape becomes one node. A style keeps its own state (its
 //! caps, particles and traces) per element, thrown away when the style
 //! changes or the live state flips, so each style's resting frame is drawn
-//! over the all-zero baseline the way the QML repaint did.
+//! over the all-zero baseline.
 
 use std::time::Instant;
 

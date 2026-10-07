@@ -12,7 +12,7 @@
 # Six things proven, over IPC and in frames both:
 #  - connected state and device name (`iphone status`).
 #  - an ordinary arrival becomes a toast carrying the iPhone source mark
-#    (NotificationBubble.qml/NotificationRow.qml's `sourceMark`), and its
+#    (`sourceMark`), and its
 #    positive action reaches the bridge shim's own record.
 #  - `iphone.notifications.focus: respect` routes a silent arrival to the
 #    centre's pending tier with no toast (Iphone/model.js focusVerdict's
@@ -53,11 +53,10 @@
 # key IN PLACE (jq to a temp file, then `cat` back over the same inode)
 # rather than through --config-reload's symlink-retarget dance: that leg
 # exists to prove a retargeted *symlink* is picked up, which nothing here
-# needs -- Config.qml's FileView watches the path with `watchChanges: true`
-# and a same-inode rewrite has always been the ordinary case it handles.
+# needs -- the config watcher covers a same-inode rewrite, the ordinary
+# case it handles.
 leg_iphone_flag="--iphone"
 leg_iphone_order=174
-leg_iphone_rust=1
 leg_iphone_needs="notify-send jq"
 
 iphone_shim_dir="$shot_dir/iphone-shim"
@@ -115,7 +114,7 @@ leg_iphone_fixture() {
   # Primed with the bridge's own first line, exactly what a real
   # `bridge listen` prints once ancs4linux reports a bonded, connected
   # phone -- `installed`/`observer`/`connected` all flip on this one line
-  # arriving (IphoneService.qml's bridgeProc onRead and _onLine).
+  # arriving.
   printf '%s\n' \
     '{"type":"status","observer":true,"connected":true,"deviceName":"'"$iphone_device_name"'","battery":81}' \
     > "$iphone_bridge_events_path"
@@ -190,7 +189,7 @@ EOF
 
 leg_iphone_timing() {
   # This leg's own drive script runs to just past 30s of sleeps plus
-  # roughly a dozen `qs ipc` round trips at ~1s each on llvmpipe (notify.sh's
+  # roughly a dozen `ipc call` round trips at ~1s each on llvmpipe (notify.sh's
   # own header note on that cost): screenshot_delay has to clear all of it,
   # since the base run's own teardown (shot.sh) fires at that mark and tears
   # the session down under whatever this leg is still doing.

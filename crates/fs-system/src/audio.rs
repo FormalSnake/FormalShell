@@ -19,8 +19,7 @@ pub struct PwNode {
 /// Hansson): identifies true playback streams using only pre-bind-safe fields
 /// (is_stream, is_sink, type). A node's property bag is invalid until the node
 /// is bound, and reading it while streams churn (a capture app starting, say)
-/// destabilized quickshell's Pipewire service in omarchy's own history, so
-/// this never touches properties.
+/// has destabilized Pipewire clients before, so this never touches properties.
 pub fn is_playback_stream(node: Option<&PwNode>) -> bool {
     let Some(node) = node.filter(|n| n.is_stream) else {
         return false;

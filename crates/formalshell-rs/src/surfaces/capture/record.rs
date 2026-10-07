@@ -1,7 +1,7 @@
-//! Services/RecordingService.qml: one wf-recorder child, the transient
+//! One wf-recorder child, the transient
 //! PipeWire mix the desktop+mic mode needs, the webcam overlay, the
-//! finalize pass and the two-pass GIF transcode, chained the way the QML
-//! chains its Processes. `active` is the recorder child running and
+//! finalize pass and the two-pass GIF transcode, chained in order.
+//! `active` is the recorder child running and
 //! nothing else; it is never persisted and never polled for.
 
 use std::time::Instant;

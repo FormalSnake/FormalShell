@@ -6,8 +6,6 @@
 # `@<file>`: a JSON device list the shell reads again whenever the file
 # changes, which is how it connects and disconnects a device on this rig
 # (`address`, `name`, `connected`, and for this seam `icon` and `battery`).
-# Rust only: the QML shell has no such card, and a `@` value there is just an
-# unparsable list.
 #
 # What it proves, off the shell's own `headset card mapped` and `unmapped`
 # log lines and the frames:
@@ -30,7 +28,6 @@
 leg_headset_card_flag="--headset-card"
 leg_headset_card_order=177
 leg_headset_card_needs="wlrctl jq"
-leg_headset_card_rust=1
 
 headset_dir="$shot_dir/headset-card"
 headset_list="$headset_dir/bluetooth.json"
@@ -50,10 +47,6 @@ headset_park_x=960
 headset_park_y=85
 
 leg_headset_card_validate() {
-  if [ "$fs_impl" != rust ]; then
-    echo "usage: --headset-card is new in the Rust shell and needs FS_IMPL=rust" >&2
-    exit 1
-  fi
   local other
   for other in bar_position frame fullscreen earbuds; do
     if leg_on "$other"; then
@@ -61,12 +54,6 @@ leg_headset_card_validate() {
       exit 1
     fi
   done
-}
-
-# A fixture decoded out of a test file: one `property string <name>: "<json>"`
-# line, a QML string literal with only \" and \\ escapes being a JSON string.
-headset_fixture() {
-  sed -n "s/^ *property string $2: \(\".*\"\)\$/\1/p" "tests/$1" | "$jq_bin" -r .
 }
 
 headset_devices() {
@@ -78,8 +65,8 @@ headset_devices() {
 leg_headset_card_fixture() {
   mkdir -p "$headset_dir"
   headset_devices true false false > "$headset_list"
-  headset_fixture tst_earbuds_airpods.qml fixturePro3 > "$headset_dir/airpods-status.json"
-  [ -s "$headset_dir/airpods-status.json" ] || { echo "headset-card: the AirPods fixture did not decode out of tests/" >&2; exit 1; }
+  cp dev/smoke.d/fixtures/airpods-pro3.json "$headset_dir/airpods-status.json"
+  [ -s "$headset_dir/airpods-status.json" ] || { echo "headset-card: dev/smoke.d/fixtures/airpods-pro3.json is missing" >&2; exit 1; }
   export FORMALSHELL_SMOKE_BLUETOOTH="@$headset_list"
 }
 

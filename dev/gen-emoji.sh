@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# Generates shell/Menu/emoji.json from Unicode's published emoji-test.txt,
-# fully-qualified entries only, in file order (Unicode group order, base
-# emoji before their skin-tone variants). The output is vendored: run this
-# once when bumping the Unicode version; the shell never generates at
-# runtime. Menu.qml parses the file with Model.parseHeaderedJson, which
-# skips the provenance header comments this script writes and hands the
-# rest to the native JSON.parse.
+# Generates crates/fs-menu/data/emoji.json from Unicode's published
+# emoji-test.txt, fully-qualified entries only, in file order (Unicode group
+# order, base emoji before their skin-tone variants). The output is
+# vendored: run this once when bumping the Unicode version; the shell never
+# generates at runtime. fs-menu's parse_headered_json skips the provenance
+# header comments this script writes and parses the rest as JSON.
 #
 # Each entry also carries CLDR's English search keywords ("kw", pipe
 # separated), which is the same annotation data macOS, iOS and Android type
@@ -29,7 +28,7 @@ cldr_base="https://raw.githubusercontent.com/unicode-org/cldr-json/main/cldr-jso
 ann_url="$cldr_base/cldr-annotations-full/annotations/en/annotations.json"
 annd_url="$cldr_base/cldr-annotations-derived-full/annotationsDerived/en/annotations.json"
 repo_root=$(cd "$(dirname "$0")/.." && pwd)
-out="$repo_root/shell/Menu/emoji.json"
+out="$repo_root/crates/fs-menu/data/emoji.json"
 
 src=$(curl -fsSL "$url")
 

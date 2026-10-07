@@ -1,4 +1,4 @@
-//! `workspaces peek <n>|close|status`, WorkspacesIpc.qml: `peek` opens the
+//! `workspaces peek <n>|close|status`: `peek` opens the
 //! preview of workspace `n` (the number on its chip) off the Spaces cell,
 //! the pointer's hover open for a keybind or the rig; `status` is the chips
 //! the cell resolved and the preview's state.

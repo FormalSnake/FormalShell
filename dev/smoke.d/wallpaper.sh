@@ -18,7 +18,6 @@
 # the running value proves the reload.
 leg_wallpaper_flag="--wallpaper"
 leg_wallpaper_order=100
-leg_wallpaper_rust=1
 leg_wallpaper_needs="convert"
 
 theme_status_path="$shot_dir/theme-status.json"

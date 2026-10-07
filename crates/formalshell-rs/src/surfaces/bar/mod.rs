@@ -1,11 +1,11 @@
-//! The bar (Surfaces/Bar/Bar.qml): three regions out of `bar.layout`
+//! The bar: three regions out of `bar.layout`
 //! (fs-chrome's resolver), the room rule that shares the strip between them
 //! (free labels give ground first, then whole cells hide from an end
 //! region's inner edge), on whichever edge `bar.position` names, painted as
-//! the theme's `bar` habit: the metamorphosis strip (BarStrip.qml) or
-//! wingpanel's band (BarWingpanel.qml), whose paint is read off the
+//! the theme's `bar` habit: the metamorphosis strip or
+//! wingpanel's band, whose paint is read off the
 //! wallpaper. With the screen frame on, the window is the whole output and
-//! paints the ring (FrameRing.qml), strip included, under its cells.
+//! paints the ring, strip included, under its cells.
 //!
 //! Cells are [`cell::Cell`]s in `cells/`, placed as [`slot::Slot`]s.
 
@@ -35,7 +35,7 @@ const LABELS: [&str; 2] = ["nowPlaying", "activeWindow"];
 /// Nodes held behind every cell for the strip's own paint.
 const STRIP_NODES: usize = 6;
 /// How long after it maps the strip holds its cells' size clocks off, so a
-/// session's first answers land as one layout (Bar.qml's `_revealed`).
+/// session's first answers land as one layout.
 const REVEAL: Duration = Duration::from_millis(1500);
 
 /// The theme's paint for the strip, the band and the ring.
@@ -414,7 +414,7 @@ impl Bar {
         &self.line_rects
     }
 
-    /// The joins cards publish (Joint.qml's `join`): each one's edge, its
+    /// The joins cards publish (`join`): each one's edge, its
     /// start and width along that line and the fillets' reach.
     /// Every gap open this frame, one per edge at most.
     pub fn set_joins(&mut self, joins: &[(Edge, f64, f64, f64)]) {
@@ -514,7 +514,7 @@ impl Bar {
         }
     }
 
-    /// Bar.qml's regions: the centre held at the middle between the two end
+    /// The regions: the centre held at the middle between the two end
     /// rails, each end region fitting whole cells from its own anchored edge.
     fn place(&mut self, now: Instant) {
         let along = self.length() as f64;
@@ -727,7 +727,7 @@ impl Bar {
     }
 
     /// Where a panel's own cell sits along the strip, for an open with no
-    /// click to read one off (Bar.qml's `panelAnchor`).
+    /// click to read one off.
     pub fn panel_anchor(&self, name: &str) -> Option<f64> {
         let s = self.slots.iter().find(|s| s.view.panel == Some(name) && !s.rect.is_empty())?;
         let r = s.rect;

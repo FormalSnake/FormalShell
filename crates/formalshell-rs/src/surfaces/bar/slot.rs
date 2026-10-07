@@ -1,4 +1,4 @@
-//! One placed cell (Bar.qml's region delegate): the cell, its measure, its
+//! One placed cell (a region's delegate): the cell, its measure, its
 //! presence along the strip and fade, its open mark, its marquee clock and
 //! the nodes it last drew. The strip and the chevron's second bar both hold
 //! their cells as slots.

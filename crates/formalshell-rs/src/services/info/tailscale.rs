@@ -1,4 +1,4 @@
-//! `tailscale status --json` on a minute (TailscalePanel.qml's poll). No
+//! `tailscale status --json` on a minute. No
 //! CLI hides the cell; a daemon that answers badly reads as an error and
 //! one that wants a login as its own state. The panel's connection switch
 //! runs `tailscale up` or `down` here, one at a time, and the state it

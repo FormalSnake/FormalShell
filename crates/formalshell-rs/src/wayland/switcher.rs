@@ -1,5 +1,5 @@
-//! The switcher's window, timers and captures (Switcher.qml's PanelWindow
-//! and its Timers); the card itself is `surfaces::switcher`.
+//! The switcher's window, timers and captures;
+//! the card itself is `surfaces::switcher`.
 //!
 //! One full-output overlay surface, created when the card shows and gone
 //! once its fade has run out, so a quick Alt+Tab maps nothing. It takes the

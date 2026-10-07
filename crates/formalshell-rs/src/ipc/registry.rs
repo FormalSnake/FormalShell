@@ -1,6 +1,6 @@
 //! The targets and how a request against them is answered, worded as
-//! quickshell's `IpcHandler` registry words it (`src/io/ipccomm.cpp` at the
-//! pinned input): every error lands on stdout and the client still exits 0.
+//! the golden contract in `tests/ipc-golden.jsonl` words it: every error lands
+//! on stdout and the client still exits 0.
 
 use super::wire::Request;
 

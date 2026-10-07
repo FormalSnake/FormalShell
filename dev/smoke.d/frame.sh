@@ -5,7 +5,7 @@
 # bar edge the run has (`--bar-position left --frame` is the frame wrapping
 # a left bar). What the screenshot cannot say is asserted off `hyprctl -j
 # layers`: the bar's own window grown to the size of the output (it paints
-# the ring, Bar.qml), and a formalshell:frame-zone on every edge, since
+# the ring), and a formalshell:frame-zone on every edge, since
 # those zones are what keep windows inside the cut-out.
 #
 # The last assert is on the wire instead, which is why this leg turns
@@ -24,7 +24,6 @@
 # reports why in the dump. The owner had 6px of nothing between every window
 # and the screen edge under this preset.
 leg_frame_flag="--frame"
-leg_frame_rust=1
 leg_frame_order=190
 leg_frame_needs="jq"
 leg_frame_wayland_debug=1

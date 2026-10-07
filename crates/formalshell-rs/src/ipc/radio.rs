@@ -1,4 +1,4 @@
-//! `radio`, RadioIpc.qml: Radio Atlas's player for keybinds and for reading
+//! `radio`: Radio Atlas's player for keybinds and for reading
 //! it from outside the shell. `play` takes a saved station's id (a favourite
 //! or a recent one), so a key can be bound to one station. Opening the atlas
 //! is `panel toggle radio`.

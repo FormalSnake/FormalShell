@@ -1,4 +1,4 @@
-//! The session lock (Lock.qml, LockService.qml): ext-session-lock-v1 with
+//! The session lock: ext-session-lock-v1 with
 //! one lock surface per output, the password typed into it checked by PAM
 //! off the UI thread, and the only unlock being PAM's own success.
 //!
@@ -77,7 +77,7 @@ pub struct Sleep {
 pub struct Lock {
     manager: SessionLockState,
     session: Option<SessionLock>,
-    /// Asked for, as `isLocked` reports it (Lock.qml's `locked`).
+    /// Asked for, as `isLocked` reports it.
     pub locked: bool,
     /// The compositor's word that every output is covered.
     pub secure: bool,
@@ -157,7 +157,7 @@ impl Dispatch2<ExtIdleNotificationV1, App> for LockIdle {
     }
 }
 
-/// `lock.command` as LockService.qml's `Lock.argv` reads it: a list of
+/// `lock.command` as read: a list of
 /// non-empty strings, or nothing.
 fn command(app: &App) -> Vec<String> {
     let Some(Value::Array(items)) = app.store.config.get("lock.command") else { return Vec::new() };
@@ -340,7 +340,7 @@ impl App {
             }
             LockMsg::Sleep(sleeping) => {
                 // Waking from a real suspend with the lock up blanks it until
-                // the next input (Lock.qml's resume guard): CLOCK_BOOTTIME
+                // the next input: CLOCK_BOOTTIME
                 // runs through a suspend and CLOCK_MONOTONIC does not.
                 if sleeping {
                     self.lock.slept_at = Some((boottime(), Instant::now()));
@@ -532,7 +532,7 @@ impl App {
         self.lock.dirty = false;
         let now = Instant::now();
         let theme = &self.store.theme.theme;
-        // The entrance (LockSurface.qml's contentEnter*): a fade that must
+        // The entrance: a fade that must
         // not overshoot and a rise that does, once the first output can draw.
         if !self.lock.entered && self.lock.outs.iter().any(|o| o.surface.configured) {
             self.lock.entered = true;
@@ -621,7 +621,7 @@ impl App {
         self.store.config.bool("lock.beforeSleep") != Some(false)
     }
 
-    /// LockService.qml's `_onPrepareForSleep`: lock, then let the delay
+    /// Lock, then let the delay
     /// inhibitor go once the lock is secure (or failed, or timed out).
     fn prepare_for_sleep(&mut self, sleeping: bool) {
         if !sleeping {

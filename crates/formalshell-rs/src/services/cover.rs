@@ -1,4 +1,4 @@
-//! Album art, Cover.qml's picture: an `artUrl` (a file, a `data:` URL as
+//! Album art: an `artUrl` (a file, a `data:` URL as
 //! mpv's mpris.lua hands out embedded art, or http art) fetched off the UI
 //! thread, decoded on the pool, cropped to a square the way
 //! `PreserveAspectCrop` fills a slot, scaled to the slot that asked and

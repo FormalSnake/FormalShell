@@ -1,10 +1,10 @@
-//! MirrorService.qml and the capture behind MirrorView.qml: the cameras
+//! The camera mirror: the cameras
 //! listed when the view opens, and the current one streamed in process on a
 //! thread of its own, each frame mirrored and fitted to the feed box before
 //! it reaches the UI. A node is held open only while the view shows it.
 //!
 //! An IR camera's emitter lights every other frame, so its feed goes
-//! through IrFeed.qml's filter: a frame darker than the one before is
+//! through the IR filter: a frame darker than the one before is
 //! dropped, and the lit one is levelled to a mean of `IR_TARGET` with at
 //! most `IR_MAX_GAIN` and a gamma, so the face reads.
 
@@ -198,7 +198,7 @@ fn capture(path: &str, ir: bool, stop: &AtomicBool, tx: &Sender<(String, Result<
     }
 }
 
-/// IrFeed.qml's level pass on a grey frame.
+/// The IR level pass on a grey frame.
 fn level(px: &mut [u8], mean: f64) {
     let gain = (IR_TARGET * 255.0 / mean.max(1.0)).min(IR_MAX_GAIN);
     for v in px.iter_mut() {

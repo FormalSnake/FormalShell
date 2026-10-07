@@ -1,4 +1,4 @@
-//! VisualizerService.qml: the one shared `cava` child behind the bar's
+//! The one shared `cava` child behind the bar's
 //! spectrum cell and the media panel's band.
 //!
 //! The process runs only while a track is playing, motion is on and

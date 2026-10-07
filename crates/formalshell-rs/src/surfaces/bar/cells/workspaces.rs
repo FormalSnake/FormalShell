@@ -1,4 +1,4 @@
-//! Workspaces.qml, Spaces: one chip per workspace on this output, each its
+//! Spaces: one chip per workspace on this output, each its
 //! ordinal followed by the icons of the windows on it, the focused chip
 //! under one pill that travels (Bar/workspaces.js picks the chips and what
 //! each lists). herdr's word on an agent rides its window's icon as a badge:
@@ -216,7 +216,7 @@ pub(crate) fn window(w: &Window) -> workspaces::Window {
     }
 }
 
-/// Workspaces.qml's `_int`: rounded, clamped, the default for a non-number.
+/// Rounded, clamped, the default for a non-number.
 fn int(env: &Env, key: &str, low: i64, high: i64, default: i64) -> i64 {
     env.store.config.f64(key).filter(|n| n.is_finite()).map_or(default, |n| (n.round() as i64).clamp(low, high))
 }
@@ -242,7 +242,7 @@ impl Workspaces {
         self.slots.iter().position(|s| s.is_focused).map_or(-1, |i| i as i64)
     }
 
-    /// Workspaces.qml's `_go`: a chip with an id focuses it, a persistent
+    /// A chip with an id focuses it, a persistent
     /// placeholder focuses by ordinal; the one already focused stays.
     fn go(&self, i: usize) -> Action {
         let s = &self.slots[i];

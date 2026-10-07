@@ -1,4 +1,4 @@
-//! `panel`, PanelIpc.qml's verbs over the panels' cards. `toggle` hangs a
+//! `panel`: the verbs over the panels' cards. `toggle` hangs a
 //! card under its cell when the strip has one; `open` hangs it at the
 //! strip's end.
 

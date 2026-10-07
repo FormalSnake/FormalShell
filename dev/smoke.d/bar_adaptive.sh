@@ -27,7 +27,6 @@
 # the bar off the overlay layer while a window covers the output, and the
 # solid paint is exactly what a session that turned that off gets to see.
 leg_bar_adaptive_flag="--bar-adaptive"
-leg_bar_adaptive_rust=1
 leg_bar_adaptive_order=101
 leg_bar_adaptive_needs="convert jq"
 # The base run's own focused window is what goes fullscreen for the fourth
@@ -195,7 +194,7 @@ leg_bar_adaptive_assert() {
     || fail "maximized: the shell does not report a window covering the output, so the solid paint is untested"
 
   # The same answer in the whole-state dump, which is where a leg that is
-  # not this one reads it (Ipc/DebugIpc.qml's `bar[].paint`).
+  # not this one reads it (`bar[].paint`).
   [ -s "$bar_adaptive_max_dump" ] || fail "maximized: no debug dump produced"
   "$jq_bin" -e '.bar[0].paint.paint == "maximized"' "$bar_adaptive_max_dump" > /dev/null 2>&1 \
     || fail "maximized: debug dump reports bar[0].paint of $("$jq_bin" -c '.bar[0].paint' "$bar_adaptive_max_dump")"

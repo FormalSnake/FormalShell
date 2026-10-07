@@ -1,13 +1,13 @@
-//! Icons by name (`shell/Theme/icons.js`): the Lucide and Nerd tables picked
+//! Icons by name: the Lucide and Nerd tables picked
 //! by `theme.icons`, and the distro logos the launcher draws whatever the set.
-//! The tables are the QML shell's own generated files, read as data.
+//! The tables are generated files, read as data.
 
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-const LUCIDE: &str = include_str!("../../../shell/Theme/icons/lucide.js");
-const NERD: &str = include_str!("../../../shell/Theme/icons/nerd.js");
-const DISTRO: &str = include_str!("../../../shell/Theme/icons/distro.js");
+const LUCIDE: &str = include_str!("../icons/lucide.js");
+const NERD: &str = include_str!("../icons/nerd.js");
+const DISTRO: &str = include_str!("../icons/distro.js");
 
 /// The family Lucide's glyphs are drawn in.
 pub const LUCIDE_FAMILY: &str = "lucide";

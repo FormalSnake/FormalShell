@@ -2,7 +2,7 @@
 # shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
 # --bar-title focuses a window whose title is far longer than any strip, in
 # a strip crowded with six `custom:` CommandModules on the right, and reads
-# the result off `bar room` (Ipc/BarIpc.qml): the title's budget is the room
+# the result off `bar room`: the title's budget is the room
 # its region actually has (Bar/layout.js's labelBudgets), the label is drawn
 # at exactly that budget with the marquee running, and no two cells on the
 # strip intersect, none is cut by its region's clip, none runs past the
@@ -28,7 +28,6 @@
 # a second apart, `bar-title.png` and `bar-title-later.png`, are the marquee
 # moving, read by eye.
 leg_bar_title_flag="--bar-title"
-leg_bar_title_rust=1
 leg_bar_title_order=196
 leg_bar_title_needs="foot jq mpv ffmpeg"
 

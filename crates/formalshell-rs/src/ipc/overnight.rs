@@ -1,4 +1,4 @@
-//! `overnight`, OvernightIpc.qml: toggle, enable, disable, and what was
+//! `overnight`: toggle, enable, disable, and what was
 //! changed and will be put back (`restore`, null while off).
 
 use serde_json::{Value as Json, json};

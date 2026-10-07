@@ -272,7 +272,7 @@ impl Tray {
         }
     }
 
-    /// `Activate(0, 0)`, as Quickshell sends it.
+    /// `Activate(0, 0)`.
     pub async fn activate(&self, key: &str) -> zbus::Result<()> {
         self.item_call(key, "Activate", &(0i32, 0i32)).await
     }
@@ -305,7 +305,7 @@ impl Tray {
         Ok((e.item.service.clone(), path))
     }
 
-    /// The same load Quickshell does when a `QsMenuOpener` takes the handle: `AboutToShow(0)`
+    /// Loads the menu: `AboutToShow(0)`
     /// (an error there is not fatal), then the whole subtree with `GetLayout(0, -1)`. From here
     /// until [`Tray::close_menu`] the tray keeps the tree current and raises
     /// [`Event::MenuChanged`].

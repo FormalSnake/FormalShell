@@ -14,8 +14,9 @@
 #               the collector's own view. It recognises exactly the one
 #               `sh -c` carrying that glob, runs it through the REAL shell so
 #               every other section stays this machine's own honest /proc,
-#               and hands back tests/fixtures/gpu-hybrid.txt's @drm rows in
-#               place of that section's own. Every other `sh -c` execs
+#               and hands back the @drm rows of
+#               crates/fs-system/tests/fixtures/gpu-hybrid.txt in place of
+#               that section's own. Every other `sh -c` execs
 #               straight through, GpuService's own nvidia-offload/prime-run
 #               probe included, which must keep answering "neither" since the
 #               env-var offload path is what this leg proves.
@@ -35,7 +36,6 @@
 # file, read back to confirm all four offload variables reached the child and
 # that the Exec's %U field code did not.
 leg_gpu_flag="--gpu"
-leg_gpu_rust=1
 leg_gpu_order=145
 leg_gpu_needs="jq"
 
@@ -71,9 +71,9 @@ EOF
   # empty answer. The rows are the fixture file itself rather than a copy
   # pasted in here, so they are the same bytes the parser tests assert
   # against, captured off real hardware.
-  awk '/^@drm$/ { in_drm = 1; next } /^@/ { in_drm = 0 } in_drm' tests/fixtures/gpu-hybrid.txt > "$gpu_drm_rows_path"
+  awk '/^@drm$/ { in_drm = 1; next } /^@/ { in_drm = 0 } in_drm' crates/fs-system/tests/fixtures/gpu-hybrid.txt > "$gpu_drm_rows_path"
   if [ ! -s "$gpu_drm_rows_path" ]; then
-    echo "SMOKE_FAIL: no @drm rows in tests/fixtures/gpu-hybrid.txt, the collector shim would hand back an empty card list" >&2
+    echo "SMOKE_FAIL: no @drm rows in crates/fs-system/tests/fixtures/gpu-hybrid.txt, the collector shim would hand back an empty card list" >&2
     exit 1
   fi
 
@@ -132,8 +132,8 @@ EOF
 }
 
 leg_gpu_timing() {
-  # gpu-drive.sh's last step lands around 21s (15s of sleeps plus five `qs
-  # ipc` spawns and two grims on llvmpipe), with the offload launch 6s before
+  # gpu-drive.sh's last step lands around 21s (15s of sleeps plus five IPC
+  # calls and two grims on llvmpipe), with the offload launch 6s before
   # it so the probe has long since written its file.
   leg_timing 26 60
 }
@@ -159,7 +159,7 @@ EOF
 }
 
 leg_gpu_assert() {
-  local var gpu_card_count gpu_menu
+  local var gpu_card_count
   if [ ! -s "$gpu_cards_path" ]; then
     fail "no monitor gpu produced"
   fi
@@ -197,23 +197,16 @@ leg_gpu_assert() {
   if [ "$gpu_card_count" != "2" ]; then
     fail "monitor gpu reported $gpu_card_count cards, want the fixture's 2: $(cat "$gpu_cards_path")"
   fi
-  # The launcher's half waits for a shell that serves `menu`.
-  if [ "$fs_impl" = rust ] && grep -q '^Target not found' "$gpu_route_reply_path" 2>/dev/null; then
-    gpu_menu=false
-    echo "SMOKE_GPU route and monitor view skipped: this shell serves no menu target yet"
-  else
-    gpu_menu=true
-  fi
-  if $gpu_menu && ! grep -q '^ok$' "$gpu_route_reply_path" 2>/dev/null; then
+  if ! grep -q '^ok$' "$gpu_route_reply_path" 2>/dev/null; then
     fail "menu summon gpu did not answer ok, got: $(cat "$gpu_route_reply_path" 2>/dev/null)"
   fi
   if [ -s "$gpu_menu_status_path" ]; then
     cat "$gpu_menu_status_path"; echo
   fi
-  if $gpu_menu && [ ! -f "$gpu_route_png" ]; then
+  if [ ! -f "$gpu_route_png" ]; then
     fail "no gpu-route screenshot produced"
   fi
-  $gpu_menu && echo "SMOKE_GPU_ROUTE $gpu_route_png"
+  echo "SMOKE_GPU_ROUTE $gpu_route_png"
   if ! grep -q '^ok: launched' "$gpu_launch_reply_path" 2>/dev/null; then
     fail "monitor launch was refused, got: $(cat "$gpu_launch_reply_path" 2>/dev/null)"
   fi
@@ -234,7 +227,6 @@ leg_gpu_assert() {
   if ! grep -q '^ARGV:$' "$gpu_offload_env_path"; then
     fail "the launched child was handed arguments, the Exec's %U field code survived. Got: $(grep '^ARGV:' "$gpu_offload_env_path")"
   fi
-  $gpu_menu || return 0
   if [ ! -f "$gpu_monitor_png" ]; then
     fail "no gpu-monitor screenshot produced"
   fi

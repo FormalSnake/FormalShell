@@ -2,32 +2,22 @@
 """Minimal StatusNotifierItem producer for FormalShell's --tray smoke fixture.
 
 Registers a real org.kde.StatusNotifierItem object on the session bus and
-announces it to whatever org.kde.StatusNotifierWatcher is running —
-Quickshell.Services.SystemTray owns that name itself once referenced (see
-shell/Surfaces/Bar/widgets/Tray.qml's own header comment) — so the tray
-widget has genuine items to render, never anything faked inside the shell.
+announces it to whatever org.kde.StatusNotifierWatcher is running (the shell
+owns that name itself), so the tray widget has genuine items to render,
+never anything faked inside the shell.
 The icon is a flat color square built at runtime from --color (no icon-theme
-lookup: the VM ships no icon theme), using the exact wire format quickshell
-actually decodes for IconPixmap — network/big-endian ARGB32 bytes per pixel,
-confirmed against quickshell's own src/services/status_notifier/
-dbus_item_types.cpp.
+lookup: the VM ships no icon theme), in the wire format IconPixmap
+requires: network/big-endian ARGB32 bytes per pixel.
 
 --menu (M32) additionally exports a real com.canonical.dbusmenu tree at
-/MenuBar and points the item's own "Menu" property (a QDBusObjectPath —
-StatusNotifierItem::bMenuPath, item.cpp) at it, which is what flips
-quickshell's hasMenu true (bHasMenu's binding is exactly
-`!bMenuPath.value().path().isEmpty()`). GetLayout/AboutToShow/Event are the
-only three methods quickshell's own DBusMenu.cpp ever calls (confirmed
-against the pinned source: prepareToShow() calls AboutToShow then always
-GetLayout regardless of the reply, sendEvent() is the only user of Event,
-and GetGroupProperties/AboutToShowGroup back the group-ref path quickshell
-doesn't use). GetLayout always returns the full tree from whichever id was
-asked, ignoring recursionDepth: quickshell's own root ref sets
-mShowChildren=true recursively at creation and never re-asks a submenu id
-over the wire (a QsMenuEntry is itself a QsMenuHandle, so a second
-QsMenuOpener bound to one reads its already-populated children
-synchronously — TrayMenu.qml's own header has the full citation), so a
-depth-aware trim here would just be unexercised code.
+/MenuBar and points the item's own "Menu" property (an object path) at it,
+which is what marks the item as having a menu. GetLayout/AboutToShow/Event
+are the only methods a client needs to show and activate it: it calls
+AboutToShow then always GetLayout regardless of the reply, and Event only
+to activate an entry. GetLayout always returns the full tree from whichever
+id was asked, ignoring recursionDepth: a client reads the whole tree once
+and never re-asks a submenu id over the wire, so a depth-aware trim here
+would just be unexercised code.
 """
 import argparse
 import sys
@@ -83,10 +73,8 @@ ITEM_INTERFACE_XML_BASE = """<node>
   </interface>
 </node>"""
 
-# com.canonical.dbusmenu, the wire interface quickshell's DBusMenu.cpp
-# speaks (src/dbus/dbusmenu/com.canonical.dbusmenu.xml) — reproduced here
-# verbatim since it's the freedesktop dbusmenu wire spec, not quickshell's
-# own code. Only GetLayout/AboutToShow/Event are ever called by our client
+# com.canonical.dbusmenu, the wire interface a tray client speaks,
+# reproduced here verbatim from the freedesktop dbusmenu wire spec. Only GetLayout/AboutToShow/Event are ever called by our client
 # (see module docstring); the rest is declared so introspection and
 # Properties.GetAll behave like a real implementation.
 MENU_INTERFACE_XML = """<node>
@@ -189,11 +177,9 @@ def build_menu_layout(item_id, depth):
             # Raw child Variant, not pre-wrapped in GLib.Variant("v", ...):
             # the outer "(ia{sv}av)" constructor's own "av" field already
             # boxes each list element into a variant itself, so wrapping
-            # here too double-boxes every child — quickshell's QDBusArgument
-            # deserialization unwraps exactly once (dbusmenu.cpp's
-            # `qdbus_cast<QDBusVariant>(argument).variant().value<QDBusArgument>()`),
-            # so a double-boxed child came out as a default-constructed
-            # DBusMenuLayout (id 0, empty everything) for every entry.
+            # here too double-boxes every child, and a client's deserialization
+            # unwraps exactly once, so a double-boxed child comes out as a
+            # default-constructed layout (id 0, empty everything) for every entry.
             children.append(build_menu_layout(child_id, next_depth))
     return GLib.Variant("(ia{sv}av)", (item_id, _menu_props_variant(node["props"]), children))
 
@@ -213,7 +199,7 @@ def main():
         "--menu",
         action="store_true",
         help="export the fixture com.canonical.dbusmenu tree at /MenuBar and point "
-        "the item's Menu property at it, flipping quickshell's hasMenu true",
+        "the item's Menu property at it, marking the item as having a menu",
     )
     args = parser.parse_args()
 
@@ -313,9 +299,8 @@ def main():
             None,
         )
 
-    # The watcher (quickshell's own StatusNotifierWatcher, at
-    # org.kde.StatusNotifierWatcher) only exists once the shell has
-    # referenced SystemTray/StatusNotifierHost — retry briefly rather than
+    # The watcher (org.kde.StatusNotifierWatcher) only exists once the shell
+    # has registered it, so retry briefly rather than
     # assume a fixed startup delay always wins that race.
     unique_name = connection.get_unique_name()
     last_error = None

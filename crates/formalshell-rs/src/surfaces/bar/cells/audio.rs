@@ -1,4 +1,4 @@
-//! AudioWidget.qml: the default sink's volume, muted or not, with the
+//! The default sink's volume, muted or not, with the
 //! percentage opt-in (`bar.widgets.audio.showLabel`). Right click mutes,
 //! the wheel steps it by 5%.
 

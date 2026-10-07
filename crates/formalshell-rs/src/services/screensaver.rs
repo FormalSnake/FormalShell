@@ -1,4 +1,4 @@
-//! The screensaver's ttfx child (Screensaver.qml's `ttfxProc`): a PATH
+//! The screensaver's ttfx child: a PATH
 //! probe at startup, then one run at a time, its stdout split into frames
 //! here so the UI thread only ever receives parsed rows. A new run or a stop
 //! drops the one before it, child included, so no stale frame or exit from

@@ -1,4 +1,4 @@
-//! System monitor data (SystemMonitorService.qml and GpuService.qml): the
+//! System monitor data: the
 //! /proc and /sys reads of one tick happen on the blocking pool, the
 //! fs-system parsers turn them into numbers, and CPU and network figures
 //! are deltas against the tick before, so the first tick after a start
@@ -56,7 +56,7 @@ impl State {
         self.cards.iter().find_map(|c| c.record.metrics.busy.filter(|_| c.record.metrics.available))
     }
 
-    /// MonitorIpc.qml's `status`.
+    /// The IPC `status` reply.
     pub fn status(&self, now_ms: u64) -> Value {
         let num = |v: Option<f64>| v.map_or(Value::Null, |n| json!(n));
         json!({
@@ -109,7 +109,7 @@ impl State {
         })
     }
 
-    /// MonitorIpc.qml's `gpu`.
+    /// The IPC `gpu` reply.
     pub fn gpu(&self, now_ms: u64) -> Value {
         let cards: Vec<Value> = self.cards.iter().map(card_json).collect();
         json!({

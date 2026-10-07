@@ -14,7 +14,6 @@
 # against the set wallpaper instead of resetting to the fallback palette.
 leg_theme_toggle_flag="--theme-toggle"
 leg_theme_toggle_order=220
-leg_theme_toggle_rust=1
 
 theme_dark_png="$shot_dir/theme-dark.png"
 theme_light_png="$shot_dir/theme-light.png"

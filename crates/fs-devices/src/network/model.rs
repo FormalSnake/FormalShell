@@ -8,8 +8,7 @@ use std::cmp::Ordering;
 
 use fs_js as js;
 
-/// Quickshell's `WifiSecurityType` (src/network/enums.hpp:107-128), by its
-/// integer value.
+/// NetworkManager's Wi-Fi security type, by its integer value.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WifiSecurityType {
     Wpa3SuiteB192 = 0,
@@ -49,7 +48,7 @@ impl TryFrom<i32> for WifiSecurityType {
     }
 }
 
-/// Quickshell's `ConnectionFailReason` (src/network/enums.hpp:67-84).
+/// Why a connection failed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ConnectionFailReason {
     Unknown = 0,

@@ -11,12 +11,11 @@
 # station off the globe and plays it again, read back off `radio status`.
 # Escape closes the atlas, read back off `panel state`.
 #
-# The globe's centre is worked out from RadioAtlas.qml's own layout and the
+# The globe's centre is worked out from the panel's own layout and the
 # spacing tokens (panelPadding 12, controlHeight 32, lg 8, a 16px caption
 # line), since nothing over IPC reports it.
 leg_radio_atlas_flag="--radio-atlas"
 leg_radio_atlas_order=176
-leg_radio_atlas_rust=1
 leg_radio_atlas_needs="ffmpeg wtype wlrctl convert"
 
 radio_atlas_track_path="$shot_dir/radio-atlas-station.mp3"

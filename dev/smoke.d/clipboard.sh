@@ -6,7 +6,7 @@
 # The head is one copy, one settle, one read, and it is an assertion of its
 # own: the ledger has to hold something copied before anything had read it.
 # ClipboardService owns the two `wl-paste --watch` children and is built at
-# startup (shell.qml's `_startupServices`), not by its first reader. It is
+# startup, not by its first reader. It is
 # cleared afterwards so the fixture sequence starts from the same empty
 # state the count assertions expect. Polling the ledger here instead would
 # construct the service itself and prove nothing.
@@ -17,8 +17,8 @@
 # filter` narrows it to one known row, `menu activate 0` (the rig's Enter
 # stand-in) fires, and the clipboard is read back. It has to hold the ROW's
 # entry, not the sentinel: row activation is in-process
-# (`@ipc:clipboard.copy:<id>`), and a spawned `qs ipc` would be a silent
-# exit 127 on any install that does not put `qs` on PATH.
+# (`@ipc:clipboard.copy:<id>`), and a spawned `ipc call` would be a silent
+# exit 127 on any install that does not put the binary on PATH.
 #
 # The image fixture is copied last so the cursor lands on it when the route
 # is resummoned, which is what puts the split pane's framed image preview in
@@ -49,7 +49,6 @@
 # preview draw the glyph at display size, the inline one stays body text.
 leg_clipboard_flag="--clipboard"
 leg_clipboard_order=130
-leg_clipboard_rust=1
 leg_clipboard_needs="wl-copy wl-paste convert"
 
 clip_list1_path="$shot_dir/clipboard-list1.json"

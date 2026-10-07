@@ -1,6 +1,6 @@
 // Portions from omarchy-radio-atlas (MIT, Copyright 2026 Akshar Patel)
 
-//! Globe.qml: the globe in near-side perspective, countries off Natural
+//! The globe in near-side perspective, countries off Natural
 //! Earth lit from the upper left, stations as dots sized and faded by depth,
 //! drag to spin with a kinetic coast, wheel to fly in. One draw list per
 //! pose: the node keeps the same list, and so damages nothing, until the
@@ -17,7 +17,7 @@ use vello_cpu::kurbo::{self, BezPath, Circle, Shape as _};
 
 use crate::scene::{Brush, VOp};
 
-const COUNTRIES: &str = include_str!("../../../../../shell/Radio/countries.json");
+const COUNTRIES: &str = include_str!("../../../data/countries.json");
 
 pub const HIT_RADIUS: f64 = 12.0;
 const MINIMUM_SCALE: f64 = 0.72;
@@ -97,7 +97,7 @@ fn grid() -> Vec<Vec<[f64; 3]>> {
     out
 }
 
-/// The palette the globe paints in, Globe.qml's colour properties.
+/// The palette the globe paints in.
 #[derive(Clone, Copy, PartialEq)]
 pub struct Ink {
     pub sphere: Rgba,
@@ -493,7 +493,7 @@ impl Globe {
         lx >= 0.0 && ly >= 0.0 && lx < self.rect.2 && ly < self.rect.3
     }
 
-    /// The cursor shape Globe.qml's HoverHandler asks for.
+    /// Whether the cursor shows the grabbing shape.
     pub fn grabbing(&self) -> bool {
         self.drag.press.is_some()
     }

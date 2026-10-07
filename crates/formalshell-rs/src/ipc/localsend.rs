@@ -1,4 +1,4 @@
-//! `localsend`, LocalsendIpc.qml: the receiver's and the last scan's
+//! `localsend`: the receiver's and the last scan's
 //! state, a scan, and one file sent to a peer the last scan found.
 
 use super::registry::{Function, Target, Type, Value};

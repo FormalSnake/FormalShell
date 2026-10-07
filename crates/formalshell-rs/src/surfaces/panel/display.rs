@@ -1,4 +1,4 @@
-//! DisplayPanel.qml: a hero for the focused output, then one row per
+//! A hero for the focused output, then one row per
 //! output (an on/off switch, the scale, mirror and HDR lines, mode, make
 //! and model, the card driving it, and a scale track), the backlight and
 //! DDC monitors, a switch per output that can do HDR, and the one mirror

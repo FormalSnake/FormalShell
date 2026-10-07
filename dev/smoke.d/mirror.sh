@@ -24,7 +24,6 @@
 # rendered by ffmpeg straight to PNG.
 leg_mirror_flag="--mirror"
 leg_mirror_order=145
-leg_mirror_rust=1
 leg_mirror_needs="convert ffmpeg jq wtype"
 
 mirror_dir="$shot_dir/mirror"

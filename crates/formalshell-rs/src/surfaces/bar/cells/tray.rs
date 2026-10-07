@@ -1,7 +1,7 @@
-//! Tray.qml and TrayCell.qml: the StatusNotifier items as a rail of icon
+//! The StatusNotifier items as a rail of icon
 //! cells, or, under the default `tray.maxVisible` of 0 and whenever the
 //! strip has no room, one dots toggle with the whole tray in the second bar
-//! (TrayOverflow.qml). All or nothing: the strip carries every icon or the
+//! (the overflow). All or nothing: the strip carries every icon or the
 //! toggle alone. The second bar holds the same cell in its rail form.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -170,7 +170,7 @@ impl Cell for Tray {
         false
     }
 
-    /// The item's own words, else its title, else its id (TrayCell.qml).
+    /// The item's own words, else its title, else its id.
     fn tip_at(&self) -> Option<(String, f64, f64)> {
         let i = self.hover.filter(|_| self.icons())?;
         let item = &self.items[i];

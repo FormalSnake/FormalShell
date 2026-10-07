@@ -1,4 +1,4 @@
-//! `theme` and `wallpaper`, ThemeIpc.qml's and WallpaperIpc.qml's verbs.
+//! `theme` and `wallpaper`: their verbs.
 
 use serde_json::json;
 

@@ -44,7 +44,6 @@
 leg_panel_morph_flag="--panel-morph"
 leg_panel_morph_order=76
 leg_panel_morph_needs="convert mpv ffmpeg"
-leg_panel_morph_rust=1
 
 panel_morph_bare_path="$shot_dir/panel-morph-bare.png"
 panel_morph_rest_full_path="$shot_dir/panel-morph-rest-full.png"

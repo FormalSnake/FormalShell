@@ -1,11 +1,11 @@
-//! Panel.qml: one open panel's window. A full-output layer surface on the
+//! One open panel's window. A full-output layer surface on the
 //! bar's edge that takes input everywhere while the panel is open, so a
 //! click outside the card closes it, and none at all once it is closing or
 //! handed over. Inside it, the card (`card::Card`) and its contents: the
 //! header row, the seam under it and the body, which scrolls past the
 //! output's room.
 //!
-//! The frame's size follows the content on `spatial` (SizeMorph.qml):
+//! The frame's size follows the content on `spatial`:
 //! tracked while open, frozen on close, and armed off the surface being
 //! mapped rather than its enter settling. A panel opened over another is
 //! a handoff: this card is seeded on the outgoing one's rect and travels
@@ -59,7 +59,7 @@ impl Place {
     }
 }
 
-/// Panel.qml's cursor: where it is, whether it shows, and whether the
+/// The cursor: where it is, whether it shows, and whether the
 /// keyboard put it there.
 #[derive(Default)]
 struct Cursor {
@@ -520,7 +520,7 @@ impl Host {
         Effect { store, runtime, close: false, summon: None }
     }
 
-    /// cursor.js `move` and Panel.qml's `moveCursor`.
+    /// Move the cursor.
     fn move_cursor(&mut self, dx: i32, dy: i32, fx: &mut Effect) {
         let count = self.body.stops.len();
         if self.module.steps() && self.cursor.active && dy == 0 && dx != 0 {
@@ -562,7 +562,7 @@ impl Host {
         }
     }
 
-    /// One key, as KeyCatcher.qml binds it.
+    /// One key.
     pub fn key(&mut self, name: Key, store: &Store, runtime: Option<&Runtime>) -> Out {
         if !self.open {
             return Out::None;

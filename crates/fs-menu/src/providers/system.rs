@@ -45,8 +45,8 @@ pub fn custom_power_button_entries(buttons: &[CustomPowerButton]) -> Entries {
 /// `notifications` is its own root, not nested under `system.notifications`:
 /// that id is already an activatable leaf, and an action node cannot also
 /// carry children the model would ever enter.
-pub fn capture_entries(self_path: &str) -> Entries {
-    let call = format!("qs ipc -p {self_path} call ");
+pub fn capture_entries(ipc: &str) -> Entries {
+    let call = format!("{ipc} call ");
     let mut e = Entries::new();
     e.insert("capture".into(), Entry::labelled("Capture").with_icon("\u{F0E51}"));
     e.insert("capture.text".into(), Entry::labelled("Copy Text From Screen").with_icon("\u{F113A}").with_action(format!("{call}capture text")));
@@ -105,13 +105,13 @@ const PANEL_NAMES: &[PanelName] = &[
     PanelName { id: "radio", label: "Radio", icon: "\u{F0439}", aliases: &[] },
 ];
 
-pub fn panels_provider(self_path: &str) -> Vec<Node> {
+pub fn panels_provider(ipc: &str) -> Vec<Node> {
     PANEL_NAMES
         .iter()
         .map(|p| Node {
             icon: p.icon.to_string(),
             aliases: p.aliases.iter().map(|a| a.to_string()).collect(),
-            action: Some(format!("qs ipc -p {self_path} call panel open {}", p.id)),
+            action: Some(format!("{ipc} call panel open {}", p.id)),
             ..Node::new(format!("panels.{}", p.id), p.label, Kind::Action)
         })
         .collect()
@@ -130,7 +130,7 @@ pub struct TrayItem {
 /// `shq` guards an id containing whitespace from splitting into extra argv
 /// tokens on the way through `sh -c`. An empty tray renders one dim row, never
 /// an empty level.
-pub fn tray_provider(items: &[TrayItem], self_path: &str) -> Vec<Node> {
+pub fn tray_provider(items: &[TrayItem], ipc: &str) -> Vec<Node> {
     if items.is_empty() {
         return vec![Node::note("tray.empty", "No tray items")];
     }
@@ -143,7 +143,7 @@ pub fn tray_provider(items: &[TrayItem], self_path: &str) -> Vec<Node> {
                 .cloned()
                 .unwrap_or_default();
             Node {
-                action: Some(format!("qs ipc -p {self_path} call tray activate {}", shq(&item.id))),
+                action: Some(format!("{ipc} call tray activate {}", shq(&item.id))),
                 ..Node::new(format!("tray.{}", item.id), label, Kind::Action)
             }
         })
@@ -200,19 +200,19 @@ pub fn gpu_provider(cards: &[GpuCard]) -> Vec<Node> {
 /// The offload launch Shift+Enter runs against the cursor's app row. `shq`
 /// guards a desktop id containing characters a bare interpolation would
 /// break (flatpak's reverse-DNS ids can carry a trailing instance suffix).
-pub fn gpu_launch_action(self_path: &str, desktop_id: &str, card: &str) -> String {
-    format!("qs ipc -p {self_path} call monitor launch {} {}", shq(desktop_id), shq(card))
+pub fn gpu_launch_action(ipc: &str, desktop_id: &str, card: &str) -> String {
+    format!("{ipc} call monitor launch {} {}", shq(desktop_id), shq(card))
 }
 
 /// The "gpu.mode" fragment, gated on supergfxctl's own presence rather than
 /// on card count, so a machine without it has nothing at all rather than an
 /// empty placeholder. `supported` is the parsed `gfx` state's flag.
-pub fn gpu_mode_entry(self_path: &str, supported: bool) -> Entries {
+pub fn gpu_mode_entry(ipc: &str, supported: bool) -> Entries {
     let mut e = Entries::new();
     if !supported {
         return e;
     }
-    let call = format!("qs ipc -p {self_path} call ");
+    let call = format!("{ipc} call ");
     e.insert("gpu.mode".into(), Entry::labelled("GPU Mode").with_icon("\u{F04E1}"));
     e.insert(
         "gpu.mode.integrated".into(),

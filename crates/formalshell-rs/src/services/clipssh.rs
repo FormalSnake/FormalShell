@@ -1,4 +1,4 @@
-//! ClipsshService.qml: one `clipssh <alias>` at a time, which ships the
+//! One `clipssh <alias>` at a time, which ships the
 //! clipboard's image to a host over ssh and puts the remote path back on
 //! the clipboard. The aliases are clipssh's own `~/.clipssh/aliases`,
 //! watched. A send while one runs is refused with a toast rather than

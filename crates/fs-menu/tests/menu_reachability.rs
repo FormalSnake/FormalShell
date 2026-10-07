@@ -1,12 +1,8 @@
-// The launcher-reachability guard. Keeps the owner's philosophy true: every
-// panel registered in shell.qml's PanelIpc has a route in the launcher.
+// The launcher-reachability guard: every panel has a route in the launcher.
 // PANEL_NAMES here is a second, independently kept copy of the providers'
 // own panel list (not imported: a typo or a dropped entry in the shipped list
 // must show up as a mismatch between two independently-written sources, not
-// disappear because both read the same array); the registry test below
-// cross-checks it against shell.qml's actual PanelIpc registry text, so a
-// panel added to shell.qml without a matching row here fails loudly instead of
-// just shipping unreachable.
+// disappear because both read the same array).
 
 mod common;
 
@@ -19,7 +15,6 @@ use fs_menu::providers::{
     radio_rows, tray_provider,
 };
 use fs_menu::search;
-use regex::Regex;
 
 const PANEL_NAMES: &[&str] = &[
     "appmenu", "audio", "calendar", "network", "bluetooth", "earbuds", "iphone", "dualsense", "power", "weather",
@@ -41,40 +36,12 @@ fn shipped_tree_covers_every_panel() {
     }
 }
 
-// Drift guard the other direction: the list this test asserts against is
-// checked both ways against shell.qml's real PanelIpc registry, so an
-// added-and-forgotten panel (present in shell.qml, absent here) fails here
-// rather than silently shipping unrouted. trayoverflow is the one registry
-// name with no row: the "tray" route already lists its items.
-#[test]
-fn registry_names_match_the_test_list() {
-    let text = read_repo("shell/shell.qml");
-    let start = text.find("var reg = {").expect("PanelIpc registry literal not found in shell.qml");
-    let end = start + text[start..].find("};").expect("registry end");
-    let registry = &text[start..end];
-    for name in PANEL_NAMES {
-        assert!(registry.contains(&format!("{name}:")), "'{name}' not found in shell.qml's PanelIpc registry");
-    }
-    let keys: Vec<&str> = Regex::new(r"(\w+):\s*\w+Instance")
-        .unwrap()
-        .captures_iter(registry)
-        .map(|c| c.get(1).unwrap().as_str())
-        .collect();
-    assert!(!keys.is_empty(), "no registry entries parsed out of shell.qml");
-    for name in keys {
-        if name == "trayoverflow" {
-            continue;
-        }
-        assert!(PANEL_NAMES.contains(&name), "panel '{name}' is registered in shell.qml but has no launcher row");
-    }
-}
-
 // A panel is reached by typing its name at root, not only from inside the
 // Panels route.
 #[test]
 fn root_query_reaches_every_panel() {
     let tree = real_tree();
-    for row in panels_provider("/fake/shell/dir") {
+    for row in panels_provider("formalshell-ipc") {
         let ranked = search::rank(&tree.nodes, &row.label, &no_conds(), None);
         assert!(ids(&ranked).contains(&row.id.as_str()), "root query '{}' does not reach {}", row.label, row.id);
     }
@@ -82,12 +49,12 @@ fn root_query_reaches_every_panel() {
 
 #[test]
 fn panels_provider_action_shape() {
-    let rows = panels_provider("/store/share/formalshell");
+    let rows = panels_provider("formalshell-ipc");
     assert_eq!(rows.len(), PANEL_NAMES.len());
     for (row, name) in rows.iter().zip(PANEL_NAMES) {
         assert_eq!(row.id, format!("panels.{name}"));
         assert_eq!(row.kind, Kind::Action);
-        assert_eq!(row.action.as_deref(), Some(format!("qs ipc -p /store/share/formalshell call panel open {name}").as_str()));
+        assert_eq!(row.action.as_deref(), Some(format!("formalshell-ipc call panel open {name}").as_str()));
     }
 }
 
@@ -95,7 +62,7 @@ fn panels_provider_action_shape() {
 // an empty tray renders one dim note rather than nothing.
 #[test]
 fn tray_provider_empty_state() {
-    let rows = tray_provider(&[], "/store/share/formalshell");
+    let rows = tray_provider(&[], "formalshell-ipc");
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].kind, Kind::Note);
     assert_eq!(rows[0].dim, Some(true));
@@ -104,13 +71,13 @@ fn tray_provider_empty_state() {
 #[test]
 fn tray_provider_rows_activate_by_id() {
     let item = TrayItem { id: "spotify".into(), title: "Spotify".into(), tooltip_title: String::new() };
-    let rows = tray_provider(&[item], "/store/share/formalshell");
+    let rows = tray_provider(&[item], "formalshell-ipc");
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].id, "tray.spotify");
     assert_eq!(rows[0].label, "Spotify");
     // The id is shell-quoted: tray ids are opaque strings that can carry
     // spaces and quotes, so the provider must never interpolate one bare.
-    assert_eq!(rows[0].action.as_deref(), Some("qs ipc -p /store/share/formalshell call tray activate 'spotify'"));
+    assert_eq!(rows[0].action.as_deref(), Some("formalshell-ipc call tray activate 'spotify'"));
 }
 
 // The rest of the sweep (console, plain screenshots, screensaver, plugins,
@@ -119,8 +86,8 @@ fn tray_provider_rows_activate_by_id() {
 // per IPC target/function actually referenced.
 #[test]
 fn capture_entries_covers_the_rest_of_the_sweep() {
-    let call = "qs ipc -p /store/share/formalshell call ";
-    let entries = capture_entries("/store/share/formalshell");
+    let call = "formalshell-ipc call ";
+    let entries = capture_entries("formalshell-ipc");
     let action = |id: &str| entries[id].action.clone().unwrap_or_default();
     assert_eq!(action("capture.screenshot"), format!("{call}screenshot full"));
     assert_eq!(action("capture.region"), format!("{call}screenshot region"));
@@ -144,8 +111,8 @@ fn system_lock_stays_disabled() {
     assert_eq!(real_tree().nodes["system.lock"].when.as_deref(), Some("false"));
 }
 
-// In-process through the lock service, not a spawned `qs ipc call`: that form
-// only ever resolves on the smoke rig, where the whole quickshell package is
+// In-process through the lock service, not a spawned IPC command: that form
+// only ever resolves on the smoke rig, where the whole shell package is
 // installed (the same trap the clipboard rows fell into).
 #[test]
 fn system_lock_routes_in_process() {

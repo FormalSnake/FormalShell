@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
-# --toast-motion proves the row toast's own motion (Toasts.qml), slowed to a
+# --toast-motion proves the row toast's own motion, slowed to a
 # tenth (`debug motionScale`) and photographed back to back:
 #
 #   arrive   one sticky critical toast slides in from past the screen's right
@@ -19,7 +19,6 @@
 # notification, below the bar so the bell cell's unread mark stays out of it.
 leg_toast_motion_flag="--toast-motion"
 leg_toast_motion_order=32
-leg_toast_motion_rust=1
 leg_toast_motion_needs="notify-send convert"
 
 toast_motion_scale=1000
@@ -151,16 +150,12 @@ leg_toast_motion_assert() {
   echo "SMOKE_TOAST_MOTION_LEAVE_AE$trail"
   echo "SMOKE_TOAST_MOTION_LEAVE $between of $toast_motion_frames frames between the two piles"
   [ "$between" -gt 0 ] || fail "the dismissal cut from one pile to the other with no frame between"
-  # The box rather than every pixel: QML's card can land on a fractional y
+  # The box rather than every pixel: the card can land on a fractional y
   # after a restack and antialias its last row differently.
   local left
   left=$(toast_motion_box "$toast_motion_left_path")
   [ "$left" = "$rest" ] || fail "the pile left behind is not the one card at rest (box '$left', rest '$rest')"
 
-  if [ "$fs_impl" != rust ]; then
-    echo "SMOKE_TOAST_MOTION_QUIET skipped: only the rust shell logs its commits"
-    return 0
-  fi
   local commits
   commits=$(awk '
     function t(line) { match(line, /t=[0-9]+ms/); return substr(line, RSTART + 2, RLENGTH - 4) + 0 }

@@ -189,7 +189,7 @@ pub fn failed_row() -> Node {
     note_row("keybinds.failed", "Binds unavailable", "hyprctl binds failed")
 }
 
-/// KeybindsProvider.qml's `rowsFor`: `None` before `hyprctl binds` has
+/// Rows for the keybinds route: `None` before `hyprctl binds` has
 /// answered, `Some(Err(()))` when it failed, else its stdout.
 pub fn rows_for(reply: Option<Result<&str, ()>>, query: &str) -> Vec<Node> {
     match reply {

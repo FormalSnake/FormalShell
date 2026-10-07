@@ -1,4 +1,4 @@
-//! The compositor backend, BackendBase.qml's contract on Hyprland's two raw
+//! The compositor backend on Hyprland's two raw
 //! sockets: `.socket.sock` answers one request per connection,
 //! `.socket2.sock` streams `EVENT>>DATA` lines. Every write is an `hl.*`
 //! Lua call, a dispatcher sent as `dispatch` and a monitor rule as `eval`.
@@ -146,8 +146,7 @@ pub enum Command {
 
 static COMMANDS: OnceLock<async_channel::Sender<Command>> = OnceLock::new();
 
-/// Dropped when the service has not started, as a write to a backend with
-/// no compositor is in the QML shell.
+/// Dropped when the service has not started.
 pub fn send(command: Command) {
     if let Some(tx) = COMMANDS.get() {
         let _ = tx.try_send(command);

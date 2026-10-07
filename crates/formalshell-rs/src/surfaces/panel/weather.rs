@@ -1,4 +1,4 @@
-//! WeatherPanel.qml: a hero carrying the current condition, today's high
+//! A hero carrying the current condition, today's high
 //! and low and the temperature, then one row per forecast day. The header
 //! icon tracks the live condition. Opening asks the poll to go again, and
 //! the panel holds the weather source for as long as it is up, so a bar

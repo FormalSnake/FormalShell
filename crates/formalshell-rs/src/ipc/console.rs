@@ -1,4 +1,4 @@
-//! `console`, ConsoleIpc.qml: the quake console's toggle, show and hide,
+//! `console`: the quake console's toggle, show and hide,
 //! and `status`, whose `windowId` is "" when no console window exists.
 
 use super::registry::{Function, Target, Type, Value};

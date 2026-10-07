@@ -27,10 +27,9 @@
 # either end. That is what the crops are for reading by eye. It is left out
 # of the assertions on purpose: a nested software-rendered session cannot
 # promise which frame a screencopy commits, and the durations themselves are
-# pinned in tests/tst_theme_tokens.qml.
+# pinned in the theme tokens.
 leg_workspaces_flag="--workspaces"
 leg_workspaces_order=195
-leg_workspaces_rust=1
 leg_workspaces_needs="foot convert"
 leg_workspaces_fixture_window=keep
 

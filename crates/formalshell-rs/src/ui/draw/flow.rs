@@ -1,4 +1,4 @@
-//! PowerFlow.qml, FlowNode.qml and FlowLink.qml as one element. The nodes
+//! The power flow diagram as one element. The nodes
 //! sit in thirds of the width with a link between each pair, and under the
 //! laptop a trunk drops one branch per USB-C port. A link carries a train
 //! of chevrons only while power really crosses it, on the charging pulse's

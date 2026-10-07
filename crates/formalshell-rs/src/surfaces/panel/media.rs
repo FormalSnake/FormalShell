@@ -1,4 +1,4 @@
-//! MediaPanel.qml: the active source's now-playing column. The source menu
+//! The active source's now-playing column. The source menu
 //! trigger (Auto or a pinned pick) with its menu inline under it, the cover
 //! beside the title, artist and album with the spectrum at the row's
 //! trailing end, the position row (elapsed, the track, total) and the
@@ -301,7 +301,7 @@ impl Panel for Media {
         if !a.art_url.is_empty() {
             let slot = s.control_height * 3.0;
             let (px, radius) = w::cover_inner(v.theme, slot);
-            // AnimatedAlbumArt.qml over the static art: only while the panel
+            // Animated album art over the static art: only while the panel
             // shows the slot, motion is on and the album has motion art.
             let animated = self.open
                 && v.theme.motion_enabled

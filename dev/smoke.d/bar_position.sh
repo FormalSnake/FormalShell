@@ -12,7 +12,7 @@
 # 1080-tall vertical strip is more than fits under the centre once opened:
 # the expanded frame is where the overflow rule shows, the outboard cells
 # still against the screen edge and the group clipped on the centre's side
-# (Bar.qml's region comment). Collapsed frame, `bar chevron expand`,
+# (the bar's region rule). Collapsed frame, `bar chevron expand`,
 # expanded frame, the two asserted to differ. Then `panel open audio` hangs a panel
 # off the bar's inner edge for the run's own frame, with `panel state`
 # agreeing it is the open one. This leg owns the `bar` key, so it does not
@@ -29,7 +29,6 @@
 # position into it, since two top-level `bar` keys leave only the later one
 # standing.
 leg_bar_position_flag="--bar-position <edge>"
-leg_bar_position_rust=1
 leg_bar_position_order=185
 leg_bar_position_needs="jq"
 
@@ -141,8 +140,8 @@ leg_bar_position_assert() {
     fail "no formalshell:bar layer surface in $bar_position_layers_path"
   fi
   read -r bx by bw bh <<< "$box"
-  # With --frame the bar's window is the whole output and paints the ring
-  # (Bar.qml); frame.sh asserts that box, and the edge is proven by the
+  # With --frame the bar's window is the whole output and paints the ring;
+  # frame.sh asserts that box, and the edge is proven by the
   # zones instead.
   if leg_on frame; then
     echo "bar window spans the output under --frame: x=$bx y=$by w=$bw h=$bh"

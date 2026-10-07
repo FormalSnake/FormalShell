@@ -1,4 +1,4 @@
-//! ChevronWidget.qml: the boundary of its region's governed group, which
+//! The boundary of its region's governed group, which
 //! lives in its own second bar. Points away from the bar while that bar is
 //! shut and back at it while it is up.
 

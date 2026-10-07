@@ -27,7 +27,6 @@
 # so the blur-on frame has to read measurably lower.
 leg_lyrics_blur_flag="--lyrics-blur"
 leg_lyrics_blur_order=176
-leg_lyrics_blur_rust=1
 leg_lyrics_blur_needs="mpv ffmpeg convert jq"
 
 # `--config-reload` mv's the same settings.json path this leg retargets;
@@ -162,7 +161,7 @@ done
 # The isolated session's own audio bring-up can pop a volume OSD once,
 # early, unrelated to anything this leg does (seen once as a stray large
 # diff region between the bare and open frames, on a run where the bare
-# shot landed while it was still up); Osd.qml's own hide delay is 1.6s, so
+# shot landed while it was still up); the OSD's own hide delay is 1.6s, so
 # this clears it before the bare reference is taken.
 sleep 3
 "$grim_bin" "$lyrics_blur_bare_path" > /dev/null 2>&1

@@ -1,4 +1,4 @@
-//! `picker`, PickerIpc.qml: the wallpaper route summoned, the generic image
+//! `picker`: the wallpaper route summoned, the generic image
 //! selector opened on a directory, and `choose` doing what Enter on a cell
 //! does.
 

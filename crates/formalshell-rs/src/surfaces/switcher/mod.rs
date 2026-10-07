@@ -1,4 +1,4 @@
-//! The Alt+Tab switcher (Surfaces/Switcher/Switcher.qml): the windows as
+//! The Alt+Tab switcher: the windows as
 //! thumbnails on one card in the middle of the output, each with its app
 //! icon and title under it, the selected one under the cursor. Summoned
 //! over IPC alone (`switcher next|prev|commit|cancel|state`), so the
@@ -106,7 +106,7 @@ impl Metrics {
         }
     }
 
-    /// The schematic's icon, as WindowThumb.qml sizes it for a thumbnail
+    /// The schematic's icon, as a window thumbnail sizes it for a thumbnail
     /// `thumb_w` wide.
     pub fn schematic_icon(&self, theme: &Theme, thumb_w: f64) -> f64 {
         (theme.space.huge * 2.0).min(thumb_w / 2.0).min(self.thumb_h / 2.0)

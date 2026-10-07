@@ -1,4 +1,4 @@
-//! SystemUpdateWidget.qml: a package icon and the model's own summary
+//! A package icon and the model's own summary
 //! ("2 behind", "Up to date", "No flake"). Visible in every state, since the
 //! user opted in by naming it. Behind inputs make it `warning`.
 

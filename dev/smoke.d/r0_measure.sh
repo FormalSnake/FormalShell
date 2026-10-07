@@ -1,37 +1,30 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
 # --r0-measure <seconds>: R0's numbers (plans/2026-10-06-r0-rust-spike.md
-# Task 4) for whichever shell FS_IMPL picks, on one timeline so the two
-# runs compare. It records and asserts nothing about pass or fail: the
+# Task 4) on one timeline, so runs on different hosts compare. It records and asserts nothing about pass or fail: the
 # budgets are read off its output by hand.
 #
 # The bar is pinned to workspaces on the left and the clock in the centre,
 # which is all the spike draws. A foot window running a `herdr` PATH shim
-# sits on workspace 1 throughout; the shim answers `herdr agent list` with
-# whatever the state file says, so the QML badge spins exactly while the
-# drive writes `working` there, the way --spaces drives it. The rust shell
-# spins its badge over `debug r0Spinner` instead.
+# sits on workspace 1 throughout, answering `herdr agent list` with an idle
+# agent; the badge spins over `debug r0Spinner`.
 #
 # Timeline, after the shell's pid shows up and 20s of settling:
 #   idle      60s of /proc/<pid>/stat utime+stime, all threads
 #   spinner   the same 60s with the badge spinning
-#   panel     ten opens and closes of the clock's panel (QML: calendar)
-#   scrim     ten scrim fades (QML has no bare scrim: the launcher's, card
-#             and all, through `menu toggle`)
-#   stall     the badge spinning across ten launcher opens (rust: ten panel
-#             opens, the nearest thing it has), for the longest gap between
-#             bar frames and the time to the opening surface's first frame
+#   panel     ten opens and closes of the clock's panel
+#   scrim     ten scrim fades
+#   stall     the badge spinning across ten panel opens, for the longest gap
+#             between bar frames and the time to the opening surface's first
+#             frame
 #   rss       VmRSS and the thread count at <seconds> after the launch
-# Every step is stamped in r0-marks.txt on the wall clock in ns. The QML
-# shell logs each render-thread frame with a timestamp (`--log-times`,
-# qt.scenegraph.time.renderloop); the rust shell logs every commit and puts
-# its own zero on the wall clock (`start epoch_us=`). shell-start.ns is the
-# launch stamp a cold start counts from, with the zone the QML log's
-# local timestamps are in.
+# Every step is stamped in r0-marks.txt on the wall clock in ns. The shell
+# logs every commit and puts its own zero on the wall clock
+# (`start epoch_us=`). shell-start.ns is the launch stamp a cold start
+# counts from.
 leg_r0_measure_flag="--r0-measure <seconds>"
 leg_r0_measure_order=900
 leg_r0_measure_needs="foot"
-leg_r0_measure_rust=1
 
 r0_shim_dir="$shot_dir/r0-shim"
 r0_state_path="$shot_dir/r0-herdr-state"
@@ -76,10 +69,7 @@ EOF
 }
 
 leg_r0_measure_shell() {
-  local extra="" software=""
-  if [ "$fs_impl" = qml ]; then
-    extra='--no-color --log-times --log-rules "qt.scenegraph.time.renderloop.debug=true"'
-  fi
+  local software=""
   # The scaffold's start script forces llvmpipe for the vkms card's sake; a
   # real host keeps its GPU, which is what the shell runs on there.
   if [ "$session_mode" = vkms ]; then software="export LIBGL_ALWAYS_SOFTWARE=1"; fi
@@ -87,7 +77,7 @@ leg_r0_measure_shell() {
 #!/usr/bin/env bash
 $software
 date '+%s%N %z' > "$r0_start_path"
-$shell_prefix "$shell_bin" $extra > "$shell_log_path" 2>&1 &
+$shell_prefix "$shell_bin" > "$shell_log_path" 2>&1 &
 echo \$! > "$shot_dir/shell.pid"
 wait
 EOF
@@ -101,25 +91,14 @@ leg_r0_measure_timing() {
 
 leg_r0_measure_drive() {
   local script="$shot_dir/r0-drive.sh" on off panel_on panel_off scrim_on scrim_off stall_on stall_off
-  if [ "$fs_impl" = rust ]; then
-    on="call debug r0Spinner true"
-    off="call debug r0Spinner false"
-    panel_on="call debug r0Panel open"
-    panel_off="call debug r0Panel close"
-    scrim_on="call debug r0Scrim true"
-    scrim_off="call debug r0Scrim false"
-    stall_on="call debug r0Panel open"
-    stall_off="call debug r0Panel close"
-  else
-    on="echo working > '$r0_state_path'"
-    off="echo idle > '$r0_state_path'"
-    panel_on="call panel open calendar"
-    panel_off="call panel close"
-    scrim_on="call menu toggle"
-    scrim_off="call menu toggle"
-    stall_on="call menu toggle"
-    stall_off="call menu toggle"
-  fi
+  on="call debug r0Spinner true"
+  off="call debug r0Spinner false"
+  panel_on="call debug r0Panel open"
+  panel_off="call debug r0Panel close"
+  scrim_on="call debug r0Scrim true"
+  scrim_off="call debug r0Scrim false"
+  stall_on="call debug r0Panel open"
+  stall_off="call debug r0Panel close"
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 call() { $ipc call "\$@" >> "$shot_dir/r0-ipc.log" 2>&1; }

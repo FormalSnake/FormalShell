@@ -1,4 +1,4 @@
-//! Components/shoulders.js's outline and Shoulders.qml's three paths, built
+//! The outline and its three paths, built
 //! for a top line in the item's own coordinates. Every other edge is the
 //! same outline under the card's edge map, which mirrors the arcs with it.
 
@@ -188,7 +188,7 @@ pub fn paths_with(width: f64, height: f64, radius: f64, border: f64, attach: f64
     Paths { fill, outer, near }
 }
 
-/// Surfaces/Debug/JoinPreview.qml: an attached card `depth` deep hung at
+/// An attached card `depth` deep hung at
 /// a published join, so `debug join` has a card in the gap it opens. Drawn
 /// into a full-output scene; `line` is the line's row across from `edge`.
 pub fn preview(scene: &mut crate::scene::Scene, nodes: &mut Vec<crate::scene::NodeId>, theme: &fs_theme::theme::Theme, edge: fs_chrome::types::Edge, line: f64, join: Option<(f64, f64)>) {

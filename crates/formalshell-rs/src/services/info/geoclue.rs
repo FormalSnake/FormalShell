@@ -1,7 +1,6 @@
-//! LocationService.qml's geoclue path: a GeoClue2 client under the desktop
-//! id the NixOS module allowlists, left started so a later fix replaces an
-//! early inaccurate one (QtPositioning's PositionSource, `updateInterval`
-//! 60 s). A machine with no GeoClue, or one that will not talk to this
+//! The geoclue path: a GeoClue2 client under the desktop id the NixOS module
+//! allowlists, left started so a later fix replaces an early inaccurate one
+//! (`updateInterval` 60 s). A machine with no GeoClue, or one that will not talk to this
 //! client, ends the task and leaves the beaconDB lookup to place it.
 
 use futures_lite::StreamExt;

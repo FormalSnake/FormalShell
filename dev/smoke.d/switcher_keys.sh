@@ -40,7 +40,6 @@
 # drive writes; the comment beside it says why.
 leg_switcher_keys_flag="--switcher-keys"
 leg_switcher_keys_order=104
-leg_switcher_keys_rust=1
 leg_switcher_keys_needs="foot jq wtype"
 # A fourth window sits on workspace 2 throughout and must not reach the card
 # (M64): the owner's quick Alt+Tab was landing on a window elsewhere and
@@ -57,7 +56,7 @@ leg_switcher_keys_fixture_window=keep
 # doesn't work when i hit it fast, it just glitches, i have to wait for the
 # fade in to finish". Each is one wtype process holding Alt, tapping Tab
 # once and releasing straight back out with no sleep between any of them,
-# which is the one gap `Switcher.qml`'s `_commitPending` exists for: the
+# which is the one gap the switcher's pending-commit guard exists for: the
 # compositor spawns `switcher next` and `switcher commit` as two
 # independent processes, and nothing orders their arrival at the ipc
 # socket, so a fast enough tap can have the release win that race. The

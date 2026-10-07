@@ -1,6 +1,6 @@
 // Portions from omarchy-spaces (MIT, Copyright 2026 Tornike Gomareli)
 
-//! The Spaces cell's workspace preview (Surfaces/Panels/WorkspacePreview.qml):
+//! The Spaces cell's workspace preview:
 //! a card off a workspace's chip, under a header naming the workspace and its
 //! window count, holding a miniature of the output with each window at its
 //! own place and full size, and a footer naming the window under the cursor.
@@ -189,7 +189,7 @@ impl Panel for WorkspacePreview {
             && let What::Scroll(dx, dy) = ev.what
         {
             // Qt turns the rig's continuous axis into 72 px a notch where a wheel's
-            // 120 angle units give one control height; the QML card steps that far.
+            // 120 angle units give one control height; the card steps that far.
             let step = fx.store.theme.theme.space.control_height * 2.25;
             let mut shared = self.shared.borrow_mut();
             let laid = &shared.laid;

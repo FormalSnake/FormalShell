@@ -144,7 +144,7 @@ install -m755 "$tp/localsend-cli/localsend-cli" "$lib/bin/localsend-cli"
 install -m755 "$tp/clipssh/clipssh" "$lib/bin/clipssh"
 install -m755 "$tp/omarchy-iphone/bin/omarchy-iphone-bridge" "$tp/omarchy-iphone/bin/omarchy-iphone-ams" "$lib/bin/"
 
-cp -R "$repo/shell/Theme/templates" "$share/templates"
+cp -R "$repo/crates/fs-theme/templates" "$share/templates"
 cp -R "$repo/branding" "$share/branding"
 cp -R "$repo/docs/examples" "$share/examples"
 install -m644 "$tp/lucide-font/lucide.ttf" "$share/fonts/lucide.ttf"

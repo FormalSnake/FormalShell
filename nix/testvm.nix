@@ -11,10 +11,10 @@
 # outputs) into the guest's Nix store image: nix's flake fetcher resolves a
 # locked github/git input to a deterministic store path from its narHash
 # alone, and skips the network entirely when that exact path is already
-# valid in the local store. Combined with the formalshell/quickshell
-# packages also being staged below, `nix build .#formalshell` inside the VM
+# valid in the local store. Combined with the formalshell package also
+# being staged below, `nix build .#formalshell` inside the VM
 # needs neither the network nor a shared store to be a no-op.
-{ self, nixpkgs, quickshell }:
+{ self, nixpkgs }:
 
 nixpkgs.lib.nixosSystem {
   system = "aarch64-linux";
@@ -28,8 +28,6 @@ nixpkgs.lib.nixosSystem {
     self.nixosModules.formalshell-greeter
     ({ pkgs, lib, config, ... }:
       let
-        quickshellPkg = quickshell.packages.aarch64-linux.default;
-
         # Only job: get WAYLAND_DISPLAY into the systemd --user environment,
         # the exact lookup dev/smoke.sh falls back to
         # (`systemctl --user show-environment`). Mirrors the
@@ -46,7 +44,7 @@ nixpkgs.lib.nixosSystem {
         # integrated EAP server (PEAP wraps a TLS tunnel in phase 1 before
         # MSCHAPv2 runs inside it — hostapd needs something to present).
         # wpa_supplicant/NM's own connectEap flow never sets a client-side
-        # ca_cert (NetworkPanel.qml's _enterpriseScript), so nothing here
+        # ca_cert (the network panel's enterprise script), so nothing here
         # ever validates the chain — a bare self-signed leaf is enough to
         # complete the handshake. World-readable in the store, same
         # throwaway-test-credential tradeoff as users.users.test.password
@@ -85,7 +83,7 @@ nixpkgs.lib.nixosSystem {
           # No forwardPorts: dev/vm.sh hands each slot its own ssh host port
           # through QEMU_NET_OPTS, and a baked-in 2222 would collide with
           # slot 0's on a second VM.
-          additionalPaths = [ nixpkgs.outPath quickshell.outPath ];
+          additionalPaths = [ nixpkgs.outPath ];
 
           # Populated at boot from the $KEYS env var, same mechanism
           # nix-builder-vm.nix uses for its own authorized_keys — dev/vm.sh
@@ -139,7 +137,7 @@ nixpkgs.lib.nixosSystem {
         ];
         services.getty.autologinUser = "test";
         # M8 Task 3: nixosModules.formalshell declares the
-        # "formalshell-lock" PAM service Lock.qml's PamContext authenticates
+        # "formalshell-lock" PAM service the lock surface authenticates
         # against (console-specific checks like pam_securetty that a lock
         # screen has no business inheriting are why it's a dedicated service
         # rather than reusing "login"), plus geoclue2/NetworkManager/
@@ -257,8 +255,6 @@ nixpkgs.lib.nixosSystem {
           # shell's own wrapper carries it separately via nix/package.nix.
           self.packages.aarch64-linux.formalshell-eds
           pkgs.evolution-data-server
-          quickshellPkg
-          pkgs.qt6.qtdeclarative
           pkgs.matugen
           # M41: dev/smoke.sh's compositor, and hyprctl with it. The rig can
           # fall back to `nix run nixpkgs#hyprland` on a host without it, but
@@ -288,15 +284,15 @@ nixpkgs.lib.nixosSystem {
           # binary asset.
           (pkgs.mpv.override { scripts = [ pkgs.mpvScripts.mpris ]; })
           pkgs.ffmpeg-headless
-          # ASCII visualizer owner-ask task: VisualizerService.qml drives
+          # ASCII visualizer owner-ask task: the visualizer service drives
           # this over PipeWire ([input] method=pipewire in the config it
           # writes) to feed the bar's cava widget real spectrum data;
           # nixpkgs' cava has withPipewire = stdenv.hostPlatform.isLinux,
           # true for this VM, so plain `cava` on PATH is pipewire-capable.
           pkgs.cava
-          # Wi-Fi QR share owner-ask task: NetworkPanel.qml pipes its
+          # Wi-Fi QR share owner-ask task: the network panel pipes its
           # `WIFI:` payload through a real `qrencode --type ASCII` child
-          # process rather than encoding QR symbols in QML, and guards the
+          # process rather than encoding QR symbols itself, and guards the
           # binary with `command -v` so its absence is an honest NO
           # QRENCODE cell. Installing it here is what lets a smoke run
           # prove the working path (a real matrix over the VM's own
@@ -305,9 +301,8 @@ nixpkgs.lib.nixosSystem {
           # M7 Task 3: --lock's round-trip proof types the real test
           # password into the real password TextInput via a genuine
           # virtual-keyboard-unstable-v1 client rather than a headless IPC
-          # shortcut (see LockIpc.qml's header comment for why one doesn't
-          # exist) — wtype is the standard tool for that on wlroots-family
-          # compositors.
+          # shortcut (the lock IPC has none by design); wtype is the standard
+          # tool for that on wlroots-family compositors.
           pkgs.wtype
           # M7 Task 3: grim talks wlr-screencopy directly as an ordinary
           # client, which a session lock does not gate, so it's what --lock
@@ -335,7 +330,7 @@ nixpkgs.lib.nixosSystem {
           pkgs.wlsunset
           # M14 Task 5: dev/smoke.sh's default leg spawns a real
           # toplevel with a controlled Wayland app-id (foot's --app-id) so
-          # ActiveWindow.qml's DesktopEntries.heuristicLookup has a genuine
+          # the active-window desktop entry lookup has a genuine
           # focused window to resolve against the smoke-iconic fixture's
           # icon — foot needs no GPU/EGL context (wl_shm + pixman/fcft
           # software text rendering), matching the VM's headless llvmpipe

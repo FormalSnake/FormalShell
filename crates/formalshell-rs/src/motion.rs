@@ -1,6 +1,6 @@
 //! The two clock families as `Anim` runs them (tokens.js `MOTION_BASE`,
 //! `MOTION_CURVES`), a `Behavior`'s retarget, and the velocity deform
-//! (Components/Deform.qml) with its spring.
+//! with its spring.
 
 use std::time::{Duration, Instant};
 
@@ -209,7 +209,7 @@ const STIFFNESS: f64 = 200.0;
 const DAMPING: f64 = 16.0;
 const EPSILON: f64 = 0.002;
 
-/// Deform.qml for a top-edge drawer: the symmetric 2x2 the three springs
+/// The deform for a top-edge drawer: the symmetric 2x2 the three springs
 /// carry, sampled off the frame's live position and height.
 pub struct Deform {
     pub m00: f64,
@@ -222,7 +222,7 @@ pub struct Deform {
     sampled: Option<(f64, f64, f64, f64)>,
 }
 
-/// Deform.qml's `edge`: the side the frame is anchored to.
+/// The side the frame is anchored to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DeformEdge {
     Top,
@@ -279,8 +279,8 @@ impl Deform {
             t11 = stretch * sin * sin + compress * cos * cos;
         }
 
-        // Damping integrated implicitly, as Deform.qml does: an explicit
-        // term flips sign once DAMPING * dt passes 1.
+        // Damping integrated implicitly: an explicit term flips sign once
+        // DAMPING * dt passes 1.
         let inv = 1.0 / (1.0 + DAMPING * dt);
         self.v00 = (self.v00 - STIFFNESS * (self.m00 - t00) * dt) * inv;
         self.v01 = (self.v01 - STIFFNESS * (self.m01 - t01) * dt) * inv;

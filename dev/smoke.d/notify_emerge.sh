@@ -35,7 +35,6 @@
 # colour and nothing about the geometry this leg reads.
 leg_notify_emerge_flag="--notify-emerge"
 leg_notify_emerge_order=31
-leg_notify_emerge_rust=1
 leg_notify_emerge_needs="notify-send convert"
 
 notify_emerge_scale_path="$shot_dir/notify-emerge-scale.txt"

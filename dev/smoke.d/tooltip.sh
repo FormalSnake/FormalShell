@@ -9,7 +9,6 @@
 # first. It anchors to a panel header's own close button, so it has nothing
 # to park on without a panel open.
 leg_tooltip_flag="--tooltip"
-leg_tooltip_rust=1
 leg_tooltip_order=80
 leg_tooltip_needs="wlrctl"
 # The panel it rides on has already dropped the base fixture window.
@@ -34,7 +33,7 @@ leg_tooltip_timing() {
 
 leg_tooltip_drive() {
   # 1886x74 is the panel header's close button, and it is the same point
-  # whatever the panel's width: Panel.qml pins the frame's RIGHT edge at
+  # whatever the panel's width: the panel pins the frame's RIGHT edge at
   # screen.width - barMargin, the Card insets by panelPadding, and the
   # button is controlHeight square against that inset edge, verticalCentred
   # in a header that starts panelPadding below a frame top of

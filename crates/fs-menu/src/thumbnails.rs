@@ -2,7 +2,7 @@
 //! picker's `cover` squares and a clipboard capture's `fit` box. A cached
 //! name is `<basename>-<key>-<mode><size>.jpg`; size and mode are in it so
 //! changing either invalidates the files by construction. The key hashes
-//! UTF-16 units, as the QML did, so both shells share one cache.
+//! UTF-16 units.
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Mode {

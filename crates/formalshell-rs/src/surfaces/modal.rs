@@ -1,4 +1,4 @@
-//! A modal card (Drawer.qml on the top edge with Scrim.qml under it): the
+//! A modal card (a drawer on the top edge with a scrim under it): the
 //! card budding off the top line on its own full-output surface, which
 //! holds the keyboard while open, and the two single-pixel scrim surfaces
 //! riding its pose: the band over the top line's own inset, which fades in

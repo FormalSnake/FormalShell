@@ -81,7 +81,7 @@ pub enum Op {
     /// The network panel's rescan button.
     Rescan,
     ToggleBluetooth,
-    /// Battery.qml's right click: state.json's `batteryShowPercent`.
+    /// The battery cell's right click: state.json's `batteryShowPercent`.
     BatteryPercent(bool),
     /// The power panel's profile group.
     Profile(fs_upower::Profile),

@@ -1,8 +1,7 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
 # --menu-morph: the launcher's card takes the size of the level kind it
-# shows (Menu.qml's `_cardWidth`/`_cardHeight`) and travels into it
-# (SizeMorph.qml) rather than jumping. The card opens at the root's
+# shows and travels into it rather than jumping. The card opens at the root's
 # `popupWidthMenu`, then `menu summon clipboard` re-levels it in place onto
 # a split route's `popupWidthMenuSplit`, all at a tenth of its speed (set
 # before the open: a window takes the scale it opened with) and photographed
@@ -15,7 +14,6 @@
 # between has to sit strictly between them: a card that jumped never does.
 leg_menu_morph_flag="--menu-morph"
 leg_menu_morph_order=126
-leg_menu_morph_rust=1
 leg_menu_morph_needs="convert"
 
 menu_morph_frames=24

@@ -11,7 +11,7 @@
 #
 # What is under test is the shell's receiver end to end: LocalsendService
 # spawns the real CLI, the file lands in the real fixture directory over the
-# real LocalSend v2 HTTPS handshake (LocalsendService.qml's header on why no
+# real LocalSend v2 HTTPS handshake (see the service's header on why no
 # `--https=false`), `recv`'s own `Recv file` log line raises the RECEIVED toast, and
 # files something else writes into the same directory (a browser download,
 # here a `cp` and a `.part` temp name before the transfer and a second
@@ -31,7 +31,6 @@
 # trip is what this rig can honestly still prove of that half.
 leg_localsend_flag="--localsend"
 leg_localsend_order=231
-leg_localsend_rust=1
 leg_localsend_needs="localsend-cli jq"
 
 localsend_receive_dir="$shot_dir/localsend-receive"

@@ -1,4 +1,4 @@
-//! `lights`, LightsIpc.qml: the keyboard's effect, colour, source, speed and
+//! `lights`: the keyboard's effect, colour, source, speed and
 //! level. A value the service refuses, or a machine with no asusd, answers
 //! an error string rather than "ok".
 
@@ -12,7 +12,7 @@ fn text(s: impl Into<String>) -> Value {
     Value::Str(s.into())
 }
 
-/// LightsIpc.qml's `_answer`: the command goes out only when it was
+/// The command goes out only when it was
 /// accepted.
 fn answer(app: &App, accepted: bool, what: &str, cmd: impl FnOnce() -> Cmd) -> Value {
     if !app.store.lights.available {

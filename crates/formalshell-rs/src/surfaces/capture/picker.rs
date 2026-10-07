@@ -1,4 +1,4 @@
-//! Surfaces/Capture/RegionPicker.qml's selection model: the candidate
+//! The region picker's selection model: the candidate
 //! rectangles, the toolbar, the cursor and its moves, and the status the
 //! `screenshot pickerStatus` verb reports. The surface and its drawing are
 //! in `draw`; the freeze, the commit and the teardown are the owner's.
@@ -48,7 +48,7 @@ pub struct Entry {
     pub rect: Option<R>,
 }
 
-/// A screen as Quickshell.screens has it: logical position and size.
+/// A screen: logical position and size.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Screen {
     pub name: String,
@@ -72,7 +72,7 @@ pub const TOOLS: [Tool; 6] = [
 ];
 
 /// The candidate sets, rebuilt from the compositor's model on every read
-/// the way the QML bindings re-evaluate.
+/// so they never go stale.
 #[derive(Clone, Debug, Default)]
 pub struct Cands {
     pub outputs: Vec<Entry>,

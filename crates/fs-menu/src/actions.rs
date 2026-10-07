@@ -30,7 +30,7 @@ pub enum Variant {
     Light,
 }
 
-/// What Menu.qml hands the footer.
+/// What the menu hands the footer.
 #[derive(Clone, Debug)]
 pub struct ActionCtx<'a> {
     pub mode: Mode,
@@ -130,7 +130,6 @@ pub fn action_bar(c: &ActionCtx) -> ActionBar {
 }
 
 /// The chords that summon a route directly, as a reader would type them.
-/// tests/tst_menu_hints.qml holds this table against the example Lua config.
 pub const ROUTE_CHORDS: &[(&str, &str)] = &[
     ("apps", "Super+Alt+Space"),
     ("calc", "Super+Ctrl+Q"),

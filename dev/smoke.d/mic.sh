@@ -13,7 +13,6 @@
 # bar.layout asked for it.
 leg_mic_flag="--mic"
 leg_mic_order=180
-leg_mic_rust=1
 
 mic_bar_png="$shot_dir/mic-bar.png"
 # The same file --dump's own leg writes, deliberately: this leg reads the

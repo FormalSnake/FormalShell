@@ -11,7 +11,6 @@
 leg_sleep_flag="--sleep"
 leg_sleep_order=112
 leg_sleep_needs="jq wtype"
-leg_sleep_rust=1
 
 sleep_inhibit_before_path="$shot_dir/sleep-inhibitors-before.txt"
 sleep_inhibit_after_path="$shot_dir/sleep-inhibitors-after.txt"

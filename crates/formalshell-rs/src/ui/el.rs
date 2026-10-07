@@ -16,8 +16,8 @@ pub enum Size {
     Px(f64),
 }
 
-/// Ink as a token, or as the enclosing `Cell`'s own (Cell.qml's
-/// `foreground` and `dimForeground`), so a row's label follows its state.
+/// Ink as a token, or as the enclosing `Cell`'s own (its `foreground` and
+/// `dimForeground`), so a row's label follows its state.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Ink {
     Fg,
@@ -77,7 +77,7 @@ impl Variant {
     }
 }
 
-/// Cell.qml's states.
+/// A `Cell`'s states.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct CellState {
     pub ghost: bool,
@@ -159,7 +159,7 @@ pub struct FlowPort {
     pub direction: i8,
 }
 
-/// PowerFlow.qml: adapter, laptop and battery in a row with a link between
+/// Power flow: adapter, laptop and battery in a row with a link between
 /// each, a trunk under the laptop with one branch per port.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Flow {
@@ -230,13 +230,13 @@ pub enum Kind {
     /// holding tiles at their own places (a workspace's miniature). The
     /// wheel over it fires its `on` with `What::Scroll`.
     Strip { size: (f64, f64), inset: f64, content: (f64, f64), scroll: (f64, f64), tiles: Vec<Tile> },
-    /// Cover.qml: a `muted` well under a border, the picture filling it
+    /// A `muted` well under a border, the picture filling it
     /// inside the border; the well alone until the picture lands.
     Cover { pic: Pic, size: f64 },
-    /// VisualizerCanvas.qml: the spectrum in one style, `columns` wide,
+    /// The spectrum in one style, `columns` wide,
     /// redrawn every frame while `live` and at rest otherwise.
     Spectrum { style: String, columns: usize, live: bool },
-    /// LyricsPane.qml at `height`.
+    /// The lyrics pane at `height`.
     Lyrics(super::lyrics::View),
 }
 

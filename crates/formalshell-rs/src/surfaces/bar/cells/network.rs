@@ -1,4 +1,4 @@
-//! NetworkWidget.qml: wired, Wi-Fi or offline, as one icon; right click
+//! Wired, Wi-Fi or offline, as one icon; right click
 //! flips the Wi-Fi radio.
 
 use crate::services::devices::{self, Op};

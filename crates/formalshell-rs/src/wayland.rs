@@ -215,8 +215,8 @@ pub struct App {
     pub menu: Option<Popout>,
     scrim: Option<(Scrim, PixelSurface)>,
     pointer: Option<wl_pointer::WlPointer>,
-    /// The pointing hand over a cell that answers a click (Cell.qml's
-    /// `cursorShape`), where the compositor offers cursor shapes.
+    /// The pointing hand over a cell that answers a click,
+    /// where the compositor offers cursor shapes.
     cursor_shapes: Option<CursorShapeManager>,
     cursor_device: Option<WpCursorShapeDeviceV1>,
     cursor: Option<(u32, Shape)>,
@@ -899,7 +899,7 @@ impl App {
         self.log(&format!("panel {id} mapped"));
     }
 
-    /// TrayOverflow.qml: the whole tray as a strip-sized card hanging off
+    /// The tray overflow: the whole tray as a strip-sized card hanging off
     /// the toggle that replaced it on the bar.
     fn open_tray_overflow(&mut self, anchor: Option<f64>) {
         let now = Instant::now();
@@ -1763,8 +1763,7 @@ impl App {
         }
     }
 
-    /// One key on the keyboard: the open panel's, as KeyCatcher.qml binds
-    /// them.
+    /// One key on the keyboard, routed to the open panel.
     fn key_event(&mut self, event: KeyEvent) {
         self.key_event_from(event, false);
     }

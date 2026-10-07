@@ -1,4 +1,4 @@
-//! What `shell/Core/Theme.qml` resolves: the preset against settings.json,
+//! What the theme resolves: the preset against settings.json,
 //! the palette theme.json carries, the tokens at the live scale, and
 //! `box()` against all three. Settings come in through `get` (one dotted
 //! path, `None` when absent) so this holds no config of its own.
@@ -325,7 +325,7 @@ mod tests {
         Rgba::parse(s).unwrap()
     }
 
-    // --- tst_box.qml: the box a role resolves to, and the geometry Box
+    // --- the box a role resolves to, and the geometry Box
     // draws it with.
 
     #[test]
@@ -361,8 +361,8 @@ mod tests {
         assert_eq!(t.box_style("cell", Some("destructive")).border.unwrap().color, hex("#ff2222"));
     }
 
-    // The QML case checks Box's colour Behavior; the clock it rides is the
-    // effects family, which is all the theme owns of it.
+    // Box's colour transition rides the effects clock family, which is all
+    // the theme owns of it.
     #[test]
     fn the_fill_crossfades_on_a_state_change() {
         let t = theme();
@@ -472,7 +472,7 @@ mod tests {
         assert_eq!(b.fill, t.hover_filled(hex("#1133ff")));
     }
 
-    // --- Theme.qml's own resolution
+    // --- the theme's own resolution
 
     #[test]
     fn the_preset_scalars_reach_the_theme() {

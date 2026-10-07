@@ -1,26 +1,21 @@
 # System-side prerequisites for FormalShell that home-manager cannot provide
 # (spec docs/superpowers/specs/2026-07-27-formalshell-design.md §Nix): a
-# dedicated PAM service for the lock screen's PamContext, geoclue2 (+ its
-# agent) for LocationService's default position source, and the system D-Bus
+# dedicated PAM service for the lock screen, geoclue2 (+ its agent) for the
+# default position source, and the system D-Bus
 # services the bar/panels bind directly and have no other way to acquire.
 #
-# Each toggle below traces to a specific QML file reading a specific
-# Quickshell service module — audited from nix/testvm.nix's own hand-added
-# services (M8 Task 3):
-#   - NetworkManager: the only backend Quickshell.Networking talks to
-#     (confirmed from quickshell's src/network/qml.cpp) — NetworkPanel.qml.
-#   - bluez: the backend Quickshell.Bluetooth talks to — BluetoothPanel.qml.
-#   - UPower: the backend Quickshell.Services.UPower talks to — the bar's
-#     Battery.qml cell and PowerPanel.qml.
-#   - power-profiles-daemon: provides the net.hadess.PowerProfiles D-Bus
-#     service UPower's PowerProfiles binding talks to — PowerPanel.qml's
-#     profile picker.
-#   - pipewire: the backend Quickshell.Services.Pipewire talks to —
-#     AudioService.qml (bar cell, audio panel, volume OSD).
-#   - polkit: PolkitService.qml registers the shell as the session's
-#     authentication agent, which needs polkitd to register with. The
-#     setuid pkexec wrapper is its own opt-in on current nixpkgs; without it
-#     pkexec refuses to run ("pkexec must be setuid root").
+# Each toggle below is a system service the shell talks to directly,
+# audited from nix/testvm.nix's own hand-added services (M8 Task 3):
+#   - NetworkManager: the network panel's only backend.
+#   - bluez: the bluetooth panel's backend.
+#   - UPower: the battery bar cell and the power panel.
+#   - power-profiles-daemon: the net.hadess.PowerProfiles D-Bus service
+#     behind the power panel's profile picker.
+#   - pipewire: the audio bar cell, audio panel and volume OSD.
+#   - polkit: the shell registers as the session's authentication agent,
+#     which needs polkitd to register with. The setuid pkexec wrapper is its
+#     own opt-in on current nixpkgs; without it pkexec refuses to run
+#     ("pkexec must be setuid root").
 # All six are genuine FormalShell prerequisites, not test-rig artifacts —
 # nix/testvm.nix's *other* hand-added bits (the null-audio-sink virtual
 # node, wtype/grim/mpv, getty autologin, …) stay in the VM config because
@@ -37,7 +32,7 @@ let
   ancs4linux = pkgs.callPackage ./ancs4linux.nix { };
 
   # 0x12 is GET_CONNECTOR_STATUS, the connector number goes in bits 16 and
-  # up; it is the only command written. shell/Power/flow.js decodes the
+  # up; it is the only command written. fs-system's power::flow decodes the
   # `response` lines. RAPL is published as a milliwatt average over the whole
   # poll interval rather than by opening energy_uj to everyone: the counter
   # is root-only because of the PLATYPUS side channel, which needs
@@ -49,18 +44,16 @@ in
     enable = lib.mkEnableOption "FormalShell system-side prerequisites";
 
     pam.enable = lib.mkEnableOption ''
-      the "formalshell-lock" PAM service Lock.qml's PamContext authenticates
-      against (shell/Surfaces/Lock/Lock.qml: `PamContext { config:
-      "formalshell-lock" }` — a literal string, not a setting, so this only
-      toggles whether the service exists, never its name)
+      the "formalshell-lock" PAM service the lock screen authenticates
+      against (the name is fixed in the shell, so this only toggles whether
+      the service exists)
     '' // { default = true; };
 
     geoclue.enable = lib.mkEnableOption ''
-      geoclue2 (+ its demo agent) for LocationService.qml's default
-      QtPositioning position source. FormalShell ships no compiled agent of
-      its own (pure QML/JS, spec's hard rule) — the upstream demo agent is
-      what actually authorizes the request, same role services.geoclue2's
-      own enableDemoAgent default already plays
+      geoclue2 (+ its demo agent) for the shell's default position source.
+      FormalShell ships no agent of its own; the upstream demo agent is what
+      authorizes the request, the role services.geoclue2's own
+      enableDemoAgent default already plays
     '' // { default = true; };
 
     networkmanager.enable = lib.mkEnableOption "NetworkManager, the network panel's only backend" // { default = true; };

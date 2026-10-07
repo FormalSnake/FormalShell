@@ -1,4 +1,4 @@
-//! UsagePanel.qml: the window closest to its limit as the hero, then a
+//! The window closest to its limit as the hero, then a
 //! Claude section and a Codex section, each a section label carrying the
 //! tier over one row per rate-limit window: the name, the percentage as a
 //! `display` mono figure, a track and the reset countdown. A window at or

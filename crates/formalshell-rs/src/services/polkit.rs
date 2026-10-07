@@ -1,4 +1,4 @@
-//! The polkit agent (PolkitService.qml): fs-auth's agent registered for
+//! The polkit agent: fs-auth's agent registered for
 //! this session on the system bus, one request at a time, each run as an
 //! `AuthFlow` whose events go to the dialog and whose answers come back
 //! from it.

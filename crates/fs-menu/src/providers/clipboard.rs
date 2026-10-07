@@ -30,9 +30,9 @@ pub enum ClipMode {
 /// These are plain "action" nodes, so the launcher's existing activation path
 /// handles them with no bespoke node kind. Copy-mode rows dispatch in-process
 /// (`@ipc:clipboard.copy:<id>`, the same argument-carrying internal-action
-/// shape `clipssh.send:<alias>` uses) rather than spawning `qs ipc ...`: `qs`
-/// is quickshell's own binary and nothing puts it on a session PATH, so the
-/// spawned form was a silent exit 127 everywhere but the VM test rig.
+/// shape `clipssh.send:<alias>` uses) rather than spawning an IPC command:
+/// nothing puts that binary on a session PATH, so the spawned form was a
+/// silent exit 127 everywhere but the VM test rig.
 ///
 /// `paste` is `clipboard.paste`, threaded in so this stays pure. It marks a
 /// copy row for the paste hook, which synthesizes the chord into whatever

@@ -11,7 +11,6 @@
 # off state.json itself, not through the service that wrote it.
 leg_reminder_flag="--reminder"
 leg_reminder_order=260
-leg_reminder_rust=1
 
 reminder_dnd_path="$shot_dir/reminder-dnd.txt"
 reminder_set_reply_path="$shot_dir/reminder-set-reply.json"

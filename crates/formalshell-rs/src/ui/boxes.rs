@@ -1,4 +1,4 @@
-//! Components/Box.qml: one role's box, in Box.qml's order: casts under
+//! One role's box, in paint order: casts under
 //! everything, rings, the fill with its border, the face, the inset
 //! hairlines and rings, then the pointer's wash.
 

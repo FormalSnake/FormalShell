@@ -1,4 +1,4 @@
-//! UsageWidget.qml: a gauge icon and the worst tracked window's percent,
+//! A gauge icon and the worst tracked window's percent,
 //! `destructive` at or past 90%. Hidden until an enabled provider has
 //! answered; the honest states (NO AUTH, STALE, NO CODEX) are words. A
 //! click on a stale cell asks for the token refresh before the panel opens.

@@ -13,7 +13,6 @@
 leg_lock_flag="--lock"
 leg_lock_order=110
 leg_lock_needs="wtype convert"
-leg_lock_rust=1
 
 lock_locked_path="$shot_dir/lock-locked.png"
 lock_typing_path="$shot_dir/lock-typing.png"

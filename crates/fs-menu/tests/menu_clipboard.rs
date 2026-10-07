@@ -40,9 +40,9 @@ fn text_entry_maps_to_preview_label_action_node() {
     assert_eq!(nodes[0].thumb_source, "");
     assert_eq!(nodes[0].full_text, "hello world");
     assert_eq!(nodes[0].time, "14:02");
-    // In-process, not a spawned `qs ipc` command: `qs` is quickshell's own
-    // binary and nothing puts it on a session PATH, so the spawned form was a
-    // silent exit 127 everywhere but the smoke VM.
+    // In-process, not a spawned IPC command: nothing puts that binary on a
+    // session PATH, so the spawned form was a silent exit 127 everywhere but
+    // the smoke VM.
     assert_eq!(nodes[0].action.as_deref(), Some("@ipc:clipboard.copy:a"));
     assert!(nodes[0].paste_after);
     assert_eq!(nodes[0].verb.as_deref(), Some("Paste"));

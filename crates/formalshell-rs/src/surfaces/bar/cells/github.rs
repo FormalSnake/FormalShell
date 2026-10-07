@@ -1,4 +1,4 @@
-//! GithubWidget.qml: a branch icon and "prs/issues" in mono. gh missing
+//! A branch icon and "prs/issues" in mono. gh missing
 //! hides the cell until the first poll lands; a failed auth reads NO AUTH,
 //! any other failure NO GH, never a stale count.
 

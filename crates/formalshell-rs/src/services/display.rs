@@ -1,7 +1,6 @@
 //! What the display panel and the `display`/`hdr` targets read beside the
-//! compositor's own outputs: each output's EDID (HdrService.qml), the
-//! backlight and DDC monitors (BrightnessService.qml), and which card drives
-//! which connector (GpuService.qml's cards).
+//! compositor's own outputs: each output's EDID, the
+//! backlight and DDC monitors, and which card drives which connector.
 //!
 //! The EDIDs are read once per set of connector names, off the hyprland
 //! service's own output refresh. The backlight is listed once at start and
@@ -10,8 +9,7 @@
 //! compositor never announces (a disabled one), for as long as it is open.
 //!
 //! HDR's choice lives in state.json's `hdr`; [`hdr_set`] and its siblings
-//! answer on the UI thread off the store, as HdrService.qml's functions
-//! answer off its bindings, and [`reconcile`] puts a wanted output back in
+//! answer on the UI thread off the store, and [`reconcile`] puts a wanted output back in
 //! HDR after a start, a hotplug or a config reload that reset the rules.
 
 use std::cell::RefCell;
@@ -30,7 +28,7 @@ use crate::services::hyprland::{self, Command};
 use crate::services::state::{self, Field};
 use crate::store::{self, Store};
 
-/// DisplayPanel.qml's re-read while open.
+/// The display panel's re-read while open.
 const REFRESH: Duration = Duration::from_secs(5);
 
 #[derive(Clone, Debug, PartialEq)]
@@ -126,7 +124,7 @@ pub fn outputs_changed(ctx: &Ctx, rows: &[Output]) {
     });
 }
 
-/// HdrService.qml's `od` over `/sys/class/drm/card*-<name>/edid`: only a
+/// Each EDID read from `/sys/class/drm/card*-<name>/edid`: only a
 /// readable node yields an entry, so a connector with none reads "No EDID".
 fn read_edids(names: &[String]) -> HashMap<String, Edid> {
     let mut out = HashMap::new();
@@ -147,7 +145,7 @@ fn read_edids(names: &[String]) -> HashMap<String, Edid> {
     out
 }
 
-/// GpuService.qml's collector rows (`card|...` and `conn|...`) read straight
+/// The `card|...` and `conn|...` rows read straight
 /// off sysfs, for `outputs::output_card_label`.
 fn read_cards() -> Vec<gpu::Card> {
     let Ok(dir) = std::fs::read_dir("/sys/class/drm") else { return Vec::new() };
@@ -265,7 +263,7 @@ async fn detect(ctx: Ctx) {
     }
 }
 
-/// BrightnessService.qml's `setDevicePercent`. `max` is the DDC row's own.
+/// Sets a device's brightness percent. `max` is the DDC row's own.
 pub fn set_percent(ctx: &Ctx, id: &str, percent: f64, max: i64) {
     let pct = percent.round().clamp(0.0, 100.0) as i64;
     if id == "backlight" {
@@ -305,7 +303,7 @@ pub async fn run(ctx: Ctx) {
 
 // HDR, answered on the UI thread.
 
-/// HyprlandBackend.qml's `outputConfigAvailable`: a compositor to talk to.
+/// Whether output config can be sent: a compositor to talk to.
 pub fn config_available() -> bool {
     std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some()
 }
@@ -342,7 +340,7 @@ fn apply(name: &str, color: outputs::Color) {
     hyprland::send(Command::SetOutputColor(name.to_owned(), color));
 }
 
-/// HdrService.qml's `set`: "ok" or why nothing was done.
+/// Sets HDR on an output: "ok" or why nothing was done.
 pub fn hdr_set(store: &Store, name: &str, on: bool) -> String {
     if !config_available() {
         return "no compositor".into();
@@ -416,7 +414,7 @@ pub fn hdr_active(store: &Store) -> bool {
 }
 
 /// `{ active, outputs: [{ name, supported, reason, on, wanted, cm }] }`, in
-/// HdrService.qml's key order.
+/// this key order.
 pub fn hdr_status(store: &Store) -> String {
     let wanted = hdr::state_of(&store.state.data.hdr);
     let active = rows(store).iter().any(|r| hdr::is_on(Some(r)));
@@ -469,7 +467,7 @@ thread_local! {
     static RELOADS: RefCell<u64> = const { RefCell::new(0) };
 }
 
-/// HdrService.qml's `_reconcile`, run whenever the outputs, the verdicts or
+/// Puts a wanted output back in HDR, run whenever the outputs, the verdicts or
 /// state.json move.
 pub fn reconcile(store: &Store) {
     if !store.state.loaded {
@@ -491,7 +489,7 @@ pub fn reconcile(store: &Store) {
     }
 }
 
-/// MainOutputService.qml's `mainOutput` over the lit outputs.
+/// The main output among the lit outputs.
 pub fn main_output(store: &Store) -> String {
     let names: Vec<String> = rows(store).iter().filter(|r| r.enabled).map(|r| r.name.clone()).collect();
     let prio = store.config.get("display.outputPriority").cloned().unwrap_or(Value::Array(Vec::new()));

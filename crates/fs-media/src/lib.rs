@@ -1,4 +1,4 @@
-//! Pure media logic ported from the QML shell: MPRIS source picking, Apple
+//! Pure media logic: MPRIS source picking, Apple
 //! Music cover glue, the AirPlay receiver model, the radio atlas.
 
 pub mod airplay;

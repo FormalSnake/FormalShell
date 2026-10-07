@@ -1,6 +1,0 @@
-ConfigReopen ConfigReopen.qml
-singleton Theme Theme.qml
-singleton State State.qml
-singleton Config Config.qml
-singleton PanelRegistry PanelRegistry.qml
-singleton TooltipRegistry TooltipRegistry.qml

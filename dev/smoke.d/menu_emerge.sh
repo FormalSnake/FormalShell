@@ -41,8 +41,8 @@
 #
 # The card's own left edge, width and top are spelled out rather than measured:
 # a `popupWidthMenu` card centred on the output with its top at 30% of it is
-# what the tokens and Menu.qml's `_topFraction` say, so a token change has to
-# be a deliberate edit here too (tst_panel_geometry.qml draws the same line).
+# what the tokens and the launcher's top fraction say, so a token change has to
+# be a deliberate edit here too.
 #
 # Which row the line itself is on is the one number that is neither pinned nor
 # measured: it comes out of a `debug dump`, so the same probes read a top
@@ -53,7 +53,6 @@
 leg_menu_emerge_flag="--menu-emerge"
 leg_menu_emerge_order=21
 leg_menu_emerge_needs="convert jq"
-leg_menu_emerge_rust=1
 
 menu_emerge_scale_path="$shot_dir/menu-emerge-scale.txt"
 menu_emerge_summon_path="$shot_dir/menu-emerge-summon.txt"
@@ -82,7 +81,7 @@ menu_emerge_frame_gap=0.09
 # figure is reported in real milliseconds through.
 menu_emerge_scale=1000
 
-# The card's own geometry (DESIGN.md §1 Space, Menu.qml's `_topFraction`):
+# The card's own geometry (DESIGN.md §1 Space):
 # `popupWidthMenu` 560 centred on a 1920 output, top at 30% of 1080. Neither
 # term moves with the bar's edge or the frame.
 menu_emerge_card_x=680

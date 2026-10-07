@@ -1,4 +1,4 @@
-//! KeyboardLayoutWidget.qml: a keyboard icon and the active layout's short
+//! A keyboard icon and the active layout's short
 //! code. Hidden until the compositor has answered, and for a session with a
 //! single layout; NO LAYOUT when it cannot be asked at all.
 

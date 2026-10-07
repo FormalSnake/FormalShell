@@ -14,7 +14,6 @@
 # level photographed with its tick on Breathe.
 leg_lights_flag="--lights"
 leg_lights_order=216
-leg_lights_rust=1
 
 lights_shim_dir="$shot_dir/lights-shim"
 lights_aura_dir="$shot_dir/lights-aura"

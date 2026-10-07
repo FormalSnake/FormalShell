@@ -60,7 +60,7 @@ impl IRect {
     }
 }
 
-/// One of a Box's casts (Components/Box.qml): CSS's offset, blur radius
+/// One of a Box's casts: CSS's offset, blur radius
 /// and spread, drawn analytically.
 #[derive(Clone, Copy, Debug)]
 pub struct Cast {
@@ -125,7 +125,7 @@ pub enum Paint {
     /// A line under a real Gaussian blur of `blur` px (the lyrics pane's
     /// depth of field), placed the way `Text` is.
     Blur { text: ShapedText, color: Rgba, blur: f32 },
-    /// A blurred copy of a line under its crisp one (Components/InkGlow.qml):
+    /// A blurred copy of a line under its crisp one:
     /// the glyphs offset by `x`, `y` and smeared over `blur` pixels.
     Glow { text: ShapedText, color: Rgba, x: f32, y: f32, blur: f32 },
     /// A filled outline and its strokes, in the node's own coordinates.

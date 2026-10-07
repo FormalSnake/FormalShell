@@ -1,5 +1,5 @@
 //! A panel whose body has not been ported yet: its own header (icon,
-//! title, width and header controls, as its QML file has them) over an
+//! title, width and header controls) over an
 //! empty body that holds the card at a working depth. Each one is replaced
 //! by its own module in R3 Tasks 2 to 5, R7 and R8.
 

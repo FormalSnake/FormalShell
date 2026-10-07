@@ -1,4 +1,4 @@
-//! Osd.qml's content: one icon, a track and the percentage in a pill the
+//! One icon, a track and the percentage in a pill the
 //! drawer buds off the bottom line. The pill is exactly `popupWidthNarrow`
 //! wide whatever it shows, and the readout column is measured off "100%"
 //! rather than the live value, so volume ticking 3% to 97% or a long media

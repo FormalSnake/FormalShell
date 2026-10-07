@@ -1,4 +1,4 @@
-//! Toasts.qml: the sonner depth stack. One overlay surface the size of the
+//! The sonner depth stack. One overlay surface the size of the
 //! output for as long as anything is popped up, so the collapse and expand
 //! reflow moves cards inside a static window rather than resizing a layer
 //! surface the compositor would animate against the shell's own motion; the
@@ -6,7 +6,7 @@
 //!
 //! Collapsed is the depth stack (the front card, two levels peeking behind
 //! it as empty chrome), expanded the plain column, both laid out by
-//! fs-info's `toast_stack`. The card is NotificationRow.qml.
+//! fs-info's `toast_stack`.
 //!
 //! Each group keeps its slot across draws, so a card retargets rather than
 //! snaps: x, y, width and height ride the table's `restack` clock (y behind
@@ -34,7 +34,7 @@ use crate::ui::{self, El, Ink, Type, Ui, Variant, Weight, w};
 
 const MAX_PEEK_LEVELS: usize = 2;
 
-/// Deform.qml's default `amount`, which Toasts.qml leaves alone.
+/// The default deform `amount`.
 const DEFORM_AMOUNT: f64 = 0.15;
 
 /// How often the relative times ("2m ago") recompute, off their own clock.
@@ -158,7 +158,7 @@ fn card(theme: &Theme, g: &Group, now: i64, picture: Option<Bitmap>) -> El {
     w::column(s.row_gap, parts).on("body")
 }
 
-/// NotificationBubble.qml, elementary's bubble: the picture in a
+/// Elementary's bubble: the picture in a
 /// `controlHeight` slot beside the words, a semibold summary, and the close
 /// button only while the pointer is over the bubble.
 fn bubble(theme: &Theme, g: &Group, now: i64, picture: Option<Bitmap>, hovered: bool) -> El {

@@ -11,7 +11,6 @@
 leg_hotcorner_flag="--hotcorner"
 leg_hotcorner_order=160
 leg_hotcorner_needs="jq"
-leg_hotcorner_rust=1
 # Nothing is summoned over the desktop, so this leg keeps the base run's
 # focused fixture window in its frame.
 leg_hotcorner_fixture_window=keep
@@ -35,7 +34,7 @@ leg_hotcorner_assert() {
   fi
   cat "$hotcorner_layers_path"; echo
   hotcorner_count=$("$jq_bin" '[.[].levels[]?[]? | select(.namespace == "formalshell:hotcorner")] | length' "$hotcorner_layers_path")
-  # Level 2 is Hyprland's `top`, the layer HotCorners.qml asks for so the
+  # Level 2 is Hyprland's `top`, the layer the corners ask for so the
   # screensaver and the lock surface can still cover a corner once fired.
   hotcorner_top=$("$jq_bin" '[.[].levels."2"[]? | select(.namespace == "formalshell:hotcorner")] | length' "$hotcorner_layers_path")
   # Two, not four: shell/HotCorners/corners.js leaves both TOP corners at

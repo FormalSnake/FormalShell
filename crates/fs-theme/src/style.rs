@@ -661,7 +661,7 @@ pub fn alpha_values(style: &Value) -> Vec<(String, &Value)> {
     out
 }
 
-/// What `Components/Box.qml` draws a resolved box as, for a box of
+/// What a renderer draws a resolved box as, for a box of
 /// `width` by `height`: the geometry every renderer of a box shares.
 pub mod geometry {
     use super::{Cast, Edge};

@@ -18,8 +18,8 @@ pub enum Image {
 /// Decodes the spec's `(iiibiiay)` image struct: width, height, rowstride,
 /// has_alpha, bits per sample, channels, data.
 ///
-/// Rowstride is honoured, unlike Quickshell, which only warns when it differs
-/// from `width * channels`: GdkPixbuf-based senders pad rows. Anything that is
+/// Rowstride is honoured even when it differs from `width * channels`:
+/// GdkPixbuf-based senders pad rows. Anything that is
 /// not 8-bit RGB or RGBA, or whose buffer is too short, decodes to `None`.
 pub(crate) fn decode(value: &OwnedValue) -> Option<ImageData> {
     let value: &Value = value;
