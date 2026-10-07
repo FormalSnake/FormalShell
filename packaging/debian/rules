@@ -26,6 +26,7 @@ override_dh_auto_configure:
 	dh_auto_configure --buildsystem=pybuild --sourcedirectory=$(ANCS)
 
 override_dh_auto_build:
+	$(MAKE) -C packaging
 	cd tools/eds && $(TP)/zig/zig build --global-cache-dir $(TP)/zig-cache \
 		--release=safe -Dcpu=baseline --prefix $(TP)/eds
 # The x86-64 engine's asm objects call libc with PC32 relocations, which a

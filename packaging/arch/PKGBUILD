@@ -24,27 +24,31 @@ pkgname=(
 )
 pkgver=0.1.1
 pkgrel=1
-pkgdesc='Hyprland desktop shell built on Quickshell'
+pkgdesc='Hyprland desktop shell'
 arch=('x86_64' 'aarch64')
 url='https://github.com/FormalSnake/FormalShell'
 license=('MIT')
 makedepends=(
   bluez-libs
   cargo
+  clang
   dbus
+  fontconfig
   gtk4
   gtk4-layer-shell
   go
   libadwaita
   libepoxy
   libpulse
+  libxkbcommon
   nasm
+  pam
+  pipewire
   protobuf
   python
   python-build
   python-hatchling
   python-installer
-  qt6-shadertools
   sqlite
   systemd
   zig
@@ -91,6 +95,9 @@ prepare() {
   local fs="$srcdir/FormalShell-$pkgver"
   export RUSTUP_TOOLCHAIN=stable
 
+  cd "$fs/crates"
+  cargo fetch --locked --target "$(rustc --print host-tuple)"
+
   cd "$srcdir/ttfx-$_ttfxver"
   cargo fetch --locked --target "$(rustc --print host-tuple)"
 
@@ -126,6 +133,8 @@ build() {
   export RUSTUP_TOOLCHAIN=stable
   export CARGO_TARGET_DIR=target
 
+  make -C "$srcdir/FormalShell-$pkgver/packaging"
+
   cd "$srcdir/FormalShell-$pkgver/tools/eds"
   zig build --global-cache-dir "$srcdir/zig-cache" --release=safe -Dcpu=baseline --prefix "$srcdir/eds"
 
@@ -159,17 +168,18 @@ build() {
 }
 
 package_formalshell() {
-  pkgdesc='Hyprland desktop shell built on Quickshell'
-  arch=('any')
+  pkgdesc='Hyprland desktop shell'
   # Everything nix/package.nix puts on the wrapper's PATH that a caller runs
   # without a `command -v` guard, plus the daemons the network, audio,
-  # battery and polkit surfaces have no other backend for.
+  # battery and polkit surfaces have no other backend for, and the libraries
+  # the binary links.
   depends=(
-    'quickshell>=0.3.1'
-    qt6-imageformats
-    qt6-multimedia
-    qt6-multimedia-ffmpeg
-    qt6-positioning
+    fontconfig
+    gcc-libs
+    glibc
+    libxkbcommon
+    pam
+    noto-fonts-emoji
     ttf-nerd-fonts-symbols
     brightnessctl
     coreutils
@@ -196,6 +206,7 @@ package_formalshell() {
     upower
     util-linux
     wf-recorder
+    wireplumber
     wl-clipboard
     wlsunset
     xdg-utils

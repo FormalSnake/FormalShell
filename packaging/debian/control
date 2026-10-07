@@ -19,29 +19,25 @@ Build-Depends:
  libadwaita-1-dev,
  libepoxy-dev,
  libfontconfig-dev,
+ libxkbcommon-dev,
+ libpipewire-0.3-dev,
+ libpam0g-dev,
+ libclang-dev,
  libdbus-1-dev,
  libbluetooth-dev,
  libpulse-dev,
  libsqlite3-dev,
  protobuf-compiler,
- qt6-shader-baker,
 Standards-Version: 4.7.2
 Homepage: https://github.com/FormalSnake/FormalShell
 Rules-Requires-Root: no
 
 Package: formalshell
-Architecture: all
+Architecture: any
 Depends:
+ ${shlibs:Depends},
  ${misc:Depends},
- quickshell (>= 0.3.1),
- qml6-module-qtqml,
- qml6-module-qtquick,
- qml6-module-qtquick-effects,
- qml6-module-qtquick-shapes,
- qml6-module-qtmultimedia,
- qml6-module-qtpositioning,
- libqt6positioning6-plugins,
- qt6-image-formats-plugins,
+ fonts-noto-color-emoji,
  formalshell-nerd-fonts-symbols,
  formalshell-eds,
  formalshell-iphone-bridge,
@@ -66,6 +62,7 @@ Depends:
  tesseract-ocr-eng,
  upower,
  wf-recorder,
+ wireplumber,
  wl-clipboard,
  wlsunset,
  xdg-utils,
@@ -87,7 +84,7 @@ Suggests:
  formalshell-openscq30,
  git,
  uxplay,
-Description: Hyprland desktop shell built on Quickshell
+Description: Hyprland desktop shell
  FormalShell is a single-process desktop shell for Hyprland: bar,
  launcher, notifications, lock screen, panels and screensaver, themed
  from the wallpaper with matugen.

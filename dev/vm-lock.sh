@@ -13,7 +13,8 @@ set -euo pipefail
 vm_sh="$(cd "$(dirname "$0")" && pwd)/vm.sh"
 slots="${FS_VM_SLOTS:-2}"
 # -c, not a heredoc: the command inherits stdin, and dev/native-check.sh
-# pipes its packages through it.
+# pipes its packages through it. The status probe and a start get
+# /dev/null instead, since their ssh would read that stream first.
 exec python3 -c '
 import fcntl, os, subprocess, sys, time
 vm_sh, slots = sys.argv[1], int(sys.argv[2])
@@ -31,9 +32,9 @@ while True:
         os.environ["FS_VM_SLOT"] = str(n)
         os.environ["FS_VM_LOCK_HELD"] = "1"
         print("vm-lock: slot %d" % n, file=sys.stderr)
-        up = subprocess.run([vm_sh, "status"], stdout=subprocess.PIPE, text=True)
+        up = subprocess.run([vm_sh, "status"], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, text=True)
         if "ssh reachable" not in up.stdout:
-            subprocess.run([vm_sh, "start"], stdout=sys.stderr, check=True)
+            subprocess.run([vm_sh, "start"], stdin=subprocess.DEVNULL, stdout=sys.stderr, check=True)
         sys.exit(subprocess.call(cmd))
     time.sleep(3)
 ' "$vm_sh" "$slots" "$@"

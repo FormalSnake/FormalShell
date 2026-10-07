@@ -155,8 +155,7 @@ dofile("/usr/share/formalshell/examples/hyprland/formalshell.lua")
 
 Debian 13 (trixie), testing (forky), unstable (sid) and Ubuntu 26.04. Each
 release attaches one set of `.deb` files per suite, the suite in every file
-name (`formalshell_0.1.0-1+trixie_all.deb`). On trixie and Ubuntu the set also
-carries a `quickshell` rebuilt for that release. Swap `trixie` for `forky`,
+name (`formalshell_0.1.1-1+trixie_amd64.deb`). Swap `trixie` for `forky`,
 `sid` or `resolute` (Ubuntu 26.04):
 
 ```sh

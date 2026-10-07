@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
+# A main loop that stops serving leaves a live process, so Restart=on-failure
+# never fires. `formalshell-ipc show` is answered by that loop: two timeouts
+# in a row restart the service. "No running instances" exits fast with 255
+# and is a stopped shell, not a hung one, so it clears the strike.
 strikes=${XDG_RUNTIME_DIR:-/tmp}/formalshell-watchdog.strikes
-@TIMEOUT@ -k 5 20 @QS@ ipc --any-display -p @SHAREDIR@ show >/dev/null 2>&1
+@TIMEOUT@ -k 5 20 @IPC@ show >/dev/null 2>&1
 if [ $? -ne 124 ]; then rm -f "$strikes"; exit 0; fi
 n=$(( $(cat "$strikes" 2>/dev/null || echo 0) + 1 ))
 if [ $n -lt 2 ]; then echo "$n" > "$strikes"; exit 0; fi

@@ -80,21 +80,11 @@ in
   options.services.formalshell-greeter = {
     enable = lib.mkEnableOption "the FormalShell greetd greeter";
 
-    implementation = lib.mkOption {
-      type = lib.types.enum [ "qml" "rust" ];
-      default = "qml";
-      description = ''
-        Which greeter `package` defaults to: the Quickshell one
-        (formalshell-greeter) or `formalshell-rs greeter`
-        (formalshell-greeter-rs). Both read the same settings.json.
-      '';
-    };
-
     package = lib.mkOption {
       type = lib.types.package;
-      default = self.packages.${pkgs.stdenv.hostPlatform.system}.${if cfg.implementation == "rust" then "formalshell-greeter-rs" else "formalshell-greeter"};
-      defaultText = lib.literalMD "this flake's `formalshell-greeter`, or `formalshell-greeter-rs` when `implementation` is `\"rust\"`";
-      description = "The greeter package. Defaults to this flake's build of `implementation` for the host system.";
+      default = self.packages.${pkgs.stdenv.hostPlatform.system}.formalshell-greeter;
+      defaultText = lib.literalExpression "formalshell.packages.\${pkgs.stdenv.hostPlatform.system}.formalshell-greeter";
+      description = "The greeter package. Defaults to this flake's build for the host system.";
     };
 
     compositorPackage = lib.mkOption {

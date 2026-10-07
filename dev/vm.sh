@@ -26,9 +26,8 @@ testvm_dir="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)"
 # FS_VM_SLOT picks one of the VMs dev/vm-lock.sh hands out. Slot 0 is the
 # original layout (port 2222, disk, log and pid straight in dev/.testvm);
 # slot N has its own VM, disk and pid under dev/.testvm/slotN and ssh on
-# 2222+N. The keypair is shared. FS_VM_ATTR boots another testvm variant
-# (testvm-greeter-rs) on `start`; vm-lock.sh hands out slots 0 and 1 only,
-# so a variant goes on a slot of its own (FS_VM_SLOT=2) and is stopped after.
+# 2222+N. The keypair is shared. vm-lock.sh hands out slots 0 and 1 only, so
+# a slot past those is free for a VM booted off a branch's own testvm.
 slot="${FS_VM_SLOT:-0}"
 case "$slot" in
   0) work_dir="$testvm_dir" ;;
@@ -127,7 +126,7 @@ cmd_start() {
 
   git -C "$repo_root" add -A >/dev/null 2>&1 || true  # flakes only see tracked files
   local vm_pkg
-  vm_pkg=$(nix build --no-link --print-out-paths "$repo_root#${FS_VM_ATTR:-testvm}")
+  vm_pkg=$(nix build --no-link --print-out-paths "$repo_root#testvm")
   echo "built $vm_pkg"
 
   # Copy just the pubkey into its own directory before adding to the
@@ -242,27 +241,21 @@ cmd_run() {
 # screenshot plus any other stdout (the dump/status/query JSON the smoke
 # script cats inline) back to ./artifacts/ on the mac.
 # Builds the shell on the mac (through the linux-builder) and copies the
-# closure into the VM's store, then prints FS_RESULT/FS_RS_RESULT assignments
+# closure into the VM's store, then prints the FS_RESULT assignment
 # for the VM-side command. A closure the VM already holds copies as a no-op,
 # and nothing compiles in the guest, whose freed blocks never shrink the
 # qcow2 on the mac. FS_BUILD_IN_VM=1 skips this and lets smoke.sh build in
-# the VM. FS_IMPL=rust adds the Rust shell. Needs the VM up and the caller
-# holding the slot lock.
+# the VM. Needs the VM up and the caller holding the slot lock.
 prebuild_env() {
   [ -z "${FS_BUILD_IN_VM:-}" ] || return 0
-  local attrs=(formalshell) paths=() out var attr
-  [ "${FS_IMPL:-qml}" != rust ] || attrs+=(formalshell-rs)
+  local attrs=(formalshell) paths=() out attr
   git -C "$repo_root" add -A >/dev/null 2>&1 || true  # flakes only see tracked files
   for attr in "${attrs[@]}"; do
     # One root per slot and package: the copy in use survives a mac GC, and
     # the build it replaces becomes garbage instead of piling up.
     out=$(nix build --out-link "$work_dir/gcroot-$attr" --print-out-paths "$repo_root#packages.aarch64-linux.$attr") || return 1
     paths+=("$out")
-    case "$attr" in
-      formalshell) var=FS_RESULT ;;
-      *) var=FS_RS_RESULT ;;
-    esac
-    printf '%s=%s ' "$var" "$out"
+    printf 'FS_RESULT=%s ' "$out"
   done
   NIX_SSHOPTS="${ssh_opts[*]}" nix copy --no-check-sigs --to ssh-ng://test@localhost "${paths[@]}" >&2 || return 1
 }
