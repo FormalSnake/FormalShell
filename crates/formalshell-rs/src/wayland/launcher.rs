@@ -116,7 +116,7 @@ impl App {
 
     /// A content layer on `card`, the size of its scene, taking no input:
     /// the pointer lands on the card underneath.
-    pub(super) fn content_layer(&self, card: &Surface, size: crate::scene::IRect) -> crate::surfaces::modal::Layer {
+    pub(super) fn content_layer(&self, name: &'static str, card: &Surface, size: crate::scene::IRect) -> crate::surfaces::modal::Layer {
         use crate::surface::{Ignore, Sub};
         let surface = self.compositor.create_surface(&self.qh);
         let sub = self.pixels.subcompositor.get_subsurface(&surface, card.layer.wl_surface(), &self.qh, Ignore);
@@ -124,7 +124,7 @@ impl App {
             surface.set_input_region(Some(region.wl_region()));
         }
         let fade = self.pixels.alpha.get_surface(&surface, &self.qh, Ignore);
-        let mut s = Surface::new("menu-content", Sub { surface, sub }, &self.shm, self.started);
+        let mut s = Surface::new(name, Sub { surface, sub }, &self.shm, self.started);
         s.configure(size.w, size.h);
         crate::surfaces::modal::Layer::new(s, fade, (size.w, size.h))
     }
@@ -142,7 +142,7 @@ impl App {
         }
         modal.surface.raster_budget = Some(LAUNCHER_SLICE);
         let size = modal.card.scene.size;
-        let mut content = self.content_layer(&modal.surface, size);
+        let mut content = self.content_layer("menu-content", &modal.surface, size);
         if let Some(kept) = self.layer_kept.take() {
             content.surface.adopt(kept);
         }
