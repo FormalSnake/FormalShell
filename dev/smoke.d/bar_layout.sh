@@ -14,6 +14,7 @@
 # proof.
 leg_bar_layout_flag="--bar-layout"
 leg_bar_layout_order=190
+leg_bar_layout_needs="jq"
 
 bar_layout_path="$shot_dir/bar-layout.png"
 bar_cmd_fixture_path="$shot_dir/bar-cmd-fixture.sh"
@@ -22,6 +23,7 @@ bar_cmd_badjson_path="$shot_dir/bar-cmd-badjson.sh"
 bar_cmd_timeout_path="$shot_dir/bar-cmd-timeout.sh"
 bar_cmd_empty_path="$shot_dir/bar-cmd-empty.sh"
 bar_gh_shim_dir="$shot_dir/gh-shim"
+bar_layout_room_path="$shot_dir/bar-layout-room.json"
 
 leg_bar_layout_fixture() {
   write_script "$bar_cmd_fixture_path" <<'EOF'
@@ -78,7 +80,7 @@ EOF
   # assertion honest if that default ever changes: the VM is a NixOS box with
   # no distributor-logo icon theme, which is exactly the path that has to
   # reach the bundled font-logos table for a real logo.
-  settings_fragment ', "bar": {"launcherIcon": "distro", "layout": {"left": ["launcher", "github", "custom:cmdfixture", "custom:cmdfail", "custom:cmdbadjson", "custom:cmdtimeout", "custom:cmdmissing", "custom:cmdempty", "activeWindow", "workspaces"]}, "modules": [{"id": "cmdfixture", "type": "command", "command": ["bash", "'"$bar_cmd_fixture_path"'"], "interval": 2000}, {"id": "cmdfail", "type": "command", "command": ["bash", "'"$bar_cmd_fail_path"'"], "interval": 20000}, {"id": "cmdbadjson", "type": "command", "command": ["bash", "'"$bar_cmd_badjson_path"'"], "interval": 20000}, {"id": "cmdtimeout", "type": "command", "command": ["bash", "'"$bar_cmd_timeout_path"'"], "interval": 20000, "timeout": 1000}, {"id": "cmdmissing", "type": "command", "command": ["'"$shot_dir"'/no-such-formalshell-smoke-binary"], "interval": 20000}, {"id": "cmdempty", "type": "command", "command": ["bash", "'"$bar_cmd_empty_path"'"], "interval": 20000}}]}'
+  settings_fragment ', "bar": {"launcherIcon": "distro", "layout": {"left": ["launcher", "github", "custom:cmdfixture", "custom:cmdfail", "custom:cmdbadjson", "custom:cmdtimeout", "custom:cmdmissing", "custom:cmdempty", "activeWindow", "workspaces"]}, "modules": [{"id": "cmdfixture", "type": "command", "command": ["bash", "'"$bar_cmd_fixture_path"'"], "interval": 2000}, {"id": "cmdfail", "type": "command", "command": ["bash", "'"$bar_cmd_fail_path"'"], "interval": 20000}, {"id": "cmdbadjson", "type": "command", "command": ["bash", "'"$bar_cmd_badjson_path"'"], "interval": 20000}, {"id": "cmdtimeout", "type": "command", "command": ["bash", "'"$bar_cmd_timeout_path"'"], "interval": 20000, "timeout": 1000}, {"id": "cmdmissing", "type": "command", "command": ["'"$shot_dir"'/no-such-formalshell-smoke-binary"], "interval": 20000}, {"id": "cmdempty", "type": "command", "command": ["bash", "'"$bar_cmd_empty_path"'"], "interval": 20000}]}'
 }
 
 leg_bar_layout_timing() {
@@ -95,6 +97,7 @@ leg_bar_layout_drive() {
 #!/usr/bin/env bash
 sleep 5
 "$grim_bin" "$bar_layout_path" > /dev/null 2>&1
+$ipc call bar room > "$bar_layout_room_path" 2>&1
 EOF
   hypr_exec_once "bash $script"
 }
@@ -103,5 +106,10 @@ leg_bar_layout_assert() {
   if [ ! -f "$bar_layout_path" ]; then
     fail "no bar-layout screenshot produced"
   fi
+  # A settings.json that does not parse falls back to the default layout,
+  # which photographs fine; the left region has to be the one asked for.
+  jq -e '[.[0].cells[] | select(.region == "left") | .name] | index("custom:cmdfixture") != null and index("activeWindow") < index("workspaces")' \
+    "$bar_layout_room_path" > /dev/null \
+    || fail "the bar did not take the layout from settings.json: $(cat "$bar_layout_room_path")"
   echo "SMOKE_BAR_LAYOUT $bar_layout_path"
 }

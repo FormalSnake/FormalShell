@@ -110,12 +110,24 @@ sleep 1
 "$grim_bin" "$bar_title_later_png_path" > /dev/null 2>&1
 # Focus to a short title and back, sampling the strip as fast as the IPC
 # answers while the title cell, the centre and both region clips travel.
+# Twelve samples take a few tens of ms, far less than foot takes to map, so
+# each burst starts once Hyprland has the focus it asked for; otherwise the
+# short window maps after the focus back and keeps the focus for the rest.
 mkdir -p "$bar_title_samples_dir"
+focused() {
+  for _ in \$(seq 1 40); do
+    [ "\$("$hyprctl_bin" -j activewindow | "$jq_bin" -r .class)" = "\$1" ] && return 0
+    sleep 0.1
+  done
+  return 1
+}
 "$hyprctl_bin" dispatch "hl.dsp.exec_cmd([==[$foot_bin --app-id=formalshell-bar-short --title=short sh -c 'sleep 300']==])"
+focused formalshell-bar-short
 for i in \$(seq 1 12); do
   $ipc call bar room > "$bar_title_samples_dir/to-short-\$i.json" 2>&1
 done
 "$hyprctl_bin" dispatch "hl.dsp.focus({ window = 'class:formalshell-bar-title' })" > /dev/null 2>&1
+focused formalshell-bar-title
 for i in \$(seq 1 12); do
   $ipc call bar room > "$bar_title_samples_dir/to-long-\$i.json" 2>&1
 done
