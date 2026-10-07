@@ -24,6 +24,8 @@
 pub mod boxes;
 mod draw;
 pub mod el;
+pub mod lyrics;
+mod spectrum;
 mod strip;
 pub mod w;
 
@@ -83,7 +85,8 @@ pub enum HitWhat {
     Pick(usize),
     /// Hover only (a tooltip carrier, a static row).
     Hover,
-    /// A viewport the wheel scrolls along both axes.
+    /// A region the wheel scrolls: a viewport along both axes (a
+    /// workspace's miniature), or a pane the host moves itself (lyrics).
     Scroll,
 }
 
@@ -124,6 +127,8 @@ pub struct Drawn {
 /// Everything that persists for one surface between draws.
 pub struct Ui {
     groups: HashMap<String, Group>,
+    spectra: HashMap<String, spectrum::Live>,
+    panes: HashMap<String, lyrics::Pane>,
     tweens: HashMap<String, Tween>,
     births: HashMap<String, Instant>,
     frame: u64,
@@ -149,6 +154,8 @@ impl Ui {
     pub fn new(anchor: Option<NodeId>) -> Self {
         Self {
             groups: HashMap::new(),
+            spectra: HashMap::new(),
+            panes: HashMap::new(),
             tweens: HashMap::new(),
             births: HashMap::new(),
             frame: 0,
@@ -221,6 +228,8 @@ impl Ui {
             }
         }
         self.tweens.retain(|_, t| frame - t.seen < 120);
+        self.spectra.retain(|_, l| frame - l.seen < 120);
+        self.panes.retain(|_, l| frame - l.seen < 120);
         drawn
     }
 
@@ -250,6 +259,19 @@ impl Ui {
             HitWhat::Hover | HitWhat::Scroll => return None,
         };
         Some(Event { on, what })
+    }
+
+    /// The scroll region under a point, under whatever row sits on it.
+    pub fn scroll_hit(&self, x: f64, y: f64) -> Option<&Hit> {
+        let (x, y) = (x.floor() as i32, y.floor() as i32);
+        self.hits.iter().rev().find(|h| h.what == HitWhat::Scroll && x >= h.rect.x && x < h.rect.right() && y >= h.rect.y && y < h.rect.bottom())
+    }
+
+    /// Moves a scroll region's content by `delta` px.
+    pub fn scroll(&mut self, path: &str, delta: f64) {
+        if let Some(p) = self.panes.get_mut(path) {
+            p.scroll(delta);
+        }
     }
 
     pub fn stop_index(&self, key: &str) -> Option<usize> {
@@ -314,6 +336,17 @@ impl Cx<'_> {
             self.drawn.animating = true;
         }
         a.value(now)
+    }
+
+    /// Puts a tween's value at `value` with nothing running.
+    pub fn jump(&mut self, key: &str, value: f64, kind: Clock) {
+        let frame = self.ui.frame;
+        let t = self.ui.tweens.entry(key.to_owned()).or_insert_with(|| Tween { value: TweenValue::Num(Animated::new(value, kind.curve())), seen: frame });
+        t.seen = frame;
+        match &mut t.value {
+            TweenValue::Num(a) => a.jump(value),
+            v => *v = TweenValue::Num(Animated::new(value, kind.curve())),
+        }
     }
 
     /// A colour crossfading to `target` (`CAnim`, always `effectsSlow`).

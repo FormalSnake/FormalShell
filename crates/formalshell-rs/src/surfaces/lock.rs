@@ -20,7 +20,7 @@ use crate::scene::{Bitmap, IRect, NodeId, Scene};
 use crate::services::wallpaper::Picture;
 use crate::surfaces::bar::cell::{Kit, Painter};
 use crate::text::TextStyle;
-use crate::ui::el::{Kind, Opt};
+use crate::ui::el::Opt;
 use crate::ui::{self, El, Ink, Size, Type, Ui, w};
 
 /// The modal scrim's opacity over the wallpaper (LockSurface.qml's `_scrimAlpha`).
@@ -279,10 +279,7 @@ fn now_playing(m: &NowPlaying, theme: &Theme, _kit: &mut Kit, ink: Rgba, sub: Rg
             o
         })
         .collect();
-    let mut group = w::group(options, usize::MAX, false).stop("transport");
-    if let Kind::Group { cursor_index, .. } = &mut group.kind {
-        *cursor_index = m.cursor.max(0) as usize;
-    }
+    let group = w::group(options, usize::MAX, false).stop("transport").ring(m.cursor.max(0) as usize);
     rows.push(group.centred());
     w::column(s.md, rows)
 }

@@ -58,7 +58,7 @@ impl State {
     }
 }
 
-fn dir() -> PathBuf {
+pub fn dir() -> PathBuf {
     let base = std::env::var("XDG_RUNTIME_DIR").ok().filter(|d| !d.is_empty()).unwrap_or_else(|| "/tmp".into());
     PathBuf::from(base).join("formalshell").join("airplay")
 }

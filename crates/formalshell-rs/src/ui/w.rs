@@ -69,6 +69,22 @@ pub fn strip(size: (f64, f64), inset: f64, content: (f64, f64), scroll: (f64, f6
     El::new(Kind::Strip { size, inset, content, scroll, tiles })
 }
 
+/// Album art in a `size` square (Cover.qml).
+pub fn cover(image: Option<crate::scene::Bitmap>, size: f64) -> El {
+    El::new(Kind::Cover { pic: Pic(image), size })
+}
+
+/// The picture a cover of `size` asks for: inside its border, at the radius
+/// that leaves concentric with the frame's.
+pub fn cover_inner(theme: &fs_theme::theme::Theme, size: f64) -> (u32, f64) {
+    let bw = theme.border_width;
+    (((size - bw * 2.0).round().max(1.0)) as u32, (theme.cover_radius(size) - bw).max(0.0))
+}
+
+pub fn spectrum(style: impl Into<String>, columns: usize, live: bool) -> El {
+    El::new(Kind::Spectrum { style: style.into(), columns, live })
+}
+
 pub fn icon(name: impl Into<String>) -> El {
     El::new(Kind::Icon { name: name.into(), size: Type::Body, ink: Ink::Fg })
 }

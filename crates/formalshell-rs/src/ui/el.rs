@@ -230,6 +230,14 @@ pub enum Kind {
     /// holding tiles at their own places (a workspace's miniature). The
     /// wheel over it fires its `on` with `What::Scroll`.
     Strip { size: (f64, f64), inset: f64, content: (f64, f64), scroll: (f64, f64), tiles: Vec<Tile> },
+    /// Cover.qml: a `muted` well under a border, the picture filling it
+    /// inside the border; the well alone until the picture lands.
+    Cover { pic: Pic, size: f64 },
+    /// VisualizerCanvas.qml: the spectrum in one style, `columns` wide,
+    /// redrawn every frame while `live` and at rest otherwise.
+    Spectrum { style: String, columns: usize, live: bool },
+    /// LyricsPane.qml at `height`.
+    Lyrics(super::lyrics::View),
 }
 
 /// One element: what it is, how wide it sits, and how it is addressed.
@@ -263,7 +271,7 @@ impl El {
             Kind::Column { .. } | Kind::Separator { vertical: false, .. } | Kind::Track { .. } | Kind::Group { .. } => Size::Fill,
             Kind::Cell { state, .. } if !state.chip => Size::Fill,
             Kind::Strip { size, .. } => Size::Px(size.0),
-            Kind::Input { .. } | Kind::Para { .. } | Kind::Matrix { .. } => Size::Fill,
+            Kind::Input { .. } | Kind::Para { .. } | Kind::Matrix { .. } | Kind::Lyrics(_) => Size::Fill,
             _ => Size::Hug,
         };
         Self { kind, width, pad: [0.0; 4], key: None, stop: false, on: None, tip: None, centred: false, top: false, mid: false, gauge: None }
