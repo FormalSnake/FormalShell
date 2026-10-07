@@ -4,6 +4,7 @@
 //! the pointer and the keyboard, and which owner a configure, a frame
 //! callback or an input event belongs to.
 
+mod atlas;
 mod caffeinate;
 pub mod capture;
 mod console;
@@ -166,6 +167,7 @@ enum Owner {
     LauncherScrim(u8),
     Switcher,
     Picker(usize),
+    Atlas(atlas::Part),
 }
 
 pub struct App {
@@ -190,6 +192,7 @@ pub struct App {
     headset: headset::Headset,
     thumbnails: capture::Capture,
     pub switcher: switcher::State,
+    pub atlas: atlas::State,
     peek: preview::State,
     pub bar: Bar,
     bar_surface: Option<Surface>,
@@ -282,6 +285,7 @@ impl App {
             headset: headset::Headset::default(),
             thumbnails: capture::Capture::bind(globals, qh),
             switcher: switcher::State::default(),
+            atlas: atlas::State::default(),
             peek: preview::State::default(),
             bar,
             bar_surface: None,
@@ -639,6 +643,7 @@ impl App {
             joins.extend(o.card.joins.iter().map(|j| (j.edge, j.x, j.width, j.reach)));
         }
         joins.extend(self.launcher_joins());
+        joins.extend(self.atlas_joins());
         joins.extend(self.popup_joins());
         let edge = self.bar.edge();
         if !joins.iter().any(|j| j.0 == edge)
@@ -787,6 +792,7 @@ impl App {
         if kept {
             return;
         }
+        self.atlas_close();
         if name == "trayoverflow" {
             if let Some(h) = &mut self.panel {
                 h.close(now);
@@ -1265,6 +1271,7 @@ impl App {
         }
         self.panel_dirty = false;
         self.present_launcher(now);
+        self.present_atlas(now);
         self.switcher_present();
         self.present_saver(now);
         self.present_tooltip(now);
@@ -1329,7 +1336,7 @@ impl App {
     fn arm_wake(&mut self, now: Instant) {
         let hosts = [&self.panel, &self.outgoing];
         let notifications = self.store.notifications.wake().map(|at| crate::services::notifications::instant_at(at, now));
-        let at = [self.bar.wake(now), self.tips.wake(), notifications, self.osd_wake(), self.headset.wake(), self.switcher_deadline(), self.preview_deadline(), self.toasts.as_ref().map(|t| t.rel_at + surfaces::toasts::REL_EVERY)]
+        let at = [self.bar.wake(now), self.tips.wake(), notifications, self.osd_wake(), self.headset.wake(), self.switcher_deadline(), self.atlas_deadline(), self.preview_deadline(), self.toasts.as_ref().map(|t| t.rel_at + surfaces::toasts::REL_EVERY)]
             .into_iter()
             .chain(hosts.iter().filter_map(|h| h.as_ref()).flat_map(|h| [h.prime_until, h.wake.filter(|w| *w > now)]))
             .flatten()
@@ -1350,6 +1357,9 @@ impl App {
     }
 
     fn owner(&self, surface: &wl_surface::WlSurface) -> Option<Owner> {
+        if let Some(p) = self.atlas_part(surface) {
+            return Some(Owner::Atlas(p));
+        }
         if let Some(o) = self.launcher_owner(surface) {
             return Some(o);
         }
@@ -1513,6 +1523,9 @@ impl App {
             let owner = self.owner(&e.surface);
             if let Some(Owner::Picker(i)) = owner {
                 self.picker_pointer(i, e);
+                continue;
+            }
+            if self.atlas_pointer(e) {
                 continue;
             }
             if self.launcher_pointer(e, owner) {
@@ -1688,7 +1701,7 @@ impl App {
     }
 
     fn key_event_from(&mut self, event: KeyEvent, repeat: bool) {
-        if self.lock_key(&event) || self.polkit_key(&event) || self.picker_key_event(&event) || self.launcher_key(&event, repeat) || self.headset_key(&event) || self.switcher_key(event.keysym) {
+        if self.lock_key(&event) || self.polkit_key(&event) || self.picker_key_event(&event) || self.atlas_key(&event) || self.launcher_key(&event, repeat) || self.headset_key(&event) || self.switcher_key(event.keysym) {
             return;
         }
         let editing = self.panel.as_ref().is_some_and(|h| h.editing());
@@ -1719,6 +1732,7 @@ impl App {
         match out {
             Out::None => {}
             Out::Close => self.close_panels(),
+            Out::Summon(panel::ATLAS) => self.atlas_show(),
             Out::Summon(route) => {
                 self.close_panels();
                 self.menu_open(Some(route));
@@ -1820,6 +1834,7 @@ impl CompositorHandler for App {
                 (z.frame_pending, z.mapped, z.callbacks) = (false, true, z.callbacks + 1);
             }
             Some(Owner::Switcher) => self.switcher_frame(),
+            Some(Owner::Atlas(p)) => self.atlas_frame(p, now),
             Some(o @ (Owner::Launcher | Owner::LauncherScrim(_))) => self.launcher_frame(o, now),
             Some(Owner::Picker(i)) => self.picker_frame(i),
             Some(Owner::Backdrop) => {
@@ -1870,6 +1885,7 @@ impl LayerShellHandler for App {
             Some(Owner::Backdrop) => self.backdrop = None,
             Some(Owner::Launcher) => self.launcher_closed(),
             Some(Owner::Switcher) => self.switcher_close(),
+            Some(Owner::Atlas(_)) => self.atlas_closed(),
             Some(Owner::Picker(i)) => self.picker_closed(i),
             None if self.saver_owns(layer.wl_surface()) => self.saver_closed(),
             Some(Owner::Zone(_) | Owner::LauncherScrim(_)) | None => {}
@@ -1932,6 +1948,7 @@ impl LayerShellHandler for App {
             }
             Some(o @ (Owner::Launcher | Owner::LauncherScrim(_))) => self.launcher_configure(o, width, height),
             Some(Owner::Switcher) => self.switcher_configure(width, height),
+            Some(Owner::Atlas(p)) => self.atlas_configure(p, width, height),
             Some(Owner::Picker(i)) => self.picker_configure(i, width, height),
             None if self.caffeinate_owns(layer) => self.caffeinate_configure(),
             None if self.saver_owns(layer.wl_surface()) => self.saver_configure(width, height),

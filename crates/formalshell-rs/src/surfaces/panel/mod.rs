@@ -69,6 +69,9 @@ pub enum Edit {
 }
 
 /// What a panel may do from an input.
+/// The `summon` that opens Radio Atlas rather than a launcher route.
+pub const ATLAS: &str = "@radio-atlas";
+
 pub struct Effect<'a> {
     pub store: &'a Store,
     pub runtime: Option<&'a Runtime>,
