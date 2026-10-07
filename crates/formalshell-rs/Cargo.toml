@@ -10,6 +10,9 @@ async-executor = "1.14"
 async-io = "2.6"
 async-process = "2"
 base64 = "0.22"
+# Held below 1.7.0, whose idle threads never exit and wake every 500 ms
+# (smol-rs/blocking's main_loop exits only past the thread limit).
+blocking = "=1.6.2"
 calloop = "0.14"
 chrono = "0.4"
 fs-theme = { version = "0.1.0", path = "../fs-theme" }
