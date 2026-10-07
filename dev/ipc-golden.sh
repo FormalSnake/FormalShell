@@ -12,7 +12,7 @@
 # `airplay`, `visualizer`, `overnight`, `earbuds`, `display`, `hdr` and
 # `workspaces` their own IPC files' (WorkspacesIpc.qml's `status` only: peek
 # and close wait for the preview), `calendar`, `iphone`, `notifications`,
-# `reminder`, `osd`, `nightlight`, `lights`, `switcher` and `clipboard` their own;
+# `reminder`, `osd`, `nightlight`, `lights`, `switcher`, `clipboard` and `picker` their own;
 # `probe` covers every type qs converts and the function names that collide
 # with qs's subcommands.
 set -euo pipefail
@@ -235,6 +235,15 @@ ShellRoot {
         function set(duration: string, message: string): string { return "set " + duration + " " + message }
         function show(): string { return "ok" }
         function clear(): string { return "ok: cleared 0" }
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "picker"
+        function summon(): string { return "ok" }
+        function select(directory: string, token: string): string { return "select " + directory + " " + token }
+        function choose(path: string): string { return "choose " + path }
+        function variant(name: string): string { return "variant " + name }
+        function close(): string { return "ok" }
         function status(): string { return "{}" }
     }
     IpcHandler {
@@ -633,6 +642,16 @@ rec call reminder set 25m
 rec call reminder set 25m ''
 rec call reminder clear
 rec show reminder
+rec call picker summon
+rec call picker select /tmp/p tok
+rec call picker select /tmp/p
+rec call picker choose /tmp/p/a.png
+rec call picker variant light
+rec call picker variant
+rec call picker close
+rec call picker status
+rec call picker nope
+rec show picker
 rec call clipboard list
 rec call clipboard copy x
 rec call clipboard copy

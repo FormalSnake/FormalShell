@@ -43,6 +43,7 @@ pub enum View {
     Rows,
     Emoji,
     AppGrid,
+    Picker,
 }
 
 impl View {
@@ -51,6 +52,7 @@ impl View {
             View::Rows => "rows",
             View::Emoji => "emoji",
             View::AppGrid => "appGrid",
+            View::Picker => "picker",
         }
     }
 }
@@ -111,6 +113,29 @@ pub struct Model {
     pub dirty: bool,
     /// A `pasteAfter` row ran: the chord goes out once the window is gone.
     pub paste: bool,
+    pub picker: Picker,
+    /// The Dark | Light switcher's height at the head of the body, 0 when
+    /// the route has none.
+    picker_switch_h: f64,
+}
+
+/// WallpaperPickerProvider.qml: the wallpaper route lists `dir`, and in
+/// select mode answers `token` in picker-selection.txt instead of setting
+/// the wallpaper.
+#[derive(Clone, Debug, Default)]
+pub struct Picker {
+    pub select: bool,
+    pub dir: String,
+    pub token: String,
+    pub light: bool,
+    /// `picker select` set this up for the open that follows.
+    pending: bool,
+}
+
+pub const PICKER_ROUTE: &str = "wallpaper";
+
+pub fn picker_selection_path() -> std::path::PathBuf {
+    state::state_path().with_file_name("picker-selection.txt")
 }
 
 impl Default for Model {
@@ -135,6 +160,8 @@ impl Default for Model {
             cursor: 0,
             cursor_id: String::new(),
             paste: false,
+            picker: Picker::default(),
+            picker_switch_h: 0.0,
             placed: false,
             want: String::new(),
             from_keys: true,
@@ -259,6 +286,106 @@ impl Model {
         }
     }
 
+    pub fn on_picker(&self) -> bool {
+        self.mode == Mode::Menu && self.level.as_deref() == Some(PICKER_ROUTE)
+    }
+
+    pub fn picker_variants(&self, store: &Store) -> fs_menu::providers::WallpaperVariants {
+        if store.picker.dir != self.picker.dir {
+            return Default::default();
+        }
+        fs_menu::providers::wallpaper_variants(&store.picker.scanned, &self.picker.dir)
+    }
+
+    fn picker_variant(&self) -> Option<fs_menu::providers::Variant> {
+        use fs_menu::providers::Variant;
+        Some(if self.picker.light { Variant::Light } else { Variant::Dark })
+    }
+
+    pub fn picker_listing(&self, store: &Store) -> Vec<String> {
+        fs_menu::providers::wallpaper_listing(&self.picker_variants(store), self.picker_variant()).to_vec()
+    }
+
+    /// The wallpaper route's segmented switcher shows.
+    pub fn picker_switch(&self, store: &Store) -> bool {
+        self.on_picker() && self.picker_variants(store).has_variants
+    }
+
+    /// `openImageSelect`.
+    pub fn open_image_select(&mut self, store: &Store, dir: &str, token: &str) {
+        self.picker_abandon();
+        let dir = if dir.is_empty() { store.config.str("picker.directory").unwrap_or("").to_owned() } else { dir.to_owned() };
+        self.picker = Picker { select: true, dir, token: token.into(), light: self.picker.light, pending: true };
+        self.open(store, Some(PICKER_ROUTE));
+    }
+
+    /// `chooseImage`: false off the route or for a path not listed.
+    pub fn choose_image(&mut self, store: &Store, path: &str) -> bool {
+        if !self.open || !self.on_picker() || !self.picker_listing(store).iter().any(|p| p == path) {
+            return false;
+        }
+        if self.picker.select {
+            write_picker_selection(&json!({"token": self.picker.token, "value": path}));
+            self.picker.token.clear();
+        } else {
+            let mode = fs_menu::providers::wallpaper_pick_mode(&self.picker_variants(store), self.picker_variant());
+            let mode = mode.map(|v| if v == fs_menu::providers::Variant::Light { "light" } else { "dark" });
+            state::set_wallpaper(path, mode);
+        }
+        self.close();
+        true
+    }
+
+    /// `setPickerVariant`.
+    pub fn set_picker_variant(&mut self, store: &Store, light: bool) -> bool {
+        if !self.open || !self.picker_switch(store) {
+            return false;
+        }
+        if self.picker.light != light {
+            self.picker.light = light;
+            self.from_keys = true;
+            self.dirty = true;
+        }
+        true
+    }
+
+    /// `pickerStatus`.
+    pub fn picker_status(&self, store: &Store) -> Value {
+        let v = self.picker_variants(store);
+        let listing = self.picker_listing(store);
+        json!({
+            "open": self.open && self.on_picker(),
+            "mode": if self.picker.select { "select" } else { "wallpaper" },
+            "directory": self.picker.dir,
+            "count": listing.len(),
+            "variant": if v.has_variants { if self.picker.light { "light" } else { "dark" } } else { "none" },
+            "hasVariants": v.has_variants,
+            "cachedThumbnails": listing.iter().filter(|p| store.picker.cached.contains(*p)).count(),
+            "darkCount": v.dark.len(),
+            "lightCount": v.light.len(),
+            "cursor": self.cursor,
+        })
+    }
+
+    fn picker_enter(&mut self, store: &Store) {
+        if !self.picker.pending {
+            self.picker_abandon();
+            self.picker.select = false;
+            self.picker.dir = store.config.str("picker.directory").unwrap_or("").to_owned();
+            self.picker.token.clear();
+        }
+        self.picker.pending = false;
+        self.picker.light = store.state.data.mode == "light";
+        crate::services::picker::command(crate::services::picker::Cmd::Scan(self.picker.dir.clone()));
+    }
+
+    fn picker_abandon(&mut self) {
+        if self.picker.select && !self.picker.token.is_empty() {
+            write_picker_selection(&json!({"token": self.picker.token, "cancelled": true}));
+            self.picker.token.clear();
+        }
+    }
+
     pub fn placeholder(&self, store: &Store) -> String {
         if self.mode != Mode::Menu {
             return self.select_prompt.clone();
@@ -321,7 +448,11 @@ impl Model {
         let emoji = menu && (level == Some("emoji") || emoji_q.is_some());
         let route_rows = matches!(level, Some("nix" | "keybinds" | "calc" | "radio.search" | "clipboard" | "share.history"));
         let grid_wanted = store.config.bool("menu.appGrid").unwrap_or(true);
-        let view = if emoji {
+        let picker = menu && level == Some(PICKER_ROUTE);
+        let emoji = emoji && !picker;
+        let view = if picker {
+            View::Picker
+        } else if emoji {
             View::Emoji
         } else if menu && grid_wanted && !route_rows {
             View::AppGrid
@@ -339,6 +470,7 @@ impl Model {
                     .collect()
             }
             Mode::Input => Vec::new(),
+            Mode::Menu if picker => fs_menu::providers::image_rows(&self.picker_listing(store), q),
             Mode::Menu if matches!(level, Some("clipboard" | "share.history")) => {
                 let history: Vec<Node> = model::visible_children(nodes, level, cond).into_iter().cloned().collect();
                 if history.is_empty() {
@@ -400,8 +532,8 @@ impl Model {
             rows = parts.rows;
             app_count = parts.app_count;
         }
-        let searching = menu && !q.is_empty() && !emoji && !route_rows && keys_q.is_none();
-        let key = format!("{:?}\u{1}{}\u{1}{}", self.mode, level.unwrap_or(""), q);
+        let searching = menu && !q.is_empty() && !emoji && !picker && !route_rows && keys_q.is_none();
+        let key = format!("{:?}\u{1}{}\u{1}{}\u{1}{}", self.mode, level.unwrap_or(""), q, if picker && self.picker.light { "light" } else { "" });
         (view, rows, app_count, empty, searching, key)
     }
 
@@ -436,6 +568,7 @@ impl Model {
         let ids: Vec<&str> = self.rows.iter().map(|r| r.id.as_str()).collect();
         let index = nav::rederive(&self.want, self.cursor as i64, &ids, fresh, self.placed);
         self.key = key;
+        self.picker_switch_h = if self.picker_switch(store) { ui::measure(&picker_switch(self), 400.0, theme, kit).1 } else { 0.0 };
         self.layout(theme, kit);
         self.place(index, false);
         if fresh || view_changed {
@@ -471,13 +604,18 @@ impl Model {
             if band == prev { String::new() } else { band }
         };
         match self.view {
-            View::AppGrid | View::Emoji => {
+            View::AppGrid | View::Emoji | View::Picker => {
+                if self.picker_switch_h > 0.0 {
+                    y += self.picker_switch_h + s.row_gap;
+                }
                 let (cells, min_cell) = if self.view == View::AppGrid {
                     (self.app_count, s.control_height * 4.0)
                 } else {
                     (self.rows.len(), 0.0)
                 };
-                let columns = if self.view == View::Emoji {
+                let columns = if self.view == View::Picker {
+                    fs_theme::tokens::LAUNCHER.picker_columns as usize
+                } else if self.view == View::Emoji {
                     fs_theme::tokens::LAUNCHER.emoji_columns as usize
                 } else {
                     fs_menu::appgrid::columns_for(width, min_cell)
@@ -555,7 +693,7 @@ impl Model {
     fn cells(&self) -> usize {
         match self.view {
             View::AppGrid => self.app_count,
-            View::Emoji => self.rows.len(),
+            View::Emoji | View::Picker => self.rows.len(),
             View::Rows => 0,
         }
     }
@@ -640,7 +778,7 @@ impl Model {
         let drawn: Vec<Value> = match self.view {
             View::AppGrid => self.rows[..self.app_count].iter().map(|r| json!({"id": r.id, "label": r.label})).collect(),
             View::Rows => self.rows.iter().map(|r| json!({"id": r.id, "label": r.label})).collect(),
-            View::Emoji => Vec::new(),
+            View::Emoji | View::Picker => Vec::new(),
         };
         json!({
             "isOpen": self.open,
@@ -741,6 +879,9 @@ impl Model {
 
     pub fn close(&mut self) {
         self.abandon_select();
+        if self.on_picker() {
+            self.picker_abandon();
+        }
         self.open = false;
         self.confirm.clear();
     }
@@ -796,7 +937,14 @@ impl Model {
     }
 
     fn enter_level(&mut self, store: &Store, id: Option<String>) {
+        if self.level.as_deref() == Some(PICKER_ROUTE) && id.as_deref() != Some(PICKER_ROUTE) {
+            self.picker_abandon();
+        }
+        let entering = id.as_deref() == Some(PICKER_ROUTE);
         self.level = id;
+        if entering {
+            self.picker_enter(store);
+        }
         self.confirm.clear();
         self.from_keys = true;
         self.query.clear();
@@ -878,6 +1026,10 @@ impl Model {
                 self.close();
                 Out::Close
             }
+            NodeKind::Image => {
+                let path = node.path.clone();
+                if self.choose_image(store, &path) { Out::Close } else { Out::None }
+            }
             NodeKind::Submenu | NodeKind::Provider => {
                 self.enter_level(store, Some(node.id.clone()));
                 Out::None
@@ -913,7 +1065,7 @@ impl Model {
             grid: self.view != View::Rows,
             app_view: false,
             scrollable: false,
-            variants: false,
+            variants: self.picker_switch(store),
         };
         let action = nav::key_action(key, mods, repeat, &ctx);
         let out = match action {
@@ -957,6 +1109,11 @@ impl Model {
                 Out::None
             }
             KeyAction::Pop => self.pop(store),
+            KeyAction::Variant => {
+                let light = !self.picker.light;
+                self.set_picker_variant(store, light);
+                Out::None
+            }
             KeyAction::Close => {
                 self.close();
                 Out::Close
@@ -1363,6 +1520,10 @@ fn body_el(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, scroll: f64, 
             items.push((*y, h, w::section_label(s, text, None, true).pad_start(s.control_padding_x + x)));
         }
     }
+    if m.picker_switch_h > 0.0 {
+        let top = lay.slots.first().map_or(0.0, |s0| s0.y) - m.picker_switch_h - s.row_gap;
+        items.push((top, m.picker_switch_h, picker_switch(m).pad_start(s.sm)));
+    }
     let cells = m.cells();
     for (i, slot) in lay.slots.iter().enumerate() {
         if !visible(slot.y, slot.h) {
@@ -1387,6 +1548,19 @@ fn body_el(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, scroll: f64, 
                 .cell_state(|st| st.cursor = selected && m.from_keys)
                 .on(format!("row:{i}"))
                 .key(format!("c:{}", row.id))
+                .width(Size::Px(slot.w))
+                .pad(gutter, gutter, gutter, gutter)
+        } else if i < cells && m.view == View::Picker {
+            let gutter = s.sm;
+            let edge = (slot.w - (gutter + s.sm) * 2.0).max(1.0);
+            let image = store.picker.thumbs.get(&row.path).cloned().flatten();
+            w::cell(w::picture(image, edge).centred())
+                .ghost()
+                .selected(selected)
+                .interactive()
+                .cell_state(|st| st.cursor = selected && m.from_keys)
+                .on(format!("row:{i}"))
+                .key(format!("p:{}", row.id))
                 .width(Size::Px(slot.w))
                 .pad(gutter, gutter, gutter, gutter)
         } else if i < cells {
@@ -1437,6 +1611,27 @@ fn body_el(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, scroll: f64, 
     }
     col.push(w::space((lay.content_h - y).max(0.0)));
     w::column(0.0, col)
+}
+
+/// The wallpaper route's Dark | Light switcher.
+fn picker_switch(m: &Model) -> El {
+    w::segmented(vec!["Dark".into(), "Light".into()], usize::from(m.picker.light)).on("variant")
+}
+
+/// A picker cell's picture edge for a slot `w` wide.
+pub fn picker_cell_px(theme: &Theme) -> u32 {
+    let s = &theme.space;
+    let width = s.popup_width_menu - s.panel_padding * 2.0;
+    let cell = width / f64::from(fs_theme::tokens::LAUNCHER.picker_columns.max(1));
+    (cell - (s.sm + s.sm) * 2.0).max(1.0).round() as u32
+}
+
+fn write_picker_selection(payload: &Value) {
+    let path = picker_selection_path();
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let _ = std::fs::write(&path, payload.to_string());
 }
 
 /// Where an item sits across the body, off its key.

@@ -32,6 +32,7 @@ mod network;
 mod nightlight;
 mod osd;
 mod panel;
+mod picker;
 mod plugins;
 mod radio;
 mod switcher;
@@ -91,6 +92,7 @@ fn registry() ->&'static Registry<App> {
             nightlight::target(),
             lights::target(),
             clipboard::target(),
+            picker::target(),
             switcher::target(),
         ],
     })

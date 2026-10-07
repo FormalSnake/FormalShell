@@ -24,6 +24,7 @@ pub mod menu;
 pub mod nightlight;
 pub mod notifications;
 pub mod overnight;
+pub mod picker;
 pub mod info;
 pub mod plugins;
 pub mod polkit;
@@ -70,4 +71,5 @@ pub fn start(ctx: &Ctx) {
     ctx.spawn(menu::run(ctx.clone()));
     ctx.spawn(clipboard::run(ctx.clone()));
     ctx.spawn(clipssh::run(ctx.clone()));
+    ctx.spawn(picker::run(ctx.clone()));
 }

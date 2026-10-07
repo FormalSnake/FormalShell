@@ -466,6 +466,52 @@ impl App {
         }
     }
 
+    /// The picker grid's pictures, asked for once the listing's thumbnails
+    /// are in the cache (or the warm gave up on them).
+    pub fn launcher_picker(&mut self) {
+        if self.launcher.open && self.launcher.on_picker() {
+            let px = crate::surfaces::launcher::picker_cell_px(&self.store.theme.theme);
+            let p = &self.store.picker;
+            let want: Vec<String> = self
+                .launcher
+                .picker_listing(&self.store)
+                .into_iter()
+                .filter(|path| px != p.thumb_px || !p.thumbs.contains_key(path))
+                .filter(|path| p.cached.contains(path) || !p.cached.is_empty())
+                .collect();
+            if !want.is_empty() {
+                crate::services::picker::command(crate::services::picker::Cmd::Thumbs(want, px));
+            }
+        }
+        self.launcher_store_changed();
+    }
+
+    pub fn picker_summon(&mut self) {
+        self.menu_open(Some(crate::surfaces::launcher::PICKER_ROUTE));
+        self.launcher_picker();
+    }
+
+    pub fn picker_select(&mut self, dir: &str, token: &str) {
+        self.launcher.open_image_select(&self.store, dir, token);
+        self.show_launcher();
+        self.launcher_picker();
+    }
+
+    pub fn picker_choose(&mut self, path: &str) -> bool {
+        let chosen = self.launcher.choose_image(&self.store, path);
+        if chosen {
+            self.hide_launcher();
+        }
+        chosen
+    }
+
+    pub fn picker_variant(&mut self, light: bool) -> bool {
+        let ok = self.launcher.set_picker_variant(&self.store, light);
+        self.launcher_resolve = true;
+        self.launcher_picker();
+        ok
+    }
+
     /// The clipssh route's rows off the saved aliases.
     pub fn launcher_clipssh(&mut self) {
         let rows = fs_menu::providers::clipssh_rows(&self.store.clipssh.aliases);
@@ -689,6 +735,10 @@ impl App {
                 }
                 match on.as_deref() {
                     Some("outside" | "close") => self.menu_close(),
+                    Some("variant") => {
+                        let light = !self.launcher.picker.light;
+                        self.picker_variant(light);
+                    }
                     Some("back") => {
                         let out = self.launcher.key(&self.store, nav::Key::Escape, nav::Modifiers::default(), false, None);
                         self.launcher_out(out);

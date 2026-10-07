@@ -29,6 +29,7 @@ pub fn changed(app: &mut App, topic: Topic) {
         Topic::Menu => app.launcher_store_changed(),
         Topic::Config => {
             app.launcher_inputs();
+            crate::services::picker::command(crate::services::picker::Cmd::Boot(app.store.config.str("picker.directory").unwrap_or("").to_owned()));
             let settings = app.store.config.settings().clone();
             if app.store.theme.apply(theme::Diff::Settings(settings)) {
                 changed(app, Topic::Theme);
@@ -66,6 +67,7 @@ pub fn changed(app: &mut App, topic: Topic) {
             app.refresh_bar(Some(topic));
         }
         Topic::Clipboard => app.launcher_clipboard(),
+        Topic::Picker => app.launcher_picker(),
         Topic::Clipssh => {
             app.launcher_clipssh();
             app.refresh_bar(Some(topic));

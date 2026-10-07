@@ -331,6 +331,19 @@ fn stub() -> Registry<()> {
                 ],
             },
             Target {
+                name: "picker",
+                functions: vec![
+                    f("summon", &[], Type::String, |_, _| s("ok")),
+                    f("select", &[("directory", Type::String), ("token", Type::String)], Type::String, |_, a| {
+                        s(format!("select {} {}", a[0].str(), a[1].str()))
+                    }),
+                    f("choose", &[("path", Type::String)], Type::String, |_, a| s(format!("choose {}", a[0].str()))),
+                    f("variant", &[("name", Type::String)], Type::String, |_, a| s(format!("variant {}", a[0].str()))),
+                    f("close", &[], Type::String, |_, _| s("ok")),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
                 name: "clipboard",
                 functions: vec![
                     f("list", &[], Type::String, |_, _| s("[]")),
@@ -502,6 +515,7 @@ fn signatures_match_qml() {
         super::nightlight::target(),
         super::lights::target(),
         super::clipboard::target(),
+        super::picker::target(),
         super::switcher::target(),
     ] {
         let defs: Vec<String> = real.functions.iter().map(|f| f.definition()).collect();

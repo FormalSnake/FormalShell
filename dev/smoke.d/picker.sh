@@ -23,6 +23,7 @@
 # the clipboard leg wait on this file rather than summoning over the grid.
 leg_picker_flag="--picker"
 leg_picker_order=120
+leg_picker_rust=1
 leg_picker_needs="convert"
 
 # This leg's own clock, the same rule menu_t0 and lock_t0 draw: the grid
