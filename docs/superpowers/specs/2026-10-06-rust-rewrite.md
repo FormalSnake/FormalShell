@@ -117,21 +117,29 @@ ERROR cell and is restarted on a backoff. `CommandModule` stays as it is.
 
 ## Installing (owner, 2026-10-07)
 
-Nix first, and one script for everyone else; no native distro packages.
-NixOS users take the flake's modules. On any other distro:
+NixOS users take the flake's modules. Everyone else gets one script and no
+Nix:
 
     curl -fsSL https://raw.githubusercontent.com/FormalSnake/FormalShell/main/install.sh | sh
 
-installs Nix if it is missing (the Determinate installer), installs the
-flake's `formalshell` into the user's Nix profile with every runtime CLI
-pinned, then runs `formalshell install`. That subcommand, like Caelestia's
-`caelestia install`, writes the few pieces outside the profile: the user
-systemd unit, the Hyprland Lua include and a `hypr-user.lua` the user owns
-and updates never touch, and, with sudo and a prompt for each, the
-`formalshell-lock` PAM file and the optional greetd config.
-`formalshell update` upgrades the profile and rewrites only what the
-installer owns. The same subcommands work on NixOS as no-ops that point at
-the modules.
+- A GitHub release carries one tarball per arch (x86_64, aarch64): the
+  shell, `formalshell-ipc`, the greeter, and the helpers no distro packages
+  (matugen, ttfx, clipssh, localsend-cli, nothingctl, openscq30, tensaku),
+  built once in CI against an old glibc so they run on any current distro,
+  linking only libraries every distro carries under stable sonames
+  (pipewire, fontconfig, pam, xkbcommon).
+- `install.sh` detects pacman, apt or dnf and installs Hyprland and the
+  runtime tools from one small name table (required set minimal; the rest
+  optional, a missing one leaves its surface on its honest unavailable
+  state), unpacks the tarball under `~/.local` (or `/usr/local` with
+  `--system`), then runs `formalshell install`.
+- `formalshell install` writes the user systemd unit, the Hyprland Lua
+  include and a `hypr-user.lua` the user owns and updates never touch, and,
+  with sudo and a prompt for each, the `formalshell-lock` PAM file and the
+  optional greetd config. `formalshell update` fetches the newest release
+  and rewrites only what the installer owns; `formalshell uninstall`
+  reverses it.
+- No native distro packages, no per-distro builds.
 
 ## How we get there
 
