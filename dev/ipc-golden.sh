@@ -72,6 +72,8 @@ ShellRoot {
         function volume(percent: int): string { return "volume " + percent }
         function raise(): string { return "raise" }
         function select(id: string): string { return "select " + id }
+        function output(name: string): string { return "output " + name }
+        function outputs(): string { return "[]" }
         function players(): string { return "[]" }
         function status(): string { return "{}" }
         function lyrics(): string { return "{}" }
@@ -477,6 +479,9 @@ rec call media volume x
 rec call media volume
 rec call media select ''
 rec call media select 'org.mpris.MediaPlayer2.mpv'
+rec call media output 'alsa_output.pci-0000_00_1f.3.analog-stereo'
+rec call media output
+rec call media outputs
 rec call media players
 rec call radio play smoke-radio-1
 rec call radio play

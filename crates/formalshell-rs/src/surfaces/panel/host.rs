@@ -584,6 +584,9 @@ impl Host {
                 _ => self.module.key(stop.as_deref(), &t, &mut fx),
             },
         }
+        if let Some(k) = self.cursor.key.clone().filter(|_| self.cursor.active) {
+            self.module.reached(&k, &mut fx);
+        }
         self.take_module_cursor();
         if fx.close { Out::Close } else { Out::None }
     }

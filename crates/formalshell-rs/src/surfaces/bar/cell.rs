@@ -495,6 +495,12 @@ impl<'a> Painter<'a> {
     /// A line under a Gaussian blur, its bounds grown by the blur's reach and
     /// cut to `clip`.
     pub fn blurred(&mut self, shaped: &ShapedText, at: (i32, i32), color: Rgba, blur: f32, clip: Option<IRect>) {
+        self.blurred_with(shaped, at, color, blur, clip, Affine::IDENTITY);
+    }
+
+    /// [`blurred`](Self::blurred) under a transform about the surface's
+    /// origin; it must not carry the box past its grown bounds.
+    pub fn blurred_with(&mut self, shaped: &ShapedText, at: (i32, i32), color: Rgba, blur: f32, clip: Option<IRect>, about: Affine) {
         if color.a <= 0.0 || shaped.glyphs.is_empty() {
             return;
         }
@@ -502,7 +508,7 @@ impl<'a> Painter<'a> {
         let reach = (blur * 3.0).ceil() as i32 + 1;
         let bounds = IRect::new(at.0 - text::PAD - reach, at.1 - text::PAD - reach, w + reach * 2, h + reach * 2);
         let shift = Affine::translate((reach as f64, reach as f64));
-        self.put(bounds, Paint::Blur { text: shaped.clone(), color, blur }, shift, clip);
+        self.put(bounds, Paint::Blur { text: shaped.clone(), color, blur }, about * shift, clip);
     }
 
     pub fn finish(self) {

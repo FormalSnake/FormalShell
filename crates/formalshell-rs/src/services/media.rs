@@ -1,8 +1,9 @@
 //! MediaService.qml: every source the bar reads now-playing from, behind one
 //! active pick. Four kinds share the row list: an MPRIS player (fs-mpris),
 //! the radio's own mpv (`radio`), the phone's Apple Media Service (`ams`) and
-//! AirPlay's receiver (`airplay`). Apps playing with no MPRIS (`stream:`
-//! rows) arrive with the audio graph.
+//! AirPlay's receiver (`airplay`). An app playing with no MPRIS is a
+//! `stream:<node id>` row, listed from the audio graph only while the media
+//! panel is open or one is picked, and only ever picked by hand.
 //!
 //! `selected` is the one piece of state the UI owns; every source's own
 //! state is published whole by its service.
@@ -14,6 +15,7 @@ use fs_media::media::{self as pick, LabelledRow, PlayerRow};
 use fs_mpris::{LoopStatus, Mpris, PlayerState};
 use serde_json::{Value, json};
 
+use super::devices::audio::{self, Routing, StreamInfo};
 use super::{airplay, ams, radio, visualizer};
 use crate::runtime::Ctx;
 use crate::store;
@@ -174,6 +176,8 @@ pub struct State {
     pub ams: ams::State,
     /// A bus name, "radio", "iphone" or "airplay"; "" is auto.
     pub selected: String,
+    /// The sinks and playback streams, published while something wants them.
+    pub routing: Routing,
     /// Decoded art by url and slot size; `None` is art that failed to load.
     covers: Vec<(String, u32, Option<crate::scene::Bitmap>)>,
 }
@@ -184,6 +188,7 @@ pub enum Diff {
     Airplay(airplay::State),
     Ams(ams::State),
     Cover(String, u32, Option<crate::scene::Bitmap>),
+    Routing(Routing),
     /// The panel's source menu, as `media select` does it.
     Select(String),
 }
@@ -219,6 +224,7 @@ impl State {
                 self.covers.push((url, size, bitmap));
                 return true;
             }
+            Diff::Routing(next) => std::mem::replace(&mut self.routing, next) != self.routing,
             Diff::Mpris(next) => {
                 let same = self.mpris.len() == next.len() && self.mpris.iter().zip(&next).all(|(a, b)| a.same(b));
                 self.mpris = next;
@@ -250,6 +256,7 @@ impl State {
 
     pub fn select(&mut self, id: &str) {
         self.selected = id.to_owned();
+        audio::routing_wanted(1, id.starts_with("stream:"));
         self.sync_gate();
     }
 
@@ -291,7 +298,87 @@ impl State {
         if self.airplay.active && !self.airplay.title.is_empty() {
             rows.push(row("airplay", "airplay", "AirPlay", false));
         }
+        let mpris: Vec<PlayerRow> = rows.iter().filter(|r| r.kind.as_deref() == Some("mpris")).cloned().collect();
+        for s in self.routing.streams.iter().filter(|s| self.stream_owner(s, &mpris).is_empty()) {
+            let mut r = row(&format!("stream:{}", s.id), "stream", &s.label, false);
+            r.auto = Some(false);
+            rows.push(r);
+        }
         rows
+    }
+
+    /// Whose a playback stream is: the radio's by the client name its mpv
+    /// stamps on it, a player's by name, "" for an app with no MPRIS.
+    fn stream_owner(&self, s: &StreamInfo, mpris: &[PlayerRow]) -> String {
+        if s.keys[0].as_deref() == Some(radio::CLIENT_NAME) {
+            return "radio".into();
+        }
+        let keys: Vec<Option<&str>> = s.keys.iter().map(|k| k.as_deref()).collect();
+        pick::stream_owner(&keys, mpris)
+    }
+
+    fn mpris_rows(&self) -> Vec<PlayerRow> {
+        self.rows().into_iter().filter(|r| r.kind.as_deref() == Some("mpris")).collect()
+    }
+
+    /// The streams the active source is playing through right now.
+    fn routed_streams(&self) -> Vec<&StreamInfo> {
+        let id = self.active_id();
+        if let Some(n) = id.strip_prefix("stream:") {
+            return self.routing.streams.iter().filter(|s| s.id.to_string() == n).collect();
+        }
+        let mpris = self.mpris_rows();
+        self.routing.streams.iter().filter(|s| !id.is_empty() && self.stream_owner(s, &mpris) == id).collect()
+    }
+
+    /// Where the active source can be moved: every sink the graph has.
+    pub fn outputs(&self) -> &[(String, String)] {
+        &self.routing.sinks
+    }
+
+    pub fn can_route(&self) -> bool {
+        self.routing.sinks.len() > 1 && (self.active_id() == "radio" || !self.routed_streams().is_empty())
+    }
+
+    /// The sink name the active source is on: the radio's saved choice ("" is
+    /// the default sink), otherwise wherever its first stream is linked.
+    pub fn output_id(&self) -> String {
+        let fallback = self.routing.default_sink.clone();
+        if self.active_id() == "radio" {
+            return if self.radio.output.is_empty() { fallback } else { self.radio.output.clone() };
+        }
+        match self.routed_streams().first() {
+            Some(s) if !s.target.is_empty() => s.target.clone(),
+            Some(_) => fallback,
+            None => String::new(),
+        }
+    }
+
+    pub fn set_output(&self, name: &str) {
+        if !self.routing.sinks.iter().any(|(id, _)| id == name) {
+            return;
+        }
+        if self.active_id() == "radio" {
+            let sink = if name == self.routing.default_sink { "" } else { name };
+            return radio::send(radio::Cmd::SetOutput(sink.to_owned()));
+        }
+        let ids: Vec<u32> = self.routed_streams().iter().map(|s| s.id).collect();
+        if ids.is_empty() {
+            return;
+        }
+        let sink = name.to_owned();
+        // pactl addresses a stream by its sink-input index and PipeWire by
+        // its node id: list the sink inputs, then move each one found.
+        std::thread::spawn(move || {
+            let Ok(listed) = std::process::Command::new("pactl").args(["-f", "json", "list", "sink-inputs"]).output() else { return };
+            let text = String::from_utf8_lossy(&listed.stdout);
+            for id in ids {
+                let index = pick::sink_input_index(&text, id);
+                if index >= 0 {
+                    let _ = std::process::Command::new("pactl").args(["move-sink-input", &index.to_string(), &sink]).status();
+                }
+            }
+        });
     }
 
     pub fn players(&self) -> Vec<LabelledRow> {
@@ -358,6 +445,16 @@ impl State {
                 };
                 Active { kind: "airplay", identity: label, title: a.title.clone(), artist: a.artist.clone(), album: a.album.clone(), art_url, ..base }
             }
+            stream if stream.starts_with("stream:") => {
+                let s = self.routing.streams.iter().find(|s| format!("stream:{}", s.id) == stream)?;
+                Active {
+                    kind: "stream",
+                    identity: label,
+                    title: if s.title.is_empty() { s.label.clone() } else { s.title.clone() },
+                    volume: s.volume.map(pick::clamp_volume),
+                    ..base
+                }
+            }
             _ => {
                 let p = self.mpris.iter().find(|p| p.id == id)?;
                 Active {
@@ -400,8 +497,8 @@ impl State {
             "id": a.id,
             "kind": a.kind,
             "selectedId": self.selected,
-            "output": "",
-            "canRoute": false,
+            "output": self.output_id(),
+            "canRoute": self.can_route(),
             "playerCount": self.players().len(),
             "identity": a.identity,
             "title": a.title,
@@ -420,6 +517,11 @@ impl State {
             "volumeSupported": a.volume.is_some(),
             "volume": num(a.volume.unwrap_or(0.0)),
         })
+    }
+
+    /// MediaIpc.qml's `outputs`.
+    pub fn outputs_json(&self) -> Value {
+        Value::Array(self.routing.sinks.iter().map(|(id, label)| json!({"id": id, "label": label})).collect())
     }
 
     /// MediaIpc.qml's `players`.
@@ -524,6 +626,11 @@ impl State {
                 }
             }
             "mpris" => mpris_send(Cmd::Volume(a.id, v)),
+            "stream" => {
+                if let Some(node) = a.id.strip_prefix("stream:").and_then(|n| n.parse().ok()) {
+                    audio::write(fs_audio::Command::SetVolume { node, volume: v as f32 });
+                }
+            }
             _ => {}
         }
     }
@@ -699,6 +806,61 @@ mod tests {
             s.players_json().to_string(),
             r#"[{"id":"radio","kind":"radio","auto":true,"identity":"Radio","label":"Radio","isPlaying":true}]"#
         );
+    }
+
+    fn stream(id: u32, app: &str, target: &str) -> StreamInfo {
+        StreamInfo {
+            id,
+            keys: [Some(app.into()), None, None, Some("node".into())],
+            label: app.into(),
+            title: String::new(),
+            volume: Some(0.5),
+            target: target.into(),
+        }
+    }
+
+    fn routed() -> State {
+        State {
+            mpris: vec![mpris("org.mpris.MediaPlayer2.mpv", true)],
+            routing: Routing {
+                sinks: vec![("sink-a".into(), "Speakers".into()), ("sink-b".into(), "Headset".into())],
+                streams: vec![stream(40, "mpv", "sink-b"), stream(41, "Discord", "sink-a")],
+                default_sink: "sink-a".into(),
+            },
+            ..State::default()
+        }
+    }
+
+    #[test]
+    fn an_app_with_no_player_is_a_stream_row_only_picked_by_hand() {
+        let mut s = routed();
+        let rows = s.players();
+        assert_eq!(rows.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), ["org.mpris.MediaPlayer2.mpv", "stream:41"]);
+        assert_eq!(s.active_id(), "org.mpris.MediaPlayer2.mpv");
+        s.selected = "stream:41".into();
+        let a = s.active().unwrap();
+        assert_eq!((a.kind, a.identity.as_str(), a.volume), ("stream", "Discord", Some(0.5)));
+        assert_eq!(s.status()["canRoute"], true);
+        assert_eq!(s.status()["output"], "sink-a");
+    }
+
+    #[test]
+    fn a_player_routes_by_the_streams_its_name_owns() {
+        let s = routed();
+        assert!(s.can_route());
+        assert_eq!(s.output_id(), "sink-b");
+        let lone = State { routing: Routing { sinks: vec![("sink-a".into(), "Speakers".into())], ..s.routing.clone() }, ..routed() };
+        assert!(!lone.can_route());
+    }
+
+    #[test]
+    fn the_radio_routes_on_its_saved_choice_over_the_default() {
+        let mut s = State { radio: radio_on(), ..routed() };
+        s.mpris.clear();
+        assert_eq!(s.output_id(), "sink-a");
+        s.radio.output = "sink-b".into();
+        assert_eq!(s.output_id(), "sink-b");
+        assert_eq!(s.outputs_json().to_string(), r#"[{"id":"sink-a","label":"Speakers"},{"id":"sink-b","label":"Headset"}]"#);
     }
 
     #[test]

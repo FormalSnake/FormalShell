@@ -25,6 +25,8 @@ pub fn target() -> Target<App> {
             Function { name: "volume", params: &[("percent", Type::Int)], ret: Type::String, call: volume },
             Function { name: "raise", params: &[], ret: Type::String, call: raise },
             Function { name: "select", params: &[("id", Type::String)], ret: Type::String, call: select },
+            Function { name: "output", params: &[("name", Type::String)], ret: Type::String, call: output },
+            Function { name: "outputs", params: &[], ret: Type::String, call: outputs },
             Function { name: "players", params: &[], ret: Type::String, call: players },
             Function { name: "status", params: &[], ret: Type::String, call: status },
             Function { name: "lyrics", params: &[], ret: Type::String, call: lyrics },
@@ -108,6 +110,27 @@ fn select(app: &mut App, args: &[Value]) -> Value {
     crate::services::lyrics::sync(&app.store.media, &app.store.config, &app.store.lyrics);
     crate::surfaces::changed(app, Topic::Media);
     text(OK)
+}
+
+/// The source's output, by sink name as `outputs` lists it. Only listed while
+/// the media panel is open or a stream is the picked source.
+fn output(app: &mut App, args: &[Value]) -> Value {
+    let name = args[0].str();
+    if app.store.media.active().is_none() {
+        return text("error: no player");
+    }
+    if !app.store.media.can_route() {
+        return text("error: source has no stream to move");
+    }
+    if !app.store.media.outputs().iter().any(|(id, _)| id == name) {
+        return text(format!("error: no output {name}"));
+    }
+    app.store.media.set_output(name);
+    text(OK)
+}
+
+fn outputs(app: &mut App, _: &[Value]) -> Value {
+    text(app.store.media.outputs_json().to_string())
 }
 
 fn players(app: &mut App, _: &[Value]) -> Value {
