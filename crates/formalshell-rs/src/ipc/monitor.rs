@@ -14,6 +14,12 @@ use crate::services::info::monitor::now_ms;
 use crate::services::wants::{self, Source};
 use crate::wayland::App;
 
+/// MonitorIpc.qml's `_warmMonitor`: one sample lands at startup, before
+/// any caller can connect, so the first reply is not an empty one.
+pub fn warm() {
+    wants::pulse(Source::Monitor);
+}
+
 fn status(app: &mut App, _: &[Value]) -> Value {
     wants::pulse(Source::Monitor);
     Value::Str(app.store.info.monitor.status(now_ms()).to_string())

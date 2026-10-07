@@ -83,6 +83,7 @@ pub fn dispatch(app: &mut App, request: &Request) -> String {
 }
 
 pub fn start(ctx: &Ctx) {
+    monitor::warm();
     ctx.spawn(serve(ctx.clone()));
 }
 
