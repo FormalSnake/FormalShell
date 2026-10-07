@@ -178,7 +178,9 @@ cmd_sync() {
   # gigabytes that filled the VM's 40G disk.
   # Every leg builds the shell inside the VM, and those store paths fill
   # the same disk in a night of parallel runs, so collect them first.
-  vm_ssh 'used=$(df --output=pcent / | tail -1 | tr -dc 0-9); [ "$used" -lt 85 ] || { sudo nix-collect-garbage >/dev/null 2>&1; df -h / | tail -1; }'
+  # fstrim hands the freed blocks back to the qcow2 on the mac (the root
+  # drive is attached with discard=unmap, nix/vm-discard.nix).
+  vm_ssh 'used=$(df --output=pcent / | tail -1 | tr -dc 0-9); [ "$used" -lt 85 ] || { sudo nix-collect-garbage >/dev/null 2>&1; sudo fstrim -av >/dev/null 2>&1; df -h / | tail -1; }'
   rsync -az --delete \
     --exclude 'result*' \
     --exclude '/.git' \
