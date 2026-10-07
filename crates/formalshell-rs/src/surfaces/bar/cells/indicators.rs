@@ -16,6 +16,8 @@ struct Item {
     icon: &'static str,
     tooltip: String,
     destructive: bool,
+    /// Drawn dim: the thing is winding down.
+    dim: bool,
     /// What a click on it does.
     click: Option<Action>,
 }
@@ -25,10 +27,16 @@ fn items(env: &Env) -> Vec<Item> {
     let mut out = Vec::new();
     let rec = &env.store.recording;
     if rec.active {
-        out.push(Item { icon: "circle-dot", tooltip: format!("RECORDING {}", elapsed_label(rec.elapsed_ms as f64)), destructive: true, click: None });
+        out.push(Item {
+            icon: "circle-dot",
+            tooltip: format!("RECORDING {}", elapsed_label(rec.elapsed_ms as f64)),
+            destructive: true,
+            dim: rec.stopping,
+            click: None,
+        });
     }
     if env.store.caffeinate.active {
-        out.push(Item { icon: "coffee", tooltip: "CAFFEINATE ON".into(), destructive: false, click: Some(Action::Caffeinate(false)) });
+        out.push(Item { icon: "coffee", tooltip: "CAFFEINATE ON".into(), destructive: false, dim: false, click: Some(Action::Caffeinate(false)) });
     }
     out
 }
@@ -62,7 +70,7 @@ impl Cell for Indicators {
         // The rail's gap, with each icon's own cell padding either side.
         let gap = look.sm + look.pad_x * 2.0;
         self.pitch.set((look.body as f64 + gap, look.pad_x, gap));
-        let parts = self.items.iter().map(|i| Part::Icon { name: i.icon.into(), dim: false, dot: false }).collect();
+        let parts = self.items.iter().map(|i| Part::Icon { name: i.icon.into(), dim: i.dim, dot: false }).collect();
         let tooltip = self.items.iter().map(|i| i.tooltip.as_str()).collect::<Vec<_>>().join(" / ");
         let mut view = View::new(parts, gap).tooltip(tooltip);
         if self.items.iter().any(|i| i.destructive) {

@@ -110,7 +110,7 @@ fn config_max_height(app: &App) -> f64 {
 /// while the recorder runs.
 fn sync_bar(app: &mut App) {
     let r = &app.capture.rec;
-    let diff = recording::Diff::Active { active: r.active(), elapsed_ms: r.elapsed_ms() };
+    let diff = recording::Diff::Active { active: r.active(), elapsed_ms: r.elapsed_ms(), stopping: r.active() && r.stopping };
     if app.store.recording.apply(diff) {
         crate::surfaces::changed(app, Topic::Recording);
     }
@@ -233,6 +233,10 @@ pub fn stop(app: &mut App) -> String {
         return "error: not recording".into();
     }
     app.capture.rec.stopping = true;
+    // wf-recorder only reads its exit flag when a new frame arrives, and a
+    // screencopy frame arrives only on damage; a shell at rest damages
+    // nothing, so the indicator dims here and that redraw is the frame.
+    sync_bar(app);
     let Some(pid) = app.capture.pid(app.capture.rec.recorder) else {
         // Not spawned yet: the Spawned event lands on a stopping run.
         return "ok".into();
