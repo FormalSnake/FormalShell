@@ -86,6 +86,7 @@ pub fn changed(app: &mut App, topic: Topic) {
             app.launcher_inputs();
         }
         Topic::Localsend => app.launcher_inputs(),
+        Topic::Mirror => app.launcher_mirror(),
         Topic::Picker => app.launcher_picker(),
         Topic::Info => {
             if app.launcher.open && app.launcher.level.as_deref() == Some(crate::surfaces::launcher::MONITOR_ROUTE) {

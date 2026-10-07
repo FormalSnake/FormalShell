@@ -24,6 +24,7 @@ pub mod lights;
 pub mod localsend;
 pub mod media;
 pub mod menu;
+pub mod mirror;
 pub mod nightlight;
 pub mod notifications;
 pub mod overnight;
@@ -41,6 +42,7 @@ pub mod state;
 mod watch;
 pub mod theme;
 pub mod tray;
+pub mod v4l2;
 pub mod visualizer;
 pub mod wallpaper;
 pub mod wants;
@@ -81,4 +83,5 @@ pub fn start(ctx: &Ctx) {
     ctx.spawn(clipssh::run(ctx.clone()));
     ctx.spawn(picker::run(ctx.clone()));
     ctx.spawn(localsend::run(ctx.clone()));
+    ctx.spawn(mirror::run(ctx.clone()));
 }

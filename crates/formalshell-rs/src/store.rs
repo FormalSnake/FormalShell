@@ -4,7 +4,7 @@
 
 use crate::services::{
     appicon, barpaint, brightness, caffeinate, capture, clipboard, clipssh, clock, commands, config, devices, display, herdr,
-    hyprland, info, lights, localsend, lyrics, media, menu, nightlight, notifications, picker, plugins, recording, screensaver, state, theme, tray,
+    hyprland, info, lights, localsend, lyrics, media, menu, mirror, nightlight, notifications, picker, plugins, recording, screensaver, state, theme, tray,
     visualizer, wallpaper,
 };
 
@@ -41,6 +41,7 @@ pub struct Store {
     pub clipssh: clipssh::State,
     pub picker: picker::State,
     pub localsend: localsend::State,
+    pub mirror: mirror::State,
 }
 
 /// One service's change, tagged with the slice it applies to.
@@ -77,6 +78,7 @@ pub enum Diff {
     Clipssh(clipssh::Diff),
     Picker(picker::Diff),
     Localsend(localsend::Diff),
+    Mirror(mirror::Diff),
 }
 
 /// The slice a diff changed, for the surfaces that read it.
@@ -116,6 +118,7 @@ pub enum Topic {
     Clipssh,
     Picker,
     Localsend,
+    Mirror,
 }
 
 impl Store {
@@ -164,6 +167,7 @@ impl Store {
             Diff::Clipssh(d) => self.clipssh.apply(d).then_some(Topic::Clipssh),
             Diff::Picker(d) => self.picker.apply(d).then_some(Topic::Picker),
             Diff::Localsend(d) => self.localsend.apply(d).then_some(Topic::Localsend),
+            Diff::Mirror(d) => self.mirror.apply(d).then_some(Topic::Mirror),
         }
     }
 }

@@ -388,6 +388,17 @@ fn stub() -> Registry<()> {
                 ],
             },
             Target {
+                name: "mirror",
+                functions: vec![
+                    f("toggle", &[], Type::String, |_, _| s("ok")),
+                    f("open", &[], Type::String, |_, _| s("ok")),
+                    f("close", &[], Type::String, |_, _| s("ok")),
+                    f("next", &[], Type::String, |_, _| s("ok")),
+                    f("previous", &[], Type::String, |_, _| s("ok")),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
                 name: "localsend",
                 functions: vec![
                     f("status", &[], Type::String, |_, _| s("{}")),
@@ -610,6 +621,7 @@ fn signatures_match_qml() {
         super::clipboard::target(),
         super::picker::target(),
         super::localsend::target(),
+        super::mirror::target(),
     ] {
         let defs: Vec<String> = real.functions.iter().map(|f| f.definition()).collect();
         let qml = stub.targets.iter().find(|t| t.name == real.name).expect("a stub target");

@@ -28,6 +28,7 @@ mod lock;
 mod golden;
 mod media;
 mod menu;
+mod mirror;
 mod notifications;
 mod overnight;
 mod monitor;
@@ -106,6 +107,7 @@ fn registry() ->&'static Registry<App> {
             clipboard::target(),
             picker::target(),
             localsend::target(),
+            mirror::target(),
         ],
     })
 }

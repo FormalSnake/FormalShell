@@ -564,6 +564,58 @@ impl App {
         }
     }
 
+    /// The mirror's stream follows the view: the current camera while it
+    /// shows, nothing otherwise.
+    pub fn launcher_mirror(&mut self) {
+        use crate::services::mirror::{self, Cmd};
+        if self.launcher.open && self.launcher.on_mirror() && self.store.mirror.listed {
+            let cams = &self.store.mirror.cameras;
+            let current = fs_system::camera::pick(cams, &self.launcher.mirror_current);
+            let ir = cams.iter().find(|c| c.id == current).is_some_and(|c| c.ir);
+            self.launcher.mirror_current = current.clone();
+            let (w, h) = self.launcher.mirror_box(&self.store.theme.theme);
+            mirror::set_box(w as u32, h as u32);
+            mirror::command(Cmd::Stream((!current.is_empty()).then_some((current, ir))));
+        }
+        self.launcher_store_changed();
+    }
+
+    pub fn mirror_showing(&self) -> bool {
+        self.launcher.open && self.launcher.on_mirror() && self.launch.as_ref().is_some_and(|w| w.shown.open)
+    }
+
+    pub fn mirror_cycle(&mut self, delta: i64) -> bool {
+        if !self.mirror_showing() {
+            return false;
+        }
+        self.launcher.mirror_cycle(&self.store, delta);
+        self.launcher_mirror();
+        true
+    }
+
+    /// MirrorIpc.qml's `status`.
+    pub fn mirror_status(&self) -> String {
+        let mi = &self.store.mirror;
+        let showing = self.mirror_showing();
+        let current = if showing { self.launcher.mirror_current.as_str() } else { "" };
+        let streaming = showing && mi.streaming.as_deref() == Some(current) && !current.is_empty();
+        let rect = |r: crate::scene::IRect| serde_json::json!({"x": r.x, "y": r.y, "width": r.w, "height": r.h});
+        let feed = self.launch.as_ref().filter(|_| showing).and_then(|w| w.shown.feed);
+        serde_json::json!({
+            "showing": showing,
+            "open": showing,
+            "streaming": streaming,
+            "hasFrame": streaming && mi.has_frame(current),
+            "irFilter": streaming && mi.cameras.iter().any(|c| c.id == current && c.ir),
+            "error": mi.error,
+            "current": current,
+            "feed": feed.map(|(f, _)| rect(f)),
+            "picture": feed.and_then(|(_, p)| p).filter(|_| streaming && mi.has_frame(current)).map(rect),
+            "cameras": if showing { mi.cameras.iter().map(|c| serde_json::json!({"id": c.id, "ir": c.ir, "label": c.label})).collect::<Vec<_>>() } else { Vec::new() },
+        })
+        .to_string()
+    }
+
     /// The clipssh route's rows off the saved aliases.
     pub fn launcher_clipssh(&mut self) {
         let rows = fs_menu::providers::clipssh_rows(&self.store.clipssh.aliases);
@@ -750,6 +802,9 @@ impl App {
         let text = event.utf8.as_deref().filter(|t| t.chars().all(|c| c as u32 >= 0x20 && c != '\u{7f}') && !t.is_empty());
         self.resolve_launcher();
         let out = self.launcher.key(&self.store, key, self.mods, repeat, text);
+        if self.launcher.on_mirror() {
+            self.launcher_mirror();
+        }
         self.launcher_resolve = true;
         self.launcher_out(out);
         true

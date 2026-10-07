@@ -12,7 +12,7 @@
 # `airplay`, `visualizer`, `overnight`, `earbuds`, `display`, `hdr` and
 # `workspaces` their own IPC files', `calendar`, `iphone`, `notifications`,
 # `reminder`, `osd`, `nightlight`, `lights`, `switcher`, `screenshot`,
-# `capture`, `record`, `clipboard`, `picker` and `localsend` their own; `probe` covers every type qs
+# `capture`, `record`, `clipboard`, `picker`, `localsend` and `mirror` their own; `probe` covers every type qs
 # converts and the function names that collide with qs's subcommands.
 set -euo pipefail
 
@@ -268,6 +268,15 @@ ShellRoot {
         function set(duration: string, message: string): string { return "set " + duration + " " + message }
         function show(): string { return "ok" }
         function clear(): string { return "ok: cleared 0" }
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "mirror"
+        function toggle(): string { return "ok" }
+        function open(): string { return "ok" }
+        function close(): string { return "ok" }
+        function next(): string { return "ok" }
+        function previous(): string { return "ok" }
         function status(): string { return "{}" }
     }
     IpcHandler {
@@ -741,6 +750,14 @@ rec call reminder set 25m
 rec call reminder set 25m ''
 rec call reminder clear
 rec show reminder
+rec call mirror toggle
+rec call mirror open
+rec call mirror close
+rec call mirror next
+rec call mirror previous x
+rec call mirror status
+rec call mirror nope
+rec show mirror
 rec call localsend status
 rec call localsend peers
 rec call localsend send phone /tmp/a.txt
