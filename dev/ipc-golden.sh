@@ -132,6 +132,9 @@ ShellRoot {
     IpcHandler {
         target: "monitor"
         function status(): string { return "{}" }
+        function processes(query: string): string { return "processes " + query }
+        function kill(pid: string, signal: string): string { return "kill " + pid + " " + signal }
+        function restart(pid: string): string { return "restart " + pid }
         function gpu(): string { return "{}" }
     }
     IpcHandler {
@@ -469,6 +472,11 @@ rec show network connectEap
 rec call monitor status
 rec call monitor status x
 rec call monitor gpu
+rec call monitor processes
+rec call monitor processes smokevictim
+rec call monitor kill 42
+rec call monitor kill 42 TERM
+rec call monitor restart 42
 rec call monitor nope
 rec show monitor
 rec call plugins list

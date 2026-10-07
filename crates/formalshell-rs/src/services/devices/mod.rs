@@ -25,6 +25,7 @@ pub struct State {
     pub power: Power,
     pub earbuds: earbuds::Earbuds,
     pub lights: power::Lights,
+    pub profiles: power::Profiles,
 }
 
 pub enum Diff {
@@ -34,6 +35,7 @@ pub enum Diff {
     Power(Power),
     Earbuds(earbuds::Diff),
     Lights(power::Lights),
+    Profiles(power::Profiles),
 }
 
 fn set<T: PartialEq>(slot: &mut T, v: T) -> bool {
@@ -51,6 +53,7 @@ impl State {
             Diff::Power(v) => set(&mut self.power, v),
             Diff::Earbuds(d) => self.earbuds.apply(d),
             Diff::Lights(v) => set(&mut self.lights, v),
+            Diff::Profiles(v) => set(&mut self.profiles, v),
         }
     }
 }
@@ -61,6 +64,7 @@ pub fn start(ctx: &Ctx) {
     ctx.spawn(audio::run(ctx.clone()));
     ctx.spawn(power::run(ctx.clone()));
     ctx.spawn(power::lights(ctx.clone()));
+    ctx.spawn(power::run_profiles(ctx.clone()));
     earbuds::start(ctx);
 }
 
@@ -78,6 +82,8 @@ pub enum Op {
     ToggleBluetooth,
     /// Battery.qml's right click: state.json's `batteryShowPercent`.
     BatteryPercent(bool),
+    /// The power panel's profile group.
+    Profile(fs_upower::Profile),
 }
 
 pub fn run(ctx: &Ctx, op: Op) {
@@ -89,6 +95,7 @@ pub fn run(ctx: &Ctx, op: Op) {
         Op::Wifi(on) => network::set_wifi(ctx, on),
         Op::Rescan => network::rescan(ctx),
         Op::ToggleBluetooth => bluetooth::toggle_power(ctx),
+        Op::Profile(p) => power::set_profile(ctx, p),
         Op::BatteryPercent(on) => {
             crate::services::state::set(vec![crate::services::state::Field::BatteryShowPercent(serde_json::Value::Bool(on))])
         }

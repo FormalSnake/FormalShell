@@ -179,6 +179,13 @@ impl Panel for Gallery {
             let row = w::row(s.md, vec![w::section_label(s, &format!("{name} {px}"), None, false), w::text("Aa").size(ty)]);
             types.push(w::cell(row).ghost());
         }
+        types.push(
+            w::column(
+                s.row_gap,
+                vec![label("PowerFlow / sample snapshot, not live"), w::flow(super::power::flow_view(&fs_system::power::flow::sample_flow(), true))],
+            )
+            .pad_top(s.section_gap - s.row_gap),
+        );
         let type_column = w::column(s.row_gap, types).fill();
 
         let mut seps = vec![label("Separator")];

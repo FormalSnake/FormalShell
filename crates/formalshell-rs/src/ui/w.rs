@@ -6,7 +6,7 @@ use fs_chrome::types::Edge;
 use fs_theme::color::Rgba;
 use fs_theme::tokens::Space;
 
-use super::el::{CellState, El, Font, Ink, Kind, Opt, Pic, Series, Type, Variant, Weight};
+use super::el::{CellState, El, Flow, Font, Ink, Kind, Opt, Pic, Series, Type, Variant, Weight};
 
 pub fn column(gap: f64, children: Vec<El>) -> El {
     El::new(Kind::Column { gap, children })
@@ -22,6 +22,12 @@ pub fn grid(columns: usize, gap: f64, children: Vec<El>) -> El {
 
 pub fn space(along: f64) -> El {
     El::new(Kind::Space { along })
+}
+
+/// Takes whatever width a row has left, which pushes what follows it to the
+/// row's end.
+pub fn spacer() -> El {
+    text_el("", Type::Caption, Weight::Normal, false, Ink::Fg).elide()
 }
 
 fn text_el(s: impl Into<String>, size: Type, weight: Weight, mono: bool, ink: Ink) -> El {
@@ -193,6 +199,10 @@ pub fn sparkline(values: Vec<f64>, secondary: Vec<f64>, ceiling: f64, capacity: 
 
 pub fn shoulders(edge: Edge, span: f64, depth: f64, run: f64) -> El {
     El::new(Kind::Shoulders { edge, span, depth, run })
+}
+
+pub fn flow(flow: Flow) -> El {
+    El::new(Kind::Flow(Box::new(flow))).fill()
 }
 
 pub fn marquee(text: impl Into<String>, max: f64) -> El {

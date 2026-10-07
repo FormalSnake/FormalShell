@@ -138,6 +138,40 @@ pub struct Series {
     pub capacity: usize,
 }
 
+/// One node of the power diagram: an icon over a caption, a mono value and
+/// a dim detail line. An empty `value` or `detail` drops its line.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FlowNode {
+    pub icon: String,
+    pub caption: String,
+    pub value: String,
+    pub detail: String,
+    pub dim: bool,
+}
+
+/// One USB-C branch under the laptop.
+#[derive(Clone, Debug, PartialEq)]
+pub struct FlowPort {
+    pub name: String,
+    pub label: String,
+    pub detail: String,
+    /// +1 power flows toward the port's text, -1 away from it, 0 none.
+    pub direction: i8,
+}
+
+/// PowerFlow.qml: adapter, laptop and battery in a row with a link between
+/// each, a trunk under the laptop with one branch per port.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Flow {
+    pub nodes: [FlowNode; 3],
+    /// The adapter-to-laptop and laptop-to-battery links: +1 toward the
+    /// trailing end, -1 toward the leading one, 0 a plain rule.
+    pub links: [i8; 2],
+    pub ports: Vec<FlowPort>,
+    /// A closed panel passes false, so no chevron runs.
+    pub animate: bool,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Kind {
     Column { gap: f64, children: Vec<El> },
@@ -170,6 +204,7 @@ pub enum Kind {
     /// A square of modules, one string of `1`s and `0`s per row (a QR
     /// code), centred at the largest whole module that fits.
     Matrix { rows: Vec<String> },
+    Flow(Box<Flow>),
 }
 
 /// One element: what it is, how wide it sits, and how it is addressed.

@@ -19,6 +19,9 @@ vm-down:
 vm-build:
     ./dev/vm.sh sync
     ./dev/vm.sh run 'git add -A && nix build --print-out-paths .#formalshell'
+vm-build-rs:
+    ./dev/vm.sh sync
+    ./dev/vm.sh run 'git add -A && nix build --print-out-paths .#formalshell-rs'
 vm-test:
     ./dev/vm.sh sync
     ./dev/vm.sh run 'nix develop -c env QT_QPA_PLATFORM=offscreen QML_XHR_ALLOW_FILE_READ=1 qmltestrunner -import tests/stubs -input tests'

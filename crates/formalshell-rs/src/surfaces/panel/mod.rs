@@ -25,10 +25,16 @@ pub mod display;
 pub mod dualsense;
 pub mod earbuds;
 pub mod gallery;
+pub mod github;
 pub mod host;
 pub mod iphone;
+pub mod monitor;
 pub mod network;
+pub mod power;
 pub mod standin;
+pub mod systemupdate;
+pub mod tailscale;
+pub mod usage;
 pub mod weather;
 
 use fs_theme::theme::Theme;
@@ -180,6 +186,12 @@ pub fn build(name: &str) -> Option<Box<dyn Panel>> {
         "dualsense" => Box::new(dualsense::Dualsense),
         "earbuds" => Box::new(earbuds::Earbuds::default()),
         "display" => Box::new(display::Display::new()),
+        "github" => Box::new(github::Github::new()),
+        "monitor" => Box::new(monitor::Monitor::new()),
+        "power" => Box::new(power::Power::new()),
+        "systemupdate" => Box::new(systemupdate::SystemUpdate::new()),
+        "tailscale" => Box::new(tailscale::Tailscale::new()),
+        "usage" => Box::new(usage::Usage::new()),
         _ => Box::new(standin::StandIn::new(id)),
     })
 }

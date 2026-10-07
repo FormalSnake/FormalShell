@@ -13,6 +13,8 @@ use crate::motion::Kind as Clock;
 use crate::scene::{IRect, Paint, Scene};
 use crate::text::{self, Family, ShapedText, TextStyle};
 
+mod flow;
+
 fn px(cx: &Cx, t: Type) -> f32 {
     let f = &cx.theme.font_size;
     (match t {
@@ -266,12 +268,13 @@ pub fn measure(cx: &mut Cx, el: &El, avail: f64) -> (f64, f64) {
             let side = matrix_module(inner, rows.len()) * rows.len() as f64;
             (inner, side)
         }
+        Kind::Flow(f) => (inner, flow::metrics(cx, f, inner).total),
         Kind::Shoulders { edge, span, depth, run } => {
             if edge.is_vertical() { (*depth, span + run * 2.0) } else { (span + run * 2.0, *depth) }
         }
     };
     let w = match el.kind {
-        Kind::Grid { .. } | Kind::Track { .. } | Kind::Input { .. } | Kind::Sparkline(_) | Kind::Matrix { .. } => avail,
+        Kind::Grid { .. } | Kind::Track { .. } | Kind::Input { .. } | Kind::Sparkline(_) | Kind::Matrix { .. } | Kind::Flow(_) => avail,
         _ => width_of(el, avail, nw + ps + pe),
     };
     (w, nh + pt + pb)
@@ -537,6 +540,7 @@ pub fn paint(cx: &mut Cx, el: &El, rect: Rect, path: &str) {
         }
         Kind::Sparkline(series) => sparkline(cx, inner, series, path),
         Kind::Matrix { rows } => matrix(cx, inner, rows, path),
+        Kind::Flow(f) => flow::paint(cx, inner, f, path),
         Kind::Shoulders { edge, span, depth, run } => shoulders(cx, inner, *edge, *span, *depth, *run, path),
     }
     if let Some(on) = &el.on

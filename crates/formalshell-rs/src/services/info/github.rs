@@ -4,9 +4,12 @@
 
 use serde_json::Value;
 
-use super::{changed, idle, settings};
+use futures_lite::FutureExt;
+
+use super::{changed, idle, kicked, settings};
 use crate::runtime::Ctx;
 use crate::services::proc::{self, MISSING};
+use crate::services::wants::Source;
 use crate::store;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -82,11 +85,16 @@ fn read() -> std::time::Duration {
 
 pub async fn run(ctx: Ctx) {
     let rx = changed();
+    let kick = kicked(Source::Github);
+    while kick.try_recv().is_ok() {}
     loop {
         let interval = read();
         let done = proc::capture(&proc::argv(&["gh", "api", "graphql", "-f", &format!("query={QUERY}")]), std::time::Duration::from_secs(60)).await;
         ctx.publish(store::Diff::Info(super::Diff::Github(parse(done.code, &done.stdout))));
-        idle(interval, &rx, &interval, read).await;
+        let asked = async {
+            let _ = kick.recv().await;
+        };
+        asked.or(idle(interval, &rx, &interval, read)).await;
     }
 }
 

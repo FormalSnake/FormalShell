@@ -159,7 +159,15 @@ fn stub() -> Registry<()> {
             },
             Target {
                 name: "monitor",
-                functions: vec![f("status", &[], Type::String, |_, _| s("{}")), f("gpu", &[], Type::String, |_, _| s("{}"))],
+                functions: vec![
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                    f("processes", &[("query", Type::String)], Type::String, |_, a| s(format!("processes {}", a[0].str()))),
+                    f("kill", &[("pid", Type::String), ("signal", Type::String)], Type::String, |_, a| {
+                        s(format!("kill {} {}", a[0].str(), a[1].str()))
+                    }),
+                    f("restart", &[("pid", Type::String)], Type::String, |_, a| s(format!("restart {}", a[0].str()))),
+                    f("gpu", &[], Type::String, |_, _| s("{}")),
+                ],
             },
             Target {
                 name: "network",
