@@ -19,8 +19,8 @@ mod display;
 mod earbuds;
 mod gallery;
 mod iphone;
-mod lock;
 mod lights;
+mod lock;
 #[cfg(test)]
 mod golden;
 mod media;
@@ -34,6 +34,7 @@ mod osd;
 mod panel;
 mod plugins;
 mod radio;
+mod switcher;
 pub mod registry;
 mod theme;
 mod tray;
@@ -90,6 +91,7 @@ fn registry() ->&'static Registry<App> {
             nightlight::target(),
             lights::target(),
             clipboard::target(),
+            switcher::target(),
         ],
     })
 }

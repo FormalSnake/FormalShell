@@ -3,13 +3,14 @@
 
 pub mod bar;
 pub mod card;
+pub mod headset;
 pub mod launcher;
 pub mod lock;
-pub mod headset;
 pub mod osd;
 pub mod panel;
 pub mod popup;
 pub mod shoulders;
+pub mod switcher;
 pub mod tray_menu;
 pub mod toasts;
 pub mod tooltip;
@@ -23,6 +24,7 @@ pub fn changed(app: &mut App, topic: Topic) {
     if matches!(topic, Topic::Hyprland | Topic::State | Topic::Display | Topic::Config) {
         crate::services::display::reconcile(&app.store);
     }
+    app.switcher_changed(topic);
     match topic {
         Topic::Menu => app.launcher_store_changed(),
         Topic::Config => {

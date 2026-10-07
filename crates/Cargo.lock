@@ -646,6 +646,7 @@ dependencies = [
  "smithay-client-toolkit",
  "tempfile",
  "vello_cpu",
+ "wayland-scanner",
  "yeslogic-fontconfig-sys",
  "zbus",
  "zeroize",

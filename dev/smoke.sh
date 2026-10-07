@@ -807,10 +807,10 @@ fi
 if [ "$fs_impl" = rust ]; then
   grep -E '^(start|commit|exit|ipc|text:|hyprland:|event loop:) ' "$shell_log_path" 2>/dev/null || true
   if [ ${#active_legs[@]} -eq 0 ]; then
-    # `debug dump` is the one reply that grows with the shell, so it is
-    # read as data: every key must be one DebugIpc.qml's dump() emits and
-    # the numbers this rig pins must read back. Every other reply must
-    # match QML byte for byte.
+    # `debug dump` and `debug query` grow with the shell, so they are read
+    # as data: every dump key must be one DebugIpc.qml's dump() emits and
+    # the numbers this rig pins must read back, and a query answers with
+    # the launcher's rows. Every other reply must match QML byte for byte.
     [ -s "$rs_ipc_path" ] || fail "the rust drive wrote no debug replies"
     need_jq
     qml_dump_keys=$(awk '/function dump\(\)/{f=1;next} f&&/^    }/{exit} f&&/^            [a-zA-Z]+:/{sub(/:.*/,"");gsub(/ /,"");print}' shell/Ipc/DebugIpc.qml | "$jq_bin" -R . | "$jq_bin" -sc .)
@@ -832,7 +832,10 @@ if [ "$fs_impl" = rust ]; then
     second_dump=$(printf '%s\n' "$dumps" | sed -n 2p)
     check_dump "$first_dump" null || fail "debug dump (no join) is not what DebugIpc.qml's keys allow: $first_dump"
     check_dump "$second_dump" '{"edge":"top","x":100,"width":200,"reach":14}' || fail "debug dump (joined) is not what DebugIpc.qml's keys allow: $second_dump"
-    diff -u - <(awk 'prev=="> debug dump"{print "<checked>"; prev=$0; next} {print; prev=$0}' "$rs_ipc_path") <<EOF || fail "debug's replies over formalshell-ipc differ (diff above)"
+    query_reply=$(awk 'prev=="> debug query x"{print} {prev=$0}' "$rs_ipc_path")
+    printf '%s' "$query_reply" | "$jq_bin" -e 'type == "array" and all(.[]; (.id | type) == "string" and (.label | type) == "string" and (.kind | type) == "string")' >/dev/null \
+      || fail "debug query x is not a list of launcher rows: $query_reply"
+    diff -u - <(awk 'prev=="> debug dump" || prev=="> debug query x"{print "<checked>"; prev=$0; next} {print; prev=$0}' "$rs_ipc_path") <<EOF || fail "debug's replies over formalshell-ipc differ (diff above)"
 > debug dump
 <checked>
 exit 0
@@ -853,7 +856,7 @@ exit 0
 error: percent must be 1..5000
 exit 0
 > debug query x
-[]
+<checked>
 exit 0
 > debug nope
 Function not found.

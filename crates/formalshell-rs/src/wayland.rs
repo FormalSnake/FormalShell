@@ -5,13 +5,15 @@
 //! callback or an input event belongs to.
 
 mod caffeinate;
+pub mod capture;
+mod headset;
 mod hotcorners;
 mod launcher;
 pub mod lock;
-mod polkit;
-mod toasts;
-mod headset;
 mod osd;
+mod polkit;
+pub mod switcher;
+mod toasts;
 
 use std::time::Instant;
 
@@ -143,6 +145,7 @@ enum Owner {
     Launcher,
     /// The launcher's scrim: 0 the top line's band, 1 the rest.
     LauncherScrim(u8),
+    Switcher,
 }
 
 pub struct App {
@@ -163,6 +166,8 @@ pub struct App {
     polkit: Option<polkit::Dialog>,
     osd: osd::Osd,
     headset: headset::Headset,
+    capture: capture::Capture,
+    pub switcher: switcher::State,
     pub bar: Bar,
     bar_surface: Option<Surface>,
     backdrop: Option<Backdrop>,
@@ -245,6 +250,8 @@ impl App {
             polkit: None,
             osd: osd::Osd::default(),
             headset: headset::Headset::default(),
+            capture: capture::Capture::bind(globals, qh),
+            switcher: switcher::State::default(),
             bar,
             bar_surface: None,
             backdrop: None,
@@ -1159,6 +1166,7 @@ impl App {
         }
         self.panel_dirty = false;
         self.present_launcher(now);
+        self.switcher_present();
         self.present_tooltip(now);
         self.present_toasts(now);
         self.osd_present(now);
@@ -1220,7 +1228,7 @@ impl App {
     fn arm_wake(&mut self, now: Instant) {
         let hosts = [&self.panel, &self.outgoing];
         let notifications = self.store.notifications.wake().map(|at| crate::services::notifications::instant_at(at, now));
-        let at = [self.bar.wake(now), self.tips.wake(), notifications, self.osd_wake(), self.headset.wake()]
+        let at = [self.bar.wake(now), self.tips.wake(), notifications, self.osd_wake(), self.headset.wake(), self.switcher_deadline()]
             .into_iter()
             .chain(hosts.iter().filter_map(|h| h.as_ref()).flat_map(|h| [h.prime_until, h.wake.filter(|w| *w > now)]))
             .flatten()
@@ -1278,6 +1286,9 @@ impl App {
         }
         if self.backdrop.as_ref().is_some_and(|b| b.layer.wl_surface() == surface) {
             return Some(Owner::Backdrop);
+        }
+        if self.switcher.owns(surface) {
+            return Some(Owner::Switcher);
         }
         self.zones.iter().position(|(_, z)| z.layer.wl_surface() == surface).map(Owner::Zone)
     }
@@ -1400,6 +1411,10 @@ impl App {
                     self.hover(None, (x, y));
                 }
                 PointerEventKind::Press { .. } => {
+                    if owner == Some(Owner::Switcher) {
+                        self.switcher_close();
+                        continue;
+                    }
                     if owner == Some(Owner::Toasts) {
                         if let Some(t) = &mut self.toasts {
                             t.press(x, y);
@@ -1533,7 +1548,7 @@ impl App {
     }
 
     fn key_event_from(&mut self, event: KeyEvent, repeat: bool) {
-        if self.lock_key(&event) || self.headset_key(&event) || self.polkit_key(&event) || self.launcher_key(&event, repeat) {
+        if self.lock_key(&event) || self.polkit_key(&event) || self.launcher_key(&event, repeat) || self.headset_key(&event) || self.switcher_key(event.keysym) {
             return;
         }
         let editing = self.panel.as_ref().is_some_and(|h| h.editing());
@@ -1654,6 +1669,7 @@ impl CompositorHandler for App {
                 let z = &mut self.zones[i].1;
                 (z.frame_pending, z.mapped, z.callbacks) = (false, true, z.callbacks + 1);
             }
+            Some(Owner::Switcher) => self.switcher_frame(),
             Some(o @ (Owner::Launcher | Owner::LauncherScrim(_))) => self.launcher_frame(o, now),
             Some(Owner::Backdrop) => {}
             None => {
@@ -1697,6 +1713,7 @@ impl LayerShellHandler for App {
             }
             Some(Owner::Backdrop) => self.backdrop = None,
             Some(Owner::Launcher) => self.launcher_closed(),
+            Some(Owner::Switcher) => self.switcher_close(),
             Some(Owner::Zone(_) | Owner::LauncherScrim(_)) | None => {}
         }
     }
@@ -1756,6 +1773,7 @@ impl LayerShellHandler for App {
                 self.update_backdrop();
             }
             Some(o @ (Owner::Launcher | Owner::LauncherScrim(_))) => self.launcher_configure(o, width, height),
+            Some(Owner::Switcher) => self.switcher_configure(width, height),
             None if self.caffeinate_owns(layer) => self.caffeinate_configure(),
             None if self.hot_corner_owns(layer) => self.hot_corner_configure(layer),
             None if self.polkit_owns(layer) => self.polkit_configure(width, height),

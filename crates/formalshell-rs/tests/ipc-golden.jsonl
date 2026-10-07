@@ -242,6 +242,14 @@
 {"argv":["call","lock","status"],"live":true,"stdout":"{}\n","stderr":"","exit":0}
 {"argv":["call","lock","status","x"],"live":true,"stdout":"Too many arguments provided (0 required but 1 were provided.)\nFunction definition: function status(): string\n","stderr":"","exit":0}
 {"argv":["call","lock","unlock"],"live":true,"stdout":"Function not found.\n","stderr":"","exit":0}
+{"argv":["call","switcher","next"],"live":true,"stdout":"ok\n","stderr":"","exit":0}
+{"argv":["call","switcher","prev"],"live":true,"stdout":"ok\n","stderr":"","exit":0}
+{"argv":["call","switcher","commit"],"live":true,"stdout":"ok\n","stderr":"","exit":0}
+{"argv":["call","switcher","cancel"],"live":true,"stdout":"ok\n","stderr":"","exit":0}
+{"argv":["call","switcher","state"],"live":true,"stdout":"{}\n","stderr":"","exit":0}
+{"argv":["call","switcher","state","x"],"live":true,"stdout":"Too many arguments provided (0 required but 1 were provided.)\nFunction definition: function state(): string\n","stderr":"","exit":0}
+{"argv":["call","switcher","nope"],"live":true,"stdout":"Function not found.\n","stderr":"","exit":0}
+{"argv":["show","switcher"],"live":true,"stdout":"","stderr":"The following argument was not expected: switcher\nRun with --help for more information.\n","exit":109}
 {"argv":["call","gallery","open"],"live":true,"stdout":"ok\n","stderr":"","exit":0}
 {"argv":["call","gallery","status"],"live":true,"stdout":"{\"isOpen\":false}\n","stderr":"","exit":0}
 {"argv":["call","gallery","status","x"],"live":true,"stdout":"Too many arguments provided (0 required but 1 were provided.)\nFunction definition: function status(): string\n","stderr":"","exit":0}

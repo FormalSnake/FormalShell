@@ -38,6 +38,7 @@
 # the leg pins no preset and rides --pantheon or --retro for their material.
 leg_switcher_flag="--switcher"
 leg_switcher_order=102
+leg_switcher_rust=1
 leg_switcher_needs="foot jq convert"
 # The base run's fixture window is the third of the three, and the one the
 # commit lands on.
