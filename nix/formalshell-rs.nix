@@ -1,6 +1,7 @@
 { lib, stdenvNoCC, rustCommon, makeWrapper, lucide-font, nerd-fonts, noto-fonts-color-emoji, matugen, brightnessctl, ddcutil, wlsunset
 , wireplumber, cava, mpv, curl, util-linux, uxplay, iphone-bridge, openscq30, nothingctl, earbuds, formalshell-eds, git, qrencode, networkmanager
-, wl-clipboard, grim, slurp, wf-recorder, tesseract, ffmpeg-headless, pulseaudio, xdg-utils, tensaku, ttfx }:
+, wl-clipboard, grim, slurp, wf-recorder, tesseract, ffmpeg-headless, pulseaudio, xdg-utils, tensaku, ttfx
+, clipssh, localsend-cli, wtype, openssh }:
 
 rustCommon.craneLib.buildPackage (rustCommon.commonArgs // {
   inherit (rustCommon) cargoArtifacts cargoVendorDir;
@@ -47,7 +48,7 @@ rustCommon.craneLib.buildPackage (rustCommon.commonArgs // {
       --set-default FS_TEMPLATE_DIR $out/share/formalshell-rs/templates \
       --set-default FS_BRANDING_DIR $out/share/formalshell-rs/branding \
       --prefix PATH : ${lib.makeBinPath [ matugen brightnessctl ddcutil wlsunset wireplumber cava mpv curl util-linux git formalshell-eds qrencode wl-clipboard grim slurp wf-recorder tesseract ffmpeg-headless pulseaudio xdg-utils ttfx ]} \
-      --suffix PATH : ${lib.makeBinPath ([ tensaku uxplay iphone-bridge networkmanager ] ++ lib.optionals (lib.meta.availableOn stdenvNoCC.hostPlatform earbuds) [ earbuds openscq30 ] ++ lib.optional (lib.meta.availableOn stdenvNoCC.hostPlatform nothingctl) nothingctl)}
+      --suffix PATH : ${lib.makeBinPath ([ tensaku wtype openssh clipssh localsend-cli uxplay iphone-bridge networkmanager ] ++ lib.optionals (lib.meta.availableOn stdenvNoCC.hostPlatform earbuds) [ earbuds openscq30 ] ++ lib.optional (lib.meta.availableOn stdenvNoCC.hostPlatform nothingctl) nothingctl)}
   '';
 
   meta = {

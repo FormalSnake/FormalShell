@@ -213,6 +213,15 @@ impl App {
         if let Some((verb, value)) = name.strip_prefix("lights.").and_then(|r| r.split_once(':')) {
             return self.call_self("lights", verb, &[value]);
         }
+        if let Some((i, id)) = name.strip_prefix("localsend.send:").and_then(|r| r.split_once(':')) {
+            return self.localsend_entry(i, id);
+        }
+        if let Some(attr) = name.strip_prefix("nix.run:") {
+            return self.console_run_once(&format!("nix run nixpkgs#{attr}; read"));
+        }
+        if let Some(pid) = name.strip_prefix("monitor.kill:") {
+            return self.call_self("monitor", "kill", &[pid, "TERM"]);
+        }
         if let Some(alias) = name.strip_prefix("clipssh.send:") {
             return crate::services::clipssh::command(crate::services::clipssh::Cmd::Send(alias.to_owned()));
         }
@@ -461,7 +470,9 @@ impl App {
         if !want.is_empty() {
             crate::services::clipboard::command(crate::services::clipboard::Cmd::Thumbs(want, size));
         }
-        if self.store.menu.apply(index::Diff::Source("clipboard".into(), rows)) {
+        let shared = fs_menu::providers::clipboard_provider(&c.items, fs_menu::providers::ClipMode::Share, paste);
+        let moved = self.store.menu.apply(index::Diff::Source("clipboard".into(), rows));
+        if self.store.menu.apply(index::Diff::Source("shareHistory".into(), shared)) || moved {
             self.launcher_store_changed();
         }
     }
@@ -510,6 +521,24 @@ impl App {
         self.launcher_resolve = true;
         self.launcher_picker();
         ok
+    }
+
+    /// LocalsendService.sendClipboardEntryAt: a ledger entry to the peer at
+    /// `index` of the last scan.
+    fn localsend_entry(&mut self, index: &str, id: &str) {
+        use crate::services::localsend::{self, Cmd, Payload};
+        use fs_info::notifications::Urgency;
+        let peer = index.parse::<usize>().ok().and_then(|i| self.store.localsend.peers.get(i)).cloned();
+        let Some(peer) = peer else {
+            self.store.notifications.notify("LOCALSEND FAILED", "That device is no longer in range, rescan and try again", Urgency::Critical);
+            return crate::surfaces::changed(self, crate::store::Topic::Notifications);
+        };
+        let Some(entry) = self.store.clipboard.items.iter().find(|e| e.id == id) else { return };
+        let payload = match entry.kind {
+            fs_menu::clipboard::history::EntryKind::Image => Payload::Path(entry.path.clone().unwrap_or_default()),
+            fs_menu::clipboard::history::EntryKind::Text => Payload::Text(entry.text.clone().unwrap_or_default()),
+        };
+        localsend::command(Cmd::Send { peer, payload });
     }
 
     /// The clipssh route's rows off the saved aliases.
@@ -792,6 +821,20 @@ impl App {
             lights: l.available.then(|| {
                 l.effects.iter().map(|(id, label)| fs_menu::providers::LightEffect { id: id.clone(), label: label.clone() }).collect()
             }),
+            share: {
+                let ls = &self.store.localsend;
+                Some(index::ShareInputs {
+                    installed: ls.installed,
+                    peers: ls.peers.iter().map(|p| p.name.clone()).collect(),
+                    items: self.store.clipboard.items.clone(),
+                    receive: fs_menu::providers::ReceiveStatus {
+                        enabled: ls.enabled,
+                        receiving: ls.receiving,
+                        alias: ls.alias.clone(),
+                        dir: ls.dir.clone(),
+                    },
+                })
+            },
         };
         if self.menu_buttons.as_ref() != Some(&inputs) || !self.store.config.loaded {
             self.menu_buttons = Some(inputs.clone());

@@ -44,6 +44,8 @@ pub enum View {
     Emoji,
     AppGrid,
     Picker,
+    /// MonitorView.qml: the metric tiles over the process table.
+    Monitor,
 }
 
 impl View {
@@ -53,6 +55,7 @@ impl View {
             View::Emoji => "emoji",
             View::AppGrid => "appGrid",
             View::Picker => "picker",
+            View::Monitor => "monitor",
         }
     }
 }
@@ -117,7 +120,15 @@ pub struct Model {
     /// The Dark | Light switcher's height at the head of the body, 0 when
     /// the route has none.
     picker_switch_h: f64,
+    /// The monitor route's tile strip height, 0 off the route.
+    monitor_strip_h: f64,
+    /// The monitor route keeps both polls running while it is the level.
+    monitor_wants: Option<(crate::services::wants::Want, crate::services::wants::Want)>,
+    /// The pid an Enter armed TERM on; the next Enter on it sends it.
+    monitor_armed: Option<u64>,
 }
+
+pub const MONITOR_ROUTE: &str = "monitor";
 
 /// WallpaperPickerProvider.qml: the wallpaper route lists `dir`, and in
 /// select mode answers `token` in picker-selection.txt instead of setting
@@ -162,6 +173,9 @@ impl Default for Model {
             paste: false,
             picker: Picker::default(),
             picker_switch_h: 0.0,
+            monitor_strip_h: 0.0,
+            monitor_wants: None,
+            monitor_armed: None,
             placed: false,
             want: String::new(),
             from_keys: true,
@@ -449,8 +463,11 @@ impl Model {
         let route_rows = matches!(level, Some("nix" | "keybinds" | "calc" | "radio.search" | "clipboard" | "share.history"));
         let grid_wanted = store.config.bool("menu.appGrid").unwrap_or(true);
         let picker = menu && level == Some(PICKER_ROUTE);
-        let emoji = emoji && !picker;
-        let view = if picker {
+        let monitor = menu && level == Some(MONITOR_ROUTE);
+        let emoji = emoji && !picker && !monitor;
+        let view = if monitor {
+            View::Monitor
+        } else if picker {
             View::Picker
         } else if emoji {
             View::Emoji
@@ -471,6 +488,7 @@ impl Model {
             }
             Mode::Input => Vec::new(),
             Mode::Menu if picker => fs_menu::providers::image_rows(&self.picker_listing(store), q),
+            Mode::Menu if monitor => monitor_rows(store, q),
             Mode::Menu if matches!(level, Some("clipboard" | "share.history")) => {
                 let history: Vec<Node> = model::visible_children(nodes, level, cond).into_iter().cloned().collect();
                 if history.is_empty() {
@@ -532,7 +550,7 @@ impl Model {
             rows = parts.rows;
             app_count = parts.app_count;
         }
-        let searching = menu && !q.is_empty() && !emoji && !picker && !route_rows && keys_q.is_none();
+        let searching = menu && !q.is_empty() && !emoji && !picker && !monitor && !route_rows && keys_q.is_none();
         let key = format!("{:?}\u{1}{}\u{1}{}\u{1}{}", self.mode, level.unwrap_or(""), q, if picker && self.picker.light { "light" } else { "" });
         (view, rows, app_count, empty, searching, key)
     }
@@ -568,6 +586,7 @@ impl Model {
         let ids: Vec<&str> = self.rows.iter().map(|r| r.id.as_str()).collect();
         let index = nav::rederive(&self.want, self.cursor as i64, &ids, fresh, self.placed);
         self.key = key;
+        self.monitor_strip_h = if view == View::Monitor { ui::measure(&monitor_strip(store, theme), theme.space.popup_width_menu, theme, kit).1 } else { 0.0 };
         self.picker_switch_h = if self.picker_switch(store) { ui::measure(&picker_switch(self), 400.0, theme, kit).1 } else { 0.0 };
         self.layout(theme, kit);
         self.place(index, false);
@@ -651,9 +670,12 @@ impl Model {
                     y += band + row_h;
                 }
             }
-            View::Rows => {
+            View::Rows | View::Monitor => {
                 out.columns = 1;
                 let side = s.sm;
+                if self.monitor_strip_h > 0.0 {
+                    y += self.monitor_strip_h + s.section_gap;
+                }
                 for i in 0..self.rows.len() {
                     let h_text = heading(i, &self.sections);
                     let band = band_of(&h_text, i == 0);
@@ -680,7 +702,7 @@ impl Model {
         let view = self.body_h;
         let mut next = self.scroll;
         // The grid's own heading rides with its first row.
-        let top = if self.view != View::Rows && self.cursor < self.cells() && self.cursor < self.layout.columns { 0.0 } else { top };
+        let top = if !matches!(self.view, View::Rows | View::Monitor) && self.cursor < self.cells() && self.cursor < self.layout.columns { 0.0 } else { top };
         if top < next {
             next = top;
         } else if top + h > next + view {
@@ -694,7 +716,7 @@ impl Model {
         match self.view {
             View::AppGrid => self.app_count,
             View::Emoji | View::Picker => self.rows.len(),
-            View::Rows => 0,
+            View::Rows | View::Monitor => 0,
         }
     }
 
@@ -710,6 +732,7 @@ impl Model {
         self.placed = true;
         self.want = self.cursor_id.clone();
         self.confirm.clear();
+        self.monitor_armed = None;
         self.from_keys = true;
         self.follow();
         self.dirty = true;
@@ -726,7 +749,7 @@ impl Model {
     /// A wheel notch: the view scrolls a row (a grid row of cells) and the
     /// cursor stays where it is.
     pub fn wheel(&mut self, notches: i32) {
-        let step = if self.view == View::Rows { 32.0 } else { self.layout.cell_h.max(1.0) };
+        let step = if matches!(self.view, View::Rows | View::Monitor) { 32.0 } else { self.layout.cell_h.max(1.0) };
         let max = (self.layout.content_h - self.body_h).max(0.0);
         let next = (self.scroll + notches as f64 * step).clamp(0.0, max);
         if next != self.scroll {
@@ -777,7 +800,7 @@ impl Model {
         };
         let drawn: Vec<Value> = match self.view {
             View::AppGrid => self.rows[..self.app_count].iter().map(|r| json!({"id": r.id, "label": r.label})).collect(),
-            View::Rows => self.rows.iter().map(|r| json!({"id": r.id, "label": r.label})).collect(),
+            View::Rows | View::Monitor => self.rows.iter().map(|r| json!({"id": r.id, "label": r.label})).collect(),
             View::Emoji | View::Picker => Vec::new(),
         };
         json!({
@@ -882,6 +905,8 @@ impl Model {
         if self.on_picker() {
             self.picker_abandon();
         }
+        self.monitor_wants = None;
+        self.monitor_armed = None;
         self.open = false;
         self.confirm.clear();
     }
@@ -941,6 +966,11 @@ impl Model {
             self.picker_abandon();
         }
         let entering = id.as_deref() == Some(PICKER_ROUTE);
+        self.monitor_armed = None;
+        self.monitor_wants = (id.as_deref() == Some(MONITOR_ROUTE)).then(|| {
+            use crate::services::wants::{Source, Want};
+            (Want::new(Source::Monitor), Want::new(Source::Processes))
+        });
         self.level = id;
         if entering {
             self.picker_enter(store);
@@ -963,6 +993,7 @@ impl Model {
     pub fn set_query(&mut self, store: &Store, text: &str) {
         self.query = text.into();
         self.confirm.clear();
+        self.monitor_armed = None;
         if self.mode == Mode::Menu && fs_menu::providers::emoji_trigger_query(text).is_some() && store.menu.emoji.is_none() {
             index::ask(Ask::Emoji);
         }
@@ -971,6 +1002,16 @@ impl Model {
     /// `_activateRow`.
     pub fn activate(&mut self, store: &Store, index: usize) -> Out {
         let Some(node) = self.rows.get(index).cloned() else { return Out::None };
+        if self.view == View::Monitor {
+            let Some(pid) = node.id.strip_prefix("proc.").and_then(|p| p.parse::<u64>().ok()) else { return Out::None };
+            self.dirty = true;
+            if self.monitor_armed == Some(pid) {
+                self.monitor_armed = None;
+                return Out::Internal(format!("monitor.kill:{pid}"));
+            }
+            self.monitor_armed = Some(pid);
+            return Out::None;
+        }
         match node.kind {
             NodeKind::Other(ref k) if k == "option" => {
                 self.complete_select(&node.label);
@@ -1062,7 +1103,7 @@ impl Model {
         let ctx = KeyCtx {
             mode: self.key_mode(),
             query: !self.query.is_empty(),
-            grid: self.view != View::Rows,
+            grid: !matches!(self.view, View::Rows | View::Monitor),
             app_view: false,
             scrollable: false,
             variants: self.picker_switch(store),
@@ -1520,6 +1561,9 @@ fn body_el(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, scroll: f64, 
             items.push((*y, h, w::section_label(s, text, None, true).pad_start(s.control_padding_x + x)));
         }
     }
+    if m.monitor_strip_h > 0.0 {
+        items.push((lay.slots.first().map_or(s.lg, |s0| s0.y) - m.monitor_strip_h - s.section_gap, m.monitor_strip_h, monitor_strip(store, theme)));
+    }
     if m.picker_switch_h > 0.0 {
         let top = lay.slots.first().map_or(0.0, |s0| s0.y) - m.picker_switch_h - s.row_gap;
         items.push((top, m.picker_switch_h, picker_switch(m).pad_start(s.sm)));
@@ -1550,6 +1594,8 @@ fn body_el(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, scroll: f64, 
                 .key(format!("c:{}", row.id))
                 .width(Size::Px(slot.w))
                 .pad(gutter, gutter, gutter, gutter)
+        } else if m.view == View::Monitor {
+            proc_row(m, row, i, selected, theme).width(Size::Px(slot.w))
         } else if i < cells && m.view == View::Picker {
             let gutter = s.sm;
             let edge = (slot.w - (gutter + s.sm) * 2.0).max(1.0);
@@ -1611,6 +1657,92 @@ fn body_el(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, scroll: f64, 
     }
     col.push(w::space((lay.content_h - y).max(0.0)));
     w::column(0.0, col)
+}
+
+/// The process table's rows: the filter, busiest first.
+fn monitor_rows(store: &Store, q: &str) -> Vec<Node> {
+    use fs_system::monitor::{format, procs};
+    let p = &store.info.procs;
+    if !p.available {
+        let note = if p.sampled_ms.is_none() { "Reading processes" } else { "No process table" };
+        return vec![Node { dim: Some(true), ..Node::note("monitor.empty", note) }];
+    }
+    let rows = procs::sort_rows(&procs::filter_rows(&p.rows, q), "cpu");
+    if rows.is_empty() {
+        return vec![Node { dim: Some(true), ..Node::note("monitor.empty", format!("No process matches \u{201C}{q}\u{201D}")) }];
+    }
+    rows.iter()
+        .take(200)
+        .map(|r| Node {
+            desc: Some(r.cmd.clone()),
+            meta: Some(format!("{}\u{1}{}\u{1}{}", r.pid, format::proc_pct(r.cpu_fraction), format::bytes(Some(r.mem_bytes)))),
+            ..Node::new(format!("proc.{}", r.pid), r.name.clone(), NodeKind::Action)
+        })
+        .collect()
+}
+
+/// MonitorView.qml's strip: CPU, Memory, GPU, Disk and Network, each a
+/// label over one figure; a reading nobody has taken yet is a dash.
+fn monitor_strip(store: &Store, theme: &Theme) -> El {
+    use fs_system::monitor::format;
+    let s = &theme.space;
+    let m = &store.info.monitor;
+    let gpu = m
+        .cards
+        .iter()
+        .find(|c| c.record.metrics.available && c.record.metrics.busy.is_some())
+        .or_else(|| m.cards.first());
+    let gpu_figure = match gpu {
+        None => "No GPU".to_owned(),
+        Some(c) => c.record.metrics.busy.filter(|_| c.record.metrics.available).map_or_else(|| "No metrics".to_owned(), |b| format::pct(Some(b))),
+    };
+    let disk = m.disk.iter().find(|d| d.mount == "/").or_else(|| m.disk.first());
+    let rx: Option<f64> = m.net_available.then(|| m.net.iter().map(|n| n.rx_bytes_per_sec).sum());
+    let tiles = [
+        ("CPU", format::pct(m.cpu.aggregate)),
+        ("Memory", format::pct(m.mem.as_ref().map(|x| x.used_fraction))),
+        ("GPU", gpu_figure),
+        ("Disk", format::pct(disk.map(|d| d.fraction))),
+        ("Network", format::rate(rx)),
+    ];
+    let cells = tiles
+        .into_iter()
+        .map(|(label, figure)| {
+            w::cell(w::column(s.xxs, vec![w::section_label(s, label, None, false), w::text(figure).size(Type::Title).mono().weight(Weight::Semibold)]))
+                .fill()
+        })
+        .collect();
+    w::row(s.sm, cells).fill().pad(s.sm, 0.0, s.sm, 0.0)
+}
+
+/// One process: name and command line, then pid, CPU and memory in mono.
+/// An armed row turns destructive under a confirm.
+fn proc_row(m: &Model, row: &Node, i: usize, selected: bool, theme: &Theme) -> El {
+    let s = &theme.space;
+    let pid = row.id.strip_prefix("proc.").and_then(|p| p.parse::<u64>().ok());
+    let armed = pid.is_some() && m.monitor_armed == pid;
+    let meta = row.meta.clone().unwrap_or_default();
+    let mut nums = meta.split('\u{1}');
+    let (pid_s, cpu, mem) = (nums.next().unwrap_or(""), nums.next().unwrap_or(""), nums.next().unwrap_or(""));
+    let name = if armed { format!("End {}? Enter again", row.label) } else { row.label.clone() };
+    let mut lead = vec![w::label(name).elide()];
+    if row.kind == NodeKind::Note {
+        return w::cell(w::text(row.label.clone()).ink(Ink::Dim)).ghost();
+    }
+    if let Some(cmd) = row.desc.clone().filter(|c| !c.is_empty() && !armed) {
+        lead.push(w::text(cmd).size(Type::BodySmall).ink(Ink::Dim).elide());
+    }
+    // Fixed gutters, so the mono figures line up down the table.
+    let figure = |t: &str, px: f64| w::caption(t.to_owned()).mono().ink(Ink::Muted).width(Size::Px(px));
+    let trail = vec![figure(pid_s, 56.0), figure(cpu, 48.0), figure(mem, 56.0)];
+    let parts = vec![w::row(s.icon_gap, lead).fill(), w::row(s.sm, trail)];
+    w::cell(w::row(s.control_padding_x, parts).fill())
+        .ghost()
+        .selected(selected)
+        .interactive()
+        .cell_state(|st| st.destructive = armed)
+        .on(format!("row:{i}"))
+        .key(format!("r:{}", row.id))
 }
 
 /// The wallpaper route's Dark | Light switcher.

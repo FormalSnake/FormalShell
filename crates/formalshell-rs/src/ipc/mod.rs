@@ -22,6 +22,7 @@ mod earbuds;
 mod gallery;
 mod iphone;
 mod lights;
+mod localsend;
 mod lock;
 #[cfg(test)]
 mod golden;
@@ -104,6 +105,7 @@ fn registry() ->&'static Registry<App> {
             switcher::target(),
             clipboard::target(),
             picker::target(),
+            localsend::target(),
         ],
     })
 }

@@ -21,6 +21,7 @@ pub mod herdr;
 pub mod hyprland;
 pub mod icons;
 pub mod lights;
+pub mod localsend;
 pub mod media;
 pub mod menu;
 pub mod nightlight;
@@ -79,4 +80,5 @@ pub fn start(ctx: &Ctx) {
     ctx.spawn(clipboard::run(ctx.clone()));
     ctx.spawn(clipssh::run(ctx.clone()));
     ctx.spawn(picker::run(ctx.clone()));
+    ctx.spawn(localsend::run(ctx.clone()));
 }
