@@ -15,6 +15,7 @@ leg_instance_order=210
 # Nothing is summoned over the desktop, so this leg keeps the base run's
 # focused fixture window in its frame.
 leg_instance_fixture_window=keep
+leg_instance_rust=1
 
 instance_status_path="$shot_dir/instance-status.json"
 instance_second_log_path="$shot_dir/instance-second.log"
@@ -51,23 +52,25 @@ leg_instance_drive() {
   # through it. LIBGL_ALWAYS_SOFTWARE for the same reason dev/smoke.sh exports
   # it around the primary: on the vkms card Qt's EGL init takes the process
   # down otherwise.
+  # Under FS_IMPL=rust the daemon is the wrapped binary itself, told apart
+  # from formalshell-ipc and the scripts by what /proc says it executes.
+  local find_daemons launch
+  if [ "$fs_impl" = rust ]; then
+    find_daemons='for pid in $(pgrep -f -- formalshell-rs); do case "$(readlink /proc/$pid/exe 2>/dev/null)" in *formalshell-rs-wrapped|*/bin/formalshell-rs) echo "$pid" ;; esac; done'
+    launch="$PWD/result-rs/bin/formalshell-rs"
+  else
+    find_daemons='for pid in $(pgrep -f -- "-p '"$shell_path"'"); do if [ "$(tr '"'"'\0'"'"' '"'"'\n'"'"' < /proc/$pid/cmdline 2>/dev/null | sed -n '"'"'2p'"'"')" = "-p" ]; then echo "$pid"; fi; done'
+    launch="$PWD/result/bin/formalshell"
+  fi
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 3
-# argv[1] == "-p" separates the real daemons from this run's own
-# "qs ipc ... call" client processes, which match a bare pgrep on the same
-# shell path. nixpkgs' wrapProgram also renames the binary, so comm is
-# ".quickshell-wra" and matching has to go by cmdline either way.
 find_daemon_pids() {
-  for pid in \$(pgrep -f -- "-p $shell_path"); do
-    if [ "\$(tr '\\0' '\\n' < /proc/\$pid/cmdline 2>/dev/null | sed -n '2p')" = "-p" ]; then
-      echo "\$pid"
-    fi
-  done
+  $find_daemons
 }
 old_pid=\$(find_daemon_pids | head -n1)
 export LIBGL_ALWAYS_SOFTWARE=1
-"$PWD/result/bin/formalshell" > "$instance_second_log_path" 2>&1 &
+"$launch" > "$instance_second_log_path" 2>&1 &
 new_pid=\$!
 waited=0
 count=0

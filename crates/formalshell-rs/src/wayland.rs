@@ -5,7 +5,10 @@
 //! callback or an input event belongs to.
 
 mod caffeinate;
+mod hotcorners;
 mod launcher;
+pub mod lock;
+mod polkit;
 mod toasts;
 
 use std::time::Instant;
@@ -151,6 +154,9 @@ pub struct App {
     pub runtime: Option<Runtime>,
     pub store: Store,
     caffeinate: caffeinate::Caffeinate,
+    pub lock: lock::Lock,
+    hot: hotcorners::HotCorners,
+    polkit: Option<polkit::Dialog>,
     pub bar: Bar,
     bar_surface: Option<Surface>,
     backdrop: Option<Backdrop>,
@@ -228,6 +234,9 @@ impl App {
             runtime: None,
             store,
             caffeinate: caffeinate::Caffeinate::bind(globals, qh),
+            lock: lock::Lock::bind(globals, qh),
+            hot: Default::default(),
+            polkit: None,
             bar,
             bar_surface: None,
             backdrop: None,
@@ -287,6 +296,7 @@ impl App {
 
     pub fn set_handle(&mut self, handle: LoopHandle<'static, App>) {
         self.handle = Some(handle);
+        self.start_lock();
     }
 
     /// A layer surface that takes no input and reserves nothing.
@@ -382,6 +392,7 @@ impl App {
     /// The settings the bar is built from: its edge, its layout, its
     /// modules. Anything structural re-creates the window.
     pub fn apply_config(&mut self) {
+        self.sync_hot_corners();
         let bar_cfg = self.store.config.get("bar").cloned();
         let resolved = layout::resolve(bar_cfg.as_ref(), &self.store.plugins.bar_plugins());
         let modules: Vec<commands::Module> = BarRegion::ALL
@@ -1149,6 +1160,8 @@ impl App {
         if let Some((scrim, surface)) = &mut self.scrim {
             surface.present(scrim.alpha(now), scrim.animating(now), &qh);
         }
+        self.present_polkit();
+        self.present_lock();
         self.arm_wake(now);
     }
 
@@ -1500,7 +1513,7 @@ impl App {
     }
 
     fn key_event_from(&mut self, event: KeyEvent, repeat: bool) {
-        if self.launcher_key(&event, repeat) {
+        if self.lock_key(&event) || self.polkit_key(&event) || self.launcher_key(&event, repeat) {
             return;
         }
         let editing = self.panel.as_ref().is_some_and(|h| h.editing());
@@ -1620,7 +1633,12 @@ impl CompositorHandler for App {
                 (z.frame_pending, z.mapped, z.callbacks) = (false, true, z.callbacks + 1);
             }
             Some(o @ (Owner::Launcher | Owner::LauncherScrim(_))) => self.launcher_frame(o, now),
-            Some(Owner::Backdrop) | None => {}
+            Some(Owner::Backdrop) => {}
+            None => {
+                if !self.polkit_frame(surface) {
+                    self.lock_frame(surface);
+                }
+            }
         }
     }
 
@@ -1710,6 +1728,8 @@ impl LayerShellHandler for App {
             }
             Some(o @ (Owner::Launcher | Owner::LauncherScrim(_))) => self.launcher_configure(o, width, height),
             None if self.caffeinate_owns(layer) => self.caffeinate_configure(),
+            None if self.hot_corner_owns(layer) => self.hot_corner_configure(layer),
+            None if self.polkit_owns(layer) => self.polkit_configure(width, height),
             None => {}
         }
     }
@@ -1756,7 +1776,11 @@ impl SeatHandler for App {
 
 impl PointerHandler for App {
     fn pointer_frame(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_pointer::WlPointer, events: &[PointerEvent]) {
-        self.pointer_events(events);
+        self.lock_pointer(events.iter().map(|e| e.surface.clone()));
+        let rest = self.hot_corner_pointer(events);
+        if !rest.is_empty() {
+            self.pointer_events(&rest);
+        }
     }
 }
 
@@ -1798,6 +1822,8 @@ impl OutputHandler for App {
 
 impl App {
     fn on_outputs(&mut self) {
+        self.lock_outputs();
+        self.sync_hot_corners();
         let name = self.bar_output_name();
         if name != self.bar.output {
             self.bar.output = name;

@@ -20,6 +20,7 @@
 leg_lock_media_flag="--lock-media"
 leg_lock_media_order=111
 leg_lock_media_needs="mpv ffmpeg convert wtype jq"
+leg_lock_media_rust=1
 
 lock_media_track="$shot_dir/lock-media-track.flac"
 lock_media_art="$shot_dir/lock-media-art.png"

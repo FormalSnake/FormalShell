@@ -29,6 +29,10 @@ fs-info = { version = "0.1.1", path = "../fs-info" }
 fs-menu = { path = "../fs-menu" }
 indexmap = "2"
 fs-notifd = { path = "../fs-notifd" }
+fs-auth = { path = "../fs-auth" }
+zeroize = "1.8"
+base64 = "0.22"
+libc = "0.2"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
 zbus = "5"
 parley = "0.11"
