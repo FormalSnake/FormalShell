@@ -63,6 +63,7 @@ fn dump(app: &mut App, _: &[Value]) -> Value {
         None => serde_json::Value::Null,
     };
     let line: Vec<serde_json::Value> = app.bar.line_rects().iter().map(rect).collect();
+    let phone = &app.store.info.iphone;
     let dump = json!({
         "compositor": "hyprland",
         "available": c.available,
@@ -74,6 +75,17 @@ fn dump(app: &mut App, _: &[Value]) -> Value {
         "fullscreenOutputs": c.fullscreen_outputs,
         "configLoaded": app.store.config.settings(),
         "herdr": {"stateByWindow": app.store.herdr.by_window, "stateByKey": app.store.herdr.by_key},
+        "iphone": {
+            "installed": phone.installed,
+            "available": phone.observer,
+            "connected": phone.connected,
+            "deviceName": phone.device_name,
+            "batteryAvailable": phone.battery.is_some(),
+            "battery": phone.battery.unwrap_or(0.0),
+            "unread": phone.unread,
+            "inFocus": phone.in_focus,
+            "recentCount": phone.recent.len(),
+        },
         "bar": [{"screen": screen, "edge": edge.as_str(), "line": line, "paint": app.bar.paint_state(&app.store)}],
         "join": join,
         "frame": app.bar.frame_state(),

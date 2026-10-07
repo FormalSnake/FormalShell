@@ -85,6 +85,12 @@ impl Drop for Want {
     }
 }
 
+/// The phone's notifications reach the centre with no cell or panel open,
+/// so the bridge child lives as long as the shell.
+fn always(source: Source) -> bool {
+    source == Source::Iphone
+}
+
 fn start(source: Source, ctx: Ctx) -> Pin<Box<dyn Future<Output = ()>>> {
     match source {
         Source::Weather => Box::pin(info::weather::run(ctx)),
@@ -111,7 +117,7 @@ pub async fn run(ctx: Ctx) {
         for source in SOURCES {
             let i = source as usize;
             let pulsed = PULSES[i].swap(false, Ordering::SeqCst);
-            if pulsed || COUNTS[i].load(Ordering::SeqCst) > 0 {
+            if pulsed || always(source) || COUNTS[i].load(Ordering::SeqCst) > 0 {
                 idle_since[i] = None;
                 if running[i].is_none() {
                     let (stop, stopped) = async_channel::bounded::<()>(1);

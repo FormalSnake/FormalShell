@@ -2,6 +2,7 @@
 //! for exploring the styles without an edit to settings.json. The override is
 //! in memory only, `style config` drops it.
 
+use fs_media::visualizer::model::{self, BAR_COUNT};
 use fs_media::visualizer::styles;
 use serde_json::{Value as Json, json};
 
@@ -59,7 +60,16 @@ fn level(v: f64) -> Json {
 fn status(app: &mut App, _: &[Value]) -> Value {
     let v = &app.store.visualizer;
     let configured = configured(app);
-    let frame = visualizer::frame();
+    // cava hears nothing of the phone, so its frame is drawn off the track's
+    // tempo, the way the bar cell draws it.
+    let frame = match app.store.media.active().filter(|a| a.kind == "iphone" && v.running) {
+        Some(a) => visualizer::Frame {
+            mono: model::beat_frame(a.position, v.bpm, BAR_COUNT, 0),
+            left: model::beat_frame(a.position, v.bpm, BAR_COUNT, -1),
+            right: model::beat_frame(a.position, v.bpm, BAR_COUNT, 1),
+        },
+        None => visualizer::frame(),
+    };
     let levels = |l: &[f64]| Json::Array(l.iter().map(|x| level(*x)).collect());
     text(
         json!({

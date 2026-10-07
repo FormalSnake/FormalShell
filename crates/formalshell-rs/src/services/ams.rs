@@ -248,6 +248,13 @@ pub async fn run(ctx: Ctx) {
                 None => base.await,
             }
         };
+        // A closed stdout is ready on every poll and wins the select over the
+        // exit future, so the exit is awaited here instead.
+        let event = match (event, child.as_mut()) {
+            (Ev::Line(None), Some((c, _))) => Ev::Exit(c.status().await.ok().and_then(|s| s.code()).unwrap_or(-1)),
+            (Ev::Line(None), None) => Ev::Exit(-1),
+            (event, _) => event,
+        };
         match event {
             Ev::Settings(Some(next)) => settings = next,
             Ev::Settings(None) => return,
@@ -261,7 +268,6 @@ pub async fn run(ctx: Ctx) {
                     apply(&mut state, event);
                 }
             }
-            Ev::Line(None) => {}
             Ev::Exit(code) => {
                 child = None;
                 state.installed = code != 127;
@@ -271,6 +277,7 @@ pub async fn run(ctx: Ctx) {
                     backoff = (backoff * 2).min(MAX_BACKOFF);
                 }
             }
+            Ev::Line(None) => unreachable!("a closed stdout became an exit above"),
             Ev::Retry => retry_at = None,
             Ev::Command(Some(name)) => {
                 let reply_tx = reply_tx.clone();
