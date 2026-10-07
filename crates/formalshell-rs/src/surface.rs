@@ -432,9 +432,12 @@ impl<R: Role> Surface<R> {
         self.layer.role_commit();
 
         self.commits += 1;
+        if !crate::tracing() {
+            return;
+        }
         let area: i64 = damage.iter().map(IRect::area).sum();
         let rects: Vec<String> = damage.iter().map(|r| format!("{},{},{}x{}", r.x, r.y, r.w, r.h)).collect();
-        eprintln!(
+        crate::trace(format!(
             "commit surface={} n={} t={}ms render_us={} copy_us={} rects={} px={} damage=[{}] buffer={} frame_callbacks={} request={} last_wait_us={} react_us={} slices={}",
             self.name,
             self.commits,
@@ -450,7 +453,7 @@ impl<R: Role> Surface<R> {
             self.waited_us,
             react_us,
             self.slices,
-        );
+        ));
     }
 
     pub fn report(&self) -> String {
@@ -542,7 +545,10 @@ impl PixelSurface {
         self.layer.commit();
         self.multiplier = Some(multiplier);
         self.commits += 1;
-        eprintln!(
+        if !crate::tracing() {
+            return;
+        }
+        crate::trace(format!(
             "commit surface={} n={} t={}ms render_us={} copy_us=0 rects=1 px=0 damage=[0,0,1x1] buffer=pixel alpha={:.3} frame_callbacks={} request={}",
             self.name,
             self.commits,
@@ -551,7 +557,7 @@ impl PixelSurface {
             alpha,
             self.callbacks,
             request as u8,
-        );
+        ));
     }
 
     pub fn report(&self) -> String {

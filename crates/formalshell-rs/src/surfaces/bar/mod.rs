@@ -675,6 +675,28 @@ impl Bar {
         self.line_rects = lines;
     }
 
+    /// A frame in which only cells' own drawing moves (a badge's spinner):
+    /// those slots repainted where they are, with no layout of the strip.
+    /// False when anything along it changes, for a whole layout instead.
+    pub fn step_in_place(&mut self, now: Instant) -> bool {
+        let visible = !self.hidden;
+        let vertical = self.edge.is_vertical();
+        let band = self.band_box.is_some();
+        if !self.slots.iter_mut().all(|s| s.moves_in_place(&mut self.kit, vertical, band, visible, now)) {
+            return false;
+        }
+        let edge = self.edge;
+        let band = self.band();
+        let band_ref = band.as_ref().map(|(c, g)| (*c, g.as_slice()));
+        for (i, slot) in self.slots.iter_mut().enumerate() {
+            if slot.rect.is_empty() || !slot.drawing(now) {
+                continue;
+            }
+            slot.paint(&mut self.kit, &mut self.scene, edge, self.hover == Some(i), band_ref, 1.0, visible, now);
+        }
+        true
+    }
+
     pub fn animating(&mut self, now: Instant) -> bool {
         let visible = !self.hidden;
         let kit = &self.kit;

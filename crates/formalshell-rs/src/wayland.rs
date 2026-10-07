@@ -1300,7 +1300,7 @@ impl App {
         }
         let qh = self.qh.clone();
         let animating = self.bar.animating(now);
-        if self.bar_dirty || animating {
+        if self.bar_dirty || (animating && !self.bar.step_in_place(now)) {
             self.bar.layout(&self.store, now);
             self.bar_dirty = false;
         }
@@ -1833,8 +1833,13 @@ impl CompositorHandler for App {
             Some(Owner::Bar) => {
                 let Some(s) = &mut self.bar_surface else { return };
                 s.landed(now);
-                s.mapped = true;
-                self.bar_dirty = true;
+                // A callback only lets the next frame go; what that frame
+                // draws is the present's to decide (a spinner needs no new
+                // layout of the strip).
+                if !s.mapped {
+                    s.mapped = true;
+                    self.bar_dirty = true;
+                }
             }
             Some(o @ (Owner::Overflow | Owner::Menu)) => {
                 let Some(p) = self.popout_of(o) else { return };

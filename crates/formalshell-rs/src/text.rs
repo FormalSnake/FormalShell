@@ -35,7 +35,7 @@ fn map_font(path: impl AsRef<std::path::Path>) -> std::io::Result<Blob<u8>> {
     Ok(Blob::new(Arc::new(map)))
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Family {
     Generic(GenericFamily),
     /// A family registered by name, the icon font.
@@ -129,26 +129,24 @@ struct Shared {
     urgent: AtomicUsize,
 }
 
-#[derive(Hash, PartialEq, Eq)]
-struct ShapeKey {
-    text: String,
-    family: String,
+/// A style as a cache key, built without allocating: a frame's lookups of
+/// strings already shaped cost a hash each.
+#[derive(Hash, PartialEq, Eq, Clone, Copy)]
+struct StyleKey {
+    family: Family,
     size: u32,
     weight: u32,
     tracking: u32,
 }
 
-impl ShapeKey {
-    fn new(text: &str, style: TextStyle) -> Self {
-        let family = match style.family {
-            Family::Generic(g) => format!("{g:?}"),
-            Family::Named(n) => n.to_owned(),
-        };
-        Self { text: text.to_owned(), family, size: style.size.to_bits(), weight: style.weight.to_bits(), tracking: style.tracking.to_bits() }
+impl StyleKey {
+    fn new(style: TextStyle) -> Self {
+        Self { family: style.family, size: style.size.to_bits(), weight: style.weight.to_bits(), tracking: style.tracking.to_bits() }
     }
 }
 
 const SHAPED_LIMIT: usize = 4096;
+const OUTLINE_LIMIT: usize = 8192;
 
 impl Text {
     pub fn new() -> Self {
@@ -189,15 +187,17 @@ impl Text {
             eprintln!("text: waited {}us on the shaper", asked.elapsed().as_micros());
         }
         let inner = guard.as_mut().expect("loaded above");
-        let key = ShapeKey::new(source, style);
-        if let Some(hit) = inner.shaped.get(&key) {
+        let key = StyleKey::new(style);
+        if let Some(hit) = inner.shaped.get(&key).and_then(|m| m.get(source)) {
             return hit.clone();
         }
         let shaped = inner.shape(source, style);
-        if inner.shaped.len() >= SHAPED_LIMIT {
+        if inner.shaped_count >= SHAPED_LIMIT {
             inner.shaped.clear();
+            inner.shaped_count = 0;
         }
-        inner.shaped.insert(key, shaped.clone());
+        inner.shaped.entry(key).or_default().insert(source.to_owned(), shaped.clone());
+        inner.shaped_count += 1;
         shaped
     }
 }
@@ -215,7 +215,8 @@ struct Inner {
     /// The autohinter's glyph classes per face, the costly half of a hinting
     /// instance, computed once and shared by every size.
     styles: HashMap<(u64, u32), GlyphStyles>,
-    shaped: HashMap<ShapeKey, ShapedText>,
+    shaped: HashMap<StyleKey, HashMap<String, ShapedText>>,
+    shaped_count: usize,
 }
 
 impl Inner {
@@ -265,6 +266,7 @@ impl Inner {
             bitmaps: HashMap::new(),
             styles: HashMap::new(),
             shaped: HashMap::new(),
+            shaped_count: 0,
         }
     }
 
@@ -435,6 +437,11 @@ impl Inner {
             }
         }
         let path = Arc::new(pen.0);
+        // The screensaver shapes glyphs no surface draws again; the paths
+        // live on in the strings that hold them.
+        if self.outlines.len() >= OUTLINE_LIMIT {
+            self.outlines.clear();
+        }
         self.outlines.insert(key, path.clone());
         path
     }

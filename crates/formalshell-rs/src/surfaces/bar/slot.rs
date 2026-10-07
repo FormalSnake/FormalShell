@@ -212,6 +212,30 @@ impl Slot {
             || self.scroll(kit, visible, now).is_some()
     }
 
+    /// Whether only the cell's own drawing moves this frame: nothing about
+    /// the slot's place, size or fade, and a self-drawn cell measuring what
+    /// it measured. False sends the frame to a whole layout.
+    pub fn moves_in_place(&mut self, kit: &mut Kit, vertical: bool, band: bool, visible: bool, now: Instant) -> bool {
+        let still = !(self.along.running(now)
+            || self.fade.running(now)
+            || self.mark.running(now)
+            || self.mark_fade.running(now)
+            || self.ghost.is_some() && self.cross.running(now)
+            || self.scroll(kit, visible, now).is_some());
+        let shown = self.view.shown;
+        let natural = self.natural;
+        still
+            && match self.cell.custom() {
+                Some(c) if c.animating(now) => !shown || (c.measure(kit, vertical, band) - natural).abs() < 0.5,
+                _ => true,
+            }
+    }
+
+    /// The cell's own drawing moves this frame.
+    pub fn drawing(&mut self, now: Instant) -> bool {
+        self.cell.custom().is_some_and(|c| c.animating(now))
+    }
+
     pub fn hide(&mut self, scene: &mut Scene) {
         for id in &self.nodes {
             scene.set_visible(*id, false);

@@ -113,7 +113,8 @@ pub struct State {
     reminder_serial: u64,
     /// `iphone.notifications.dedupe`, as last read.
     rules: Vec<iphone::DedupeRule>,
-    rules_seen: Option<Value>,
+    /// The key as last read, absent included.
+    rules_seen: Option<Option<Value>>,
 }
 
 impl State {
@@ -268,12 +269,12 @@ impl State {
 
     /// Reads `iphone.notifications.dedupe` whenever settings.json moved.
     pub fn sync_config(&mut self, raw: Option<&Value>) {
-        if self.rules_seen.as_ref() == raw && self.rules_seen.is_some() {
+        if self.rules_seen.as_ref().is_some_and(|seen| seen.as_ref() == raw) {
             return;
         }
+        self.rules_seen = Some(raw.cloned());
         let raw = raw.cloned().unwrap_or_else(iphone::default_dedupe);
         self.rules = iphone::dedupe_rules(&raw);
-        self.rules_seen = Some(raw);
     }
 
     /// Mirrors state.json's dnd and reminders whenever the file moved.
