@@ -60,6 +60,10 @@ How a run works:
   Hyprland in the running session, and the VM, whose pixman sway parent
   advertises no `zwp_linux_dmabuf_v1` and hands out no render node, runs it
   on the `vkms` software KMS card instead (`nix/testvm.nix`).
+- The nested session runs in a transient user scope of its own
+  (`fs-run-hypr-<pid>`) and is stopped as a cgroup at teardown, so a
+  compositor that outlives `timeout` (NixOS's `/run/wrappers/bin/Hyprland`)
+  goes with it; a leftover carrying the run's config path fails the run.
 - `FS_CPU_QUOTA=10% FS_CPU_QUOTA_PERIOD=2ms` runs the shell alone under that
   CPU quota in a scope of its own, the stand-in for e1504g in power saver
   (its launcher and cold start numbers land in the same range). Every
