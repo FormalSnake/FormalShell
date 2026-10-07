@@ -1,4 +1,4 @@
-//! `iphone`, IphoneIpc.qml's verbs: `status` answers exactly what the panel
+//! `iphone`: `status` answers exactly what the panel
 //! renders from, `installed: false` and nothing else when the bridge has
 //! never answered a line. The rest drive the service the way the panel does.
 
@@ -94,7 +94,7 @@ fn pair(app: &mut App, _: &[Value]) -> Value {
     text("ok")
 }
 
-/// QML's `Number(id)`: whatever does not parse names nothing.
+/// Whatever does not parse as a number names nothing.
 fn number(id: &str) -> Option<i64> {
     id.trim().parse::<f64>().ok().filter(|n| n.fract() == 0.0).map(|n| n as i64)
 }

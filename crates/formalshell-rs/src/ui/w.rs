@@ -69,7 +69,7 @@ pub fn strip(size: (f64, f64), inset: f64, content: (f64, f64), scroll: (f64, f6
     El::new(Kind::Strip { size, inset, content, scroll, tiles })
 }
 
-/// Album art in a `size` square (Cover.qml).
+/// Album art in a `size` square.
 pub fn cover(image: Option<crate::scene::Bitmap>, size: f64) -> El {
     El::new(Kind::Cover { pic: Pic(image), size })
 }
@@ -89,7 +89,7 @@ pub fn icon(name: impl Into<String>) -> El {
     El::new(Kind::Icon { name: name.into(), size: Type::Body, ink: Ink::Fg })
 }
 
-/// SectionLabel.qml: caption, medium, muted, sentence case, an optional
+/// Section label: caption, medium, muted, sentence case, an optional
 /// trailing count. `inset` lines it up with flat rows' own text.
 pub fn section_label(s: &Space, text: &str, count: Option<usize>, inset: bool) -> El {
     let text = match count {
@@ -105,7 +105,7 @@ pub fn section(s: &Space, title: &str, count: Option<usize>, rows: Vec<El>) -> E
     column(s.row_gap, vec![section_label(s, title, count, true), column(0.0, rows)])
 }
 
-/// Cell.qml around one child.
+/// A `Cell` around one child.
 pub fn cell(child: El) -> El {
     El::new(Kind::Cell { state: CellState::default(), interactive: false, child: Box::new(child) })
 }
@@ -130,7 +130,7 @@ pub fn icon_text_button(glyph: impl Into<String>, text: impl Into<String>) -> El
     El::new(Kind::Button { variant: Variant::Default, text: text.into(), icon: glyph.into(), enabled: true, square: false })
 }
 
-/// IconButton.qml: a ghost button `controlHeight` square.
+/// A ghost button `controlHeight` square.
 pub fn icon_button(glyph: impl Into<String>) -> El {
     El::new(Kind::Button { variant: Variant::Ghost, text: String::new(), icon: glyph.into(), enabled: true, square: true })
 }
@@ -148,7 +148,7 @@ pub fn slider(value: f64) -> El {
     El::new(Kind::Track { value, notch: None, interactive: true })
 }
 
-/// ButtonGroup.qml: a choice among several when `exclusive`, a set of
+/// A choice among several when `exclusive`, a set of
 /// actions when not.
 pub fn group(options: Vec<Opt>, index: usize, exclusive: bool) -> El {
     El::new(Kind::Group { options, index, exclusive, cursor_index: index, wrap: false })
@@ -178,7 +178,7 @@ pub fn keycap(key: &str) -> El {
     El::new(Kind::Keycap { key: key.into() })
 }
 
-/// Chord.qml: one cap per key, `xxs` apart.
+/// One cap per key, `xxs` apart.
 pub fn chord(s: &Space, keys: &str) -> El {
     row(s.xxs, super::draw::split_chord(keys).iter().map(|k| keycap(k)).collect())
 }
@@ -196,7 +196,7 @@ pub fn dot(color: Rgba, d: f64) -> El {
     El::new(Kind::Swatch { color, w: d, h: d, radius: d / 2.0, border: false })
 }
 
-/// MenuTrigger.qml: a chip carrying an icon, what is picked and a chevron,
+/// A chip carrying an icon, what is picked and a chevron,
 /// `selected` while its menu is open. The label elides at the width its
 /// parent has left.
 pub fn trigger(s: &Space, glyph: &str, label: &str, open: bool) -> El {
@@ -235,7 +235,7 @@ pub fn matrix(rows: Vec<String>) -> El {
     El::new(Kind::Matrix { rows })
 }
 
-/// PanelHero.qml's parts.
+/// The parts of a panel hero.
 pub struct Hero {
     pub glyph: String,
     pub title: String,
@@ -247,7 +247,7 @@ pub struct Hero {
     pub rail_on: Option<String>,
 }
 
-/// PanelHero.qml: a flat ghost cell leading the content column, a
+/// Panel hero: a flat ghost cell leading the content column, a
 /// `subtitle` title over a `bodySmall` meta, a `display` readout, a trailing
 /// control, and an optional rail under all of it.
 pub fn hero(s: &Space, h: Hero) -> El {

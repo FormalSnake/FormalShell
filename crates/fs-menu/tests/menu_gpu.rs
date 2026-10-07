@@ -66,8 +66,8 @@ fn gpu_launch_action_targets_the_discrete_card() {
     let card = cards.iter().find(|c| c.discrete).expect("a discrete card");
     assert_eq!(card.card, "card0");
     assert_eq!(
-        gpu_launch_action("/store/share/formalshell", "firefox", &card.card),
-        "qs ipc -p /store/share/formalshell call monitor launch 'firefox' 'card0'"
+        gpu_launch_action("formalshell-ipc", "firefox", &card.card),
+        "formalshell-ipc call monitor launch 'firefox' 'card0'"
     );
 }
 
@@ -77,26 +77,26 @@ fn gpu_launch_action_targets_the_discrete_card() {
 #[test]
 fn gpu_launch_action_shell_quotes_a_tricky_desktop_id() {
     assert_eq!(
-        gpu_launch_action("/store/share/formalshell", "it's-an-app", "card0"),
-        "qs ipc -p /store/share/formalshell call monitor launch 'it'\\''s-an-app' 'card0'"
+        gpu_launch_action("formalshell-ipc", "it's-an-app", "card0"),
+        "formalshell-ipc call monitor launch 'it'\\''s-an-app' 'card0'"
     );
 }
 
 #[test]
 fn gpu_mode_entry_absent_when_unsupported() {
-    assert_eq!(gpu_mode_entry("/store/share/formalshell", false).len(), 0);
+    assert_eq!(gpu_mode_entry("formalshell-ipc", false).len(), 0);
 }
 
 #[test]
 fn gpu_mode_entry_present_and_shell_quoted_when_supported() {
-    let entries = gpu_mode_entry("/store/share/formalshell", true);
+    let entries = gpu_mode_entry("formalshell-ipc", true);
     assert!(entries.contains_key("gpu.mode"));
     assert_eq!(
         entries["gpu.mode.integrated"].action.as_deref(),
-        Some("qs ipc -p /store/share/formalshell call monitor mode integrated")
+        Some("formalshell-ipc call monitor mode integrated")
     );
     assert_eq!(
         entries["gpu.mode.hybrid"].action.as_deref(),
-        Some("qs ipc -p /store/share/formalshell call monitor mode hybrid")
+        Some("formalshell-ipc call monitor mode hybrid")
     );
 }

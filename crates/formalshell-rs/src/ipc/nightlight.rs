@@ -1,4 +1,4 @@
-//! `nightlight`, NightLightIpc.qml: toggle, enable and disable the
+//! `nightlight`: toggle, enable and disable the
 //! wlsunset-backed night light, and `status`.
 
 use super::registry::{Function, Target, Type, Value};

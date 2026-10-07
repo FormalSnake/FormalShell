@@ -23,7 +23,7 @@ impl App {
         let n = &mut self.store.notifications;
         let dnd = n.model.dnd;
         let mut moved = false;
-        // Center.qml's close() files everything pending as seen, however
+        // Closing the centre files everything pending as seen, however
         // the card was closed (Escape, a click outside, showHistory).
         if n.center_open != open {
             n.center_open = open;

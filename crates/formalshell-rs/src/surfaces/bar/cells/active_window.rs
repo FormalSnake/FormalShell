@@ -1,4 +1,4 @@
-//! ActiveWindow.qml: the held-focus window's app icon and desktop-entry
+//! The held-focus window's app icon and desktop-entry
 //! name, then its title as the strip's second free label. The name crossfades
 //! when it changes. With no desktop entry resolved the name is the app id in
 //! the meta ink and there is no icon.

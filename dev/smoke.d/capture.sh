@@ -13,8 +13,8 @@
 #
 # The window split is what the port turns on: Hyprland reports a box for
 # every window it does not hide, so the fixture window has to
-# arrive DRAWABLE and the named-only card stays empty (RegionPicker.qml's
-# _unboxedWindows: "Empty on Hyprland"). Asserting a positive count either
+# arrive DRAWABLE and the named-only card stays empty (the picker's
+# unboxed-windows list is "Empty on Hyprland"). Asserting a positive count either
 # way is the point, since a picker that never enumerated windows at all
 # would report zero of both and otherwise look identical.
 #
@@ -83,7 +83,7 @@ leg_capture_timing() {
   local t0
   t0=$(capture_t0)
   # Open and cycle (4s), up to 10s polling `capturing` back to false, the
-  # toolbar pass, then the region-and-escape pass, plus qs spawn overhead
+  # toolbar pass, then the region-and-escape pass, plus spawn overhead
   # per call on llvmpipe.
   leg_timing $((32 + t0 - 5)) $((58 + t0 - 5))
   # Sharing wf-recorder with --record costs this leg that leg's whole

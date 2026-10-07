@@ -1,4 +1,4 @@
-//! `earbuds`, EarbudsIpc.qml: the active device as the panel renders it,
+//! `earbuds`: the active device as the panel renders it,
 //! the device list, a pick, and a control change against the active device
 //! (`set noise anc`, `set ca on`, `set adaptive 40`), refused with the
 //! reason rather than dropped.

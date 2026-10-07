@@ -1,5 +1,4 @@
-//! The chrome tables, embedded from the same JSON files the QML shell reads
-//! (`shell/Theme/themes/`). `style` documents the schema and resolves it.
+//! The chrome tables, embedded from the JSON files in `themes/`. `style` documents the schema and resolves it.
 
 use std::sync::LazyLock;
 

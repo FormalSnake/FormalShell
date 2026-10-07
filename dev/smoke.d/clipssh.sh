@@ -91,7 +91,7 @@ sleep 4
 $ipc call notifications status > "$clipssh_notify_status_path" 2>&1
 EOF
   # Frames on their own clock rather than interleaved with the calls above:
-  # each `qs ipc` spawn costs about a second on llvmpipe, and both toast
+  # each `ipc call` spawn costs about a second on llvmpipe, and both toast
   # windows the middle two frames aim at are only six seconds wide.
   write_script "$frames" <<EOF
 #!/usr/bin/env bash

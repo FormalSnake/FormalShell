@@ -1,4 +1,4 @@
-//! App icons for windows (AppIconService.qml): which desktop entry a window
+//! App icons for windows: which desktop entry a window
 //! belongs to (`fs_system`'s class, process and title tiers), that entry's
 //! icon through [`icons`], fitted to the size the cell draws. All
 //! the filesystem and decode work runs on the blocking pool; the cell only

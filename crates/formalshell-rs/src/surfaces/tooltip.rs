@@ -1,4 +1,4 @@
-//! Tooltip.qml over TooltipGroup.qml: one card per output, shown 400ms
+//! One card per output, shown 400ms
 //! after the pointer parks on an item and, within 500ms of the last one
 //! standing, handed to the next item at once, travelling there on
 //! `spatialFast` with its text crossfading on `effects`. The surface exists
@@ -33,7 +33,7 @@ pub struct Ask {
     pub bar: Option<Edge>,
 }
 
-/// TooltipGroup.qml.
+/// The tooltip group shared by every output.
 #[derive(Default)]
 pub struct Group {
     target: Option<Ask>,

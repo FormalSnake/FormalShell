@@ -1,4 +1,4 @@
-//! NetworkPanel.qml: a hero for the connected network, the throughput the
+//! A hero for the connected network, the throughput the
 //! last speed test measured, the wired devices, one row per Wi-Fi network
 //! (connected, then known, then by signal), the inline passphrase prompt a
 //! secured network nobody knows opens, and the speed test footer.
@@ -13,7 +13,7 @@ use crate::services::devices::{self, network as net};
 use crate::store::Topic;
 use crate::ui::{El, Event, Ink, Type, Variant, Weight, What, w};
 
-/// The mask AuthPrompt.qml and the passphrase field draw.
+/// The mask the passphrase field draws.
 const MASK: char = '\u{25CF}';
 
 #[derive(Clone, Copy, PartialEq, Eq)]

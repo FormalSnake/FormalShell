@@ -1,4 +1,4 @@
-//! LocalsendService.qml: `localsend-cli` as children. `recv` runs while
+//! `localsend-cli` as children. `recv` runs while
 //! `localsend.receive` is on and the CLI is installed, restarted on a
 //! doubling backoff, and each `Recv file` line it logs for a file that is
 //! really there raises a RECEIVED toast; files something else drops into

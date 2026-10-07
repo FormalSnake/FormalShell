@@ -224,7 +224,7 @@ pub enum KeyAction {
 }
 
 impl KeyAction {
-    /// The name the QML layer and the IPC status use.
+    /// The name the IPC status uses.
     pub fn as_str(self) -> &'static str {
         match self {
             KeyAction::Pass => "pass",

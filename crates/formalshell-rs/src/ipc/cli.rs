@@ -1,6 +1,6 @@
-//! `formalshell-ipc`'s argument parsing, matching what `qs ipc` makes of
-//! the same words under CLI11 (`src/launch/parsecommand.cpp` at the pinned
-//! input), quirks included, since the smoke legs were written against them:
+//! `formalshell-ipc`'s argument parsing, matching the golden contract in
+//! `tests/ipc-golden.jsonl` for the same words under CLI11, quirks included,
+//! since the smoke legs were written against them:
 //!
 //! - an argument that starts with `[` and ends with `]` is a list: split on
 //!   commas outside quotes, each piece trimmed and empty ones dropped;
@@ -177,7 +177,7 @@ pub fn parse(argv: &[String]) -> Result<Request, CliError> {
     })
 }
 
-/// What qs checks on the client once connected, before anything is sent.
+/// What the client checks once connected, before anything is sent.
 pub fn missing(request: &Request) -> Option<&'static str> {
     match request {
         Request::Call { target, .. } | Request::Prop { target, .. } if target.is_empty() => {

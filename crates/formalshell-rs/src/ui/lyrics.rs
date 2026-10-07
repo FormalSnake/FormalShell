@@ -1,4 +1,4 @@
-//! LyricsPane.qml: the media panel's lyrics card. Every line is a row in a
+//! The media panel's lyrics card. Every line is a row in a
 //! column that rests its anchor (the lit main line, else the latest lit
 //! secondary one) at the comfort offset while it follows the song, and sits
 //! where a wheel left it once it does not. A lit row wipes chunk by chunk,

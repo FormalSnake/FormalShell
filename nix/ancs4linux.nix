@@ -5,7 +5,7 @@
 #
 # The metadata patch (kbbahaPro/omarchy-iphone, MIT) adds the fields upstream
 # drops on the floor: subtitle, category, the Silent/Important ANCS flags and
-# the phone's own timestamp. shell/Services/IphoneService.qml needs Silent for
+# the phone's own timestamp. the shell's iPhone service needs Silent for
 # the Focus heuristic and category for routing, so this is applied
 # unconditionally rather than left optional.
 #

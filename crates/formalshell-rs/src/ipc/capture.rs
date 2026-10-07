@@ -1,4 +1,4 @@
-//! `capture`, CaptureIpc.qml: text (OCR) and colour off a slurp selection
+//! `capture`: text (OCR) and colour off a slurp selection
 //! or a geometry the caller already has, cancel and status.
 
 use super::registry::{Function, Target, Type, Value};

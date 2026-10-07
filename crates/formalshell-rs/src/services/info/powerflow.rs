@@ -1,5 +1,5 @@
-//! What the power panel samples while it is open (PowerPanel.qml's two
-//! timers): the CPU package draw the nix module's poller leaves in
+//! What the power panel samples while it is open: the CPU package draw
+//! the nix module's poller leaves in
 //! `/run/formalshell/rapl`, and one sysfs pass over the supplies and USB-C
 //! ports that Power/flow.js decodes. A missing poller leaves `cpu_w` empty
 //! rather than 0.

@@ -1,4 +1,4 @@
-//! BrightnessService.qml: the internal backlight through `brightnessctl -m`
+//! The internal backlight through `brightnessctl -m`
 //! and every DDC monitor through `ddcutil`. Nothing polls: the backlight is
 //! read when the service starts and after a write, and ddcutil's seconds-slow
 //! I2C detection runs only when a consumer asks for the device list (the

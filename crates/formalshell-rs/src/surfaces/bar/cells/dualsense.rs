@@ -1,4 +1,4 @@
-//! DualsenseWidget.qml: a gamepad icon and the controller's battery, gone
+//! A gamepad icon and the controller's battery, gone
 //! from the strip with no controller. Warn and critical colour the border
 //! and the ink, as the laptop battery's cell does.
 

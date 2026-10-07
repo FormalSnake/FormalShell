@@ -1,4 +1,4 @@
-//! `screensaver`, ScreensaverIpc.qml: start, stop, status, the frame pin a
+//! `screensaver`: start, stop, status, the frame pin a
 //! recorder steps through, and `frameInfo`, whose `cycles` is its last key
 //! on purpose (the rig greps `"cycles":0}`).
 

@@ -1,4 +1,4 @@
-//! Osd.qml: the bottom-centre volume, brightness and media pill, one
+//! The bottom-centre volume, brightness and media pill, one
 //! `popupWidthNarrow` card out of the bottom edge's line, no keyboard focus
 //! and no pointer input at all, gone `HIDE` after the last trigger. The
 //! layer surface exists only while the card is drawn, and is a band along
@@ -68,7 +68,7 @@ impl App {
         }
     }
 
-    /// OsdIpc.qml's `state`.
+    /// The OSD's `state` over IPC.
     pub fn osd_state(&self) -> String {
         let visible = self.osd.pill.is_some();
         let kind = self.osd.kind.map_or("", Kind::name);

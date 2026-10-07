@@ -416,8 +416,7 @@ mod tests {
         );
     }
 
-    /// The QML test also passes the string "52"; a typed f64 cannot carry it,
-    /// so only the NaN half has a counterpart.
+    /// A typed f64 cannot carry the string "52", so only the NaN case applies.
     #[test]
     fn sun_times_null_for_non_number_coordinates() {
         assert_eq!(

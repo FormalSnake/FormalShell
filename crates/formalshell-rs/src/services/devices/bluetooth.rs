@@ -4,7 +4,7 @@
 //!
 //! The panel's actions run here, one at a time, each settled by BlueZ's own
 //! answer: a method that errors fails its row, one that never answers fails
-//! it after [`ACTION_TIMEOUT`] (BluetoothPanel.qml's actionTimeout).
+//! it after [`ACTION_TIMEOUT`].
 //! Discovery runs only while the panel is open on a powered adapter, and is
 //! re-armed whenever BlueZ lets it lapse.
 
@@ -72,7 +72,7 @@ thread_local! {
     static BLUEZ: RefCell<Option<fs_bluez::Bluez>> = const { RefCell::new(None) };
 }
 
-/// Quickshell's `BluetoothAdapterState.toString`.
+/// The adapter state's name.
 fn state_word(s: AdapterState) -> &'static str {
     match s {
         AdapterState::Disabled => "Disabled",
@@ -277,8 +277,8 @@ pub async fn run(ctx: Ctx) {
 }
 
 /// One action against BlueZ: `None` once BlueZ has done it, else the row's
-/// failure text. Pairing goes on to trust and connect, the sequence
-/// BluetoothPanel.qml runs once `paired` reports true.
+/// failure text. Pairing goes on to trust and connect once
+/// `paired` reports true.
 async fn run_action(b: &fs_bluez::Bluez, address: &str, kind: ActionKind) -> Option<&'static str> {
     let out = match kind {
         ActionKind::Connect => b.connect_device(address).await,
@@ -302,7 +302,7 @@ async fn run_action(b: &fs_bluez::Bluez, address: &str, kind: ActionKind) -> Opt
     })
 }
 
-/// BluetoothWidget.qml's right click: the default adapter's radio flipped.
+/// The bluetooth cell's right click: the default adapter's radio flipped.
 pub fn toggle_power(ctx: &Ctx) {
     let Some(bluez) = BLUEZ.with_borrow(|b| b.clone()) else { return };
     ctx.spawn(async move {

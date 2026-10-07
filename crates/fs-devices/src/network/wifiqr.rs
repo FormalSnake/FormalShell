@@ -180,7 +180,6 @@ mod tests {
         assert_eq!(escape_value("FORMALTEST"), "FORMALTEST");
     }
 
-    // The QML test also passed undefined and null, which read as "".
     #[test]
     fn escape_empty_value() {
         assert_eq!(escape_value(""), "");

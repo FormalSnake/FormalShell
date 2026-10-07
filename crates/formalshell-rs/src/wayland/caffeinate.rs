@@ -1,4 +1,4 @@
-//! Caffeinate (Surfaces/Caffeinate/Caffeinate.qml and IdleService.qml):
+//! Caffeinate:
 //! while the toggle is on, a 1px transparent layer surface of its own holds
 //! a Wayland idle inhibitor, and an ext-idle-notify listener that respects
 //! inhibitors reports whether the session went idle. The surface is its own
@@ -109,7 +109,7 @@ impl App {
     /// Once settings.json has loaded: the idle listener with the screensaver
     /// timeout it carries, and `caffeinate.onStartup`. Created once, already
     /// carrying the right timeout: reconfiguring a live notification
-    /// recreates it, which Quickshell's own monitor lost track of.
+    /// recreates it, which loses track of the monitor.
     pub fn arm_caffeinate(&mut self) {
         if self.caffeinate.armed || !self.store.config.loaded {
             return;

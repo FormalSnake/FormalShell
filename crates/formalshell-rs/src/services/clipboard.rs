@@ -1,4 +1,4 @@
-//! ClipboardService.qml: the ledger at `$XDG_STATE_HOME/formalshell/
+//! The ledger at `$XDG_STATE_HOME/formalshell/
 //! clipboard.json`, fed by three `wl-paste --watch` children started with
 //! the shell, never by a first reader.
 //!
@@ -37,7 +37,7 @@ use crate::store;
 const SETTLE: Duration = Duration::from_millis(300);
 const ECHO_MS: i64 = 5000;
 const RESTART: Duration = Duration::from_secs(3);
-/// ThumbnailService.qml's edge, shared with the picker's cache.
+/// The thumbnail edge, shared with the picker's cache.
 pub const THUMB_SIZE: u32 = 512;
 
 #[derive(Default)]
@@ -83,7 +83,7 @@ impl State {
         true
     }
 
-    /// ClipboardIpc.qml's `list`.
+    /// The IPC `list` reply.
     pub fn list(&self) -> String {
         serde_json::to_string(&self.items).unwrap_or_else(|_| "[]".into())
     }

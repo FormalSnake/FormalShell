@@ -1,4 +1,4 @@
-//! IphoneWidget.qml: a phone icon with a primary dot while messages are
+//! A phone icon with a primary dot while messages are
 //! unread, the battery beside it, the cell at 60% while the phone is out of
 //! range. Absent unless `omarchy-iphone-bridge` is installed.
 

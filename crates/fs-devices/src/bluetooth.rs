@@ -152,8 +152,6 @@ mod tests {
         assert!(has_human_name("Sony WH-1000XM4"));
     }
 
-    // The QML test fed buckets() a Qt sequence wrapper rather than an Array;
-    // a slice is the one shape Rust has.
     #[test]
     fn buckets_accepts_a_plain_slice() {
         let devices = [

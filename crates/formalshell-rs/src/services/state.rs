@@ -1,6 +1,5 @@
 //! `$XDG_STATE_HOME/formalshell/state.json`, the runtime-mutable counterpart
-//! to settings.json and the only file the shell writes. Same keys as
-//! `shell/Core/State.qml`. The service thread owns the working copy, applies
+//! to settings.json and the only file the shell writes. The service thread owns the working copy, applies
 //! setters in the order they arrive, publishes what moved, and writes the file
 //! once per burst of setters.
 
@@ -318,7 +317,7 @@ pub async fn run(ctx: Ctx) {
 
     let shared = Rc::new(RefCell::new(Shared { data: Data::default(), dirty: false, written: None }));
 
-    // Absent file: write the defaults, as the QML does on FileNotFound.
+    // Absent file: write the defaults.
     let initial = read(&ctx, &path).await.flatten();
     let absent = initial.is_none();
     if let Some(text) = &initial {

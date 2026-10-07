@@ -1,7 +1,7 @@
 // Portions from omarchy-radio-atlas (MIT, Copyright 2026 Akshar Patel)
 
-//! RadioAtlas.qml: the globe beside a station list and the player, inside
-//! RadioOverlay.qml's card. Playback, saved stations and every Radio
+//! The globe beside a station list and the player, inside
+//! the overlay's card. Playback, saved stations and every Radio
 //! Browser request belong to the radio service; this is the atlas's own
 //! state (mode, lists, selection, search) and how it draws.
 
@@ -53,7 +53,7 @@ enum Purpose {
     Country,
 }
 
-/// One key the atlas reads, as RadioAtlas.qml's `_key` names them.
+/// One key the atlas reads.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Key {
     Escape,
@@ -615,8 +615,7 @@ impl Atlas {
         }
     }
 
-    /// RadioService's station, favourites or recents moved
-    /// (RadioAtlas.qml's Connections).
+    /// RadioService's station, favourites or recents moved.
     pub fn radio_changed(&mut self, before: &radio::State, r: &radio::State) {
         self.dirty = true;
         let uuid = |s: &Option<Station>| s.as_ref().map(|s| s.uuid.clone());
@@ -636,7 +635,7 @@ impl Atlas {
         }
     }
 
-    /// RadioAtlas.qml's `_key`. True when the key was taken; `close` set
+    /// True when the key was taken; `close` set
     /// when it asked the overlay to close.
     pub fn key(&mut self, r: &radio::State, key: Key, now: Instant, close: &mut bool) -> bool {
         self.dirty = true;

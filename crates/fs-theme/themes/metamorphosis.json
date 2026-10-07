@@ -470,8 +470,8 @@
         "table": [
             "The shipped look as a table (M59 T1): shadcn chrome on Omarchy habits, the 2026-08-25 redesign. Every number here was read off the primitive that drew it before this file existed, so the primitives that now render `Theme.box(role, state)` paint the frames they painted then.",
             "What the table does NOT carry: ink (text and icon colour, which is content rather than chrome), geometry (a control's padding, its height, the concentric radius a nested box takes from its owner) and motion. The scalars a preset already owns stay in presets.js: radius base, icons, fonts, surface alpha, blur, dither.",
-            "Colours are role names resolved at draw time, so matugen keeps driving the palette; alphas are literals here, which is what makes a theme readable as one file. `shell/Theme/style.js` documents the schema and resolves it.",
-            "This file is JSON so the QML shell (shell/Theme/themes.js) and the Rust one (crates/fs-theme) read the same table; `notes` is for the reader and nothing resolves it."
+            "Colours are role names resolved at draw time, so matugen keeps driving the palette; alphas are literals here, which is what makes a theme readable as one file. crates/fs-theme (`style.rs`) documents the schema and resolves it.",
+            "This file is JSON so crates/fs-theme embeds it as data; `notes` is for the reader and nothing resolves it."
         ],
         "retro": [
             "Retro is this table on different scalars (M59 T1): square corners, one mono face, opaque surfaces with no compositor blur and the dither pass over content imagery. Every one of those is a key the presets own, so retro has no file of its own: both presets resolve to this one table, and a change to a shadcn box reaches retro by construction."

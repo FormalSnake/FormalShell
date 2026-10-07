@@ -8,12 +8,12 @@
 # second bar, and that the bar itself opens as a real popout.
 # `tray.maxVisible: -1` is the other half of that key, the strip carrying
 # what fits; --tray pins it and reads the six-cell strip back.
-# tests/tst_tray_overflow.qml pins the arithmetic behind both.
+# The unit tests pin the arithmetic behind both.
 #
 # It also puts the tray behind a bar chevron, alone on its governed side, and
 # rides it down and back up. Collapsed and expanded then differ by exactly one
 # cell, this one, so two byte-identical frames mean the toggle did not come
-# back: Bar.qml reveals a governed entry only while it measures more than 0,
+# back: the bar reveals a governed entry only while it measures more than 0,
 # and a tray drawing nothing until it has decided something measures 0 and
 # stays hidden forever. That shipped (owner, 2026-08-28: "I just opened the
 # chevron and its not there"), with `tray status` reporting the collapse

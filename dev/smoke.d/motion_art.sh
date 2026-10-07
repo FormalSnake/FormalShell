@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
-# --motion-art proves the animated album cover (AnimatedAlbumArt.qml) with no
+# --motion-art proves the animated album cover with no
 # network: `media.appleMusicArt` on, a track tagged with an artist and album
 # whose motion art is already in the cache the lookup would have filled
 # (`$XDG_CACHE_HOME/formalshell/applemusic-art/<key>.mp4`), so the decode is

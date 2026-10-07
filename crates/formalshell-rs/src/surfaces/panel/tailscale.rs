@@ -1,4 +1,4 @@
-//! TailscalePanel.qml: this machine's tailnet name and the backend's
+//! This machine's tailnet name and the backend's
 //! connection state as the hero, this machine's own address, then the peers
 //! with a reachability dot. The header's switch runs `tailscale up` or
 //! `down`, and a permission failure reads NOT OPERATOR inline rather than

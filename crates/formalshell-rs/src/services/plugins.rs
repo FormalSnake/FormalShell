@@ -109,7 +109,7 @@ impl State {
         plugins::bar_plugins(&self.resolved.plugins)
     }
 
-    /// PluginsIpc.qml's `list`.
+    /// The IPC `list` reply.
     pub fn list(&self) -> Value {
         Value::Array(
             self.resolved
@@ -132,7 +132,7 @@ impl State {
         )
     }
 
-    /// PluginsIpc.qml's `status`. `errors` are the plugins failing now.
+    /// The IPC `status` reply. `errors` are the plugins failing now.
     pub fn status(&self) -> Value {
         let count = |kind: Kind| self.resolved.plugins.iter().filter(|p| p.kind == kind).count();
         let surfaces: Vec<String> = plugins::surface_plugins(&self.resolved.plugins).iter().map(plugins::surface_key).collect();

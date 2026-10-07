@@ -1,5 +1,5 @@
 //! The live process table and the three things a row can do to a process
-//! (ProcessService.qml). One `/proc` walk per tick while something wants
+//! One `/proc` walk per tick while something wants
 //! it, parsed by fs-system; the table is unsorted and unfiltered, since
 //! ordering and matching are each reader's call. A signal answers at once
 //! with what was sent, and its own exit status lands in [`State::last`] a
@@ -67,7 +67,7 @@ impl State {
         self.rows.iter().find(|r| r.pid == pid)
     }
 
-    /// MonitorIpc.qml's `processes`: the rows matching `query`, by CPU,
+    /// The IPC `processes` reply: the rows matching `query`, by CPU,
     /// capped at 40 with `matched` saying what the cap dropped.
     pub fn report(&self, query: &str, now_ms: u64) -> Value {
         let rows = procs::sort_rows(&procs::filter_rows(&self.rows, query), "cpu");

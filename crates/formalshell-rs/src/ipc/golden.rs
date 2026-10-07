@@ -1,6 +1,5 @@
-//! `tests/ipc-golden.jsonl`, recorded off the built `qs` by
-//! `dev/ipc-golden.sh`, replayed through the client's parsing and the
-//! registry against the same stub handlers that script serves.
+//! `tests/ipc-golden.jsonl`, the fixed wire contract, replayed through the
+//! client's parsing and the registry against the stub handlers below.
 
 use serde::Deserialize;
 
@@ -38,7 +37,7 @@ const fn f(name: &'static str, params: &'static [(&'static str, Type)], ret: Typ
 
 const STR: (&str, Type) = ("a", Type::String);
 
-/// dev/ipc-golden.sh's shell.qml, function for function.
+/// The stub handlers the recordings were taken against, function for function.
 fn stub() -> Registry<()> {
     Registry {
         targets: vec![
@@ -543,7 +542,7 @@ fn no_instance(text: &str) -> bool {
     text.starts_with("No running instances for \"") && text.ends_with("\"\n")
 }
 
-/// qs lists targets and functions out of a hash, so only the set holds.
+/// The recorded listing comes out of a hash, so only the set holds.
 /// Each recording saw the targets of its own branch, so every target block
 /// it lists must appear in ours with the same functions; ours may list more.
 fn blocks(text: &str) -> std::collections::BTreeMap<&str, Vec<&str>> {
@@ -594,10 +593,10 @@ fn matches_qs_ipc() {
     }
 }
 
-/// Each real target declares every one of its QML handler's functions
-/// exactly as the stub above does.
+/// Each real target declares every function of its stub target exactly as the
+/// stub above does.
 #[test]
-fn signatures_match_qml() {
+fn signatures_match_golden() {
     let stub = stub();
     for real in [
         super::debug::target(),
@@ -642,8 +641,8 @@ fn signatures_match_qml() {
         super::mirror::target(),
     ] {
         let defs: Vec<String> = real.functions.iter().map(|f| f.definition()).collect();
-        let qml = stub.targets.iter().find(|t| t.name == real.name).expect("a stub target");
-        for function in &qml.functions {
+        let golden = stub.targets.iter().find(|t| t.name == real.name).expect("a stub target");
+        for function in &golden.functions {
             assert!(defs.contains(&function.definition()), "{} lacks {}", real.name, function.definition());
         }
     }

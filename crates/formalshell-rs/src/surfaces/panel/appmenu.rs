@@ -1,4 +1,4 @@
-//! AppMenuPanel.qml: the focused app's menu, opened from the active-window
+//! The focused app's menu, opened from the active-window
 //! cell. The window's desktop entry supplies the Actions rows (its own
 //! `[Desktop Action]` groups) and the compositor's window list filtered by
 //! the same app id supplies the Windows rows, the focused one carrying a

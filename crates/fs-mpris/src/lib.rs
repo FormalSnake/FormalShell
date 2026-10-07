@@ -284,7 +284,7 @@ async fn read_position(conn: &Connection, name: &str) -> Option<i64> {
 
 /// Command side. Cheap to clone; each call addresses a player by bus name.
 /// Capability gating (`CanGoNext`, `CanControl`, ...) is the caller's, read
-/// off [`PlayerState`], the way `MediaService.qml` gates each verb.
+/// off [`PlayerState`].
 #[derive(Clone)]
 pub struct Controls {
     conn: Connection,
@@ -328,7 +328,7 @@ impl Controls {
         self.player(name).await?.seek(offset_us).await
     }
 
-    /// Absolute seek the way Quickshell does it: `SetPosition` against the
+    /// Absolute seek: `SetPosition` against the
     /// current track id when the player has one, else a relative `Seek` from
     /// the interpolated position.
     pub async fn set_position(&self, state: &PlayerState, target: Duration) -> Result<()> {

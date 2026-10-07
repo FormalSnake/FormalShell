@@ -1,5 +1,5 @@
-//! The forecast behind the weather cell (WeatherPanel.qml's fetch) and the
-//! place it is for (LocationService.qml): `location.latitude/longitude`
+//! The forecast behind the weather cell and the
+//! place it is for: `location.latitude/longitude`
 //! from settings.json when both are numbers, else GeoClue's fix, else (15 s
 //! without one) a beaconDB lookup off the visible Wi-Fi access points. No fix
 //! is its own state, never a guess.

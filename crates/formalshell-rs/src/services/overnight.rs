@@ -1,4 +1,4 @@
-//! OvernightService.qml: the machine left compiling while its owner sleeps.
+//! The machine left compiling while its owner sleeps.
 //! Screens to 1%, every LED the shell may touch off, the Aura zones dark,
 //! and a Performance profile dropped to Balanced (power-saver would also
 //! pin the CPU's energy preference and drag a long build out).
@@ -29,7 +29,7 @@ thread_local! {
     static RECORD: RefCell<Option<Map<String, Value>>> = const { RefCell::new(None) };
 }
 
-/// Quickshell's `PowerProfile` enum numbers, what the record has always held.
+/// The `PowerProfile` enum numbers, what the record has always held.
 fn profile_number(p: Profile) -> i64 {
     match p {
         Profile::PowerSaver => 0,
@@ -70,7 +70,7 @@ async fn output(argv: &[&str]) -> Option<(i32, String)> {
     Some((out.status.code().unwrap_or(-1), String::from_utf8_lossy(&out.stdout).into_owned()))
 }
 
-/// BrightnessService.qml's backlight: `brightnessctl -m -c backlight -l`'s
+/// The backlight: `brightnessctl -m -c backlight -l`'s
 /// first row, name and percent.
 async fn backlight() -> Option<(String, i64)> {
     let (_, text) = output(&["brightnessctl", "-m", "-c", "backlight", "-l"]).await?;

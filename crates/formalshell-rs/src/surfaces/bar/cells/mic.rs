@@ -1,4 +1,4 @@
-//! MicWidget.qml: the default capture source, opt-in through bar.layout.
+//! The default capture source, opt-in through bar.layout.
 //! One icon, live or muted; with no capture device one dim NO MIC label,
 //! staying on the strip because the user asked for it. Left click mutes,
 //! middle opens the audio panel; no wheel, a mic reads as on or off.

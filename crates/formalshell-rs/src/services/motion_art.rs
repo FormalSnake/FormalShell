@@ -1,11 +1,11 @@
-//! Apple Music's animated cover (AppleMusicArtService.qml, AnimatedAlbumArt.qml):
+//! Apple Music's animated cover:
 //! behind `media.appleMusicArt`, the track's album is looked up over the
 //! undocumented chain fs-media's `applemusic` parses (iTunes artist search,
 //! that artist's albums, a scraped web-player token, amp-api's editorial
 //! video, the HLS playlists, one progressive mp4) and the mp4 kept under
 //! `$XDG_CACHE_HOME/formalshell/applemusic-art`. While the media panel shows
-//! the cover, an ffmpeg child decodes that mp4 to raw frames at the QML grab
-//! timer's ~8 fps, cropped to the slot; each frame is rounded on the pool
+//! the cover, an ffmpeg child decodes that mp4 to raw frames at ~8 fps,
+//! cropped to the slot; each frame is rounded on the pool
 //! and published to the store. A paused track stops the child where it is
 //! and keeps its last frame; the panel closing kills it.
 
@@ -23,7 +23,7 @@ use crate::runtime::Ctx;
 use crate::scene::Bitmap;
 use crate::store;
 
-/// AnimatedAlbumArt.qml's 120 ms grab timer.
+/// One frame per 120 ms.
 const FPS: &str = "25/3";
 /// The lookup waits out a track skipped straight past (`_debounce`).
 const DEBOUNCE: Duration = Duration::from_millis(1500);

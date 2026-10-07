@@ -1,4 +1,4 @@
-//! WeatherWidget.qml: the condition icon (a dim thermometer before the first
+//! The condition icon (a dim thermometer before the first
 //! reading), the rounded temperature beside it when `showLabel` is on, and
 //! the whole reading in the tooltip.
 

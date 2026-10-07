@@ -4,9 +4,8 @@
 //! resting state, and anything that moves over time (a falling cap, a
 //! particle, a scrolling trace) is only ever set moving by a level.
 //!
-//! Each style calls a `Scene` the way the QML build called its canvas, so the
-//! geometry and colour maths are the original's and the result is a list of
-//! `Shape`s for a renderer to walk.
+//! Each style calls a `Scene` the way a canvas 2D context is called, so the
+//! result is a list of `Shape`s for a renderer to walk.
 //!
 //! `State` belongs to one renderer and is thrown away when the style changes
 //! or cava stops. `dt` is 0 on a repaint that is not a new frame (a colour
@@ -14,11 +13,10 @@
 //! spawning anything. Randomness comes from the state's own generator, so a
 //! seeded state replays.
 //!
-//! The QML `draw` also took a clock `t` that no style read; it is gone.
 //! A style whose column count changed under a live state (`ink.columns`)
 //! restarts its buffers rather than reading past the old ones.
 
-// The loops index several parallel buffers by one counter, as the QML did, and
+// The loops index several parallel buffers by one counter, and
 // the 6.28 and 6.283 the particle styles seed their phases with are values, not
 // approximations of TAU.
 #![allow(clippy::needless_range_loop, clippy::approx_constant)]
@@ -2290,8 +2288,7 @@ mod tests {
         (0..BAR_COUNT).map(value).collect()
     }
 
-    // Every coordinate a shape hands the renderer, as the QML mock context
-    // recorded them.
+    // Every coordinate a shape hands the renderer, in call order.
     fn points(scene: &Scene) -> Vec<(f64, f64, &'static str)> {
         let mut out = Vec::new();
         for shape in &scene.shapes {

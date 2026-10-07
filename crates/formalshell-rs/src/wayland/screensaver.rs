@@ -1,4 +1,4 @@
-//! The screensaver (Screensaver.qml): one controller deciding when to show,
+//! The screensaver: one controller deciding when to show,
 //! the session's idle state crossed with the live media guard, and one
 //! full-output overlay drawing the banner cell by cell. ttfx is the frame
 //! source when it is on PATH (its stdout parsed on the service thread),
@@ -357,7 +357,7 @@ impl App {
     }
 
     /// The canvas measured in cells of the mono font at the size that fits
-    /// the banner, as Screensaver.qml's `metric` text measures it.
+    /// the banner.
     pub(super) fn saver_configure(&mut self, width: i32, height: i32) {
         let banner = self.saver_banner();
         let Some(o) = &mut self.saver.overlay else { return };

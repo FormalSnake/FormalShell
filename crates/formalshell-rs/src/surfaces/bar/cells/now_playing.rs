@@ -1,4 +1,4 @@
-//! NowPlaying.qml: the music glyph and the active source's track as the
+//! The music glyph and the active source's track as the
 //! strip's first free label, which keeps its room longest. Right click skips
 //! ahead and the wheel steps previous and next. Once the source has art, its
 //! cover takes the glyph's slot.

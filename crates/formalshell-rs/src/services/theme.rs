@@ -1,5 +1,5 @@
-//! The palette and the chrome the compositor reads: `Core/Theme.qml`'s
-//! theme.json half and `Theme/ThemeEngine.qml`. The pure halves live in
+//! The palette and the chrome the compositor reads: the theme.json half
+//! and the theme engine. The pure halves live in
 //! fs-theme; this runs the files, the matugen children and the schedule.
 //!
 //! [`watch`] publishes theme.json as it stands. [`run`] is the engine: it
@@ -285,7 +285,7 @@ fn publish_file(path: &Path, content: &str) -> io::Result<()> {
     std::fs::rename(&staged, path)
 }
 
-/// theme.json as `Core/Theme.qml` reads it: per key, a missing or malformed
+/// theme.json as read here: per key, a missing or malformed
 /// value falls back to zinc and the rest stays.
 pub(crate) fn read_palette(path: &Path) -> (Map<String, Value>, bool) {
     match std::fs::read_to_string(path) {

@@ -641,7 +641,6 @@ mod tests {
         assert_eq!(model[0].id, "");
         assert!(model[0].placeholder);
         assert_eq!(model[1].id, "7");
-        // The QML record left `placeholder` undefined on a real workspace.
         assert!(!model[1].placeholder);
     }
 
@@ -727,8 +726,7 @@ mod tests {
         assert_eq!(list.overflow, 2);
     }
 
-    // The QML test read `title` and `rect` back as undefined; here the
-    // carried type has no such fields at all.
+    // The carried type has no `title` or `rect` fields at all.
     #[test]
     fn slot_windows_drop_title_and_rect() {
         let list = slot_windows(

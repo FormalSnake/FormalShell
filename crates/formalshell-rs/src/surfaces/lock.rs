@@ -1,4 +1,4 @@
-//! One output's lock screen (LockSurface.qml with AuthPrompt.qml): the
+//! One output's lock screen: the
 //! wallpaper under the modal scrim, or the flat background without one,
 //! and the avatar, clock, date and password field as one column at its
 //! centre. The clock's ink is chosen per output against the wallpaper under
@@ -23,7 +23,7 @@ use crate::text::TextStyle;
 use crate::ui::el::Opt;
 use crate::ui::{self, El, Ink, Size, Type, Ui, w};
 
-/// The modal scrim's opacity over the wallpaper (LockSurface.qml's `_scrimAlpha`).
+/// The modal scrim's opacity over the wallpaper.
 pub const SCRIM: f64 = 0.5;
 
 /// What every output shows the same.
@@ -43,7 +43,7 @@ pub struct Shared<'a> {
     pub enter: (f32, f64),
     /// Idle-blanked: nothing but black once the wake fade has run out.
     pub blanked: bool,
-    /// The blank and wake crossfade (LockSurface.qml's _wakeOpacity): 0 is
+    /// The blank and wake crossfade: 0 is
     /// black, 1 the whole screen.
     pub wake: f32,
     /// The clock in `foreground` and the date in `mutedForeground` with no
@@ -52,7 +52,7 @@ pub struct Shared<'a> {
     pub palette_ink: bool,
 }
 
-/// AuthPrompt.qml's field and what sits over it.
+/// The password field and what sits over it.
 pub struct Prompt<'a> {
     /// What the field shows: a password's dots, or a username as typed.
     pub text: String,
@@ -71,7 +71,7 @@ impl Prompt<'_> {
     }
 }
 
-/// LockNowPlaying.qml's block, shown while a player that is not a stream
+/// The now-playing block, shown while a player that is not a stream
 /// has a track.
 pub struct NowPlaying<'a> {
     pub title: &'a str,
@@ -395,7 +395,7 @@ fn decode(path: &str) -> Option<image::RgbaImage> {
     Some(image::ImageReader::open(path).ok()?.with_guessed_format().ok()?.decode().ok()?.to_rgba8())
 }
 
-/// Cover.qml at `size`: the track's art (a file or a data URL) cover-cropped
+/// The cover at `size`: the track's art (a file or a data URL) cover-cropped
 /// square, for the pool.
 pub fn cover(url: &str, size: u32) -> Option<Bitmap> {
     let img = match url.strip_prefix("data:") {
@@ -413,7 +413,7 @@ pub fn cover(url: &str, size: u32) -> Option<Bitmap> {
     Some(Bitmap::from_rgba(size as u16, size as u16, out.into_raw()))
 }
 
-/// Avatar.qml: the picture cover-cropped into a `size` disc, for the pool.
+/// The picture cover-cropped into a `size` disc, for the pool.
 /// None when there is no readable picture, which hides the avatar.
 pub fn avatar(path: &str, size: u32) -> Option<Bitmap> {
     let img = decode(path)?;

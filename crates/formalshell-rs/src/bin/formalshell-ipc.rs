@@ -1,6 +1,7 @@
-//! `formalshell-ipc <call|show|wait|listen|prop> ...`: the rust shell's
-//! answer to `qs ipc -p <shell> ...`, printing what qs prints and exiting
-//! as it exits.
+//! `formalshell-ipc <call|show|wait|listen|prop> ...`: the command line
+//! client for the shell's IPC, printing replies as
+//! `crates/formalshell-rs/tests/ipc-golden.jsonl` fixes them and exiting as
+//! it exits.
 
 #[path = "../ipc/cli.rs"]
 mod cli;

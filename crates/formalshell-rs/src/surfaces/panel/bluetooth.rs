@@ -1,4 +1,4 @@
-//! BluetoothPanel.qml: the adapter's power `Switch` and a rescan button in
+//! The adapter's power `Switch` and a rescan button in
 //! the header, a hero naming the one connected device (or the adapter), and
 //! the rows split into Paired (connected first, each carrying a check) and
 //! Available. Enter connects or disconnects the row under the cursor, or

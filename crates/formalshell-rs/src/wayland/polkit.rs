@@ -1,4 +1,4 @@
-//! The polkit dialog (PolkitDialog.qml): a modal card on the top layer
+//! The polkit dialog: a modal card on the top layer
 //! (`surfaces::modal`), budding off the top line to the output's centre
 //! over its scrim and holding the keyboard while a request is open:
 //! "Authentication required", the action's message, the identity, the
@@ -23,7 +23,7 @@ use crate::ui::{self, El, Size, Ui, Variant, w};
 
 const NAMESPACE: &str = "formalshell:polkit";
 
-/// Drawer.qml's default `deformAmount`, which PolkitDialog.qml leaves alone.
+/// The drawer's default `deformAmount`, which the dialog leaves alone.
 const DEFORM_AMOUNT: f64 = 0.15;
 
 pub struct Dialog {
@@ -51,7 +51,7 @@ impl Dialog {
     }
 }
 
-/// Text.qml's `WordWrap` for body text: greedy lines no wider than `width`.
+/// Word wrap for body text: greedy lines no wider than `width`.
 fn wrap(text: &str, width: f64, theme: &fs_theme::theme::Theme, kit: &mut crate::surfaces::bar::cell::Kit) -> Vec<String> {
     let mut lines: Vec<String> = Vec::new();
     let mut line = String::new();
@@ -213,7 +213,7 @@ impl App {
         };
         let mut rows: Vec<El> = vec![w::section_label(s, "Authentication required", None, false)];
         rows.push(w::column(0.0, wrap(&d.message, inner, theme, kit).into_iter().map(w::text).collect()));
-        // Avatar.qml's slot: the picture goes in over the space the row
+        // The avatar's slot: the picture goes in over the space the row
         // leaves for it.
         let avatar = d.avatar.as_ref().map(|b| b.pixmap.width() as f64);
         let mut avatar_row = None;

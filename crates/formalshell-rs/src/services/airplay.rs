@@ -1,4 +1,4 @@
-//! AirplayService.qml: AirPlay over UxPlay, owned by the shell behind
+//! AirPlay over UxPlay, owned by the shell behind
 //! `airplay.enable`.
 //!
 //! UxPlay has no MPRIS and no query verb. `active` is whether the `-dacp`

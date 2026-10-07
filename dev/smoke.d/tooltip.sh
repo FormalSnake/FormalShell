@@ -33,7 +33,7 @@ leg_tooltip_timing() {
 
 leg_tooltip_drive() {
   # 1886x74 is the panel header's close button, and it is the same point
-  # whatever the panel's width: Panel.qml pins the frame's RIGHT edge at
+  # whatever the panel's width: the panel pins the frame's RIGHT edge at
   # screen.width - barMargin, the Card insets by panelPadding, and the
   # button is controlHeight square against that inset edge, verticalCentred
   # in a header that starts panelPadding below a frame top of

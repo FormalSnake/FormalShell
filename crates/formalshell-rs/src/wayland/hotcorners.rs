@@ -1,4 +1,4 @@
-//! Hot corners (HotCorners.qml): a transparent `hotCorners.size` square on
+//! Hot corners: a transparent `hotCorners.size` square on
 //! the top layer in every corner whose action is not "none", firing after a
 //! dwell or on a click. Arming is fs-chrome's `arm` rule: an action that
 //! reports its end (the lock, the screensaver) ends when its covering

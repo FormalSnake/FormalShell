@@ -1,4 +1,4 @@
-//! LauncherWidget.qml: `bar.launcherIcon`, by default the distro's own
+//! `bar.launcherIcon`, by default the distro's own
 //! logo out of font-logos, else an icon by name. The menu it summons is
 //! the launcher's own surface; until that lands a click has nothing to open.
 

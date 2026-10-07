@@ -151,7 +151,7 @@ fn hints<'a>(pairs: Vec<(&'a str, Value<'a>)>) -> HashMap<&'a str, Value<'a>> {
 }
 
 #[test]
-fn identity_and_capabilities_match_the_qml_shell() {
+fn identity_and_capabilities_hold() {
     run(async {
         let rig = Rig::new().await;
         let p = rig.proxy().await;

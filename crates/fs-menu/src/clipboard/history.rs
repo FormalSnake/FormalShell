@@ -85,7 +85,7 @@ fn no_removal(state: &State) -> Reduced {
 /// event produces) and returns the text unchanged otherwise; real content is
 /// never trimmed.
 ///
-/// NUL bytes are stripped before the empty check. Quickshell's SplitParser
+/// NUL bytes are stripped before the empty check. The watcher's line splitter
 /// skips the byte directly after a delimiter match, so two adjacent NULs in
 /// the watcher's stream leak one into the front of the next entry: an empty
 /// capture followed by a real one recorded `\0/tmp/shot.png` alongside the

@@ -1,4 +1,4 @@
-//! NotificationService.qml and ReminderService.qml: `fs-notifd` serving
+//! Notifications and reminders: `fs-notifd` serving
 //! `org.freedesktop.Notifications` on the service thread, and fs-info's
 //! three-tier reducer held here on the UI thread, which is its only writer.
 //!
@@ -78,7 +78,7 @@ pub struct LocalAction {
 pub enum Op {
     SetDnd(bool),
     DismissGroup(Vec<String>),
-    /// Center.qml's "Clear all": pending and seen both go.
+    /// The centre's "Clear all": pending and seen both go.
     ClearHistory,
     Invoke(String, String),
     /// NotificationService.notify() for a service on its own thread.
@@ -490,7 +490,7 @@ impl State {
         self.notify("Reminders", &lines, Urgency::Normal);
     }
 
-    /// ReminderIpc.qml's `status`.
+    /// The IPC reminder `status` reply.
     pub fn reminder_status(&self) -> String {
         let now = now_ms() as f64;
         let items: Vec<String> = self
@@ -612,7 +612,7 @@ fn image_of(n: &fs_notifd::Notification) -> (String, Option<Arc<ImageData>>) {
 static ENTRIES: std::sync::Mutex<(Vec<Option<std::time::SystemTime>>, Vec<DesktopEntry>)> =
     std::sync::Mutex::new((Vec::new(), Vec::new()));
 
-/// NotificationCard.qml's `entry`: the `desktop-entry` hint's entry, else the
+/// A card's `entry`: the `desktop-entry` hint's entry, else the
 /// entry the sender's name heuristically matches, and its icon.
 fn sender_icon(desktop_id: &str, app_name: &str) -> Option<String> {
     let dirs = applications_dirs();
@@ -683,9 +683,8 @@ fn arrival(n: &fs_notifd::Notification, replaced: bool) -> Arrival {
     }
 }
 
-/// What the QML shell's server answers over the bus, which senders may key
-/// on: Quickshell's name, an empty version (its build carries none), and the
-/// capabilities NotificationService.qml's flags turn on.
+/// The server identity senders may key on: the default name and capabilities,
+/// and an empty version.
 fn config() -> Config {
     Config { version: String::new(), ..Config::default() }
 }
@@ -744,7 +743,7 @@ pub async fn run(ctx: Ctx) {
     }
 }
 
-/// NotificationsIpc.qml's `status`, the centre's numbers handed in by the
+/// The IPC `status` reply, the centre's numbers handed in by the
 /// surface that owns them.
 pub fn status(s: &State, center: (f64, f64, bool)) -> String {
     format!(
@@ -772,7 +771,7 @@ mod tests {
     }
 
     #[test]
-    fn status_reads_like_the_qml_reply() {
+    fn status_reads_like_the_golden_reply() {
         let s = State::default();
         assert_eq!(
             status(&s, (0.0, 0.0, false)),

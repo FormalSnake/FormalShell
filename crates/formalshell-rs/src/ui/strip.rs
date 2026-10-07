@@ -1,6 +1,6 @@
 //! `Kind::Strip`: a framed viewport over tiles at their own places
-//! (WorkspacePreview.qml's miniature), each tile a window's picture
-//! (Components/WindowThumb.qml) or its schematic until a frame lands.
+//! (the Spaces preview's miniature), each tile a window's picture or its
+//! schematic until a frame lands.
 
 use fs_theme::color::Rgba;
 use vello_cpu::kurbo::Rect;

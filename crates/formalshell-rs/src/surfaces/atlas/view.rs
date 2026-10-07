@@ -1,6 +1,6 @@
 // Portions from omarchy-radio-atlas (MIT, Copyright 2026 Akshar Patel)
 
-//! RadioOverlay.qml's card and RadioAtlas.qml's layout: the card buds off
+//! The overlay's card and the atlas's layout: the card buds off
 //! the top line the way the launcher's does and rests centred on the
 //! output; the header, the globe pane and the sidebar are drawn into it.
 
@@ -39,7 +39,7 @@ const MOUSE: [(&str, &str); 4] = [
     ("Click a country", "Browse stations"),
 ];
 
-/// RadioAtlas.qml's own size off the output's.
+/// The atlas's own size off the output's.
 pub fn content_size(output: (f64, f64)) -> (f64, f64) {
     ((PREFERRED.0.min(output.0 * 0.85)).round(), (PREFERRED.1.min(output.1 * 0.85)).round())
 }
@@ -510,7 +510,7 @@ fn player_el(a: &Atlas, r: &radio::State, s: &fs_theme::tokens::Space) -> El {
     w::column(s.row_gap, vec![w::row(0.0, top).fill(), controls, volume]).fill()
 }
 
-/// Holds a row at least `h` tall, the height QML gives these rows outright.
+/// Holds a row at least `h` tall, the height these rows are given outright.
 fn strut(h: f64) -> El {
     w::column(0.0, vec![w::space(h)]).width(Size::Px(0.0))
 }

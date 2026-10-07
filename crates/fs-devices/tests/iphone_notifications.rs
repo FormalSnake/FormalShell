@@ -1,6 +1,6 @@
 //! The iPhone mirror against the notification model: the replace path, the
 //! quiet and DND tiers and the source-keyed grouping, with fs-info's reducer
-//! standing where `NotificationService.qml` runs `Model.add`.
+//! standing where the notification service runs `Model.add`.
 
 use fs_devices::iphone::{
     CentreEntry, DedupeRule, Event, Notification, PhoneFields, dedupe_rules, default_dedupe,

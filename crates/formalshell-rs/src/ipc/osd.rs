@@ -1,4 +1,4 @@
-//! `osd`, OsdIpc.qml: the bottom pill from outside. It shows itself on a
+//! `osd`: the bottom pill from outside. It shows itself on a
 //! volume change; this covers brightness (a keybind runs `brightnessctl`
 //! first, this catches the cached percent up and shows it), media text,
 //! close and state.

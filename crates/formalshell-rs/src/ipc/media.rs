@@ -1,4 +1,4 @@
-//! `media`, MediaIpc.qml's verbs over the active source. Every verb that acts
+//! `media`: the verbs over the active source. Every verb that acts
 //! on a source it does not have (no player at all, or one that does not
 //! implement that part of MPRIS) answers with an error string naming which,
 //! rather than "ok" over a call that went nowhere.

@@ -1,5 +1,5 @@
-//! PowerPanel.qml's low-battery watcher, which runs for the shell's whole
-//! lifetime in QML because the panel is instantiated once. The notification
+//! The low-battery watcher, which runs for the shell's whole
+//! lifetime. The notification
 //! is a local one, so critical earns the DND bypass.
 
 use fs_info::notifications::Urgency;

@@ -1,4 +1,4 @@
-//! The cell kit (Components/Cell.qml and the pieces a bar widget is built
+//! The cell kit (the pieces a bar widget is built
 //! from: Icon, CellLabel, CellRow, MarqueeText).
 //!
 //! A cell is one module under `cells/` implementing [`Cell`]: which store
@@ -98,21 +98,21 @@ pub enum Part {
     SlotIcon { name: String, width: f64 },
     /// A glyph in a named family (the distro logo).
     Glyph { text: String, family: &'static str },
-    /// CellLabel.qml: mono, body, medium unless `weight` says otherwise.
+    /// Mono, body, medium unless `weight` says otherwise.
     Label { text: String, weight: Option<f32> },
     /// A `Label` in the dim ink (`color: dimForeground`).
     DimLabel { text: String },
-    /// CellLabel.qml's `meta` label: the caption size in sans, in the meta
+    /// The `meta` label: the caption size in sans, in the meta
     /// ink, for the honest words (NO AUTH, NO LAYOUT). The text arrives
     /// already upper case.
     Meta { text: String },
     /// A sans name elided at `max`, hidden on a vertical bar.
     Name { text: String, max: f64, dim: bool },
-    /// MarqueeText.qml: free text drawn at the budget the bar hands this
+    /// Free text drawn at the budget the bar hands this
     /// cell, scrolling once it outgrows it. `lead` is its own padding,
     /// `ceiling` the most it ever draws.
     Free { text: String, dim: bool, lead: f64, ceiling: f64, cross: bool },
-    /// Cover.qml in the icon's slot, `size` square: the `muted` well under a
+    /// A cover in the icon's slot, `size` square: the `muted` well under a
     /// border, the picture inside it once decoded. Content imagery, so it
     /// keeps its own colours on any cell fill.
     Cover { image: crate::ui::el::Pic, size: f64 },
@@ -391,8 +391,7 @@ impl Look {
     }
 }
 
-/// The ink a cell's content resolves to (Cell.qml's `foreground` and
-/// `dimForeground`), and the band's glow under it.
+/// The ink a cell's content resolves to, and the band's glow under it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Ink {
     pub fg: Rgba,
@@ -658,8 +657,7 @@ impl Kit {
         }
     }
 
-    /// A view's extent along the strip at a given free-label budget
-    /// (Cell.qml's `_alongExtent` over CellRow's measure).
+    /// A view's extent along the strip at a given free-label budget.
     pub fn measure(&mut self, view: &View, vertical: bool, budget: f64, band: bool) -> Measured {
         let look = self.look.clone();
         let icon_h = self.icon("circle").line_height() as f64;

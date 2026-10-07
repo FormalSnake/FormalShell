@@ -1,4 +1,4 @@
-//! Battery.qml: the laptop battery's state icon and percentage, gone from
+//! The laptop battery's state icon and percentage, gone from
 //! the strip without one. Critical and low while discharging put their
 //! colour on the border and the ink; right click flips the percentage.
 

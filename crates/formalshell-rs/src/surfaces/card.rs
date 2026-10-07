@@ -1,10 +1,10 @@
-//! A card hanging off a line (Drawer.qml), on any of the four edges. Under
-//! the `join` emerge habit it is DrawerJoin.qml with Joint.qml's arithmetic:
+//! A card hanging off a line, on any of the four edges. Under
+//! the `join` emerge habit it is the joined shape:
 //! Presence's emerge on the theme's `emerge` clock, the let-go on
 //! `spatialFast`, Deform's springs, Shoulders' outline cut at the line, the
 //! walls a side too close to the line's end runs out to (M57 D2) and the
 //! bud a card hanging off another card's far edge is clamped into (M57 D3).
-//! Under `popover` it is DrawerPopover.qml: a plain card on its casts,
+//! Under `popover` it is a plain card on its casts,
 //! fading on the table's `emerge` clock over an `md` drop out of its cell.
 //!
 //! Worked out for a top edge in the card's own coordinates, `u` along the
@@ -32,7 +32,7 @@ use serde_json::json;
 
 use crate::services::theme::getter;
 
-/// Drawer.qml's `deformAmount` for a popout.
+/// The deform amount for a popout.
 const DEFORM_AMOUNT: f64 = 0.15;
 /// Room past the card's resting rect for the overshoot, the deform's
 /// stretch and the cast, on a surface sized to one card.
@@ -142,7 +142,7 @@ pub struct Card {
     pub far_gap: Option<(f64, f64)>,
     /// The frame's whole opacity: 0 cuts a handed-over card outright.
     pub frame_alpha: f32,
-    /// Drawer.qml's `deformAmount`: the pill is small and travels its whole
+    /// The deform amount: the pill is small and travels its whole
     /// height, so it asks for more than a popout does.
     pub deform_amount: f64,
     casts: NodeId,
@@ -420,7 +420,7 @@ impl Card {
         let shape_depth = (extent + depth - slide).max(0.0);
         let neck = (depth - slide).max(0.0);
 
-        // Joint.qml: the span the card may bud in, and whether it is too
+        // The span the card may bud in, and whether it is too
         // tight to bud at all.
         let spanned = self.target.is_some_and(|t| t.length > 0.0);
         let ends = self.ends;
@@ -587,7 +587,7 @@ impl Card {
     }
 }
 
-/// A full-output black scrim on the pose a modal drawer rides (Scrim.qml),
+/// A full-output black scrim on the pose a modal drawer rides,
 /// here on its own `emerge` clock with no card in front of it. It rasters
 /// nothing: its surface is one black pixel the compositor scales and fades.
 pub struct Scrim {

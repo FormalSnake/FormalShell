@@ -1,4 +1,4 @@
-//! `bar`, BarIpc.qml's verbs: the chevron's second bar opened and shut
+//! `bar`: the chevron's second bar opened and shut
 //! headlessly, `room` (what the strip shares out and what it hid) and
 //! `paint` (the band's reading of the wallpaper).
 

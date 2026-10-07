@@ -6,8 +6,6 @@
 # `@<file>`: a JSON device list the shell reads again whenever the file
 # changes, which is how it connects and disconnects a device on this rig
 # (`address`, `name`, `connected`, and for this seam `icon` and `battery`).
-# Rust only: the QML shell has no such card, and a `@` value there is just an
-# unparsable list.
 #
 # What it proves, off the shell's own `headset card mapped` and `unmapped`
 # log lines and the frames:

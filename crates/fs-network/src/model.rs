@@ -3,9 +3,7 @@ use zbus::zvariant::OwnedObjectPath;
 /// Wi-Fi signal in percent, 0..=100.
 ///
 /// NetworkManager's `AccessPoint.Strength` is percent and this keeps it that
-/// way. Quickshell's `WifiNetwork.signalStrength` divides by 100
-/// (src/network/nm/network.cpp), so the QML's `signalBar` takes a fraction;
-/// the conversion is [`SignalStrength::as_fraction`], never implicit.
+/// way, so a 0..1 fraction never enters implicitly; the conversion is [`SignalStrength::as_fraction`], never implicit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct SignalStrength(u8);
 
@@ -30,7 +28,7 @@ pub enum DeviceKind {
     Wifi,
 }
 
-/// The state mapping Quickshell's `NMDevice` applies: NetworkManager's 0..20
+/// The state mapping: NetworkManager's 0..20
 /// are unknown, 30 disconnected, 40..90 connecting, 100 connected, and 110
 /// and 120 (deactivating, failed) disconnecting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,7 +61,7 @@ impl ConnectionState {
         }
     }
 
-    /// Quickshell's `stateChanging`.
+    /// Whether the device is mid-transition.
     pub fn is_changing(self) -> bool {
         matches!(self, Self::Connecting | Self::Disconnecting)
     }
@@ -89,7 +87,7 @@ impl Device {
     }
 }
 
-/// The security classes Quickshell's `WifiSecurityType` names.
+/// The security classes a Wi-Fi network is shown with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Security {
     Wpa3SuiteB192,
@@ -157,8 +155,7 @@ impl Security {
     }
 }
 
-/// One SSID as one row, the way Quickshell's per-device network list shows
-/// it: the strongest access point stands for the SSID, and a saved network
+/// One SSID as one row: the strongest access point stands for the SSID, and a saved network
 /// out of range stays listed with `visible: false`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WifiNetwork {
@@ -226,7 +223,7 @@ mod tests {
     }
 
     #[test]
-    fn device_states_follow_quickshell() {
+    fn device_states_map_from_networkmanager() {
         use ConnectionState::*;
         let cases = [
             (0, Unknown),

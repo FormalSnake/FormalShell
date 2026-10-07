@@ -1,4 +1,4 @@
-//! Clock.qml: the time as one mono label in the format state.json keeps
+//! The time as one mono label in the format state.json keeps
 //! (right click walks the ring), stacked one field per line on a vertical
 //! bar, opening the calendar.
 

@@ -47,8 +47,7 @@
 # enough that several samples land inside it, but a card growing around its
 # cells is still only measurably narrow while its cells are measuring
 # themselves, which is the first frame or two of it.
-# tests/tst_overflow_quiet.qml is where the gate itself is pinned. Do not
-# tighten the sampling to chase it; the lanes below already lock in step
+# Do not tighten the sampling to chase it; the lanes below already lock in step
 # under load.
 #
 # The quiet claim only means anything if the band is quiet at rest, so the

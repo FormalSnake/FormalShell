@@ -161,7 +161,7 @@ done
 # The isolated session's own audio bring-up can pop a volume OSD once,
 # early, unrelated to anything this leg does (seen once as a stray large
 # diff region between the bare and open frames, on a run where the bare
-# shot landed while it was still up); Osd.qml's own hide delay is 1.6s, so
+# shot landed while it was still up); the OSD's own hide delay is 1.6s, so
 # this clears it before the bare reference is taken.
 sleep 3
 "$grim_bin" "$lyrics_blur_bare_path" > /dev/null 2>&1

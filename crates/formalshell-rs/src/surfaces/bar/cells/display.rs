@@ -1,4 +1,4 @@
-//! DisplayWidget.qml: one monitor icon opening the display panel. A session
+//! One monitor icon opening the display panel. A session
 //! always has an output, so there is no absent state, and no single number
 //! to summarise; `bar.widgets.display.showLabel` opts a name in.
 

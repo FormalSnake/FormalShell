@@ -1,4 +1,4 @@
-//! IphonePanel.qml: the popout behind the iPhone cell. Honest states first
+//! The popout behind the iPhone cell. Honest states first
 //! (no bridge on PATH, a bridge whose daemon is not running, a daemon with
 //! no phone bonded, which offers Pair with the code the phone shows), then
 //! the phone itself, the Focus line worded as an inference (ANCS carries no

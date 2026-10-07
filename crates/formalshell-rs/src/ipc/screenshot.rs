@@ -1,4 +1,4 @@
-//! `screenshot`, ScreenshotIpc.qml: full, region and the picker's pick,
+//! `screenshot`: full, region and the picker's pick,
 //! its headless keys and status, the editor, and cancel.
 
 use super::registry::{Function, Target, Type, Value};

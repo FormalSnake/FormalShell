@@ -1,4 +1,4 @@
-//! `debug`, DebugIpc.qml's verbs as far as this shell can answer them, and
+//! `debug`: the verbs as far as this shell can answer them, and
 //! the R0 spike's animation switches (`r0*`) until real targets replace
 //! them.
 
@@ -44,7 +44,7 @@ pub fn rect(r: &IRect) -> serde_json::Value {
     json!({"x": r.x, "y": r.y, "width": r.w, "height": r.h})
 }
 
-/// Only what this shell holds, keyed and ordered as DebugIpc.qml's dump:
+/// Only what this shell holds, keyed and ordered as the full dump:
 /// the compositor block, the settings, the bar, its join, the frame and the
 /// chrome numbers. Every other key waits for the service behind it.
 fn dump(app: &mut App, _: &[Value]) -> Value {
@@ -113,8 +113,7 @@ fn join(app: &mut App, args: &[Value]) -> Value {
     if width <= 0 {
         return text("error: width must be positive");
     }
-    // A join on an edge the strip is not on has no line to open, as under
-    // QML with no bar on that edge.
+    // A join on an edge the strip is not on has no line to open.
     app.set_debug_join((edge == app.bar.edge().as_str()).then_some((x, width)));
     ok()
 }

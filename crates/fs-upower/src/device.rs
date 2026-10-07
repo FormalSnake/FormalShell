@@ -5,10 +5,8 @@ use zbus::zvariant::{OwnedObjectPath, OwnedValue};
 
 /// A charge or health level in percent, 0..=100.
 ///
-/// UPower sends percent on the wire and this keeps it that way. Quickshell's
-/// `UPowerDevice.percentage` divides by 100 (src/services/upower/device.cpp),
-/// which is why the QML multiplies it back; the two scales never meet here
-/// without a named conversion.
+/// UPower sends percent on the wire and this keeps it that way, so a 0..1
+/// fraction never meets it without a named conversion.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Default)]
 pub struct Percent(f64);
 
@@ -135,7 +133,7 @@ pub struct Device {
 }
 
 impl Device {
-    /// The test Quickshell's `isLaptopBattery` applies: an internal pack,
+    /// An internal pack,
     /// not a mouse or a UPS.
     pub fn is_laptop_battery(&self) -> bool {
         self.kind == DeviceKind::Battery && self.power_supply

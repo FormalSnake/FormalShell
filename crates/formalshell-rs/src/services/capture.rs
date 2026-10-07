@@ -101,7 +101,7 @@ impl Run {
         self
     }
 
-    /// `sh -c <script>`, the QML Process idiom: values ride the
+    /// `sh -c <script>`: values ride the
     /// environment, never the script text.
     pub fn sh(job: Job, generation: u64, script: &str) -> Self {
         Self::new(job, generation, vec!["sh".into(), "-c".into(), script.into()])

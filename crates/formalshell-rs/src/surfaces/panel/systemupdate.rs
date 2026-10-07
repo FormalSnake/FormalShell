@@ -1,4 +1,4 @@
-//! SystemUpdatePanel.qml: are the flake's inputs behind their upstream
+//! Are the flake's inputs behind their upstream
 //! refs. A hero naming the flake and carrying the summary, an inputs
 //! section of rows (name, locked rev in mono, status that goes `warning`
 //! on Behind), and a footer pairing an outline Check button with the

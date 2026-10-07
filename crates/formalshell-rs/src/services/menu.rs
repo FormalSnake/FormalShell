@@ -28,10 +28,10 @@ use crate::store;
 const DEFAULT_MENU: &str = include_str!("../../../fs-menu/data/default-menu.jsonc");
 const EMOJI: &str = include_str!("../../../fs-menu/data/emoji.json");
 
-/// What fs-menu's self-targeted fragments call the shell by: the QML
-/// shell's `qs ipc -p <path> call`, which [`ipc_command`] turns into this
-/// binary's own client at the moment an action runs.
-pub const SELF: &str = "formalshell-rs";
+/// What fs-menu's self-targeted fragments call the shell by, which
+/// [`ipc_command`] turns into the client installed beside this binary at the
+/// moment an action runs.
+pub const SELF: &str = "formalshell-ipc";
 
 /// The app cell's icon edge (`controlHeight * 2`, AppGridView.qml's
 /// `iconExtent`), the size every app icon is decoded at.
@@ -132,10 +132,10 @@ impl State {
     }
 }
 
-/// An action string as `sh -c` runs it: fs-menu's QML client prefix swapped
-/// for this binary's own.
+/// An action string as `sh -c` runs it: fs-menu's client prefix swapped for
+/// the one installed beside this binary.
 pub fn ipc_command(action: &str) -> String {
-    let prefix = format!("qs ipc -p {SELF} call ");
+    let prefix = format!("{SELF} call ");
     match action.strip_prefix(&prefix) {
         Some(rest) => format!("{} call {rest}", ipc_client()),
         None => action.to_owned(),

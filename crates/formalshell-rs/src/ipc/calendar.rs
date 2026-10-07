@@ -1,6 +1,6 @@
-//! `calendar`, CalendarIpc.qml's `select` and `status`: the panel's own
+//! `calendar`'s `select` and `status`: the panel's own
 //! day selection, headless. A panel that is not open answers from a fresh
-//! one, which is what the QML shell's idle panel holds until it opens.
+//! one, which is what an idle panel holds until it opens.
 
 use super::registry::{Function, Target, Type, Value};
 use crate::surfaces::panel::Panel;

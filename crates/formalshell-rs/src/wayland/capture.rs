@@ -1,4 +1,4 @@
-//! Window thumbnails (Components/WindowThumb.qml) over
+//! Window thumbnails over
 //! ext-image-copy-capture-v1, each one a session on an
 //! ext-image-capture-source-v1 made from the window's
 //! ext-foreign-toplevel-list handle. Hyprland's toplevel-mapping protocol

@@ -1,10 +1,9 @@
-//! The PipeWire graph the shell reads through Quickshell.Services.Pipewire:
+//! The PipeWire graph the shell reads:
 //! nodes with their volume and mute, links, and the `default` metadata
 //! object's four default names. The model here is pure; the `pipewire`
 //! feature adds the client thread that feeds it ([`spawn`]).
 //!
-//! Volumes are the visual scale quickshell exposes (`src/services/pipewire/
-//! node.cpp`): the cube root of the linear `channelVolumes` the server
+//! Volumes are the visual scale: the cube root of the linear `channelVolumes` the server
 //! holds, the same scale `wpctl get-volume` prints.
 
 use std::collections::BTreeMap;
@@ -30,7 +29,7 @@ pub fn linear_from_visual(visual: f32) -> f32 {
     visual * visual * visual
 }
 
-/// Quickshell's `PwNodeAudio.volume` setter: every channel scaled by the
+/// The volume setter: every channel scaled by the
 /// same factor so their balance holds, or all set flat when the average was
 /// zero. Negative results clamp to zero, as `setVolumes` does.
 pub fn scaled_volumes(current: &[f32], average: f32) -> Vec<f32> {
@@ -107,7 +106,7 @@ pub struct AudioState {
 }
 
 impl AudioState {
-    /// The averaged `volume` quickshell reports.
+    /// The averaged `volume`.
     pub fn volume(&self) -> f32 {
         average_volume(&self.volumes)
     }
@@ -261,7 +260,7 @@ pub struct Link {
     pub state: LinkState,
 }
 
-/// Quickshell's `PwLinkGroup`: every link between one pair of nodes.
+/// A link group: every link between one pair of nodes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LinkGroup {
     pub output_node: u32,
@@ -301,7 +300,7 @@ impl Defaults {
 }
 
 /// A default's value is `{"name": "<node.name>"}` typed `Spa:String:JSON`;
-/// anything else reads as no default, as in quickshell.
+/// anything else reads as no default.
 pub fn parse_default_name(type_: Option<&str>, value: Option<&str>) -> String {
     let (Some(DEFAULT_TYPE), Some(value)) = (type_, value) else {
         return String::new();
@@ -312,8 +311,7 @@ pub fn parse_default_name(type_: Option<&str>, value: Option<&str>) -> String {
         .unwrap_or_default()
 }
 
-/// The value written for a default: compact JSON, as quickshell and pactl
-/// write it.
+/// The value written for a default: compact JSON, as pactl writes it.
 pub fn default_value(name: &str) -> String {
     serde_json::json!({ "name": name }).to_string()
 }
@@ -328,7 +326,7 @@ pub enum Event {
     LinkRemoved(u32),
     Defaults(Defaults),
     /// The initial burst has landed: every node bound so far has its props
-    /// and volumes. Quickshell's `Pipewire.ready`.
+    /// and volumes.
     Ready,
     /// The connection dropped. Everything known is gone; a reconnect starts
     /// over with fresh `Node` events and another `Ready`.
@@ -373,8 +371,7 @@ pub enum Command {
         node: u32,
         muted: bool,
     },
-    /// By `node.name`; `None` clears the configured default. Quickshell's
-    /// `preferredDefaultAudioSink`, what `pactl set-default-sink` writes.
+    /// By `node.name`; `None` clears the configured default. What `pactl set-default-sink` writes.
     SetDefaultSink(Option<String>),
     SetDefaultSource(Option<String>),
 }
@@ -556,7 +553,7 @@ mod tests {
     }
 
     #[test]
-    fn media_class_flags_match_quickshell() {
+    fn media_class_flags_hold() {
         let t = NodeType::from_media_class("Stream/Output/Audio");
         assert!(t.audio && t.stream && t.sink && !t.source);
         assert_eq!(t.name(), "AudioOutStream");

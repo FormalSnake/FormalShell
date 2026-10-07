@@ -1,6 +1,4 @@
-// The device routes' pure half. The action-bar hint tests of the QML file
-// (alternate hint, accessory slot) belong to the actions/hints port; the verb
-// each row carries is checked here.
+// The device routes' pure half: the verb each row carries is checked here.
 
 use std::collections::HashSet;
 

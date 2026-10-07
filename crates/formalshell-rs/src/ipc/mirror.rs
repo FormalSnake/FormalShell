@@ -1,4 +1,4 @@
-//! `mirror`, MirrorIpc.qml: the launcher's camera route opened, closed and
+//! `mirror`: the launcher's camera route opened, closed and
 //! stepped, and what it shows.
 
 use super::registry::{Function, Target, Type, Value};

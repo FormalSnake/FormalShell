@@ -1,4 +1,4 @@
-//! Flake inputs behind their upstream (SystemUpdatePanel.qml's poll): one
+//! Flake inputs behind their upstream: one
 //! shared pass over `<systemUpdate.flakeDir>/flake.lock`, however many
 //! cells and panels read it. Stage one reads the lock off the pool, stage
 //! two probes each input's forge one at a time. The lock changing on disk

@@ -1,4 +1,4 @@
-//! `plugins`, PluginsIpc.qml: `list` (the resolved manifests), `status`
+//! `plugins`: `list` (the resolved manifests), `status`
 //! (what loaded, what failed and what the scan warned about) and `reload`
 //! (scan again, restart every plugin). Summoning a plugin's panel stays on
 //! the `panel` target under its `plugin:<id>` name.

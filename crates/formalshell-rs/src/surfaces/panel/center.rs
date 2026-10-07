@@ -1,4 +1,4 @@
-//! Center.qml: the notification history, a card on the right edge with the
+//! The notification history, a card on the right edge with the
 //! pending tier over the seen one, each a column of grouped rows newest
 //! where its section reads first. The host owns the card, its scroll and
 //! its cursor; opening it suppresses the toast stack and closing it files

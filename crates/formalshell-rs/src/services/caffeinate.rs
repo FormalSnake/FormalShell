@@ -32,7 +32,7 @@ impl State {
         changed
     }
 
-    /// CaffeinateIpc.qml's `status`.
+    /// The IPC `status` reply.
     pub fn status(&self) -> String {
         format!(r#"{{"active":{},"inhibiting":{},"isIdle":{}}}"#, self.active, self.inhibiting, self.idle)
     }
@@ -43,7 +43,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn status_reads_like_the_qml_reply() {
+    fn status_reads_like_the_golden_reply() {
         let mut s = State::default();
         assert_eq!(s.status(), r#"{"active":false,"inhibiting":false,"isIdle":false}"#);
         assert!(s.apply(Diff::Active(true)));

@@ -10,7 +10,7 @@
 # line the way nothingctl does (`{"cmd":...,"type":"ack"}`); the openscq30
 # shim logs its argv.
 #
-# BlueZ: the VM has no Bluetooth controller, so Quickshell.Bluetooth has no
+# BlueZ: the VM has no Bluetooth controller, so the shell has no
 # adapter and no device. The Nothing backend does not need one (discovery
 # is `nothingctl list --json`, re-run on acquire), but the Soundcore
 # backend crosses openscq30's paired list with BlueZ's connected devices.
@@ -137,7 +137,7 @@ EOF
 }
 
 leg_earbuds_timing() {
-  # Five phases of sleeps (~45s) plus some twenty `qs ipc` round trips at
+  # Five phases of sleeps (~45s) plus some twenty `ipc call` round trips at
   # about a second each on llvmpipe.
   leg_timing 80 120
 }

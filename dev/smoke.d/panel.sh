@@ -2,7 +2,7 @@
 # shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
 # --panel <name> opens one per-widget popout over the real `panel` IPC route
 # and leaves it open for the run's own frame. No bar-cell click happened, so
-# Panel.qml's anchorX stays unset and the frame falls back under the bar's
+# the panel's anchorX stays unset and the frame falls back under the bar's
 # right region. `panel state` is read back beside the route's own answer:
 # the claim a screenshot cannot make is that the shell's own bookkeeping
 # says this panel, and only this one, is the open one.

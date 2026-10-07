@@ -1,4 +1,4 @@
-//! EarbudsPanel.qml: drawn from the active device alone, never branching on
+//! Drawn from the active device alone, never branching on
 //! vendor. A `choice` control is a wrapping `ButtonGroup`, a `toggle` a
 //! `Switch` row, a `range` a track, each under its control's section in the
 //! order the adapter listed them. No backend source at all is the dim "No

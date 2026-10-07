@@ -258,8 +258,7 @@ fn user_name(uid: u32) -> Option<String> {
     }
 }
 
-/// The conversation for one `AuthRequest`, as `AuthFlow` in Quickshell's
-/// polkit service: a wrong answer restarts the helper for a retry, a right
+/// The conversation for one `AuthRequest`: a wrong answer restarts the helper for a retry, a right
 /// one completes the request, and dropping the flow dismisses it.
 pub struct AuthFlow {
     request: AuthRequest,

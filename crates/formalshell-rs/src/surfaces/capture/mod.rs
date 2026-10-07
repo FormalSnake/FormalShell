@@ -1,6 +1,5 @@
-//! The capture family: Ipc/ScreenshotIpc.qml, Ipc/CaptureIpc.qml,
-//! Services/RecordingService.qml and Surfaces/Capture/RegionPicker.qml,
-//! ported whole. Every child runs on the service thread
+//! The capture family: the screenshot and capture IPC, the recorder and the
+//! region picker. Every child runs on the service thread
 //! (`services::capture`); its pid and its answer come back here as events,
 //! and this is where every decision about them is made, on the UI thread
 //! next to the picker surface it drives.

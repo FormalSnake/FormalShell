@@ -1,6 +1,6 @@
-//! The desktop's picture (Background.qml): the wallpaper decoded and
+//! The desktop's picture: the wallpaper decoded and
 //! cover-cropped to the output on the pool, handed to the UI thread as
-//! ready pixels, through the retro dither pass (DitherImage.qml) when
+//! ready pixels, through the retro dither pass when
 //! `wallpaper.dither` asks for it. The backdrop crossfades between two of
 //! these.
 
@@ -52,7 +52,7 @@ pub fn show(path: &str, width: u32, height: u32, dither: Option<usize>) {
     }
 }
 
-/// DitherImage.qml's retro mode: the output sampled on a `chunk` grid at
+/// The retro dither: the output sampled on a `chunk` grid at
 /// each cell's centre, a palette of the image's own colours, and every cell
 /// painted as one hard-edged square of its quantized entry.
 fn dither(img: &mut image::RgbaImage, colors: usize) {
@@ -82,7 +82,7 @@ fn dither(img: &mut image::RgbaImage, colors: usize) {
     }
 }
 
-/// Background.qml's `PreserveAspectCrop`: scaled to cover, centred.
+/// Aspect-crop: scaled to cover, centred.
 fn render(path: &str, width: u32, height: u32, colors: Option<usize>) -> Option<Picture> {
     let img = image::open(path).ok()?.to_rgba8();
     let (iw, ih) = (img.width() as f64, img.height() as f64);

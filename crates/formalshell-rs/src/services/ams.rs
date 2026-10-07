@@ -1,4 +1,4 @@
-//! The phone's own now-playing, the half of IphoneService.qml the media
+//! The phone's own now-playing, the half of the iPhone support the media
 //! source reads: `omarchy-iphone-ams listen`, a second GATT client on the
 //! BLE link ANCS rides, owned only while a phone is connected.
 //!

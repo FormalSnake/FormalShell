@@ -11,11 +11,7 @@
 # PATH it inherited regardless. That makes the CLI-present branch the only
 # one this rig can honestly exercise end to end; the CLI-absent fallback
 # shape (M17's Clipboard/Pick From History/Receive-launches-the-GUI rows)
-# is proven instead by tst_menu_share.qml's sharePeerEntries(false, ...)
-# tests, which build the tree directly against fixture data and need no
-# real binary at all -- the old spawn-and-shadow dance this leg used to run
-# tested exactly that fallback, which this rig can no longer honestly
-# produce, so it isn't reproduced here.
+# cannot be produced honestly on this rig, so it isn't reproduced here.
 #
 # What is under test: the route resolves and renders (a screenshot, read by
 # eye, of the honest "No devices found" state -- this rig's isolated

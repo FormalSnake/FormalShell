@@ -33,7 +33,7 @@ impl Pixmap {
     }
 }
 
-/// Port of Quickshell's `closestPixmap`: the first adequate one that is smaller than the
+/// The first adequate pixmap that is smaller than the
 /// current pick, else the largest.
 pub fn closest_pixmap(pixmaps: &[Pixmap], width: i32, height: i32) -> Option<&Pixmap> {
     let mut best: Option<&Pixmap> = None;
@@ -102,7 +102,7 @@ pub struct Tooltip {
     pub description: String,
 }
 
-/// What the bar draws, resolved the way Quickshell's `StatusNotifierItem::icon` binding does.
+/// What the bar draws, resolved from the item's icon properties.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IconSource<'a> {
     Named {
@@ -413,7 +413,7 @@ impl MenuItem {
     }
 }
 
-/// Quickshell's `mCleanLabel` pass, quirks included: every `_` but a trailing one is dropped,
+/// The mnemonic clean-up pass, quirks included: every `_` but a trailing one is dropped,
 /// and the character after a dropped `_` is skipped, so `__` survives as one literal `_`.
 pub(crate) fn clean_label(label: &str) -> String {
     let mut chars: Vec<char> = label.chars().collect();
@@ -432,7 +432,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn mnemonic_underscores_follow_quickshell() {
+    fn mnemonic_underscores_follow_dbusmenu() {
         assert_eq!(clean_label("_Open"), "Open");
         assert_eq!(clean_label("Save _As"), "Save As");
         assert_eq!(clean_label("a__b"), "a_b");

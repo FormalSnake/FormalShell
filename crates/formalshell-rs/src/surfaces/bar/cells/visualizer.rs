@@ -1,4 +1,4 @@
-//! Visualizer.qml: six per-column tracks, each the `muted` trough with a
+//! Six per-column tracks, each the `muted` trough with a
 //! fill rising to that column's own level, beside NowPlaying.
 //!
 //! Opt-in through bar.layout since it spawns a real process. Hidden until the

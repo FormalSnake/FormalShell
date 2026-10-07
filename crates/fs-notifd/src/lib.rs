@@ -1,7 +1,6 @@
 //! The `org.freedesktop.Notifications` server (Desktop Notifications 1.2).
 //!
-//! Behaviour follows Quickshell's `NotificationServer`, which the QML shell
-//! runs on today: ids start at 1, `replaces_id` updates in place and only for
+//! Behaviour: ids start at 1, `replaces_id` updates in place and only for
 //! an id that is still live, the server never expires anything itself (the
 //! owner calls [`Server::close`] with [`CloseReason::Expired`]), and a
 //! non-resident notification closes as dismissed after an action is invoked.
@@ -59,9 +58,8 @@ impl From<zbus::Error> for Error {
 
 /// What `GetServerInformation` and `GetCapabilities` report.
 ///
-/// The default is what the QML shell advertises today: Quickshell's own
-/// identity, no markup, and the `persistence`, `body`, `actions` and
-/// `icon-static` capabilities.
+/// The default advertises the identity `quickshell`, no markup, and the
+/// `persistence`, `body`, `actions` and `icon-static` capabilities.
 #[derive(Debug, Clone)]
 pub struct Config {
     pub name: String,

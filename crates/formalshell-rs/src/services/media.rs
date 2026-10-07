@@ -1,4 +1,4 @@
-//! MediaService.qml: every source the bar reads now-playing from, behind one
+//! Every source the bar reads now-playing from, behind one
 //! active pick. Four kinds share the row list: an MPRIS player (fs-mpris),
 //! the radio's own mpv (`radio`), the phone's Apple Media Service (`ams`) and
 //! AirPlay's receiver (`airplay`). An app playing with no MPRIS is a
@@ -497,7 +497,7 @@ impl State {
         visualizer::set_media(playing, tempo, &artist, &title);
     }
 
-    /// MediaIpc.qml's `status`.
+    /// The IPC `status` reply.
     pub fn status(&self) -> Value {
         let a = self.active().unwrap_or_default();
         let available = !a.id.is_empty();
@@ -528,12 +528,12 @@ impl State {
         })
     }
 
-    /// MediaIpc.qml's `outputs`.
+    /// The IPC `outputs` reply.
     pub fn outputs_json(&self) -> Value {
         Value::Array(self.routing.sinks.iter().map(|(id, label)| json!({"id": id, "label": label})).collect())
     }
 
-    /// MediaIpc.qml's `players`.
+    /// The IPC `players` reply.
     pub fn players_json(&self) -> Value {
         Value::Array(
             self.players()

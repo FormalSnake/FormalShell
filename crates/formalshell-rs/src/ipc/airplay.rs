@@ -1,4 +1,4 @@
-//! `airplay`, AirplayIpc.qml: a headless drive path for the receiver. No other
+//! `airplay`: a headless drive path for the receiver. No other
 //! verb: UxPlay takes no remote command, and `airplay.enable` and
 //! `airplay.name` are settings.json keys the shell only ever reads.
 

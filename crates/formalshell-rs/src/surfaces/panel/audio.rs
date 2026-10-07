@@ -1,4 +1,4 @@
-//! AudioPanel.qml: a hero for the default sink (its rail the master slider,
+//! A hero for the default sink (its rail the master slider,
 //! its mute a `Switch`), Output listing the other sinks, an Input master row
 //! over the default source with Input under it, and Apps for the live
 //! playback streams. Two or three candidates render as a `ButtonGroup` pick

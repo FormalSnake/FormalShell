@@ -1,4 +1,4 @@
-//! AI usage, Claude Code and Codex rate limits (UsagePanel.qml's polls).
+//! AI usage, Claude Code and Codex rate limits.
 //! Claude: `~/.claude/.credentials.json` and Anthropic's OAuth usage
 //! endpoint through curl, refreshing a stale pair by asking the `claude`
 //! CLI for its auth status. Codex: one `codex app-server` JSON-RPC session

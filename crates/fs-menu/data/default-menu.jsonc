@@ -5,10 +5,10 @@
 // (see "apps" below), else a plain submenu.
 //
 // Internal actions: an `action` value prefixed `@ipc:` is dispatched
-// in-process instead of spawned via `sh -c`, Menu.qml's activation switches
-// on the name after the prefix (e.g. "@ipc:theme.toggleMode" ->
-// ThemeEngine.requestMode("toggle")). Use this for anything that must run in the
-// shell's own process rather than as a detached command.
+// in-process instead of spawned via `sh -c`, and the launcher's activation
+// switches on the name after the prefix (e.g. "@ipc:theme.toggleMode"). Use
+// this for anything that must run in the shell's own process rather than as
+// a detached command.
 //
 // Grouping: `section` is the heading the launcher draws above a run of rows
 // that share it (model.js's sectionsFor), and rows are never reordered to
@@ -18,7 +18,7 @@
 // while standing inside that node ("Search <label>" otherwise).
 //
 // Live state: a `checked` value prefixed `@state:` resolves in-process from
-// Menu.qml's `_stateSnapshot` against toggles.js's closed allow-list, never
+// the launcher's state snapshot against toggles.js's closed allow-list, never
 // through `sh -c` and never cached, so the checkmark repaints the instant the
 // underlying state flips. `@state:` is a `checked` prefix only; a `when`
 // carrying it is refused with a warning and the node hides. `"keepOpen":
@@ -29,26 +29,25 @@
     "apps": { "provider": "apps", "section": "Suggestions", "prompt": "Search apps" },
     "clipboard": { "provider": "clipboard", "section": "Suggestions", "prompt": "Search clipboard history" },
     // "calc" registers no provider fn, the node exists as a summonable
-    // route (`menu summon calc`) whose level Menu.qml special-cases to show
+    // route (`menu summon calc`) whose level the launcher special-cases to show
     // only the live CALC result row for the typed expression (calc.js).
     "calc": { "label": "Calculator", "provider": "calc", "section": "Suggestions", "prompt": "Type an expression" },
     // "emoji" registers no provider fn either: a summonable route
-    // (`menu summon emoji`) whose level Menu.qml renders as a GRID over the
+    // (`menu summon emoji`) whose level the launcher renders as a GRID over the
     // vendored emoji dataset (emoji.json) instead of the tree; ":e <query>"
     // reaches the same grid from anywhere.
     "emoji": { "label": "Emoji", "provider": "emoji", "section": "Suggestions", "prompt": "Search emoji" },
     // "wallpaper" registers no provider fn either: a summonable route
     // (`menu summon wallpaper`, and the whole `picker` IPC target) whose
-    // level Menu.qml renders as an image GRID over `picker.directory`
+    // level the launcher renders as an image GRID over `picker.directory`
     // rather than as rows, the wallpaper picker lives inside the menu now
     // instead of being a popout of its own. The search field filters it by
     // filename like any other level.
     "wallpaper": { "label": "Wallpaper", "provider": "wallpaper", "aliases": ["picker", "background"], "section": "Suggestions", "prompt": "Search wallpapers" },
     // "monitor" registers no provider fn either, on the same footing as
     // "wallpaper" above: a summonable route (`menu summon monitor`) whose
-    // level Menu.qml renders as a whole APP VIEW rather than as rows:
-    // Surfaces/Menu/views/MonitorView.qml, registered against this id in
-    // Menu/appviews.js. The full system monitor lives here for anyone who
+    // level the launcher renders as a whole APP VIEW rather than as rows,
+    // registered against this id. The full system monitor lives here for anyone who
     // does not want its bar cell, which is opt-in. The declared "provider"
     // is what keeps the row itself listed: a childless "submenu" is
     // filtered out of its parent level (model.js's visibleChildren), a
@@ -59,15 +58,14 @@
     "monitor": { "label": "System Monitor", "provider": "monitor", "aliases": ["sysmon", "system", "cpu", "gpu", "ps", "top", "htop", "processes", "kill", "task", "tasks", "activity"], "section": "Suggestions", "prompt": "Filter processes" },
 
     // "mirror" registers no provider fn either, on the same footing as
-    // "monitor" above: an app view (Surfaces/Menu/views/MirrorView.qml,
-    // registered in Menu/appviews.js) showing the live camera feed, Tab
+    // "monitor" above: an app view (registered against this id) showing the live camera feed, Tab
     // stepping through the cameras. The word "mirror" is this route's; the
     // display panel's own mirroring is reached by "display", "mirror display"
     // or "screen mirroring" (Menu/providers.js PANEL_NAMES).
     "mirror": { "label": "Mirror", "provider": "mirror", "aliases": ["camera", "webcam", "selfie", "ir camera"], "section": "Suggestions", "prompt": "Tab switches camera" },
 
     // "nix" registers no provider fn either: a summonable route
-    // (`menu summon nix`) whose level Menu.qml fills from the debounced
+    // (`menu summon nix`) whose level the launcher fills from the debounced
     // `nix search nixpkgs` cache; ":nix <query>" reaches the same rows
     // from anywhere. Entering the route pays the nixpkgs eval cache off
     // once behind a dim INDEXING NIXPKGS row, which is what keeps the
@@ -76,7 +74,7 @@
     // quake console's own terminal (ConsoleService.runOnce).
     "nix": { "label": "Nix Run", "provider": "nix", "prompt": "Search nixpkgs" },
     // "keybinds" registers no provider fn either: a summonable route
-    // (`menu summon keybinds`) whose level Menu.qml fills from the parsed
+    // (`menu summon keybinds`) whose level the launcher fills from the parsed
     // compositor binds (Compositor/keybinds.js); ":k <query>" reaches the
     // same rows from anywhere. Rows are inert notes, never activatable.
     "keybinds": { "label": "Keybinds", "provider": "keybinds", "aliases": ["keys", "hotkeys", "shortcuts"], "prompt": "Search keybinds" },
@@ -99,7 +97,7 @@
     // "radio" registers a provider fn (providers.js's radioRows): Stop while a
     // station plays, then the favourites with the tuned one ticked, Enter
     // playing. "radio.search" registers none, so it stays a listed route
-    // (`menu summon radio.search`) that Menu.qml fills from Radio Browser;
+    // (`menu summon radio.search`) that the launcher fills from Radio Browser;
     // ":r <query>" reaches the same rows from anywhere, and its results are
     // searchable only from inside that level. The "Radio" row under Panels
     // opens the card.
@@ -107,7 +105,7 @@
     "radio.search": { "label": "Search Stations", "provider": "radioSearch", "prompt": "Search Radio Browser" },
 
     // "panels" registers a provider fn too: one row per name in
-    // shell.qml's PanelIpc registry, each spawning "panel open <name>"
+    // the panel registry, each spawning "panel open <name>"
     // over IPC (providers.js's panelsProvider) -- the launcher route for
     // every popout that otherwise only opens from its own bar cell. A root
     // query walks them, so typing "iphone" or "radio" opens that panel.
@@ -124,7 +122,7 @@
     // inert note row per GpuService card -- name, integrated/discrete,
     // driver, connected outputs -- informational only, same non-activatable
     // footing as "keybinds" above. "gpu.mode" (supergfxctl integrated/hybrid
-    // switching) is NOT declared here: Menu.qml merges it in at tree-build
+    // switching) is NOT declared here: the launcher merges it in at tree-build
     // time (providers.js's gpuModeEntry), because it must be genuinely
     // absent -- not present and empty -- on a machine with no supergfxctl.
     // Launching an app on the discrete card is Shift+Enter on the app row,
@@ -164,11 +162,11 @@
     // Send, LocalsendService) or the GUI's `localsend_app` (the fallback,
     // nixpkgs' pkgs.localsend, verified against its actual installed bin/,
     // not the bare `localsend` name omarchy assumes) resolves on PATH --
-    // the standard `command -v` presence guard (see TailscalePanel.qml's
-    // own "NO TAILSCALE" check for the same idiom). Every child is
+    // the standard `command -v` presence guard (the Tailscale panel's
+    // own "NO TAILSCALE" check uses the same idiom). Every child is
     // dynamic, none declared here: providers.js's sharePeerEntries()
     // builds the whole subtree at tree-build time, picking the CLI or the
-    // GUI shape off LocalsendService.installed (Menu.qml), the same
+    // GUI shape off whether LocalSend is installed, the same
     // fully-dynamic pattern gpuModeEntry uses for "gpu.mode.*".
     "share": {
         "label": "Share",
@@ -183,8 +181,8 @@
     "clipssh": { "label": "Clipssh", "provider": "clipssh", "when": "command -v clipssh >/dev/null 2>&1" },
 
     // TOGGLE HUB: every row is a live in-process toggle. `checked` takes an
-    // "@state:" condition (toggles.js's allow-list, resolved from Menu.qml's
-    // _stateSnapshot, never a Process, so the checkmark flips in the same
+    // "@state:" condition (toggles.js's allow-list, resolved from the
+    // launcher's state snapshot, never a Process, so the checkmark flips in the same
     // turn the toggle does), and `keepOpen` holds the surface open so that
     // flip is actually visible.
     "toggles": { "label": "Toggles" },
@@ -227,7 +225,7 @@
     }
 
     // The root "capture" node (OCR, colour pick, record, stop, video-to-GIF,
-    // plain screenshot/region) is injected at tree-build time by Menu.qml via
+    // plain screenshot/region) is injected at tree-build time by the launcher via
     // providers.js's captureEntries(): its actions target the running
     // shell's own path, which static jsonc can't know. The same function
     // also injects "system.console", "system.screensaver",
@@ -235,6 +233,6 @@
     // (".clear"/".markAllSeen"/".dismissAll", separate from the existing
     // "system.notifications" leaf), and the root "theme" node
     // (".retheme"/".mode-dark"/".mode-light") -- every one of them a
-    // self-targeted "qs ipc" leaf for the same reason. Override or hide any
+    // self-targeted IPC leaf for the same reason. Override or hide any
     // of them from menu.jsonc by their declared id like any other node.
 }

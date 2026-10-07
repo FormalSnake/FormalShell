@@ -1,5 +1,5 @@
-//! The Spaces cell's preview as the shell drives it (Workspaces.qml's
-//! hover and `peek`, WorkspacePreview.qml's own timers): which workspace it
+//! The Spaces cell's preview as the shell drives it (hover, `peek` and
+//! the card's own timers): which workspace it
 //! shows, the pointer's way in and out, and its window captures, live while
 //! the card is open. The card itself is `surfaces::panel::workspace_preview`
 //! on the panel host.

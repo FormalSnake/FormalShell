@@ -1,4 +1,4 @@
-//! `menu`, MenuIpc.qml's verbs: the summon routes, the rig's stand-ins for
+//! `menu`: the summon routes, the rig's stand-ins for
 //! Enter and typing, and the select/input modes, whose answers land in
 //! `menu-selection.txt` as `{token, value}` or `{token, cancelled: true}`.
 

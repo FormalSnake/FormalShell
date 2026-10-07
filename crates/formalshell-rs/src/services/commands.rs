@@ -1,4 +1,4 @@
-//! `bar.modules` entries of type `command` (CommandModule.qml): each runs
+//! `bar.modules` entries of type `command`: each runs
 //! its argv every `interval` ms, and what it printed resolves through
 //! `Bar/commandOutput.js`'s rules. A run past `timeout` is killed and reads
 //! as an error.
@@ -23,7 +23,7 @@ pub struct Module {
 }
 
 impl Module {
-    /// A `bar.modules` entry, defaults as CommandModule.qml takes them.
+    /// A `bar.modules` entry.
     pub fn from_json(id: &str, module: &Value) -> Self {
         let ms = |key: &str| {
             let n = module.get(key).and_then(Value::as_f64).unwrap_or(0.0);

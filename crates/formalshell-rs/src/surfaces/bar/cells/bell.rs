@@ -1,4 +1,4 @@
-//! BellWidget.qml: do-not-disturb and the pending count. A click opens or
+//! Do-not-disturb and the pending count. A click opens or
 //! shuts the notification centre, a right click flips DND.
 
 use crate::store::Topic;

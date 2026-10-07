@@ -51,7 +51,7 @@ leg_tray_fixture() {
 
 leg_tray_timing() {
   # tray-drive.sh's own last step lands around its internal sleep sum (~19s)
-  # plus a second apiece for eleven `qs ipc` spawns on llvmpipe. The run's own
+  # plus a second apiece for eleven `ipc call` spawns on llvmpipe. The run's own
   # frame is taken past that, so it shows the ordinary bar with all six items
   # as their own cells and the route closed again. Getting this wrong is not a
   # slow run but a false failure: the kill script takes the stubs down right
@@ -144,7 +144,7 @@ leg_tray_assert() {
   if ! grep -q '^tray-fixture-2: Activate(' "$tray_activate_path"; then
     fail "tray-activate.txt does not record Activate on tray-fixture-2, got: $(cat "$tray_activate_path")"
   fi
-  # `tray menu` opens the shell-owned TrayMenu.qml surface, so there is no
+  # `tray menu` opens the shell-owned tray menu surface, so there is no
   # platform QMenu grab to wedge a headless run.
   if ! grep -q '^ok$' "$tray_menu_reply_path" 2>/dev/null; then
     fail "tray menu IPC call did not return ok, got: $(cat "$tray_menu_reply_path" 2>/dev/null)"

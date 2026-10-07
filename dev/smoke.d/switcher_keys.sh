@@ -56,7 +56,7 @@ leg_switcher_keys_fixture_window=keep
 # doesn't work when i hit it fast, it just glitches, i have to wait for the
 # fade in to finish". Each is one wtype process holding Alt, tapping Tab
 # once and releasing straight back out with no sleep between any of them,
-# which is the one gap `Switcher.qml`'s `_commitPending` exists for: the
+# which is the one gap the switcher's pending-commit guard exists for: the
 # compositor spawns `switcher next` and `switcher commit` as two
 # independent processes, and nothing orders their arrival at the ipc
 # socket, so a fast enough tap can have the release win that race. The

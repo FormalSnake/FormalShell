@@ -8,8 +8,6 @@
 # (a voluntary switch is a sleep, so each one is a wakeup), the frame
 # callbacks the shell asked for, and the commits it made. Under FS_CPU_QUOTA
 # this is the e1504g power saver stand-in.
-#
-# Rust only: the QML shell logs neither phases nor commits.
 leg_idle_flag="--idle"
 leg_idle_order=901
 leg_idle_needs=""

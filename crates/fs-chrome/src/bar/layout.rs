@@ -110,7 +110,7 @@ impl Builtin {
     }
 }
 
-pub const MODULE_TYPES: [&str; 2] = ["command", "qml"];
+pub const MODULE_TYPES: [&str; 1] = ["command"];
 
 pub const CUSTOM_PREFIX: &str = "custom:";
 
@@ -938,13 +938,13 @@ mod tests {
         Plugin {
             id: id.into(),
             kind: Kind::Bar,
-            entry: "E.qml".into(),
+            entry: "E.sh".into(),
             dir: format!("/p/{id}"),
             name: id.into(),
             region: Some(region),
             keep_loaded: None,
             width: None,
-            entry_url: format!("file:///p/{id}/E.qml"),
+            entry_url: format!("file:///p/{id}/E.sh"),
         }
     }
 

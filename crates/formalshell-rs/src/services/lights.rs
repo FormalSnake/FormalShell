@@ -1,4 +1,4 @@
-//! LightsService.qml: keyboard RGB. The one backend is asusd: state is read
+//! Keyboard RGB. The one backend is asusd: state is read
 //! off its Aura object over busctl (LedMode, LedModeData, Brightness,
 //! SupportedBasicModes) and written through asusctl. asusd keeps the effect
 //! across reboots itself, so the effect, colour and brightness here are
@@ -86,7 +86,7 @@ impl State {
         self.effects.iter().any(|(e, _)| e == id)
     }
 
-    /// LightsIpc.qml's `status`.
+    /// The IPC `status` reply.
     pub fn status(&self) -> String {
         let effects: Vec<&str> = self.effects.iter().map(|(id, _)| id.as_str()).collect();
         let text = |s: &str| Value::String(s.to_owned());
@@ -402,7 +402,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn status_reads_like_the_qml_reply() {
+    fn status_reads_like_the_golden_reply() {
         let mut s = State::default();
         assert_eq!(
             s.status(),

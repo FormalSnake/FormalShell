@@ -31,8 +31,8 @@ toasts_expanded_path="$shot_dir/toasts-expanded.png"
 toasts_expand_status_path="$shot_dir/toasts-expand-status.txt"
 notify_layers_collapsed_path="$shot_dir/toasts-layers-collapsed.json"
 notify_layers_expanded_path="$shot_dir/toasts-layers-expanded.json"
-# What the server says it is, off the session's own private bus: the rust
-# server has to answer exactly what Quickshell's NotificationServer does.
+# What the server says it is, off the session's own private bus, held byte
+# for byte: senders key on the name and version.
 notify_server_info_path="$shot_dir/notify-server-info.txt"
 notify_icon_dir="$iso_home/.local/share/icons/hicolor/48x48/apps"
 notify_icon_file="$notify_icon_dir/formalshell-notify-fixture.png"
@@ -131,12 +131,11 @@ leg_notify_assert() {
     fail "no toasts-expanded screenshot produced"
   fi
   cat "$notify_server_info_path" 2>/dev/null || true
-  # The QML shell's own answer (Quickshell's NotificationServer), recorded
-  # 2026-10-07; the rust server is held to it byte for byte.
+  # GetServerInformation and GetCapabilities, held byte for byte.
   grep -qxF 'ssss "quickshell" "quickshell" "" "1.2"' "$notify_server_info_path" \
-    || fail "GetServerInformation is not the QML shell's answer: $(head -n 1 "$notify_server_info_path")"
+    || fail "GetServerInformation is not the expected answer: $(head -n 1 "$notify_server_info_path")"
   grep -qxF 'as 4 "persistence" "body" "actions" "icon-static"' "$notify_server_info_path" \
-    || fail "GetCapabilities is not the QML shell's answer: $(tail -n 1 "$notify_server_info_path")"
+    || fail "GetCapabilities is not the expected answer: $(tail -n 1 "$notify_server_info_path")"
   echo "SMOKE_NOTIFY_SERVER_INFO $notify_server_info_path"
   echo "SMOKE_TOASTS_EXPANDED $toasts_expanded_path"
   echo "SMOKE_TOASTS_LAYERS_COLLAPSED $notify_layers_collapsed_path"

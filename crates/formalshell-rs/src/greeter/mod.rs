@@ -1,4 +1,4 @@
-//! `formalshell-rs greeter`: greeter.qml. greetd runs it as its
+//! `formalshell-rs greeter`: greetd runs it as its
 //! default_session inside a compositor of its own with no other client, so
 //! there is no session lock here, only one overlay layer surface per output
 //! showing the lock screen's centre column over the flat background.

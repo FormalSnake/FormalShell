@@ -215,7 +215,7 @@ media_progress_rect() {
 # panel is the position track, since it is the widest thing the panel draws
 # in the primary hue. Taking the run rather than the row keeps the elapsed
 # and total readouts either side of it out of the count. The fill is the
-# strong end of that hue and the groove the 0.2-alpha wash Track.qml paints
+# strong end of that hue and the groove the 0.2-alpha wash the track paints
 # behind it.
 media_progress_fill() {
   local body rect

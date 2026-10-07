@@ -1,4 +1,4 @@
-//! AudioService.qml over fs-audio's PipeWire thread: the default sink's
+//! Audio over fs-audio's PipeWire thread: the default sink's
 //! volume and mute, and whether a default source exists and is muted. The
 //! graph lives on the service thread; writes go back as commands.
 
@@ -23,7 +23,7 @@ pub struct Audio {
     /// A default source with an audio interface exists.
     pub source: bool,
     pub source_muted: bool,
-    /// The graph AudioPanel.qml lists, read only while it is open.
+    /// The graph the audio panel lists, read only while it is open.
     pub lists: Option<Lists>,
     /// Every device node (the launcher's audio route): its node name, its
     /// label and whether it is a sink. Volumes stay out, so a level change

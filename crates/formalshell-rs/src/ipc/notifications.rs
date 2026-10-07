@@ -1,4 +1,4 @@
-//! `notifications`, NotificationsIpc.qml, and `reminder`, ReminderIpc.qml.
+//! `notifications` and `reminder`.
 
 use serde_json::json;
 

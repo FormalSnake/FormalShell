@@ -1,6 +1,6 @@
-//! Icons by name (`shell/Theme/icons.js`): the Lucide and Nerd tables picked
+//! Icons by name: the Lucide and Nerd tables picked
 //! by `theme.icons`, and the distro logos the launcher draws whatever the set.
-//! The tables are the QML shell's own generated files, read as data.
+//! The tables are generated files, read as data.
 
 use std::collections::HashMap;
 use std::sync::OnceLock;

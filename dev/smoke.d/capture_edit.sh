@@ -18,7 +18,7 @@
 # settings.json's `screenshot.editor` rather than shadowing `tensaku-edit`
 # on PATH: the scaffold owns the shell's launch script, so a leg has no seam
 # to prefix its PATH with, and the config key is the shell's own documented
-# handoff (ScreenshotIpc.qml's FS_EDITOR) reaching the same spawn.
+# handoff (`FS_EDITOR`) reaching the same spawn.
 #
 # A real foot window filling the screen with a known solid colour is the
 # fixture, so the SAVED thumbnail shows scaled colour rather than an empty
@@ -75,7 +75,7 @@ for _ in \$(seq 1 20); do
   sleep 0.5
 done
 # The toast's image slot decodes asynchronously (Image.asynchronous in
-# NotificationCard.qml), scaling the just-saved screenshot down to a 40x40
+# the notification card), scaling the just-saved screenshot down to a 40x40
 # thumbnail off the render thread. A 1s buffer once left the shot racing that
 # decode, landing a blank slot even though the layout had reserved its width.
 sleep 3

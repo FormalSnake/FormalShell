@@ -1,4 +1,4 @@
-//! RadioOverlay.qml on the App: the atlas's window and the two scrim
+//! The radio overlay: the atlas's window and the two scrim
 //! surfaces under it (the launcher's arrangement, on the Top layer), its
 //! keys and pointer, and how it opens: `panel open|toggle radio`, the
 //! launcher's Radio row and the media panel's Radio buttons.

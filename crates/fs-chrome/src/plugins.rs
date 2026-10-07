@@ -23,10 +23,9 @@
 //! skipped silently.
 //!
 //! A missing entry file is not detectable here, this module never touches the
-//! filesystem. Two known divergences from the QML resolver: the "not valid
-//! JSON" warning carries serde_json's message rather than the QML engine's,
-//! and a manifest key named after an `Object.prototype` member (`constructor`,
-//! `toString`) is an ordinary unknown key here, where the QML one threw.
+//! filesystem. The "not valid JSON" warning carries serde_json's
+//! message, and a manifest key named after an `Object.prototype` member
+//! (`constructor`, `toString`) is an ordinary unknown key.
 
 use std::sync::LazyLock;
 
@@ -501,7 +500,7 @@ mod tests {
     }
 
     fn bar_manifest() -> Value {
-        json!({ "apiVersion": 1, "id": "diskwatch", "kind": "bar", "entry": "DiskWatch.qml" })
+        json!({ "apiVersion": 1, "id": "diskwatch", "kind": "bar", "entry": "DiskWatch.sh" })
     }
 
     fn run(text: &str) -> Resolved {
@@ -581,7 +580,7 @@ mod tests {
     fn valid_panel_manifest_defaults() {
         let r = run(&one(
             "notes",
-            json!({ "apiVersion": 1, "id": "notes", "kind": "panel", "entry": "Notes.qml" }),
+            json!({ "apiVersion": 1, "id": "notes", "kind": "panel", "entry": "Notes.sh" }),
         ));
         assert_eq!(r.warnings.len(), 0);
         let p = &r.plugins[0];
@@ -632,7 +631,7 @@ mod tests {
 
     #[test]
     fn id_with_illegal_characters_drops_plugin() {
-        let m = json!({ "apiVersion": 1, "id": "Disk Watch", "kind": "bar", "entry": "D.qml" });
+        let m = json!({ "apiVersion": 1, "id": "Disk Watch", "kind": "bar", "entry": "D.sh" });
         only_warning(
             &run(&one("Disk Watch", m)),
             "lowercase letters, digits and dashes",
@@ -650,8 +649,8 @@ mod tests {
     fn entry_escaping_plugin_dir_is_rejected() {
         for bad in [
             "/etc/passwd",
-            "../Other.qml",
-            "sub/../../Other.qml",
+            "../Other.sh",
+            "sub/../../Other.sh",
             "..",
             "",
         ] {
@@ -667,7 +666,7 @@ mod tests {
     #[test]
     fn entry_with_dots_in_a_filename_is_accepted() {
         let mut m = bar_manifest();
-        m["entry"] = json!("widgets/Disk..Watch.qml");
+        m["entry"] = json!("widgets/Disk..Watch.sh");
         let r = run(&one("diskwatch", m));
         assert_eq!((r.warnings.len(), r.plugins.len()), (0, 1));
     }
@@ -677,17 +676,17 @@ mod tests {
         let cases = [
             (
                 "svc",
-                json!({ "apiVersion": 1, "id": "svc", "kind": "service", "entry": "S.qml", "region": "left" }),
+                json!({ "apiVersion": 1, "id": "svc", "kind": "service", "entry": "S.sh", "region": "left" }),
                 "region",
             ),
             (
                 "diskwatch",
-                json!({ "apiVersion": 1, "id": "diskwatch", "kind": "bar", "entry": "D.qml", "keepLoaded": true }),
+                json!({ "apiVersion": 1, "id": "diskwatch", "kind": "bar", "entry": "D.sh", "keepLoaded": true }),
                 "keepLoaded",
             ),
             (
                 "over",
-                json!({ "apiVersion": 1, "id": "over", "kind": "overlay", "entry": "O.qml", "width": "wide" }),
+                json!({ "apiVersion": 1, "id": "over", "kind": "overlay", "entry": "O.sh", "width": "wide" }),
                 "width",
             ),
         ];
@@ -718,7 +717,7 @@ mod tests {
 
         let w = run(&one(
             "notes",
-            json!({ "apiVersion": 1, "id": "notes", "kind": "panel", "entry": "N.qml", "width": "huge" }),
+            json!({ "apiVersion": 1, "id": "notes", "kind": "panel", "entry": "N.sh", "width": "huge" }),
         ));
         assert_eq!(w.plugins.len(), 1);
         assert_eq!(w.plugins[0].width, Some(Width::Default));
@@ -739,7 +738,7 @@ mod tests {
     #[test]
     fn unknown_keys_warn_in_the_order_written() {
         let text =
-            r#"{"zeta":1,"apiVersion":1,"id":"diskwatch","kind":"bar","entry":"D.qml","alpha":2}"#;
+            r#"{"zeta":1,"apiVersion":1,"id":"diskwatch","kind":"bar","entry":"D.sh","alpha":2}"#;
         let r = run(&scan(&[("diskwatch", text.into())]));
         assert_eq!(r.warnings.len(), 2);
         assert!(r.warnings[0].contains("\"zeta\""));
@@ -776,8 +775,8 @@ mod tests {
     #[test]
     fn disabled_ids_are_excluded_without_warning() {
         let text = scan_owned(&[
-            plain("alpha", "bar", "A.qml"),
-            plain("beta", "bar", "B.qml"),
+            plain("alpha", "bar", "A.sh"),
+            plain("beta", "bar", "B.sh"),
         ]);
         let r = resolve(Some(&text), &["beta".into()]);
         assert_eq!(r.plugins.len(), 1);
@@ -798,7 +797,7 @@ mod tests {
     #[test]
     fn entry_url_is_file_scheme_joined_to_dir() {
         let p = run(&one("diskwatch", bar_manifest())).plugins.remove(0);
-        assert_eq!(p.entry_url, format!("file://{DIR}/diskwatch/DiskWatch.qml"));
+        assert_eq!(p.entry_url, format!("file://{DIR}/diskwatch/DiskWatch.sh"));
         assert_eq!(entry_url(&p), p.entry_url);
     }
 
@@ -812,8 +811,8 @@ mod tests {
     #[test]
     fn plugins_are_id_sorted() {
         let text = scan_owned(&[
-            plain("zulu", "bar", "Z.qml"),
-            plain("alpha", "bar", "A.qml"),
+            plain("zulu", "bar", "Z.sh"),
+            plain("alpha", "bar", "A.sh"),
         ]);
         let ids: Vec<_> = run(&text).plugins.into_iter().map(|p| p.id).collect();
         assert_eq!(ids.join(","), "alpha,zulu");
@@ -822,10 +821,10 @@ mod tests {
     #[test]
     fn selectors_partition_by_kind() {
         let text = scan_owned(&[
-            plain("b", "bar", "B.qml"),
-            plain("p", "panel", "P.qml"),
-            plain("o", "overlay", "O.qml"),
-            plain("s", "service", "S.qml"),
+            plain("b", "bar", "B.sh"),
+            plain("p", "panel", "P.sh"),
+            plain("o", "overlay", "O.sh"),
+            plain("s", "service", "S.sh"),
         ]);
         let all = run(&text).plugins;
         assert_eq!(all.len(), 4);
@@ -842,9 +841,9 @@ mod tests {
     #[test]
     fn one_broken_plugin_never_drops_its_neighbours() {
         let text = scan_owned(&[
-            plain("alpha", "bar", "A.qml"),
+            plain("alpha", "bar", "A.sh"),
             ("broken".into(), "{ not json".into()),
-            plain("zulu", "bar", "Z.qml"),
+            plain("zulu", "bar", "Z.sh"),
         ]);
         let r = run(&text);
         let ids: Vec<_> = r.plugins.iter().map(|p| p.id.as_str()).collect();

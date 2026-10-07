@@ -1,4 +1,4 @@
-//! EarbudsWidget.qml: a headphones icon and the active device's worst bud
+//! A headphones icon and the active device's worst bud
 //! level (the case left out), gone from the strip until a bud has reported
 //! one. The cell holds the earbuds service for as long as it exists, which
 //! is what keeps every backend idle on a strip without it.

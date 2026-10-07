@@ -1,4 +1,4 @@
-//! EarbudsService.qml: every connected pair of earbuds or headphones across
+//! Every connected pair of earbuds or headphones across
 //! the four backends, in fs-devices' one device shape (spec
 //! `docs/superpowers/specs/2026-09-30-m77-earbuds.md`). The store slice is
 //! what the bar cell and the `earbuds` IPC read; one task per backend owns
@@ -333,7 +333,7 @@ async fn run_cli(argv: Option<Vec<String>>) -> (i32, String) {
     }
 }
 
-/// AirpodsBackend.qml over the omarchy-pods librepods daemon: its whole
+/// The AirPods backend over the omarchy-pods librepods daemon: its whole
 /// state is one status.json it rewrites atomically on change and removes on
 /// quit, so a missing file is the daemon being down.
 async fn run_airpods(ctx: Ctx, rx: Receiver<Event>) {
@@ -409,7 +409,7 @@ fn connected_key(bt: &[BtDevice]) -> Vec<String> {
     out
 }
 
-/// PollingBackend.qml with SoundcoreBackend.qml and SamsungBackend.qml.
+/// The polling backend, for Soundcore and Samsung.
 /// One task, so every CLI call (a poll's or a write's) runs one at a time.
 async fn run_poll(ctx: Ctx, kind: Poller, rx: Receiver<Event>, epoch: Rc<Cell<u64>>) {
     let mut held = false;
@@ -550,7 +550,7 @@ struct Nothing {
     connected: Vec<String>,
 }
 
-/// NothingBackend.qml over `nothingctl`. Discovery is `list --json`, run on
+/// The Nothing backend over `nothingctl`. Discovery is `list --json`, run on
 /// acquire and whenever the connected Bluetooth set changes; each device it
 /// reports connected gets one `watch -d <addr>` child while held. A device
 /// nothingctl refuses over its model (exit 3) is left alone until BlueZ sees

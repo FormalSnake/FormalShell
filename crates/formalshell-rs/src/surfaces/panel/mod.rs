@@ -1,4 +1,4 @@
-//! Popout panels (Panel.qml and the files under Surfaces/Panels/).
+//! Popout panels.
 //!
 //! A panel is one module implementing [`Panel`]: its id, its title and
 //! icon, the store topics it reads, a body built from `ui` widgets, the
@@ -9,7 +9,7 @@
 //! handoff, the keyboard cursor and its halo, focus, Escape and the click
 //! outside.
 //!
-//! The cursor model is Panel.qml's: every element marked `.stop(key)` in
+//! The cursor model: every element marked `.stop(key)` in
 //! the body is one stop, in reading order; the first navigation key only
 //! reveals the cursor, arrows walk the stops (or step the value on one
 //! when [`Panel::steps`] says so), Enter or Space calls
@@ -58,7 +58,7 @@ pub struct View<'a> {
     pub hovered: Option<String>,
 }
 
-/// A key reaching an inline text field (Panel.qml's `inlineEditorFocused`).
+/// A key reaching an inline text field.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Edit {
     Insert(String),
@@ -165,8 +165,8 @@ pub trait Panel {
     /// Left or Right on a stop that carries a value, when `steps` is on.
     fn step(&mut self, _stop: &str, _direction: i32, _fx: &mut Effect) {}
     /// Tab or Shift+Tab (`direction` -1) from the stop under the cursor:
-    /// the stop to land on when the panel walks sections (Panel.qml's
-    /// `sectionCount`), or none to only reveal the cursor.
+    /// the stop to land on when the panel walks sections,
+    /// or none to only reveal the cursor.
     fn tab(&mut self, _stop: Option<&str>, _direction: i32) -> Option<String> {
         None
     }
@@ -186,7 +186,7 @@ pub trait Panel {
     }
 }
 
-/// The panels `panel` can open (PanelIpc.qml's registry), each one's
+/// The panels `panel` can open, each one's
 /// module.
 pub const PANELS: [&str; 19] = [
     "appmenu",

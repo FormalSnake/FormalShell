@@ -14,7 +14,7 @@
 #
 # The old rig recorded the opposite outcome for the same sequence: four
 # independently timed probes there never got a Down/Down/Return through to an
-# IPC-opened panel, because Panel.qml's focus-prime dance is built for a real
+# IPC-opened panel, because the panel's focus-prime dance is built for a real
 # bar-cell click and that rig had no pointer to supply one. Hyprland hands the
 # surface keyboard focus on its own, so the route works here.
 leg_panel_keys_flag="--panel-keys"

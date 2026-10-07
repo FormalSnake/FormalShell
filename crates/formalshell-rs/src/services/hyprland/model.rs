@@ -1,6 +1,5 @@
-//! Hyprland's `j/` answers mapped onto the BackendBase contract, the shapes
-//! quickshell's Hyprland module hands HyprlandBackend.qml and that backend's
-//! own mapping on top. Pure, so it is tested without a compositor.
+//! Hyprland's `j/` answers mapped onto the shapes the shell's surfaces
+//! read. Pure, so it is tested without a compositor.
 
 use std::collections::{HashMap, HashSet};
 
@@ -144,7 +143,7 @@ pub fn snapshot(monitors: &str, workspaces: &str, clients: &str, active: &str, u
             pid: int(c.get("pid")).unwrap_or(0),
             is_focused: focused,
             is_floating: c.get("floating").and_then(Value::as_bool).unwrap_or(false),
-            // Quickshell clears a window's urgency once it is activated or
+            // A window's urgency clears once it is activated or
             // its workspace takes focus.
             is_urgent: urgent.contains(&id) && !focused && focused_ws.map(|n| n.to_string()) != Some(workspace_id.clone()),
             rect,
@@ -186,7 +185,7 @@ pub fn snapshot(monitors: &str, workspaces: &str, clients: &str, active: &str, u
     }
 }
 
-/// Quickshell appends a toplevel when it first hears of it and never
+/// A toplevel is appended when it is first heard of and never
 /// reorders, so a window keeps its place across refreshes. `order` is the
 /// ids seen so far, oldest first.
 pub fn keep_order(order: &mut Vec<String>, windows: Vec<Window>) -> Vec<Window> {
@@ -266,7 +265,7 @@ mod tests {
     }
 
     #[test]
-    fn address_prints_as_quickshell_does() {
+    fn address_prints_as_hyprland_takes_it() {
         assert_eq!(address_id("0x000055d0c1b0").as_deref(), Some("55d0c1b0"));
         assert_eq!(address_id("0xABC").as_deref(), Some("abc"));
         assert_eq!(address_id("0x0"), None);

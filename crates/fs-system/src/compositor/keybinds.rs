@@ -40,7 +40,7 @@ pub struct BindProps {
 }
 
 /// `chord: "SUPER+SHIFT+slash"`, `mods: ["SUPER", "SHIFT"]`, `key: "slash"`,
-/// `action: "exec"`, `args: ["qs ipc call menu toggle"]`.
+/// `action: "exec"`, `args: ["formalshell-ipc call menu toggle"]`.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Bind {
     pub chord: String,

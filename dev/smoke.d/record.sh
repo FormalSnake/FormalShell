@@ -4,7 +4,7 @@
 # to finished GIF. `record start screen desktop` answers with the destination
 # path synchronously, `record status` has to report active:true against that
 # exact path, and the bar is screenshotted mid recording (record-active.png),
-# the only state Indicators.qml's recording cell exists in. `record stop`
+# the only state the recording cell exists in. `record stop`
 # then polls until `active` goes false (SIGTERM asks wf-recorder to finalize
 # the container rather than truncate it) and until `finalizing` settles too
 # (RecordingService's own trim/loudnorm pass), so the ffprobe read lands on

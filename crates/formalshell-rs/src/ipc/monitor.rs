@@ -1,6 +1,6 @@
-//! `monitor`, MonitorIpc.qml's `status`, `gpu`, `processes`, `kill`,
+//! `monitor`'s `status`, `gpu`, `processes`, `kill`,
 //! `restart` and `launch`. A reply is whatever the last tick left, never a wait for a
-//! fresh one; each read also asks for the poll for a grace period (QML's
+//! fresh one; each read also asks for the poll for a grace period (the
 //! subscribe/unsubscribe pulse), so a caller with no monitor cell on the bar
 //! finds data on its next call. A signal answers that it was sent, and its
 //! own exit status lands in the next `processes` reply's `lastAction`.
@@ -17,7 +17,7 @@ use crate::services::info::procs;
 use crate::services::wants::{self, Source};
 use crate::wayland::App;
 
-/// MonitorIpc.qml's `_warmMonitor`: one sample lands at startup, before
+/// One sample lands at startup, before
 /// any caller can connect, so the first reply is not an empty one.
 pub fn warm() {
     wants::pulse(Source::Monitor);

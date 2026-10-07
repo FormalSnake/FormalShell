@@ -433,7 +433,7 @@ impl NetworkManager {
     }
 
     /// Brings a wired device up on the profile NetworkManager picks for it
-    /// (`/` asks for its best match), as Quickshell's `network.connect()`.
+    /// (`/` asks for its best match).
     pub async fn connect_wired(&self, interface: &str) -> zbus::Result<()> {
         let none = ObjectPath::try_from("/")?;
         for path in self.manager.get_devices().await? {

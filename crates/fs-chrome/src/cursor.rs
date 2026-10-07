@@ -302,8 +302,7 @@ mod tests {
         assert!(!ring_after(false, false, false));
     }
 
-    // A tree of items, nearest ancestor first. The QML tests built the same
-    // shapes out of real Items: a row under a list that owns the ring, and a
+    // A tree of items, nearest ancestor first: a row under a list that owns the ring, and a
     // row under nothing.
     struct Item {
         cursor_from_keys: bool,

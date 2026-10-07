@@ -1,4 +1,4 @@
-//! `lock`, LockIpc.qml: `lock`, `isLocked` and `status`. No unlock verb: the
+//! `lock`: `lock`, `isLocked` and `status`. No unlock verb: the
 //! password typed into the surface is the only way out.
 
 use super::registry::{Function, Target, Type, Value};

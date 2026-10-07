@@ -1,4 +1,4 @@
-//! WallpaperPickerProvider.qml's scan and ThumbnailService.qml's `cover`
+//! The wallpaper picker's scan and the thumbnail `cover`
 //! half: a directory listed (itself and its Dark/Light subdirectories) by a
 //! `find` child, every image prerendered to a 512px square in the shared
 //! thumbnail cache, and the cells' pictures decoded from that cache on the

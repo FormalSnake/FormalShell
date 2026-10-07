@@ -1,4 +1,4 @@
-//! NightLightService.qml: the opt-in night light, wlsunset
+//! The opt-in night light, wlsunset
 //! (wlr-gamma-control-unstable-v1) held at its low temperature for as long
 //! as it runs.
 //!
@@ -97,7 +97,7 @@ impl State {
         changed
     }
 
-    /// NightLightIpc.qml's `status`.
+    /// The IPC `status` reply.
     pub fn status(&self) -> String {
         let dark = self.schedule_dark.map_or("null".to_owned(), |d| d.to_string());
         format!(
@@ -445,7 +445,7 @@ mod tests {
     }
 
     #[test]
-    fn status_reads_like_the_qml_reply() {
+    fn status_reads_like_the_golden_reply() {
         let mut s = State::default();
         assert_eq!(s.status(), r#"{"active":false,"temp":4000,"schedule":"off","scheduleDark":null,"source":"fallback","lastError":""}"#);
         s.scheduled = true;

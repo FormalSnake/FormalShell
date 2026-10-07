@@ -1,4 +1,4 @@
-//! `network`, NetworkIpc.qml: the Wi-Fi list and its actions for the hwsim
+//! `network`: the Wi-Fi list and its actions for the hwsim
 //! rig and for binds, and the speed test the panel runs.
 
 use fs_js as js;

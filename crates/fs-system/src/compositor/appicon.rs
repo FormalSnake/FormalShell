@@ -8,10 +8,8 @@
 //! this order:
 //!
 //!   1. The window's class, then its initial class, against each entry by the
-//!      tiers the quickshell desktop entry manager's heuristicLookup runs
-//!      (src/core/desktopentry.cpp:437-464): the id, the id case-folded,
-//!      StartupWMClass, StartupWMClass case-folded. Then a reverse-DNS tier
-//!      heuristicLookup does not have: the last dot segment of either side
+//!      tiers: the id, the id case-folded, StartupWMClass, StartupWMClass
+//!      case-folded. Then a reverse-DNS tier: the last dot segment of either side
 //!      against the other, case-folded, which is what joins a Flatpak's
 //!      `com.discordapp.Discord` to a window classed `discord` and
 //!      `org.wezfurlong.wezterm` to an entry called `wezterm`.

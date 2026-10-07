@@ -1,4 +1,4 @@
-//! The quake console (ConsoleService.qml, Console/geometry.js): one terminal
+//! The quake console: one terminal
 //! that drops down over the current workspace and parks on the special
 //! workspace again with its session still running. Visibility is read off
 //! the compositor, never stored, so a restarted shell adopts the console

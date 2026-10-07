@@ -13,7 +13,7 @@
 #
 # The rest of the multi-head rules (port prefixes, the internal/external
 # aliases, what a plug or unplug does to a run in flight) live in
-# tests/tst_display_priority.qml, since this session has one head.
+# the unit tests, since this session has one head.
 leg_screensaver_flag="--screensaver"
 leg_screensaver_order=230
 leg_screensaver_needs="mpv ffmpeg jq convert wtype"

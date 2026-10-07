@@ -1,4 +1,4 @@
-//! `clipboard`, ClipboardIpc.qml: the ledger as JSON, and the three verbs
+//! `clipboard`: the ledger as JSON, and the three verbs
 //! the launcher's rows use too. Each answers "ok" whether or not the id
 //! named an entry.
 

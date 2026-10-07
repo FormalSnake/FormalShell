@@ -1,5 +1,5 @@
-//! The wingpanel band's one reading of the wallpaper (Theme/BarPaint.qml,
-//! BarPaintService.qml): the wallpaper decoded small and cover-cropped to
+//! The wingpanel band's one reading of the wallpaper: the wallpaper decoded
+//! small and cover-cropped to
 //! the main output, the band's rows read back, three numbers. Sampled on a
 //! wallpaper or band change and never on a clock; the decode runs on the
 //! pool.
@@ -53,7 +53,7 @@ pub fn sample(request: Request) {
 }
 
 /// The band's samples off the decoded wallpaper, drawn the way
-/// Background.qml crops it: cover, centred, nearest-neighbour.
+/// the desktop crops it: cover, centred, nearest-neighbour.
 fn read(request: &Request) -> Option<Stats> {
     let img = image::open(&request.wallpaper).ok()?.to_rgba8();
     let (iw, ih) = (img.width() as f64, img.height() as f64);

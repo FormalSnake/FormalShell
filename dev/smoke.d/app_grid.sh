@@ -19,7 +19,7 @@
 # --panel-keys exists). `cursor` on `menu status` is what reads the answer.
 #
 # The key's default is the other half of the leg: the grid, under every
-# theme (M72 T2). Config.qml re-reads settings.json on a write, so the key
+# theme (M72 T2). The shell re-reads settings.json on a write, so the key
 # is deleted underneath the running shell, the launcher resummoned, and the
 # level has to come back as the grid with no key set at all; then it is put
 # back, which leaves the grid up for the run's own frame. Ridden by
@@ -75,7 +75,7 @@ app_grid_hold_path="$shot_dir/app-grid-status-hold.json"
 app_grid_mark="#2F9E44"
 app_grid_other="#2A6FAE"
 
-# Everything above the card's own top row (Menu.qml's `_topFraction` 0.3 of a
+# Everything above the card's own top row (the launcher's top fraction, 0.3 of a
 # 1080 output, the same number --menu-emerge states). Nothing the launcher
 # draws reaches it.
 app_grid_above_card="1920x324+0+0"
@@ -335,9 +335,6 @@ leg_app_grid_assert() {
   # Mixed: the apps take the grid, everything else the query ranked draws as
   # rows under it.
   cat "$app_grid_mixed_path"; echo
-  if grep -E 'AppGridView\.qml.*(ReferenceError|TypeError)' "$shell_log_path" > /dev/null 2>&1; then
-    fail "the grid view threw in the shell's log: $(grep -E 'AppGridView\.qml.*(ReferenceError|TypeError)' "$shell_log_path" | head -2)"
-  fi
   if [ "$(app_grid_field "$app_grid_mixed_path" view)" != "appGrid" ]; then
     fail "a root query ranking apps did not draw the grid, got: $(cat "$app_grid_mixed_path")"
   fi

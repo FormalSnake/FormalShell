@@ -1,4 +1,4 @@
-//! PowerPanel.qml: a hero for the battery (state icon, the state word, the
+//! A hero for the battery (state icon, the state word, the
 //! percent as the readout, the charge as the rail), a ledger of label and
 //! mono value rows, the power flow diagram, then the profiles as one
 //! `ButtonGroup`. The group is the panel's one cursor stop: Left and Right

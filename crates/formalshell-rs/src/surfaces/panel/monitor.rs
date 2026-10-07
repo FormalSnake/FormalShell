@@ -1,4 +1,4 @@
-//! MonitorPanel.qml: CPU, memory and one row per GPU card, each a section
+//! CPU, memory and one row per GPU card, each a section
 //! label over a `display` mono figure and a track, then the screen
 //! `display.outputPriority` resolves to, then the hinge into the
 //! launcher's full monitor view. A figure nobody can measure yet is `--`,

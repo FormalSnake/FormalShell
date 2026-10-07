@@ -1,4 +1,4 @@
-//! `display` and `hdr`, DisplayIpc.qml and HdrIpc.qml: the Display panel's
+//! `display` and `hdr`: the Display panel's
 //! output controls without the panel, and HDR for a compositor keybind.
 //! Each answers "ok" or why nothing was sent.
 

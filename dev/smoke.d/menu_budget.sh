@@ -11,9 +11,6 @@
 # hold on the frame, which has to stay under one frame (16 ms) wherever
 # the run is. Then five seconds with the launcher open at rest, which must
 # commit nothing.
-#
-# Only the rust shell logs its commits, so under QML the leg prints its
-# numbers as skipped.
 leg_menu_budget_flag="--menu-budget"
 leg_menu_budget_order=22
 leg_menu_budget_needs=""
