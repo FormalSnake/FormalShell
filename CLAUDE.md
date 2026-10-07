@@ -48,11 +48,14 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   `artifacts/parity/diff/`. The one acceptance test for a theme table
   migration: a non-zero diff outside the bar clock, a caret or a toast
   timestamp is a defect, never a pixel to wave off.
-- `dev/native-check.sh [--no-build] [release...]`: the Arch and Debian/Ubuntu
-  packages built for arm64 in a container on the mac, copied into the VM
-  and run through `--native` one release at a time (trixie, forky,
-  resolute, arch by default), frames and logs under
-  `artifacts/native/<release>/`.
+- `just tarball`: the release tarball install.sh unpacks
+  (`dev/tarball.sh`), built for this machine's arch in a debian:bookworm
+  container, into `artifacts/tarball/`. It fails on a binary needing glibc
+  past bookworm's 2.36 or linking a library outside its soname allowlist.
+- `dev/install-check.sh [--no-build] [distro...]`: that tarball and
+  install.sh copied into the VM and run through `--installed` one distro at
+  a time (arch, trixie, fedora by default), frames and logs under
+  `artifacts/installed/<distro>/`.
 
 How a run works:
 
@@ -275,6 +278,15 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   fires again only after a leave plus the 400ms cooldown. Then the same on
   the screensaver corner: dismissed with the cursor parked in it, quiet for
   3s after the overlay unmaps, firing again after a leave.
+- `installed.sh` `--installed <distro>`: `install.sh --from` the tarball
+  in `~/install-check`, run from nothing in a rootless podman image of
+  arch, trixie or fedora (pacman, apt or dnf installing Hyprland and the
+  tools, `formalshell install --yes` writing the PAM file), and the shell
+  it installs run from that image against the session over its Wayland
+  socket and Hyprland instance directory, on its own private bus: a
+  connected hyprland backend in the dump, the bar, `menu toggle` opening
+  the launcher, and a wrong then the real password through the installer's
+  own `formalshell-lock` PAM file.
 - `instance.sh` `--instance`: a second daemon taking the lock, exactly one
   survivor, and the survivor being the new pid.
 - `iphone.sh` `--iphone`: IphoneService and the notification filter against
@@ -432,13 +444,6 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   while playing carry both colours (an ffmpeg child decoding), two frames
   after a pause carry the same one, and no decoder survives the panel
   closing.
-- `native.sh` `--native <pkgdir>`: the packages in `<pkgdir>` installed
-  with apt or pacman in a rootless podman image of their release, and the
-  shell they install run from it against the session over its Wayland
-  socket and Hyprland instance directory, on its own private bus: a
-  connected hyprland backend in the dump, the bar, `menu toggle` opening
-  the launcher, and a wrong then the real password through the package's
-  own `formalshell-lock` PAM file.
 - `nix_run.sh` `--nix-run`: a menu.jsonc row carrying `@ipc:nix.run:hello`
   run through `menu activate`, read off `hyprctl clients` and `pgrep`: a
   `formalshell-console.run` window running `nix run nixpkgs#hello; read`,
@@ -808,10 +813,10 @@ behavior on hosts where a real owner exists.
   the wrapper's PATH, and every system piece it needs (a daemon, a D-Bus
   policy, a firewall port, avahi) is a `services.formalshell.*` option in
   `nix/nixos-module.nix`. Never tell a user to install something by hand.
-  The native Arch and Debian/Ubuntu packages under `packaging/` carry the
-  same guarantee through their own dependencies and split packages. A new
-  runtime CLI goes into `nix/package.nix`, the PKGBUILD and
-  `packaging/debian/control` together.
+  Without Nix, `install.sh` carries the same guarantee: the distro's
+  package manager for what pacman, apt and dnf all carry, the release
+  tarball (`dev/tarball.sh`) for what they do not. A new runtime CLI goes
+  into `nix/package.nix` and one of those two together.
 - **ttfx is a spec addendum, not a conflict.** Spec §10 says the
   screensaver renders "TTE-style rain/decrypt/matrix drawn in QML with the
   shell's mono font and palette — no spawned terminal windows". The

@@ -18,7 +18,7 @@ frame, teardown) and sources every file here. A leg defines:
   what the shell sent rather than what the screen shows (`--frame`).
 - `leg_<n>_shell <path>` writes the shell start script at `<path>` in place
   of the scaffold's, for a leg that runs some other build of the shell
-  (`--native`). It still logs to `$shell_log_path` and may write the
+  (`--installed`). It still logs to `$shell_log_path` and may write the
   shell's pid to `$shot_dir/shell.pid` for the memory sample.
 - `leg_<n>_rust=1` lets the leg run under `FS_IMPL=rust`, which refuses
   every other leg until the rust shell serves the targets it calls

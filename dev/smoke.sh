@@ -788,7 +788,7 @@ fi
 # Neither pattern can fire transiently, so this is a check on every run
 # rather than a leg of its own. Components/cast.js loads BoxCast.qml on
 # purpose to find out whether this Qt has RectangularShadow (6.9+), and
-# logs the miss on an older one, which only --native on trixie runs.
+# logs the miss on an older one.
 load_errors=$(grep -nE "Cannot assign to non-existent property|is not a type" "$shell_log_path" 2>/dev/null \
   | grep -v "Box casts unavailable" || true)
 if [ -n "$load_errors" ]; then

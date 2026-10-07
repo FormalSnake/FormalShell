@@ -12,8 +12,8 @@
 set -euo pipefail
 vm_sh="$(cd "$(dirname "$0")" && pwd)/vm.sh"
 slots="${FS_VM_SLOTS:-2}"
-# -c, not a heredoc: the command inherits stdin, and dev/native-check.sh
-# pipes its packages through it. The status probe and a start get
+# -c, not a heredoc: the command inherits stdin, and dev/install-check.sh
+# pipes its tarball through it. The status probe and a start get
 # /dev/null instead, since their ssh would read that stream first.
 exec python3 -c '
 import fcntl, os, subprocess, sys, time
