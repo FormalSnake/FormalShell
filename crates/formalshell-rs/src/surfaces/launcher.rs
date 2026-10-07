@@ -160,7 +160,9 @@ pub fn snapshot(store: &Store) -> Snapshot {
     toggles::snapshot(Some(&json!({
         "theme.dark": store.state.data.mode == "dark",
         "caffeinate.active": store.caffeinate.active,
-        "notifications.dnd": store.state.data.dnd,
+        "notifications.dnd": store.notifications.model.dnd,
+        "overnight.active": !store.state.data.overnight.is_null(),
+        "hdr.active": crate::services::display::hdr_active(store),
         "wifi.ssid": d.network.ssid.as_ref().map_or("", |(s, _)| s.as_str()),
         "audio.sink": d.audio.default_sink,
         "audio.source": d.audio.default_source,

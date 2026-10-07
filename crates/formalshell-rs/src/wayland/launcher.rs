@@ -21,6 +21,7 @@ use crate::surfaces::launcher::{Out, Shown};
 
 const WIFI_PASSWORD: &str = "wifi-password";
 const WIFI_IDENTITY: &str = "wifi-identity";
+const REMINDER_SET: &str = "reminder-set";
 
 pub struct Window {
     pub shown: Shown,
@@ -197,8 +198,56 @@ impl App {
                 let on = !self.store.caffeinate.active;
                 self.set_caffeinated(on);
             }
-            other => eprintln!("Menu: unknown internal action: {other}"),
+            // The rest go through the same in-process handlers the IPC
+            // targets answer with.
+            "lock.lock" => self.call_self("lock", "lock", &[]),
+            "hdr.toggle" => self.call_self("hdr", "toggle", &[]),
+            "overnight.toggle" => self.call_self("overnight", "toggle", &[]),
+            "notifications.toggleDnd" => self.call_self("notifications", "toggleDnd", &[]),
+            "notifications.showHistory" => self.call_self("notifications", "showHistory", &[]),
+            "reminder.show" => self.call_self("reminder", "show", &[]),
+            "reminder.clear" => self.call_self("reminder", "clear", &[]),
+            "reminder.set" => self.menu_input_as("Reminder (25m coffee)", REMINDER_SET, false),
+            // NightLightService, LightsService, ClipboardService,
+            // ClipsshService, LocalsendService and ConsoleService have no
+            // counterpart in this shell yet.
+            other => eprintln!("Menu: no service for internal action: {}", other.split(':').next().unwrap_or(other)),
         }
+    }
+
+    /// One call into this shell's own IPC targets, answered in process.
+    fn call_self(&mut self, target: &str, function: &str, args: &[&str]) {
+        let request = crate::ipc::wire::Request::Call {
+            target: target.into(),
+            function: function.into(),
+            args: args.iter().map(|a| (*a).to_owned()).collect(),
+        };
+        let reply = crate::ipc::dispatch(self, &request);
+        if reply.starts_with("error") {
+            eprintln!("Menu: {target}.{function}: {}", reply.trim());
+        }
+    }
+
+    /// ReminderService.resolveInput: "25m coffee" set, and a toast either way.
+    fn reminder_answer(&mut self, value: Option<String>, cancelled: bool) {
+        use fs_info::notifications::Urgency;
+        let value = value.unwrap_or_default();
+        if cancelled {
+            return;
+        }
+        let fallback = self.store.config.str("reminders.defaultMessage").unwrap_or("Time's up").to_owned();
+        let entry = fs_info::reminders::parse_spec(&value).and_then(|spec| {
+            let duration = value.split_whitespace().next().unwrap_or_default().to_owned();
+            self.store.notifications.set_reminder(&duration, &spec.message, &fallback)
+        });
+        match entry {
+            Some(e) => {
+                let body = format!("{} at {}", e.message, fs_info::reminders::due_clock(e.due_at));
+                self.store.notifications.notify("Reminder set", &body, Urgency::Normal);
+            }
+            None => self.store.notifications.notify("Reminder", &format!("Could not read \"{value}\" as a duration"), Urgency::Normal),
+        }
+        crate::surfaces::changed(self, crate::store::Topic::Notifications);
     }
 
     /// Menu.qml's `wifi.`, `bluetooth.`, `audio.` and `radio.` actions.
@@ -279,6 +328,8 @@ impl App {
         for (token, value, cancelled) in self.launcher.take_resolved() {
             if token == WIFI_IDENTITY || token == WIFI_PASSWORD {
                 self.wifi_answer(&token, value, cancelled);
+            } else if token == REMINDER_SET {
+                self.reminder_answer(value, cancelled);
             }
         }
     }

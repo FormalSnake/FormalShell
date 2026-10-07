@@ -410,6 +410,11 @@ fn js(s: &str) -> String {
     serde_json::to_string(s).unwrap_or_default()
 }
 
+/// Any output showing HDR now (HdrService.active).
+pub fn hdr_active(store: &Store) -> bool {
+    rows(store).iter().any(|r| hdr::is_on(Some(r)))
+}
+
 /// `{ active, outputs: [{ name, supported, reason, on, wanted, cm }] }`, in
 /// HdrService.qml's key order.
 pub fn hdr_status(store: &Store) -> String {
