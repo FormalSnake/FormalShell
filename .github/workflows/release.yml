@@ -72,7 +72,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with: { pattern: "debs-*", merge-multiple: true, path: debs }
-      # Every file name carries the suite, quickshell's rebuild included.
+      # Every file name carries the suite.
       - run: gh release upload "$TAG" --clobber debs/*.deb
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

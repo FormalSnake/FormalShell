@@ -25,6 +25,7 @@
 leg_native_flag="--native <pkgdir>"
 leg_native_order=5
 leg_native_needs="wtype jq convert"
+leg_native_rust=1
 
 native_home=$HOME
 native_container=formalshell-native
@@ -58,9 +59,9 @@ leg_native_validate() {
   local dir pkg
   dir=$(leg_arg native)
   command -v podman >/dev/null 2>&1 || { echo "--native needs podman on PATH" >&2; exit 1; }
-  if pkg=$(find "$dir" -maxdepth 1 -name 'formalshell_*_all.deb' 2>/dev/null | grep .); then
-    native_suite=$(basename "$pkg" | sed -n 's/^formalshell_[^+]*+\([a-z]*\)_all\.deb$/\1/p')
-  elif pkg=$(find "$dir" -maxdepth 1 -name 'formalshell-[0-9]*-any.pkg.tar.*' 2>/dev/null | grep .); then
+  if pkg=$(find "$dir" -maxdepth 1 -name 'formalshell_*.deb' 2>/dev/null | grep .); then
+    native_suite=$(basename "$pkg" | sed -n 's/^formalshell_[^+]*+\([a-z]*\)_[a-z0-9]*\.deb$/\1/p')
+  elif pkg=$(find "$dir" -maxdepth 1 -name 'formalshell-[0-9]*.pkg.tar.*' 2>/dev/null | grep .); then
     native_suite=arch
   else
     echo "--native: no formalshell package in $dir" >&2
@@ -134,7 +135,7 @@ pm run --rm --name $native_container --userns=keep-id --network none \\
   -e LIBGL_ALWAYS_SOFTWARE=1 -e LANG=C.UTF-8 \\
   "$native_image" dbus-run-session -- formalshell > "$shell_log_path" 2>&1 &
 for _ in \$(seq 60); do
-  pid=\$(pgrep -n -u $uid -f '^/usr/bin/quickshell -p /usr/share/formalshell\$') && break
+  pid=\$(pgrep -n -u $uid -f '^/usr/lib/formalshell/formalshell-rs\$') && break
   sleep 1
 done
 [ -n "\${pid:-}" ] && echo "\$pid" > "$shot_dir/shell.pid"
