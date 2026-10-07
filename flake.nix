@@ -105,10 +105,20 @@
           # darwin-side runner derivations, everything else still substitutes.
           # Driven by dev/linux-builder.sh.
           linux-builder = pkgs.darwin.linux-builder.override {
-            modules = [{
-              virtualisation.cores = 6;
-              virtualisation.darwin-builder = { memorySize = 10240; diskSize = 61440; };
-            }];
+            modules = [
+              ./nix/vm-discard.nix
+              {
+                virtualisation.cores = 6;
+                virtualisation.darwin-builder = { memorySize = 10240; diskSize = 61440; };
+                # Store paths are copied back to the mac as they finish, so
+                # the builder only needs the last day of them.
+                nix.gc = {
+                  automatic = true;
+                  dates = "daily";
+                  options = "--delete-older-than 1d";
+                };
+              }
+            ];
           };
 
           # The runtime layer: darwin-runnable headless aarch64-linux test VM

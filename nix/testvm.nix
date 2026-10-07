@@ -23,6 +23,7 @@ nixpkgs.lib.nixosSystem {
     # wires it into documentation.nixos.extraModules) — nix-builder-vm.nix
     # imports it explicitly for the same reason.
     (nixpkgs + "/nixos/modules/virtualisation/qemu-vm.nix")
+    ./vm-discard.nix
     self.nixosModules.formalshell
     self.nixosModules.formalshell-greeter
     ({ pkgs, lib, config, ... }:
