@@ -702,7 +702,7 @@ impl App {
         let entries = self.bar.overflow_entries(region);
         let edge = self.bar.edge();
         let env = Env { store: &self.store, edge, output: &self.bar.output };
-        let mut slots: Vec<Slot> = entries.iter().map(|e| Slot::new(e, &entries)).collect();
+        let mut slots: Vec<Slot> = entries.iter().enumerate().flat_map(|(n, e)| Slot::rail(e, &entries, n)).collect();
         for s in &mut slots {
             s.refresh(&mut self.bar.kit, &env, false, false, 0.0, now);
         }
@@ -1186,6 +1186,9 @@ impl App {
                 if let Some(rt) = self.runtime.as_ref().filter(|_| !record.is_null()) {
                     rt.service(move |ctx| overnight::disable(ctx, record));
                 }
+            }
+            Action::RecordStop => {
+                surfaces::capture::record::stop(self);
             }
             Action::ReminderSummary => {
                 self.store.notifications.show_reminders();

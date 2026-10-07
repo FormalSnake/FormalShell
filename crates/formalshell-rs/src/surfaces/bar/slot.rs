@@ -19,6 +19,9 @@ pub struct Slot {
     /// The name `bar.layout` gave it.
     pub name: String,
     pub region: Region,
+    /// The entry it came from: a rail's cells share one, and the region
+    /// keeps or hides them together.
+    pub unit: usize,
     pub cell: Box<dyn Cell>,
     pub view: View,
     pub measured: Measured,
@@ -46,8 +49,13 @@ pub struct Slot {
 }
 
 impl Slot {
-    pub fn new(entry: &Entry, region_entries: &[Entry]) -> Self {
-        Self::of(entry.name(), entry.region, cells::build(entry, region_entries))
+    /// The slots one `bar.layout` entry places: one, or a rail of cells
+    /// that share the entry's place along the strip as one `unit`.
+    pub fn rail(entry: &Entry, region_entries: &[Entry], unit: usize) -> Vec<Self> {
+        cells::build(entry, region_entries)
+            .into_iter()
+            .map(|cell| Self { unit, ..Self::of(entry.name(), entry.region, cell) })
+            .collect()
     }
 
     /// A slot around a cell built by its owner, for a surface that holds
@@ -56,6 +64,7 @@ impl Slot {
         Self {
             name,
             region,
+            unit: 0,
             cell,
             view: View::hidden(),
             measured: Measured::default(),

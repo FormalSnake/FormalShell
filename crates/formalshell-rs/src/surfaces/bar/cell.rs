@@ -52,6 +52,8 @@ pub enum Action {
     Caffeinate(bool),
     /// The overnight indicator's click: end it.
     OvernightOff,
+    /// The recording indicator's click: stop it.
+    RecordStop,
     /// The reminder indicator's click: a toast listing what is pending.
     ReminderSummary,
     MediaNext,
@@ -94,8 +96,6 @@ pub enum Part {
     Icon { name: String, dim: bool, dot: bool },
     /// An icon centred in a fixed-width slot, MonitorWidget's `huge` one.
     SlotIcon { name: String, width: f64 },
-    /// Empty room along the strip.
-    Pad(f64),
     /// A glyph in a named family (the distro logo).
     Glyph { text: String, family: &'static str },
     /// CellLabel.qml: mono, body, medium unless `weight` says otherwise.
@@ -653,7 +653,6 @@ impl Kit {
         match part {
             Part::Icon { name, .. } | Part::SlotIcon { name, .. } => self.icon(name),
             Part::Cover { .. } | Part::AppIcon { .. } => self.icon("music"),
-            Part::Pad(_) => self.shape("", look.label(400.0)),
             Part::Glyph { text, family } => self.shape(text, TextStyle { family: Family::Named(family), size: look.body, weight: 400.0, tracking: 0.0 }),
             Part::Label { text, weight } => {
                 let w = if band { WEIGHTS.semibold } else { weight.unwrap_or(WEIGHTS.medium as f32) as f64 };
@@ -704,7 +703,6 @@ impl Kit {
                         (w, h)
                     }
                 }
-                Part::Pad(room) => (*room, 0.0),
                 Part::Name { max, .. } => {
                     if vertical || w <= 0.0 { (0.0, 0.0) } else { (w.min(*max), h) }
                 }
@@ -813,7 +811,6 @@ impl Kit {
                             p.rect(dot_r, ink.of(look.primary), d as f32 / 2.0);
                         }
                     }
-                    Part::Pad(_) => {}
                     Part::AppIcon { image, size } => {
                         let n = size.round() as i32;
                         let (x, y) = if vertical { (across_mid - n / 2, at.round() as i32) } else { (at.round() as i32, across_mid - n / 2) };

@@ -4,11 +4,6 @@ Differences from the QML shell that milestone agents reported and left.
 Each is fixed, or kept with the owner's say-so, before R9 cuts over. Grouped
 by surface; one line each.
 
-## Bar
-- Indicators is one cell, not the QML rail of cells: a rail needs the strip to host
-  several independent hover and click cells inside one slot, which the cell model
-  does not do yet. All seven indicators are wired into the one cell.
-
 ## Panels
 - Calendar: the life-progress prompt needs the launcher's input answer routed back to the
   panel (`wayland/launcher.rs`'s resolved tokens), which the R4b launcher agent holds.
@@ -25,10 +20,6 @@ by surface; one line each.
   be generalised first.
 
 ## Media
-- Sink latency is read off `pw-dump` on a poke and every 10 s; QML does the
-  same (its graph events only trigger the re-read), but the Rust side lacks
-  the default-sink and link-change triggers. A PipeWire-event read needs
-  port, link and Latency param pods in fs-audio: kept as is.
 - Header Radio button (needs the Radio Atlas surface, Globe and search, not
   ported) and the animated album art (needs a video decode path) not ported.
 
