@@ -79,6 +79,7 @@ struct Layout {
 }
 
 pub struct Model {
+    resolved: Vec<(String, Option<String>, bool)>,
     pub open: bool,
     pub mode: Mode,
     pub level: Option<String>,
@@ -121,6 +122,7 @@ impl Default for Model {
             select_options: Vec::new(),
             select_token: String::new(),
             input_secret: false,
+            resolved: Vec::new(),
             rows: Vec::new(),
             sections: Vec::new(),
             view: View::AppGrid,
@@ -152,11 +154,89 @@ pub enum Out {
 }
 
 pub fn snapshot(store: &Store) -> Snapshot {
+    let d = &store.devices;
+    let radio = &store.media.radio;
+    let connected: Vec<String> = d.bluetooth.devices.iter().filter(|x| x.connected).map(|x| x.address.to_uppercase()).collect();
     toggles::snapshot(Some(&json!({
         "theme.dark": store.state.data.mode == "dark",
         "caffeinate.active": store.caffeinate.active,
-        "notifications.dnd": store.state.data.dnd,
+        "notifications.dnd": store.notifications.model.dnd,
+        "overnight.active": !store.state.data.overnight.is_null(),
+        "hdr.active": crate::services::display::hdr_active(store),
+        "wifi.ssid": d.network.ssid.as_ref().map_or("", |(s, _)| s.as_str()),
+        "audio.sink": d.audio.default_sink,
+        "audio.source": d.audio.default_source,
+        "bluetooth.connected": connected,
+        "radio.station": radio.station.as_ref().filter(|_| radio.running()).map_or("", |s| s.uuid.as_str()),
     })))
+}
+
+fn radio_station(s: &fs_media::radio::stations::Station) -> fs_menu::providers::RadioStation {
+    fs_menu::providers::RadioStation { uuid: s.uuid.clone(), name: s.name.clone(), country: s.country.clone(), codec: s.codec.clone() }
+}
+
+/// RadioSearchProvider.rowsFor: the answer for `q` once it is in, a
+/// searching row until then. Asking is idempotent; the service debounces.
+pub fn radio_search_rows(store: &Store, q: &str) -> Vec<Node> {
+    use fs_menu::providers as p;
+    let q = q.trim();
+    if q.chars().count() < 2 {
+        return Vec::new();
+    }
+    crate::services::radio::send(crate::services::radio::Cmd::Search(q.to_owned()));
+    let radio = &store.media.radio;
+    match &radio.search {
+        Some((answered, found)) if answered == q => match found {
+            None => vec![p::radio_failed_row()],
+            Some(v) if v.is_empty() => vec![p::radio_no_results_row()],
+            Some(v) => {
+                let favs: std::collections::HashSet<String> = radio.favorites.iter().map(|s| s.uuid.clone()).collect();
+                let list: Vec<_> = v.iter().take(50).map(radio_station).collect();
+                p::radio_result_rows(&list, &favs)
+            }
+        },
+        _ => vec![p::radio_searching_row()],
+    }
+}
+
+/// The four device routes' rows (LiveMenuSources.qml), off the store.
+pub fn device_sources(store: &Store) -> Vec<(&'static str, Vec<Node>)> {
+    use fs_menu::providers as p;
+    let d = &store.devices;
+    let n = &d.network;
+    let wifi = p::WifiState {
+        has_device: n.wifi_device.is_some(),
+        enabled: n.wifi_enabled,
+        networks: n
+            .rows
+            .iter()
+            .map(|r| p::WifiNetwork {
+                name: r.ssid.clone(),
+                known: r.known,
+                connected: r.connected,
+                secured: r.secured,
+                enterprise: r.enterprise,
+                signal: r.signal,
+                signal_strength: None,
+            })
+            .collect(),
+        action_ssid: n.action.as_ref().map(|(_, s)| s.clone()).unwrap_or_default(),
+        action_kind: n.action.as_ref().map(|(k, _)| k.as_str().to_owned()).unwrap_or_default(),
+        failure_ssid: n.failure.as_ref().map(|f| f.ssid.clone()).unwrap_or_default(),
+        failure_text: n.failure.as_ref().map(|f| f.text.clone()).unwrap_or_default(),
+    };
+    let b = &d.bluetooth;
+    let bluetooth = p::BluetoothState { available: b.powered.is_some(), enabled: b.powered == Some(true), devices: b.devices.clone() };
+    let audio: Vec<p::AudioDevice> =
+        d.audio.devices.iter().map(|(name, label, sink)| p::AudioDevice { name: name.clone(), label: label.clone(), is_sink: *sink }).collect();
+    let r = &store.media.radio;
+    let radio = p::RadioState { running: r.running(), favorites: r.favorites.iter().map(radio_station).collect() };
+    vec![
+        ("wifi", p::wifi_rows(&wifi)),
+        ("bluetooth", p::bluetooth_rows(&bluetooth)),
+        ("audio", p::audio_rows(&audio)),
+        ("radio", p::radio_rows(&radio)),
+    ]
 }
 
 impl Model {
@@ -226,6 +306,7 @@ impl Model {
         let cond = &store.menu.cond;
         let emoji_q = if menu { fs_menu::providers::emoji_trigger_query(q) } else { None };
         let keys_q = if menu { fs_menu::keybinds::trigger_query(q) } else { None };
+        let radio_q = if menu { fs_menu::providers::radio_trigger_query(q) } else { None };
         let emoji = menu && (level == Some("emoji") || emoji_q.is_some());
         let route_rows = matches!(level, Some("nix" | "keybinds" | "calc" | "radio.search"));
         let grid_wanted = store.config.bool("menu.appGrid").unwrap_or(true);
@@ -257,6 +338,7 @@ impl Model {
                 let reply = store.menu.binds.as_ref().map(|r| r.as_ref().map(|t| &**t).map_err(|_| ()));
                 fs_menu::keybinds::rows_for(reply, keys_q.unwrap_or(q))
             }
+            Mode::Menu if level == Some("radio.search") || radio_q.is_some() => radio_search_rows(store, radio_q.unwrap_or(q)),
             Mode::Menu if q.is_empty() => {
                 let gated = level.and_then(|l| nodes.get(l)).is_some_and(|n| !model::is_when_visible(n, cond));
                 if gated {
@@ -643,8 +725,21 @@ impl Model {
         self.confirm.clear();
     }
 
+    /// Every input and select answer since the last call, for the in-process
+    /// token owners (shell.qml's `selectionResolved`): the token, the value
+    /// (a secret one included, held only here), and whether it was
+    /// cancelled.
+    pub fn take_resolved(&mut self) -> Vec<(String, Option<String>, bool)> {
+        std::mem::take(&mut self.resolved)
+    }
+
     fn write_selection(&mut self, payload: Value) {
         let token = payload.get("token").cloned().unwrap_or(Value::Null);
+        self.resolved.push((
+            token.as_str().unwrap_or_default().to_owned(),
+            payload.get("value").and_then(Value::as_str).map(str::to_owned),
+            payload.get("cancelled").and_then(Value::as_bool).unwrap_or(false),
+        ));
         let filed = if self.input_secret { json!({"token": token, "cancelled": true, "secret": true}) } else { payload };
         let path = selection_path();
         if let Some(dir) = path.parent() {
@@ -868,6 +963,14 @@ impl Model {
             let reply = store.menu.binds.as_ref().map(|r| r.as_ref().map(|t| &**t).map_err(|_| ()));
             return Value::Array(
                 fs_menu::keybinds::rows_for(reply, kq)
+                    .iter()
+                    .map(|n| json!({"id": n.id, "label": n.label, "desc": n.desc.clone().unwrap_or_default(), "kind": n.kind.as_str()}))
+                    .collect(),
+            );
+        }
+        if let Some(rq) = fs_menu::providers::radio_trigger_query(q) {
+            return Value::Array(
+                radio_search_rows(store, rq)
                     .iter()
                     .map(|n| json!({"id": n.id, "label": n.label, "desc": n.desc.clone().unwrap_or_default(), "kind": n.kind.as_str()}))
                     .collect(),

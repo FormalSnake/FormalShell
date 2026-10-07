@@ -20,6 +20,7 @@
 # its own path.
 leg_device_routes_flag="--device-routes"
 leg_device_routes_order=217
+leg_device_routes_rust=1
 leg_device_routes_needs="jq wtype pactl ffmpeg mpv"
 
 device_routes_track_path="$shot_dir/device-routes-station.mp3"
