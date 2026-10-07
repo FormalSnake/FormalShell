@@ -115,6 +115,24 @@ its eight keys and its failure contract (`fs-chrome`'s manifest port);
 `entry` names the executable. A crashed plugin renders the dim PLUGIN
 ERROR cell and is restarted on a backoff. `CommandModule` stays as it is.
 
+## Installing (owner, 2026-10-07)
+
+Nix first, and one script for everyone else; no native distro packages.
+NixOS users take the flake's modules. On any other distro:
+
+    curl -fsSL https://raw.githubusercontent.com/FormalSnake/FormalShell/main/install.sh | sh
+
+installs Nix if it is missing (the Determinate installer), installs the
+flake's `formalshell` into the user's Nix profile with every runtime CLI
+pinned, then runs `formalshell install`. That subcommand, like Caelestia's
+`caelestia install`, writes the few pieces outside the profile: the user
+systemd unit, the Hyprland Lua include and a `hypr-user.lua` the user owns
+and updates never touch, and, with sudo and a prompt for each, the
+`formalshell-lock` PAM file and the optional greetd config.
+`formalshell update` upgrades the profile and rewrites only what the
+installer owns. The same subcommands work on NixOS as no-ops that point at
+the modules.
+
 ## How we get there
 
 The QML shell stays the shipped shell until the Rust one passes everything.
