@@ -450,7 +450,9 @@ impl App {
             layer.set_exclusive_zone(t);
         }
         layer.commit();
-        self.bar_surface = Some(Surface::new("bar", layer, &self.shm, self.started));
+        let mut surface = Surface::new("bar", layer, &self.shm, self.started);
+        surface.presize(self.bar.scene.size.w, self.bar.scene.size.h);
+        self.bar_surface = Some(surface);
         self.bar_dirty = true;
 
         self.zones.clear();
@@ -1293,6 +1295,7 @@ impl App {
         if !self.faces_warmed && self.bar_surface.as_ref().is_some_and(|s| s.mapped) {
             self.faces_warmed = true;
             crate::phase("bar mapped");
+            crate::thread_ticks();
             self.warm_faces();
             self.prefault_launcher();
             self.launcher_warm = true;
@@ -1952,13 +1955,23 @@ impl LayerShellHandler for App {
                 self.bar.resize(w, h);
                 let size = self.bar.scene.size;
                 if let Some(s) = &mut self.bar_surface {
-                    if !s.configured {
+                    let first = !s.configured;
+                    if first {
                         crate::phase("bar configured");
                     }
                     s.configure(size.w, size.h);
+                    // The frame drawn while this configure was on its way
+                    // goes out now, ahead of anything else this turn holds.
+                    if first && s.drawn_ahead() && size == current {
+                        s.present(&mut self.bar.scene, false, &self.qh);
+                    }
                 }
                 self.set_input_region();
-                self.refresh_bar(None);
+                // The size the bar was laid out and drawn at ahead of this
+                // configure needs nothing more; only a new one is re-read.
+                if size != current {
+                    self.refresh_bar(None);
+                }
             }
             Some(o @ (Owner::Overflow | Owner::Menu)) => {
                 let Some(p) = self.popout_of(o) else { return };

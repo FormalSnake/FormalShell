@@ -204,6 +204,17 @@ impl<R: Role> Surface<R> {
         }
     }
 
+    /// Sizes the canvas ahead of the compositor's first configure, so the
+    /// first frame is drawn while it is on its way.
+    pub fn presize(&mut self, width: i32, height: i32) {
+        self.renderer.resize(width.max(1) as u16, height.max(1) as u16);
+    }
+
+    /// A whole frame is drawn and waits only to be committed.
+    pub fn drawn_ahead(&self) -> bool {
+        !self.raster.is_empty() && self.left.is_empty()
+    }
+
     /// Draws the scene's damage into the canvas, as part of the frame in
     /// progress. False while a sliced frame still has bands left.
     fn draw(&mut self, scene: &mut Scene) -> bool {
@@ -268,12 +279,20 @@ impl<R: Role> Surface<R> {
     where
         D: Dispatch<WlCallback, FrameCallbackData> + 'static,
     {
-        if !self.configured || self.frame_pending {
+        if self.frame_pending {
             return;
         }
         // A scene resized ahead of the compositor's configure (the bar
         // moving edge) keeps its damage until the buffers match it.
         if (self.renderer.width() as i32, self.renderer.height() as i32) != (scene.size.w, scene.size.h) {
+            return;
+        }
+        // A presized canvas draws the first frame while the configure is on
+        // its way; the configure then only has it copied and committed.
+        if !self.configured {
+            if self.commits == 0 && scene.has_damage() {
+                self.draw(scene);
+            }
             return;
         }
         // An animation whose frame changed nothing (a card still wholly

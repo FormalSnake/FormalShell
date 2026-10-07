@@ -104,6 +104,23 @@ fn main() {
     }
 }
 
+/// Every thread's CPU time so far, in clock ticks, for reading what ran
+/// during the cold start.
+pub fn thread_ticks() {
+    let Ok(tasks) = std::fs::read_dir("/proc/self/task") else { return };
+    let mut out = Vec::new();
+    for task in tasks.flatten() {
+        let comm = std::fs::read_to_string(task.path().join("comm")).unwrap_or_default();
+        let stat = std::fs::read_to_string(task.path().join("stat")).unwrap_or_default();
+        // utime and stime, the 14th and 15th fields: 12th and 13th past the
+        // comm's closing paren.
+        let fields: Vec<&str> = stat.rsplit_once(") ").map(|(_, rest)| rest.split(' ').collect()).unwrap_or_default();
+        let tick = |i: usize| fields.get(i).and_then(|f| f.parse::<u64>().ok()).unwrap_or(0);
+        out.push(format!("{}={}", comm.trim(), tick(11) + tick(12)));
+    }
+    eprintln!("phase threads {}", out.join(" "));
+}
+
 /// CPU time the calling thread has run, in microseconds.
 fn thread_cpu_us() -> i64 {
     let mut ts = libc::timespec { tv_sec: 0, tv_nsec: 0 };
