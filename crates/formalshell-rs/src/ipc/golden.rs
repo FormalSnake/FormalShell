@@ -569,8 +569,13 @@ fn matches_qs_ipc() {
             assert!(no_instance(&stdout) && no_instance(&case.stdout), "stdout of {what}: {stdout:?}");
         } else if listing {
             let ours = blocks(&stdout);
+            // A recording made on an older branch knows fewer functions of a
+            // target; every one it lists must still be served, signature intact.
             for (name, functions) in blocks(&case.stdout) {
-                assert_eq!(ours.get(name), Some(&functions), "target {name} in stdout of {what}");
+                let served = ours.get(name).unwrap_or_else(|| panic!("target {name} in stdout of {what}"));
+                for f in functions {
+                    assert!(served.contains(&f), "{f:?} of target {name} in stdout of {what}");
+                }
             }
         } else {
             assert_eq!(stdout, case.stdout, "stdout of {what}");
