@@ -196,6 +196,26 @@ fn stub() -> Registry<()> {
                 ],
             },
             Target {
+                name: "calendar",
+                functions: vec![
+                    f("select", &[("date", Type::String)], Type::String, |_, a| s(format!("select {}", a[0].str()))),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
+                name: "iphone",
+                functions: vec![
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                    f("pair", &[], Type::String, |_, _| s("ok")),
+                    f("invoke", &[("id", Type::String), ("action", Type::String)], Type::String, |_, a| {
+                        s(format!("invoke {} {}", a[0].str(), a[1].str()))
+                    }),
+                    f("dismiss", &[("id", Type::String)], Type::String, |_, a| s(format!("dismiss {}", a[0].str()))),
+                    f("clear", &[], Type::String, |_, _| s("ok")),
+                    f("markRead", &[], Type::String, |_, _| s("ok")),
+                ],
+            },
+            Target {
                 name: "probe",
                 functions: vec![
                     f("s", &[STR], Type::String, |_, a| s(format!("[{}]", a[0].str()))),
@@ -313,6 +333,8 @@ fn signatures_match_qml() {
         super::plugins::target(),
         super::caffeinate::target(),
         super::gallery::target(),
+        super::calendar::target(),
+        super::iphone::target(),
     ] {
         let defs: Vec<String> = real.functions.iter().map(|f| f.definition()).collect();
         let qml = stub.targets.iter().find(|t| t.name == real.name).expect("a stub target");

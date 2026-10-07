@@ -16,10 +16,14 @@
 //! [`Panel::activate`], `x` calls [`Panel::delete`], and any other
 //! printable key reaches [`Panel::key`].
 
+pub mod appmenu;
 pub mod audio;
+pub mod calendar;
 pub mod gallery;
 pub mod host;
+pub mod iphone;
 pub mod standin;
+pub mod weather;
 
 use fs_theme::theme::Theme;
 
@@ -75,6 +79,23 @@ pub trait Panel {
     fn body(&self, v: &View) -> El;
     /// A fresh open: where the cursor starts, what resets.
     fn opened(&mut self) {}
+    /// Right after the card is built, with the store and the services in
+    /// reach: what a panel asks for once as it opens (a probe, a refresh).
+    fn start(&mut self, _fx: &mut Effect) {}
+    /// The stop the cursor starts on, before any key moves it.
+    fn cursor_start(&self) -> Option<String> {
+        None
+    }
+    /// The stop the panel moved the cursor to on its own (a selection
+    /// carrying it to another cell), once.
+    fn take_cursor(&mut self) -> Option<String> {
+        None
+    }
+    /// An IPC verb aimed at this panel (`calendar select`); `None` when the
+    /// panel answers none.
+    fn call(&mut self, _verb: &str, _arg: &str) -> Option<String> {
+        None
+    }
     /// An element's `on` action fired.
     fn event(&mut self, _ev: &Event, _fx: &mut Effect) {}
     /// Enter or Space on a stop.
@@ -126,7 +147,11 @@ pub fn known(name: &str) -> Option<&'static str> {
 pub fn build(name: &str) -> Option<Box<dyn Panel>> {
     let id = known(name)?;
     Some(match id {
+        "appmenu" => Box::new(appmenu::AppMenu),
         "audio" => Box::new(audio::Audio::default()),
+        "calendar" => Box::new(calendar::Calendar::new(true)),
+        "iphone" => Box::new(iphone::Iphone::default()),
+        "weather" => Box::new(weather::Weather::default()),
         _ => Box::new(standin::StandIn::new(id)),
     })
 }

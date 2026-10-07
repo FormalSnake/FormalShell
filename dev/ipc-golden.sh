@@ -11,7 +11,7 @@
 # WallpaperIpc.qml's exact signatures, `bar`, `panel`, `media`, `radio`,
 # `airplay`, `visualizer`, `overnight`, `earbuds` and `workspaces` their own
 # IPC files' (WorkspacesIpc.qml's `status` only: peek and close wait for the
-# preview); `probe` covers every type qs
+# preview), `calendar` and `iphone` their own; `probe` covers every type qs
 # converts and the function names that collide with qs's subcommands.
 set -euo pipefail
 
@@ -148,6 +148,20 @@ ShellRoot {
         function close(): string { return "ok" }
         function toggle(): string { return "ok" }
         function status(): string { return JSON.stringify({ isOpen: false }) }
+    }
+    IpcHandler {
+        target: "calendar"
+        function select(date: string): string { return "select " + date }
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "iphone"
+        function status(): string { return "{}" }
+        function pair(): string { return "ok" }
+        function invoke(id: string, action: string): string { return "invoke " + id + " " + action }
+        function dismiss(id: string): string { return "dismiss " + id }
+        function clear(): string { return "ok" }
+        function markRead(): string { return "ok" }
     }
     IpcHandler {
         target: "probe"
@@ -418,6 +432,22 @@ rec call gallery status x
 rec call gallery toggle
 rec call gallery close
 rec show gallery
+rec call calendar select 2026-10-06
+rec call calendar select
+rec call calendar status
+rec call calendar status x
+rec show calendar
+rec call iphone status
+rec call iphone pair
+rec call iphone invoke 1 positive
+rec call iphone invoke 1
+rec call iphone invoke
+rec call iphone dismiss 1
+rec call iphone dismiss
+rec call iphone clear
+rec call iphone markRead
+rec call iphone nope
+rec show iphone
 
 kill "$qs_pid"
 wait "$qs_pid" 2>/dev/null || true

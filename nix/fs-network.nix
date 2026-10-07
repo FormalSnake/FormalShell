@@ -1,4 +1,4 @@
-{ lib, stdenv, rustPlatform, cargo, rustc, jq, clippy, testers, openssl, runCommand, writeText }:
+{ lib, rustCommon, jq, testers, openssl, runCommand, writeText }:
 
 # fs-network's check: clippy -D warnings and the unit tests, then the daemon
 # test (tests/daemon.rs) inside a NixOS VM running NetworkManager against
@@ -6,37 +6,21 @@
 # hostapd access points (WPA2-PSK and PEAP/MSCHAPv2). The radio setup mirrors
 # nix/testvm.nix, which the smoke rig's --wifi leg runs against.
 let
-  src = lib.fileset.toSource {
-    root = ../.;
-    fileset = ../crates;
-  };
-
-  testBinary = stdenv.mkDerivation {
-    name = "fs-network-daemon-test";
-    inherit src;
-    sourceRoot = "source/crates";
-
-    cargoDeps = rustPlatform.importCargoLock { lockFile = ../crates/Cargo.lock; };
-
-    nativeBuildInputs = [ rustPlatform.cargoSetupHook cargo rustc clippy jq ];
-
-    buildPhase = ''
-      runHook preBuild
-      cargo clippy --offline --release -p fs-network --all-targets -- -D warnings
-      cargo test --offline --release -p fs-network --lib
-      cargo test --offline --release -p fs-network --test daemon --no-run \
+  testBinary = rustCommon.craneLib.mkCargoDerivation (rustCommon.checkArgs // {
+    pname = "fs-network-daemon-test";
+    nativeBuildInputs = rustCommon.checkArgs.nativeBuildInputs ++ [ jq ];
+    buildPhaseCargoCommand = ''
+      cargo clippy --release -p fs-network --all-targets -- -D warnings
+      cargo test --release -p fs-network --lib
+      cargo test --release -p fs-network --test daemon --no-run \
         --message-format=json > build.json
-      runHook postBuild
     '';
-
-    installPhase = ''
-      runHook preInstall
+    installPhaseCommand = ''
       mkdir -p $out/bin
       exe=$(jq -r 'select(.executable != null and .target.name == "daemon") | .executable' build.json)
       cp "$exe" $out/bin/fs-network-daemon-test
-      runHook postInstall
     '';
-  };
+  });
 
   # PEAP wraps a TLS tunnel, so hostapd's EAP server needs a certificate to
   # present. Nothing validates the chain: the client pins no CA.

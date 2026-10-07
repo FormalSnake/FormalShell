@@ -10,11 +10,13 @@
 mod airplay;
 mod bar;
 mod caffeinate;
+mod calendar;
 #[cfg(test)]
 mod cli;
 mod debug;
 mod earbuds;
 mod gallery;
+mod iphone;
 mod lock;
 #[cfg(test)]
 mod golden;
@@ -68,6 +70,8 @@ fn registry() ->&'static Registry<App> {
             caffeinate::target(),
             gallery::target(),
             lock::target(),
+            calendar::target(),
+            iphone::target(),
         ],
     })
 }
