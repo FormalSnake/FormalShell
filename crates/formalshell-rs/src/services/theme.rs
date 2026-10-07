@@ -287,7 +287,7 @@ fn publish_file(path: &Path, content: &str) -> io::Result<()> {
 
 /// theme.json as `Core/Theme.qml` reads it: per key, a missing or malformed
 /// value falls back to zinc and the rest stays.
-fn read_palette(path: &Path) -> (Map<String, Value>, bool) {
+pub(crate) fn read_palette(path: &Path) -> (Map<String, Value>, bool) {
     match std::fs::read_to_string(path) {
         Ok(text) => {
             let parsed: Option<Value> = serde_json::from_str(&text).ok();

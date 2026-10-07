@@ -106,8 +106,9 @@ sleep 3
 "${greeter_env[@]}" grim "$wrong_pw_png"
 sudo cp "$session_log" "$session_log_out" 2>/dev/null || true
 sudo chmod 644 "$session_log_out" 2>/dev/null || true
-if ! grep -q '"error_type":"auth_error"' "$session_log_out"; then
-  echo "SMOKE_FAIL: wrong-password leg never produced a real auth_error — got:" >&2
+# greetd's own wire reply, carrying PAM's verdict: never a greeter-side guess.
+if ! grep -q '"error_type":"auth_error","description":"pam_authenticate: AUTH_ERR"' "$session_log_out"; then
+  echo "SMOKE_FAIL: wrong-password leg never produced a real pam_authenticate AUTH_ERR, got:" >&2
   cat "$session_log_out" >&2
   exit 1
 fi
@@ -136,13 +137,15 @@ sudo cp "$session_log" "$session_log_out" 2>/dev/null || true
 sudo chmod 644 "$session_log_out" 2>/dev/null || true
 sudo journalctl -u greetd --no-pager -n 300 > "$journal_out" 2>&1 || true
 
-if ! grep -q "Authentication complete." "$session_log_out"; then
-  echo "SMOKE_FAIL: session log has no 'Authentication complete.' line — got:" >&2
+# Quickshell's Greetd and `formalshell-rs greeter` word the same two
+# moments differently; either greeter's line is the evidence.
+if ! grep -qE "Authentication complete\.|greetd: authentication complete" "$session_log_out"; then
+  echo "SMOKE_FAIL: session log has no authentication-complete line, got:" >&2
   cat "$session_log_out" >&2
   exit 1
 fi
-if ! grep -q "Quitting." "$session_log_out"; then
-  echo "SMOKE_FAIL: session log has no 'Quitting.' line (Greetd.launch's exit-after-launch never fired) — got:" >&2
+if ! grep -qE "Quitting\.|greeter: session started" "$session_log_out"; then
+  echo "SMOKE_FAIL: session log has no line saying the greeter exited after start_session, got:" >&2
   cat "$session_log_out" >&2
   exit 1
 fi

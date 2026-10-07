@@ -29,9 +29,8 @@ pub const SCRIM: f64 = 0.5;
 /// What every output shows the same.
 pub struct Shared<'a> {
     pub now: DateTime<Local>,
-    pub dots: usize,
+    pub prompt: Prompt<'a>,
     pub error: &'a str,
-    pub checking: bool,
     /// `state.json`'s wallpaper is set.
     pub has_wallpaper: bool,
     /// The decoded wallpaper, scrim baked in, at its own size.
@@ -44,6 +43,29 @@ pub struct Shared<'a> {
     pub enter: (f32, f64),
     /// Idle-blanked: nothing but black.
     pub blanked: bool,
+    /// The clock in `foreground` and the date in `mutedForeground` with no
+    /// glow (AuthPrompt's own inks, which the greeter keeps), instead of
+    /// the `lock.ink` state the backdrop asks for.
+    pub palette_ink: bool,
+}
+
+/// AuthPrompt.qml's field and what sits over it.
+pub struct Prompt<'a> {
+    /// What the field shows: a password's dots, or a username as typed.
+    pub text: String,
+    pub placeholder: &'a str,
+    /// The section label over the field; empty draws none.
+    pub label: &'a str,
+    /// Non-empty replaces the field with this message.
+    pub unavailable: &'a str,
+    pub enabled: bool,
+}
+
+impl Prompt<'_> {
+    /// The lock's: a masked password and nothing over it.
+    pub fn password(dots: usize, enabled: bool) -> Self {
+        Self { text: "\u{2022}".repeat(dots), placeholder: "Password", label: "", unavailable: "", enabled }
+    }
 }
 
 /// LockNowPlaying.qml's block, shown while a player that is not a stream
@@ -147,7 +169,17 @@ impl View {
         let clock = kit.shape(&s.now.format("%H:%M").to_string(), TextStyle { family: kit.look.mono, size: big as f32, weight: WEIGHTS.semibold as f32 });
         let date = kit.shape(&s.now.format("%A, %B %-d").to_string(), TextStyle { family: kit.look.sans, size: font.caption as f32, weight: WEIGHTS.medium as f32 });
         let error = (!s.error.is_empty()).then_some(s.error);
-        let field = w::input(&"\u{2022}".repeat(s.dots), "Password", !s.checking, error).width(Size::Px(space.popup_width_narrow)).enabled(!s.checking);
+        let pr = &s.prompt;
+        let mut block = Vec::new();
+        if pr.unavailable.is_empty() {
+            if !pr.label.is_empty() {
+                block.push(w::section_label(space, pr.label, None, false).centred());
+            }
+            block.push(w::input(&pr.text, pr.placeholder, pr.enabled, error).width(Size::Px(space.popup_width_narrow)).enabled(pr.enabled));
+        } else {
+            block.push(w::text(pr.unavailable).size(Type::BodySmall).ink(Ink::Muted).centred());
+        }
+        let field = if block.len() == 1 { block.remove(0) } else { w::column(space.lg, block) };
         let (field_w, field_h) = ui::measure(&field, space.popup_width_narrow, theme, kit);
 
         let avatar = s.avatar.map(|_| big);
@@ -169,7 +201,7 @@ impl View {
         let rest = IRect::new(clock_rect.x, clock_rect.y - rise.round() as i32, clock_rect.w, clock_rect.h);
         let (ink_name, luma, sampled) = ink(s, theme, rest, (w, h));
         let style = theme.box_style("lock.ink", Some(ink_name));
-        let glow: Vec<Glow<Rgba>> = style.ink_shadow.clone();
+        let glow: Vec<Glow<Rgba>> = if s.palette_ink { Vec::new() } else { style.ink_shadow.clone() };
 
         let mut p = Painter::new(&mut self.scene, &mut self.nodes, None);
         match s.backdrop.filter(|b| (b.pixmap.width() as i32, b.pixmap.height() as i32) == (w, h)) {
@@ -184,11 +216,12 @@ impl View {
         if let (Some(b), Some(at)) = (s.avatar, avatar_at) {
             p.image(b, at, fade);
         }
-        let clock_ink = style.ink.with_alpha(style.ink.a * fade);
+        let (clock_ink, date_ink) = if s.palette_ink { (theme.colors.get("foreground"), theme.colors.get("mutedForeground")) } else { (style.ink, style.ink) };
+        let clock_ink = clock_ink.with_alpha(clock_ink.a * fade);
         let clock_x = clock_rect.x + ((clock_w - clock.width as f64) / 2.0).round() as i32;
         p.text(&clock, (clock_x, clock_rect.y), clock_ink, &glow);
         let date_x = clock_rect.x + ((clock_w - date.width as f64) / 2.0).round() as i32;
-        p.text(&date, (date_x, clock_rect.y + clock.line_height() + space.lg as i32), clock_ink, &glow);
+        p.text(&date, (date_x, clock_rect.y + clock.line_height() + space.lg as i32), date_ink.with_alpha(date_ink.a * fade), &glow);
         // The now-playing block hangs `sectionGap * 2` under the field,
         // centred, `popupWidthNarrow` wide.
         let media_rect = s.media.as_ref().map(|m| {
