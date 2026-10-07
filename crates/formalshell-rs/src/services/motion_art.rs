@@ -178,7 +178,7 @@ fn ffmpeg_args(path: &str, size: u32) -> Vec<String> {
 }
 
 async fn frames(ctx: Ctx, key: String, path: String, (size, radius): (u32, f64), pid: Arc<AtomicI32>, hold: Arc<AtomicBool>, stop: Arc<AtomicBool>) {
-    let child = async_process::Command::new("ffmpeg")
+    let child = crate::services::proc::command("ffmpeg")
         .args(ffmpeg_args(&path, size))
         .stdin(async_process::Stdio::null())
         .stdout(async_process::Stdio::piped())
@@ -229,7 +229,7 @@ fn frame(raw: Vec<u8>, size: u32, radius: f64) -> Option<Bitmap> {
 }
 
 async fn curl(args: &[&str]) -> (i32, String) {
-    let out = async_process::Command::new("curl")
+    let out = crate::services::proc::command("curl")
         .args(CURL)
         .args(args)
         .stdin(async_process::Stdio::null())
@@ -291,7 +291,7 @@ async fn lookup(w: &Want, dir: &str, key: &str, token: &mut String) -> Result<Op
     std::fs::create_dir_all(dir).map_err(|_| "could not create cache dir")?;
     let path = format!("{dir}/{key}.mp4");
     let part = format!("{path}.{}.part", std::process::id());
-    let ok = async_process::Command::new("curl")
+    let ok = crate::services::proc::command("curl")
         .args(["-sSf", "-L", "--max-redirs", "5", "--connect-timeout", "5", "--max-time", "60", "-o", &part, "--", &mp4])
         .stdin(async_process::Stdio::null())
         .stderr(async_process::Stdio::null())

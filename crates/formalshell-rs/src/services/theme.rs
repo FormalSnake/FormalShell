@@ -638,7 +638,7 @@ impl Engine {
                 // Extraction only: --dry-run writes no template and runs no
                 // command, and -d is what prints the ranking (-q would
                 // silence it).
-                let probe = async_process::Command::new(&self.env.matugen)
+                let probe = crate::services::proc::command(&self.env.matugen)
                     .args(["-d", "image", inputs.wallpaper.as_str(), "--dry-run", "--prefer", "saturation"])
                     .stdin(std::process::Stdio::null())
                     .output()
@@ -666,7 +666,7 @@ impl Engine {
                     .collect()
             }
         };
-        let status = async_process::Command::new(&self.env.matugen)
+        let status = crate::services::proc::command(&self.env.matugen)
             .args(&args)
             .stdin(std::process::Stdio::null())
             .status()
@@ -810,7 +810,7 @@ fn read_user_configs(user: &Path, drop_ins: &Path) -> (Option<String>, Option<St
 }
 
 async fn run_status(bin: &OsString, args: &[&str]) -> bool {
-    async_process::Command::new(bin)
+    crate::services::proc::command(bin)
         .args(args)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())

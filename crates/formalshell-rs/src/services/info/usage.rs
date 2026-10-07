@@ -239,7 +239,7 @@ impl Poll {
     }
 
     async fn codex_session(&self) -> Codex {
-        let child = async_process::Command::new("codex")
+        let child = crate::services::proc::command("codex")
             .args(["-s", "read-only", "-a", "untrusted", "app-server"])
             .stdin(async_process::Stdio::piped())
             .stdout(async_process::Stdio::piped())

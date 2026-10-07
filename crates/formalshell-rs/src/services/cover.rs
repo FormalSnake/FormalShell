@@ -84,7 +84,7 @@ async fn fetch(ctx: &Ctx, url: &str) -> Option<Vec<u8>> {
         };
     }
     if url.starts_with("http://") || url.starts_with("https://") {
-        let out = async_process::Command::new("curl")
+        let out = crate::services::proc::command("curl")
             .args(["--fail", "--silent", "--location", "--connect-timeout", "4", "--max-time", "10", "--max-filesize", MAX_BYTES, url])
             .stdin(async_process::Stdio::null())
             .stderr(async_process::Stdio::null())

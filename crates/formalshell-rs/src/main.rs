@@ -50,6 +50,7 @@ fn main() {
     let epoch = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default();
     eprintln!("start epoch_us={}", epoch.as_micros());
     instance::acquire();
+    own_process_group();
     phase("instance");
 
     let conn = Connection::connect_to_env().expect("no Wayland compositor to connect to");
@@ -103,6 +104,7 @@ fn main() {
         cpu_mark = thread_cpu_us();
     });
     app.report_exit();
+    reap_children();
     if let Err(err) = ended {
         eprintln!("event loop: {err}");
     }
@@ -131,4 +133,41 @@ fn thread_cpu_us() -> i64 {
     // SAFETY: a valid out pointer, for the calling thread's own clock.
     unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &mut ts) };
     ts.tv_sec * 1_000_000 + ts.tv_nsec / 1000
+}
+
+/// The shell leads a process group of its own, which every child it starts
+/// joins, so its way out (an exit, a SIGTERM, a SIGINT, a SIGHUP) takes
+/// them along: `PR_SET_PDEATHSIG` alone misses a child's own children.
+fn own_process_group() {
+    // SAFETY: plain syscalls; the handler only makes async-signal-safe ones.
+    unsafe {
+        libc::setpgid(0, 0);
+        for sig in [libc::SIGTERM, libc::SIGINT, libc::SIGHUP] {
+            libc::signal(sig, on_exit_signal as *const () as libc::sighandler_t);
+        }
+    }
+}
+
+extern "C" fn on_exit_signal(sig: libc::c_int) {
+    // SAFETY: async-signal-safe calls only. With its handler gone, the
+    // signal the group gets ends the shell as well.
+    unsafe {
+        libc::signal(sig, libc::SIG_DFL);
+        if libc::getpgrp() == libc::getpid() {
+            libc::kill(0, sig);
+        } else {
+            libc::raise(sig);
+        }
+    }
+}
+
+/// SIGTERM to every child still running, from the group the shell leads.
+fn reap_children() {
+    // SAFETY: plain syscalls on the shell's own group.
+    unsafe {
+        if libc::getpgrp() == libc::getpid() {
+            libc::signal(libc::SIGTERM, libc::SIG_IGN);
+            libc::kill(0, libc::SIGTERM);
+        }
+    }
 }

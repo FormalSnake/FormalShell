@@ -21,7 +21,7 @@ use std::time::{Duration, Instant};
 
 use async_channel::{Receiver, Sender};
 use async_io::Timer;
-use async_process::{Command, Stdio};
+use async_process::Stdio;
 use chrono::Local;
 use fs_theme::sun;
 use futures_lite::io::BufReader;
@@ -237,7 +237,7 @@ impl Machine {
         let temp = self.settings.temp.to_string();
         let tx = CHANNEL.0.clone();
         self.ctx.spawn(async move {
-            let child = Command::new("setpriv")
+            let child = crate::services::proc::command("setpriv")
                 .args(["--pdeathsig", "TERM", "--", "wlsunset", "-t", &temp, "-S", "06:00", "-s", "18:00"])
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
@@ -265,7 +265,7 @@ impl Machine {
     fn signal(&self, name: &'static str) {
         let Some(pid) = self.run.as_ref().and_then(|r| r.pid) else { return };
         self.ctx.spawn(async move {
-            let _ = Command::new("kill").arg(format!("-{name}")).arg(pid.to_string()).stdout(Stdio::null()).stderr(Stdio::null()).status().await;
+            let _ = crate::services::proc::command("kill").arg(format!("-{name}")).arg(pid.to_string()).stdout(Stdio::null()).stderr(Stdio::null()).status().await;
         });
     }
 

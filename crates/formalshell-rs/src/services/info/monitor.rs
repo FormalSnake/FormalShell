@@ -225,7 +225,7 @@ fn sample(prev: &mut Prev, sections: &HashMap<String, String>, at: Instant) -> S
 /// One collector run, on a pool thread: it walks /proc, /sys and `df`.
 fn collect() -> HashMap<String, String> {
     let argv = collect_command();
-    let out = std::process::Command::new(&argv[0])
+    let out = crate::services::proc::std_command(&argv[0])
         .args(&argv[1..])
         .stdin(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())

@@ -374,7 +374,7 @@ async fn dispatch(lua: &str) {
 /// is the documented way in under a Lua config.
 async fn eval(ctx: &Ctx, lua: &str) {
     let lua = lua.to_owned();
-    let out = ctx.pool().run(move || std::process::Command::new("hyprctl").args(["eval", &lua]).output()).await;
+    let out = ctx.pool().run(move || crate::services::proc::std_command("hyprctl").args(["eval", &lua]).output()).await;
     let answer = match out {
         Some(Ok(out)) if out.status.success() => Ok(String::from_utf8_lossy(&out.stdout).into_owned()),
         Some(Ok(out)) => Ok(String::from_utf8_lossy(&out.stderr).into_owned()),

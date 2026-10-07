@@ -195,7 +195,7 @@ enum Outcome {
 
 /// curl's exit code and stdout; 22 is the server's own miss (`--fail`).
 async fn curl(url: &str, max_time: u32) -> (i32, String) {
-    let out = async_process::Command::new("curl")
+    let out = crate::services::proc::command("curl")
         .args(["-sS", "--fail", "--max-time", &max_time.to_string(), "-H", USER_AGENT, url])
         .stdin(async_process::Stdio::null())
         .stderr(async_process::Stdio::null())
@@ -411,7 +411,7 @@ async fn resolve(ctx: &Ctx, ask: &Ask, session: &mut Session) {
 }
 
 async fn read_latency(ctx: &Ctx) {
-    let out = async_process::Command::new("pw-dump").stdin(async_process::Stdio::null()).stderr(async_process::Stdio::null()).kill_on_drop(true).output().await;
+    let out = crate::services::proc::command("pw-dump").stdin(async_process::Stdio::null()).stderr(async_process::Stdio::null()).kill_on_drop(true).output().await;
     let text = match out {
         Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout).into_owned(),
         _ => String::new(),

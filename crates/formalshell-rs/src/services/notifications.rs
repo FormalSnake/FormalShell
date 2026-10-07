@@ -715,7 +715,7 @@ pub async fn run(ctx: Ctx) {
                     }
                 }
                 Cmd::Phone(args) => {
-                    let _ = async_process::Command::new("omarchy-iphone-bridge")
+                    let _ = crate::services::proc::command("omarchy-iphone-bridge")
                         .args(&args)
                         .stdin(async_process::Stdio::null())
                         .stdout(async_process::Stdio::null())

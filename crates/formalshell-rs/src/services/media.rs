@@ -379,12 +379,12 @@ impl State {
         // pactl addresses a stream by its sink-input index and PipeWire by
         // its node id: list the sink inputs, then move each one found.
         std::thread::spawn(move || {
-            let Ok(listed) = std::process::Command::new("pactl").args(["-f", "json", "list", "sink-inputs"]).output() else { return };
+            let Ok(listed) = crate::services::proc::std_command("pactl").args(["-f", "json", "list", "sink-inputs"]).output() else { return };
             let text = String::from_utf8_lossy(&listed.stdout);
             for id in ids {
                 let index = pick::sink_input_index(&text, id);
                 if index >= 0 {
-                    let _ = std::process::Command::new("pactl").args(["move-sink-input", &index.to_string(), &sink]).status();
+                    let _ = crate::services::proc::std_command("pactl").args(["move-sink-input", &index.to_string(), &sink]).status();
                 }
             }
         });

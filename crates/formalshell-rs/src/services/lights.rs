@@ -226,7 +226,7 @@ impl Machine {
         self.writing = true;
         let tx = CHANNEL.0.clone();
         self.ctx.spawn(async move {
-            let out = async_process::Command::new(&args[0])
+            let out = crate::services::proc::command(&args[0])
                 .args(&args[1..])
                 .stdin(async_process::Stdio::null())
                 .stdout(async_process::Stdio::null())

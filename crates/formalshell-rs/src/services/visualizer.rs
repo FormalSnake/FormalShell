@@ -196,7 +196,7 @@ fn conf_text() -> String {
 /// `setpriv` hands the child a parent-death signal, the shell's own
 /// guarantee that a crash never leaves cava behind.
 fn cava_command(conf: &std::path::Path) -> async_process::Command {
-    let mut cmd = async_process::Command::new("setpriv");
+    let mut cmd = crate::services::proc::command("setpriv");
     cmd.args(["--pdeathsig", "TERM", "--", "sh", "-c", "command -v cava >/dev/null 2>&1 || exit 127; exec cava -p \"$1\"", "sh"])
         .arg(conf)
         .stdin(async_process::Stdio::null())
@@ -245,7 +245,7 @@ enum Event {
 }
 
 async fn curl(url: &str) -> String {
-    let out = async_process::Command::new("curl")
+    let out = crate::services::proc::command("curl")
         .args(["-sS", "--fail", "--max-time", "5", url])
         .stdin(async_process::Stdio::null())
         .stderr(async_process::Stdio::null())
@@ -298,7 +298,7 @@ pub async fn run(ctx: Ctx) {
     let probe = async {
         std::fs::create_dir_all(&dir).ok()?;
         std::fs::write(&conf, conf_text()).ok()?;
-        let status = async_process::Command::new("sh")
+        let status = crate::services::proc::command("sh")
             .args(["-c", "command -v cava >/dev/null 2>&1"])
             .stdin(async_process::Stdio::null())
             .status()

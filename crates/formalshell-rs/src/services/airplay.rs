@@ -105,7 +105,7 @@ pub async fn run(ctx: Ctx) {
     // Neither file's directory exists on its own; it is made before uxplay
     // runs and before the watches are placed in it.
     let dir_ready = std::fs::create_dir_all(&dir).is_ok();
-    let installed = async_process::Command::new("sh")
+    let installed = crate::services::proc::command("sh")
         .args(["-c", "command -v uxplay >/dev/null 2>&1"])
         .status()
         .await
@@ -240,7 +240,7 @@ fn spawn(
     cover: &std::path::Path,
     dacp: &std::path::Path,
 ) -> Option<(async_process::Child, futures_lite::io::Lines<BufReader<async_process::ChildStdout>>)> {
-    let mut child = async_process::Command::new("setpriv")
+    let mut child = crate::services::proc::command("setpriv")
         .args(["--pdeathsig", "TERM", "--", "uxplay", "-p", "-n", name, "-nh", "-md"])
         .arg(meta)
         .arg("-ca")

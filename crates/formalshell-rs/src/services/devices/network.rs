@@ -654,7 +654,7 @@ fn speed_abort(message: &str) {
 }
 
 async fn sh(script: &str) -> Option<(bool, String)> {
-    let out = async_process::Command::new("sh")
+    let out = crate::services::proc::command("sh")
         .args(["-c", script])
         .stdin(async_process::Stdio::null())
         .stderr(async_process::Stdio::null())
@@ -676,7 +676,7 @@ fn stat_bytes(iface: &str) -> Option<(f64, f64)> {
 /// process's own child, so dropping the future kills it by pid.
 async fn worker(up: bool) {
     loop {
-        let mut cmd = async_process::Command::new("curl");
+        let mut cmd = crate::services::proc::command("curl");
         cmd.args(["-s", "-o", "/dev/null"]);
         if up {
             cmd.args(["-X", "POST", "-T", "/dev/zero", ST_UP_URL]);
@@ -830,7 +830,7 @@ fn request_fields(ctx: &Ctx) {
     }
     let c = ctx.clone();
     ctx.spawn(async move {
-        let out = async_process::Command::new("sh")
+        let out = crate::services::proc::command("sh")
             .args(["-c", FIELDS_SCRIPT])
             .stdin(async_process::Stdio::null())
             .stderr(async_process::Stdio::null())
@@ -894,7 +894,7 @@ fn on_fields_qr(ctx: &Ctx, code: i32, text: &str) {
     // The payload reaches qrencode over stdin, never argv.
     ctx.spawn(async move {
         use futures_lite::AsyncWriteExt;
-        let child = async_process::Command::new("sh")
+        let child = crate::services::proc::command("sh")
             .args(["-c", "qrencode --type ASCII --margin 4 --output -"])
             .stdin(async_process::Stdio::piped())
             .stdout(async_process::Stdio::piped())

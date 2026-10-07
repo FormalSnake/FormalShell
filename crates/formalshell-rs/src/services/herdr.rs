@@ -169,7 +169,7 @@ async fn poll(key: String, argv: Vec<String>, tx: async_channel::Sender<Event>, 
     let run = async {
         let mut backoff = BASE_BACKOFF;
         loop {
-            let child = async_process::Command::new(&argv[0])
+            let child = crate::services::proc::command(&argv[0])
                 .args(&argv[1..])
                 .stdin(async_process::Stdio::piped())
                 .stdout(async_process::Stdio::piped())
@@ -202,7 +202,7 @@ async fn poll(key: String, argv: Vec<String>, tx: async_channel::Sender<Event>, 
 }
 
 fn walk_rows() -> Vec<PsRow> {
-    let out = std::process::Command::new("ps").args(["-eo", "pid=,ppid=,args="]).output();
+    let out = crate::services::proc::std_command("ps").args(["-eo", "pid=,ppid=,args="]).output();
     match out {
         Ok(o) if o.status.success() => herdr::parse_ps_rows(Some(&String::from_utf8_lossy(&o.stdout))),
         _ => Vec::new(),

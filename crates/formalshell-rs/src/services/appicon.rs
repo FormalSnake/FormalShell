@@ -162,7 +162,7 @@ impl Inner {
             return;
         }
         let argv = appicon::proc_command(&wanted);
-        let Ok(out) = std::process::Command::new(&argv[0]).args(&argv[1..]).output() else { return };
+        let Ok(out) = crate::services::proc::std_command(&argv[0]).args(&argv[1..]).output() else { return };
         self.procs.extend(appicon::parse_procs(&String::from_utf8_lossy(&out.stdout)));
     }
 

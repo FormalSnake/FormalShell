@@ -103,7 +103,7 @@ struct Prev {
 
 fn collect() -> std::collections::HashMap<String, String> {
     let argv = procs::collect_command();
-    std::process::Command::new(&argv[0])
+    crate::services::proc::std_command(&argv[0])
         .args(&argv[1..])
         .stdin(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())

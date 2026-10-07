@@ -311,7 +311,7 @@ enum Wake {
 /// let go of it.
 async fn session(ctx: &Ctx, plugin: &Plugin, events: &async_channel::Receiver<String>) -> Option<String> {
     let dir = PathBuf::from(&plugin.dir);
-    let child = async_process::Command::new(dir.join(&plugin.entry))
+    let child = crate::services::proc::command(dir.join(&plugin.entry))
         .current_dir(&dir)
         .stdin(async_process::Stdio::piped())
         .stdout(async_process::Stdio::piped())

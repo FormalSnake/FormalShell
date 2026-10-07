@@ -18,6 +18,28 @@ pub struct Done {
     pub stderr: String,
 }
 
+/// Every child the shell starts: SIGTERM'd when the thread that spawned it
+/// goes (`PR_SET_PDEATHSIG`; services spawn from the service thread, which
+/// lives as long as the process), and in the shell's process group, which
+/// the shell signals on its way out (`main`'s `reap_children`).
+pub fn std_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Command {
+    use std::os::unix::process::CommandExt;
+    let mut cmd = std::process::Command::new(program);
+    // SAFETY: prctl is async-signal-safe and touches nothing of the parent.
+    unsafe {
+        cmd.pre_exec(|| {
+            libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM);
+            Ok(())
+        });
+    }
+    cmd
+}
+
+/// [`std_command`] for the service thread's executor.
+pub fn command(program: impl AsRef<std::ffi::OsStr>) -> async_process::Command {
+    std_command(program).into()
+}
+
 pub fn argv(parts: &[&str]) -> Vec<String> {
     parts.iter().map(|p| (*p).to_owned()).collect()
 }
@@ -35,7 +57,7 @@ pub async fn capture_err(argv: &[String], timeout: Duration) -> Done {
 async fn run(argv: &[String], timeout: Duration, err: bool) -> Done {
     let none = |code| Done { code, stdout: String::new(), stderr: String::new() };
     let Some((program, args)) = argv.split_first() else { return none(MISSING) };
-    let child = async_process::Command::new(program)
+    let child = command(program)
         .args(args)
         .stdin(async_process::Stdio::null())
         .stdout(async_process::Stdio::piped())

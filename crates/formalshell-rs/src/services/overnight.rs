@@ -66,7 +66,7 @@ fn record(key: &str, value: Value) {
 }
 
 async fn output(argv: &[&str]) -> Option<(i32, String)> {
-    let out = async_process::Command::new(argv[0]).args(&argv[1..]).stderr(async_process::Stdio::null()).output().await.ok()?;
+    let out = crate::services::proc::command(argv[0]).args(&argv[1..]).stderr(async_process::Stdio::null()).output().await.ok()?;
     Some((out.status.code().unwrap_or(-1), String::from_utf8_lossy(&out.stdout).into_owned()))
 }
 

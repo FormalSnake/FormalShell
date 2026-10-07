@@ -178,7 +178,7 @@ fn read_cards() -> Vec<gpu::Card> {
 }
 
 async fn output(argv: &[String]) -> Option<(i32, String)> {
-    let out = async_process::Command::new(&argv[0])
+    let out = crate::services::proc::command(&argv[0])
         .args(&argv[1..])
         .stderr(async_process::Stdio::null())
         .output()

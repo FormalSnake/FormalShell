@@ -26,7 +26,7 @@ use std::time::{Duration, Instant};
 
 use async_channel::{Receiver, Sender};
 use async_io::{Async, Timer};
-use async_process::{ChildStdin, Command, Stdio};
+use async_process::{ChildStdin, Stdio};
 use fs_devices::bluetooth::Device as BtDevice;
 use fs_devices::earbuds::{self as model, Device, Value, airpods, nothing, samsung, soundcore};
 use futures_lite::io::BufReader;
@@ -326,7 +326,7 @@ pub fn start(ctx: &Ctx) {
 /// (no binary on PATH), -2 for an argv an adapter refused to build.
 async fn run_cli(argv: Option<Vec<String>>) -> (i32, String) {
     let Some(argv) = argv.filter(|a| !a.is_empty()) else { return (-2, String::new()) };
-    let out = Command::new(&argv[0]).args(&argv[1..]).stdin(Stdio::null()).stderr(Stdio::null()).output().await;
+    let out = crate::services::proc::command(&argv[0]).args(&argv[1..]).stdin(Stdio::null()).stderr(Stdio::null()).output().await;
     match out {
         Ok(out) => (out.status.code().unwrap_or(-3), String::from_utf8_lossy(&out.stdout).into_owned()),
         Err(_) => (-1, String::new()),
@@ -671,7 +671,7 @@ impl Nothing {
         let Some(argv) = nothing::watch_argv(address) else { return };
         self.next_id += 1;
         let id = self.next_id;
-        let child = Command::new(&argv[0])
+        let child = crate::services::proc::command(&argv[0])
             .args(&argv[1..])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

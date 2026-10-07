@@ -136,7 +136,7 @@ pub fn start(ctx: &Ctx, run: u64, opts: ttfx::Opts, pinned: Option<usize>) {
 async fn stream(ctx: &Ctx, run: u64, opts: ttfx::Opts, pinned: Option<usize>) -> Option<End> {
     let rows = opts.rows;
     let argv = ttfx::command(&opts);
-    let child = async_process::Command::new(&argv[0])
+    let child = crate::services::proc::command(&argv[0])
         .args(&argv[1..])
         .stdin(async_process::Stdio::null())
         .stdout(async_process::Stdio::piped())

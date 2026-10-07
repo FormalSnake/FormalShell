@@ -310,7 +310,7 @@ fn load(path: &std::path::Path) -> Vec<Entry> {
 /// data-control protocol, or no wl-paste at all).
 async fn watch(args: Vec<String>, tx: Sender<Event>, wrap: fn(String) -> Event) {
     loop {
-        let child = async_process::Command::new("setpriv")
+        let child = crate::services::proc::command("setpriv")
             .args(["--pdeathsig", "TERM", "--", "wl-paste"])
             .args(&args)
             .stdin(async_process::Stdio::null())

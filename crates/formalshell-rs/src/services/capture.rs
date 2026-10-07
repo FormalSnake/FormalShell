@@ -121,7 +121,7 @@ async fn child(ctx: Ctx, run: Run) {
         ctx.publish(exit(false, -1, String::new(), String::new()));
         return;
     };
-    let spawned = async_process::Command::new(program)
+    let spawned = crate::services::proc::command(program)
         .args(args)
         .envs(env)
         .stdin(async_process::Stdio::null())

@@ -243,7 +243,7 @@ enum Ev {
 }
 
 fn spawn_bridge(args: &[&str]) -> std::io::Result<async_process::Child> {
-    async_process::Command::new(BRIDGE)
+    crate::services::proc::command(BRIDGE)
         .args(args)
         .stdin(async_process::Stdio::null())
         .stdout(async_process::Stdio::piped())
@@ -270,7 +270,7 @@ async fn run_child(args: Vec<String>, inbox: async_channel::Sender<Msg>, report_
 }
 
 async fn listen(ctx: &Ctx, session: &mut Session, inbox: &(async_channel::Sender<Msg>, async_channel::Receiver<Msg>), actions: &async_channel::Sender<Vec<String>>) -> i32 {
-    let child = async_process::Command::new(BRIDGE)
+    let child = crate::services::proc::command(BRIDGE)
         .args(["listen", "--limit", &HISTORY_LIMIT.to_string()])
         .stdin(async_process::Stdio::null())
         .stdout(async_process::Stdio::piped())
@@ -444,7 +444,7 @@ fn end_pairing(ctx: &Ctx, session: &mut Session) {
     if !session.advertising_hci.is_empty() {
         let hci = std::mem::take(&mut session.advertising_hci);
         ctx.spawn(async move {
-            let _ = async_process::Command::new("busctl")
+            let _ = crate::services::proc::command("busctl")
                 .args(["call", "--system", "ancs4linux.Advertising", "/", "ancs4linux.Advertising", "DisableAdvertising", "s", &hci])
                 .stdout(async_process::Stdio::null())
                 .stderr(async_process::Stdio::null())

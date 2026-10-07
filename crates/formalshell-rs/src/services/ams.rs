@@ -158,7 +158,7 @@ fn apply(state: &mut State, event: AmsEvent) {
 }
 
 fn listen() -> Option<(async_process::Child, futures_lite::io::Lines<BufReader<async_process::ChildStdout>>)> {
-    let mut child = async_process::Command::new("setpriv")
+    let mut child = crate::services::proc::command("setpriv")
         .args(["--pdeathsig", "TERM", "--", "sh", "-c", "command -v \"$0\" >/dev/null 2>&1 || exit 127; exec \"$0\" listen", AMS])
         .stdin(async_process::Stdio::null())
         .stdout(async_process::Stdio::piped())
@@ -282,7 +282,7 @@ pub async fn run(ctx: Ctx) {
             Ev::Command(Some(name)) => {
                 let reply_tx = reply_tx.clone();
                 ctx.spawn(async move {
-                    let out = async_process::Command::new("setpriv")
+                    let out = crate::services::proc::command("setpriv")
                         .args(["--pdeathsig", "TERM", "--", AMS, "command", &name])
                         .stdin(async_process::Stdio::null())
                         .stderr(async_process::Stdio::null())

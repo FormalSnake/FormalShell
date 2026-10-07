@@ -93,7 +93,7 @@ async fn once(module: &Module) -> Output {
     if module.argv.is_empty() {
         return Output::error();
     }
-    let child = async_process::Command::new(&module.argv[0])
+    let child = crate::services::proc::command(&module.argv[0])
         .args(&module.argv[1..])
         .stdin(async_process::Stdio::null())
         .stdout(async_process::Stdio::piped())

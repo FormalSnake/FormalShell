@@ -259,7 +259,7 @@ fn state_path() -> PathBuf {
 }
 
 async fn curl(args: &[String]) -> Option<String> {
-    let out = async_process::Command::new(args.first()?)
+    let out = crate::services::proc::command(args.first()?)
         .args(&args[1..])
         .stdin(async_process::Stdio::null())
         .stderr(async_process::Stdio::null())
@@ -437,7 +437,7 @@ impl Radio {
         };
         self.stopping = false;
         let argv = self.mpv_argv(&socket);
-        let child = async_process::Command::new("sh")
+        let child = crate::services::proc::command("sh")
             .args(["-c", "mkdir -p -m 700 \"$1\" && shift && exec \"$@\"", "sh"])
             .arg(dir)
             .args(argv)
