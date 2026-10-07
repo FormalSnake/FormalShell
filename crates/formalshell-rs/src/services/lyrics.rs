@@ -439,12 +439,17 @@ async fn latency(ctx: Ctx) {
     loop {
         // A synced track re-reads every ten seconds, since a Bluetooth sink
         // revises its own transport delay mid-stream; a poke (a newly synced
-        // track, another player) reads once things settle.
-        let poked = future::or(async { rx.recv().await.is_ok() }, async {
-            async_io::Timer::after(Duration::from_secs(10)).await;
-            false
-        })
-        .await;
+        // track, another player) reads once things settle. With nothing
+        // synced there is no timer at all, only the poke that starts one.
+        let poked = if LATENCY_WANTED.load(Ordering::Relaxed) {
+            future::or(async { rx.recv().await.is_ok() }, async {
+                async_io::Timer::after(Duration::from_secs(10)).await;
+                false
+            })
+            .await
+        } else {
+            rx.recv().await.is_ok()
+        };
         if poked {
             async_io::Timer::after(Duration::from_millis(300)).await;
             while rx.try_recv().is_ok() {}
