@@ -50,6 +50,7 @@ pub fn changed(app: &mut App, topic: Topic) {
         Topic::Devices => {
             app.osd_audio();
             app.headset_devices();
+            app.launcher_devices();
             app.refresh_bar(Some(topic));
         }
         Topic::Tray => {
@@ -59,6 +60,10 @@ pub fn changed(app: &mut App, topic: Topic) {
         }
         Topic::Notifications => {
             app.toasts_changed();
+            app.refresh_bar(Some(topic));
+        }
+        Topic::Media => {
+            app.launcher_devices();
             app.refresh_bar(Some(topic));
         }
         _ => app.refresh_bar(Some(topic)),

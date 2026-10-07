@@ -382,9 +382,16 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   item whole inside the viewport (`viewCursor.top`/`bottom`).
 - `menu_budget.sh` `--menu-budget`: the rust spec's launcher budget off the
   shell's own commit log, the bar's badge spinning throughout five `menu
-  toggle` opens: toggle to the launcher's first commit under 50 ms, no gap
-  between bar commits over 33 ms across an open, and no launcher commit in
-  five seconds open at rest. Rust only; QML prints it as skipped.
+  toggle` opens: toggle to the launcher's first commit under 50 ms, the
+  shell's own hold on any bar frame under 16 ms (each gap split into the
+  compositor's callback wait and the shell's turn), no gap between bar
+  commits over 33 ms where the compositor kept 60 Hz, and no launcher
+  commit in five seconds open at rest. Rust only; QML prints it as skipped.
+- `menu_actions.sh` `--menu-actions`: the launcher's in-process `@ipc:`
+  actions reached through its own rows: the toggle hub's Do Not Disturb,
+  Caffeinate and Overnight rows each flipping their service with the hub
+  left open and the rows ticked, Set Reminder's input step setting a
+  reminder typed on real keys, and Clear Reminders dropping it.
 - `menu_emerge.sh` `--menu-emerge`: the launcher budding off the top line,
   sampled frame by frame under `debug motionScale`: card fill under the line
   with nothing at its resting floor, the bar's own band undimmed while it is

@@ -25,6 +25,13 @@ pub struct Audio {
     pub source_muted: bool,
     /// The graph AudioPanel.qml lists, read only while it is open.
     pub lists: Option<Lists>,
+    /// Every device node (the launcher's audio route): its node name, its
+    /// label and whether it is a sink. Volumes stay out, so a level change
+    /// publishes nothing here.
+    pub devices: Vec<(String, String, bool)>,
+    /// The default sink's and source's node names.
+    pub default_sink: String,
+    pub default_source: String,
 }
 
 /// One device or stream row.
@@ -91,6 +98,14 @@ fn snapshot(graph: &Graph) -> Audio {
         source: source.is_some(),
         source_muted: source.is_some_and(|a| a.muted),
         lists: PANEL.load(Ordering::Relaxed).then(|| lists(graph)),
+        devices: graph
+            .nodes
+            .values()
+            .filter(|n| n.is_device() && n.audio.is_some())
+            .map(|n| (n.name.clone(), device_label(n).to_owned(), n.is_sink()))
+            .collect(),
+        default_sink: node.filter(|_| sink.is_some()).map(|n| n.name.clone()).unwrap_or_default(),
+        default_source: graph.default_source().filter(|n| n.audio.is_some()).map(|n| n.name.clone()).unwrap_or_default(),
     }
 }
 
