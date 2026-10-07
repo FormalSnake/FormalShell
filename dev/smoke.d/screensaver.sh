@@ -168,6 +168,14 @@ done
 # effect is the banner itself, so this frame is the same picture whichever
 # effect the reroll happened to land on. A pin also suspends cycling, so
 # nothing rerolls out from under grim.
+#
+# Unless the run pinned an effect, wipe is set first: a reroll can land on
+# one that never finishes inside ttfx's 600-frame pin cap (thunderstorm,
+# binarypath), and that run's last counted frame is no banner at all.
+if [ -z "${SCREENSAVER_EFFECT:-}" ]; then
+  settings_set '.screensaver.effect = "wipe"'
+  sleep 1
+fi
 $ipc call screensaver frame 0 > /dev/null 2>&1
 sleep 3
 $ipc call screensaver frameInfo > "$ss_solid_info_path" 2>&1
