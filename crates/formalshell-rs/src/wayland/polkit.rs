@@ -1,33 +1,34 @@
-//! The polkit dialog (PolkitDialog.qml): a full-output top-layer surface
-//! holding the keyboard while a request is open, the scrim over the desktop
-//! and the card at its centre: "Authentication required", the action's
-//! message, the identity, the password field and Cancel/Authenticate.
+//! The polkit dialog (PolkitDialog.qml): a modal card on the top layer
+//! (`surfaces::modal`), budding off the top line to the output's centre
+//! over its scrim and holding the keyboard while a request is open:
+//! "Authentication required", the action's message, the identity, the
+//! password field and Cancel/Authenticate.
 
 use std::time::Instant;
 
-use fs_theme::color::Rgba;
 use smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface;
 use smithay_client_toolkit::seat::keyboard::{KeyEvent, Keysym};
 use smithay_client_toolkit::shell::WaylandSurface;
-use smithay_client_toolkit::shell::wlr_layer::{Anchor, KeyboardInteractivity, Layer, LayerSurface};
+use smithay_client_toolkit::shell::wlr_layer::{Layer, LayerSurface};
 use vello_cpu::kurbo::Rect;
 use zeroize::Zeroizing;
 
 use super::App;
 use super::lock::{LockMsg, field};
-use crate::scene::{Bitmap, IRect, NodeId, Scene};
+use crate::scene::{Bitmap, NodeId};
 use crate::services::polkit::{self, Cmd, Event};
-use crate::surface::Surface;
 use crate::surfaces::bar::cell::Painter;
-use crate::ui::{self, El, Size, Ui, Variant, boxes, w};
+use crate::surfaces::modal::{Modal, Part};
+use crate::ui::{self, El, Size, Ui, Variant, w};
 
 const NAMESPACE: &str = "formalshell:polkit";
 
+/// Drawer.qml's default `deformAmount`, which PolkitDialog.qml leaves alone.
+const DEFORM_AMOUNT: f64 = 0.15;
+
 pub struct Dialog {
-    surface: Surface,
-    scene: Scene,
+    modal: Modal,
     ui: Ui,
-    nodes: Vec<NodeId>,
     avatar_nodes: Vec<NodeId>,
     /// The identity's picture, when it is this session's own account.
     avatar: Option<Bitmap>,
@@ -73,17 +74,11 @@ impl App {
         match event {
             Event::Begin { message, identity } => {
                 let own = !identity.is_empty() && std::env::var("USER").is_ok_and(|u| u == identity);
-                let surface = self.compositor.create_surface(&self.qh);
-                let layer = self.layer_shell.create_layer_surface(&self.qh, surface, Layer::Top, Some(NAMESPACE), None);
-                layer.set_anchor(Anchor::all());
-                layer.set_exclusive_zone(-1);
-                layer.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
-                layer.commit();
+                let modal = self.new_modal(["polkit", "polkit-scrim-band", "polkit-scrim"], NAMESPACE, Layer::Top, DEFORM_AMOUNT);
+                let top = modal.card.top_node();
                 self.polkit = Some(Dialog {
-                    surface: Surface::new("polkit", layer, &self.shm, self.started),
-                    scene: Scene::new(1, 1),
-                    ui: Ui::new(None),
-                    nodes: Vec::new(),
+                    modal,
+                    ui: Ui::new(Some(top)),
                     avatar_nodes: Vec::new(),
                     avatar: None,
                     message,
@@ -116,34 +111,47 @@ impl App {
                     d.text = field();
                 }
             }
-            Event::Done => self.polkit = None,
+            Event::Done => {
+                if let Some(d) = &mut self.polkit {
+                    d.modal.close(Instant::now());
+                    d.dirty = true;
+                }
+            }
         }
+    }
+
+    fn polkit_part(&self, surface: &WlSurface) -> Option<Part> {
+        self.polkit.as_ref()?.modal.part(surface)
     }
 
     pub(super) fn polkit_owns(&self, layer: &LayerSurface) -> bool {
-        self.polkit.as_ref().is_some_and(|d| d.surface.layer.wl_surface() == layer.wl_surface())
+        self.polkit_part(layer.wl_surface()).is_some()
     }
 
-    pub(super) fn polkit_configure(&mut self, width: i32, height: i32) {
+    pub(super) fn polkit_configure(&mut self, layer: &LayerSurface, width: i32, height: i32) {
+        let Some(part) = self.polkit_part(layer.wl_surface()) else { return };
         let Some(d) = &mut self.polkit else { return };
-        if (d.scene.size.w, d.scene.size.h) != (width, height) {
-            d.scene.resize(width, height);
-            d.scene.touch(d.scene.size);
-        }
-        d.surface.configure(width, height);
+        d.modal.configure(part, width, height);
         d.dirty = true;
     }
 
     pub(super) fn polkit_frame(&mut self, surface: &WlSurface) -> bool {
-        let Some(d) = self.polkit.as_mut().filter(|d| d.surface.layer.wl_surface() == surface) else { return false };
-        let s = &mut d.surface;
-        (s.frame_pending, s.mapped, s.callbacks) = (false, true, s.callbacks + 1);
+        let Some(part) = self.polkit_part(surface) else { return false };
+        let Some(d) = &mut self.polkit else { return false };
+        if d.modal.frame(part, Instant::now()) {
+            d.dirty = true;
+            self.sync_join();
+        }
         true
+    }
+
+    pub(super) fn polkit_joins(&self) -> Vec<(fs_chrome::types::Edge, f64, f64, f64)> {
+        self.polkit.as_ref().map_or_else(Vec::new, |d| d.modal.joins().collect())
     }
 
     /// The dialog's keys while it holds the keyboard.
     pub(super) fn polkit_key(&mut self, event: &KeyEvent) -> bool {
-        let Some(d) = &mut self.polkit else { return false };
+        let Some(d) = self.polkit.as_mut().filter(|d| d.modal.open) else { return false };
         let enabled = d.asked && !d.submitted;
         match event.keysym {
             Keysym::Escape => {
@@ -169,16 +177,30 @@ impl App {
         true
     }
 
-    pub(super) fn present_polkit(&mut self) {
-        let Some(d) = &mut self.polkit else { return };
-        if !d.dirty || !d.surface.configured {
+    pub(super) fn present_polkit(&mut self, now: Instant) {
+        if self.polkit.as_ref().is_some_and(|d| d.modal.finished(now)) {
+            self.polkit = None;
+            self.sync_join();
             return;
         }
-        d.dirty = false;
-        let theme = &self.store.theme.theme;
-        let kit = &mut self.bar.kit;
+        let qh = self.qh.clone();
+        let Some(d) = &mut self.polkit else { return };
+        let animating = d.modal.animating(now);
+        if (d.dirty || animating || !d.modal.surface.mapped) && d.modal.surface.configured {
+            d.dirty = false;
+            d.modal.sync_region(&self.compositor);
+            Self::lay_polkit(d, &self.store.theme.theme, &mut self.bar.kit, now);
+        }
+        let animating = d.modal.animating(now);
+        d.modal.present(animating, now, &qh);
+        if animating {
+            self.sync_join();
+        }
+    }
+
+    fn lay_polkit(d: &mut Dialog, theme: &fs_theme::theme::Theme, kit: &mut crate::surfaces::bar::cell::Kit, now: Instant) {
         let s = &theme.space;
-        let (w, h) = (d.scene.size.w, d.scene.size.h);
+        let (w, h) = (d.modal.card.scene.size.w, d.modal.card.scene.size.h);
         let inner = s.popup_width_narrow;
         let enabled = d.asked && !d.submitted;
         let shown = if d.echo { d.text.to_string() } else { "\u{2022}".repeat(d.text.chars().count()) };
@@ -220,18 +242,16 @@ impl App {
         let (_, body_h) = ui::measure(&body, inner, theme, kit);
         let card_w = inner + s.panel_padding * 2.0;
         let card_h = body_h + s.panel_padding * 2.0;
-        let card = IRect::new(((w as f64 - card_w) / 2.0).round() as i32, ((h as f64 - card_h) / 2.0).round() as i32, card_w.round() as i32, card_h.round() as i32);
-
-        let scrim = theme.box_style("scrim", None).fill.a;
-        let style = theme.box_style("card", None);
-        let radius = theme.box_radius(&style, card.h as f64);
-        let mut p = Painter::new(&mut d.scene, &mut d.nodes, None);
-        p.rect(IRect::new(0, 0, w, h), Rgba { r: 0.0, g: 0.0, b: 0.0, a: scrim }, 0.0);
-        boxes::paint(&mut p, card, &style, radius, 1.0, 0.0);
-        let last = p.last();
-        p.finish();
-        d.ui.anchor = last;
-        let (x, y) = (card.x as f64 + s.panel_padding, card.y as f64 + s.panel_padding);
+        let x0 = ((w as f64 - card_w) / 2.0).round();
+        let y0 = ((h as f64 - card_h) / 2.0).round();
+        d.modal.place(Rect::new(x0, y0, x0 + card_w, y0 + card_h), now);
+        // The content rides the card's own travel and fades in on its pose.
+        let (frame, alpha) = d.modal.card.content;
+        let clip = d.modal.card.clip;
+        let top = d.modal.card.top_node();
+        let scene = &mut d.modal.card.scene;
+        let (x, y) = (frame.x as f64 + s.panel_padding, frame.y as f64 + s.panel_padding);
+        let mut p = Painter::new(scene, &mut d.avatar_nodes, Some(clip)).after(Some(top));
         if let (Some(i), Some(b)) = (avatar_row, d.avatar.as_ref()) {
             // Under the Identity label and its gap, centred on the row.
             let label_h = ui::measure(&w::section_label(s, "Identity", None, false), inner, theme, kit).1;
@@ -239,17 +259,11 @@ impl App {
             let side = b.pixmap.width() as f64;
             let line_h = (heights[i] - label_h - s.row_gap).max(side);
             let at = (x.round() as i32, (y + above + label_h + s.row_gap + (line_h - side) / 2.0).round() as i32);
-            let mut p = Painter::new(&mut d.scene, &mut d.avatar_nodes, None).after(last);
-            p.image(b, at, 1.0);
-            let after = p.last();
-            p.finish();
-            d.ui.anchor = after;
-        } else {
-            let p = Painter::new(&mut d.scene, &mut d.avatar_nodes, None);
-            p.finish();
+            p.image(b, at, alpha);
         }
-        d.ui.draw(&body, Rect::new(x, y, x + inner, y + body_h), None, 1.0, theme, kit, &mut d.scene, Instant::now());
-        let qh = self.qh.clone();
-        d.surface.present(&mut d.scene, false, &qh);
+        let after = p.last();
+        p.finish();
+        d.ui.anchor = after.or(Some(top));
+        d.ui.draw(&body, Rect::new(x, y, x + inner, y + body_h), Some(clip), alpha, theme, kit, scene, now);
     }
 }

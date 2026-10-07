@@ -25,6 +25,7 @@ pub mod localsend;
 pub mod media;
 pub mod menu;
 pub mod mirror;
+pub mod motion_art;
 pub mod nightlight;
 pub mod notifications;
 pub mod overnight;
@@ -58,6 +59,7 @@ pub fn start(ctx: &Ctx) {
     theme::start(ctx);
     ctx.spawn(media::run(ctx.clone()));
     ctx.spawn(cover::run(ctx.clone()));
+    ctx.spawn(motion_art::run(ctx.clone()));
     ctx.spawn(lyrics::run(ctx.clone()));
     ctx.spawn(radio::run(ctx.clone()));
     ctx.spawn(airplay::run(ctx.clone()));

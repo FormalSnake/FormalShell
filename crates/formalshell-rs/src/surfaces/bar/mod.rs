@@ -269,7 +269,8 @@ impl Bar {
         for region in Region::ALL {
             let entries = self.resolved.regions.get(region).to_vec();
             for e in entries.iter().filter(|e| !e.collapsible) {
-                self.slots.push(Slot::new(e, &entries));
+                let unit = self.slots.last().map_or(0, |s| s.unit + 1);
+                self.slots.extend(Slot::rail(e, &entries, unit));
             }
         }
     }
@@ -530,14 +531,25 @@ impl Bar {
         let c_at = floor.max(middle.min(ceiling));
         let left_room = (c_at - inset - gap).max(0.0);
         let right_room = (along - inset - gap - c_at - ci).max(0.0);
-        let left_exts: Vec<f64> = left.iter().map(|x| x.1).collect();
-        let right_rev: Vec<f64> = right.iter().rev().map(|x| x.1).collect();
-        let left_fit = layout::fit_extent(&left_exts, gap, left_room);
+        // A rail's cells are one delegate to the region: kept or hidden whole.
+        let units = |items: &[(usize, f64)], slots: &[Slot]| -> Vec<f64> {
+            let mut out: Vec<(usize, f64)> = Vec::new();
+            for (i, e) in items {
+                match out.last_mut() {
+                    Some((unit, ext)) if *unit == slots[*i].unit => *ext += gap + e,
+                    _ => out.push((slots[*i].unit, *e)),
+                }
+            }
+            out.into_iter().map(|u| u.1).collect()
+        };
+        let (left_units, center_units, mut right_rev) = (units(&left, &self.slots), units(&center, &self.slots), units(&right, &self.slots));
+        right_rev.reverse();
+        let left_fit = layout::fit_extent(&left_units, gap, left_room);
         let right_fit = layout::fit_extent(&right_rev, gap, right_room);
         self.room = Room {
             slack: along - inset * 2.0 - gap * 2.0 - li - ci - ri,
-            cells: [left.len(), center.len(), right.len()],
-            hidden: [left.len() - left_fit.count, 0, right.len() - right_fit.count],
+            cells: [left_units.len(), center_units.len(), right_rev.len()],
+            hidden: [left_units.len() - left_fit.count, 0, right_rev.len() - right_fit.count],
         };
 
         let strip = self.strip();

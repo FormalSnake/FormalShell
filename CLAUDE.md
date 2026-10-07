@@ -426,6 +426,12 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   `picture` rect against both frames rendered by ffmpeg to PNG.
 - `monitor.sh` `--monitor`: the monitor bar cell, its panel and the
   launcher's monitor view, against this machine's own `/proc` and `/sys`.
+- `motion_art.sh` `--motion-art`: the media panel's animated Apple Music
+  cover with no network, its mp4 already in the lookup's cache and flipping
+  red and blue every half second over a flat green static art: frames taken
+  while playing carry both colours (an ffmpeg child decoding), two frames
+  after a pause carry the same one, and no decoder survives the panel
+  closing.
 - `native.sh` `--native <pkgdir>`: the packages in `<pkgdir>` installed
   with apt or pacman in a rootless podman image of their release, and the
   shell they install run from it against the session over its Wayland
@@ -622,6 +628,12 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `theme_toggle.sh` `--theme-toggle`: `theme mode toggle` both ways, and with
   `--wallpaper` that a toggle re-runs matugen instead of resetting to the
   fallback palette.
+- `toast_motion.sh` `--toast-motion`: the row toast's own motion at a tenth
+  speed, read off frame bursts: one sticky critical sliding in from past
+  the right edge to its rest, a second stacking in front and then dismissed,
+  with the leaving card holding its place while it fades and some frame
+  matching neither settled pile, and at full speed a still pile committing
+  nothing for four seconds. The bubble's arrival is `--notify-emerge`'s.
 - `toggles.sh` `--toggles`: the toggle hub's rows repainting from a `@state:`
   snapshot without the surface moving under them.
 - `tooltip.sh` `--tooltip`: rides `--panel <name>`; the tooltip surface

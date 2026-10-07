@@ -162,12 +162,11 @@ enum Owner {
     Headset,
     Zone(usize),
     Backdrop,
-    Launcher,
-    /// The launcher's scrim: 0 the top line's band, 1 the rest.
-    LauncherScrim(u8),
+    /// The launcher's card or one of its two scrims.
+    Launcher(crate::surfaces::modal::Part),
     Switcher,
     Picker(usize),
-    Atlas(atlas::Part),
+    Atlas(crate::surfaces::modal::Part),
 }
 
 pub struct App {
@@ -644,6 +643,7 @@ impl App {
         }
         joins.extend(self.launcher_joins());
         joins.extend(self.atlas_joins());
+        joins.extend(self.polkit_joins());
         joins.extend(self.popup_joins());
         let edge = self.bar.edge();
         if !joins.iter().any(|j| j.0 == edge)
@@ -707,7 +707,7 @@ impl App {
         let entries = self.bar.overflow_entries(region);
         let edge = self.bar.edge();
         let env = Env { store: &self.store, edge, output: &self.bar.output };
-        let mut slots: Vec<Slot> = entries.iter().map(|e| Slot::new(e, &entries)).collect();
+        let mut slots: Vec<Slot> = entries.iter().enumerate().flat_map(|(n, e)| Slot::rail(e, &entries, n)).collect();
         for s in &mut slots {
             s.refresh(&mut self.bar.kit, &env, false, false, 0.0, now);
         }
@@ -1193,6 +1193,9 @@ impl App {
                     rt.service(move |ctx| overnight::disable(ctx, record));
                 }
             }
+            Action::RecordStop => {
+                surfaces::capture::record::stop(self);
+            }
             Action::ReminderSummary => {
                 self.store.notifications.show_reminders();
                 surfaces::changed(self, Topic::Notifications);
@@ -1288,7 +1291,7 @@ impl App {
             surface.present(scrim.alpha(now), scrim.animating(now), &qh);
         }
         self.present_picker(now);
-        self.present_polkit();
+        self.present_polkit(now);
         self.present_lock();
         self.arm_wake(now);
     }
@@ -1416,7 +1419,7 @@ impl App {
         parts.extend(self.menu.as_ref().map(|p| p.surface.report()));
         parts.extend(self.tip_card.as_ref().map(|c| c.surface.report()));
         parts.extend(self.scrim.as_ref().map(|(_, s)| s.report()));
-        parts.extend(self.launch.as_ref().map(|w| w.shown.surface.report()));
+        parts.extend(self.launch.as_ref().map(|w| w.shown.modal.surface.report()));
         eprintln!("exit t={}ms {}", self.started.elapsed().as_millis(), parts.join(" "));
     }
 
@@ -1835,7 +1838,7 @@ impl CompositorHandler for App {
             }
             Some(Owner::Switcher) => self.switcher_frame(),
             Some(Owner::Atlas(p)) => self.atlas_frame(p, now),
-            Some(o @ (Owner::Launcher | Owner::LauncherScrim(_))) => self.launcher_frame(o, now),
+            Some(Owner::Launcher(part)) => self.launcher_frame(part, now),
             Some(Owner::Picker(i)) => self.picker_frame(i),
             Some(Owner::Backdrop) => {
                 if let Some(b) = &mut self.backdrop {
@@ -1883,12 +1886,12 @@ impl LayerShellHandler for App {
                 self.sync_join();
             }
             Some(Owner::Backdrop) => self.backdrop = None,
-            Some(Owner::Launcher) => self.launcher_closed(),
+            Some(Owner::Launcher(crate::surfaces::modal::Part::Card)) => self.launcher_closed(),
             Some(Owner::Switcher) => self.switcher_close(),
             Some(Owner::Atlas(_)) => self.atlas_closed(),
             Some(Owner::Picker(i)) => self.picker_closed(i),
             None if self.saver_owns(layer.wl_surface()) => self.saver_closed(),
-            Some(Owner::Zone(_) | Owner::LauncherScrim(_)) | None => {}
+            Some(Owner::Zone(_) | Owner::Launcher(_)) | None => {}
         }
     }
 
@@ -1946,14 +1949,14 @@ impl LayerShellHandler for App {
                 }
                 self.update_backdrop();
             }
-            Some(o @ (Owner::Launcher | Owner::LauncherScrim(_))) => self.launcher_configure(o, width, height),
+            Some(Owner::Launcher(part)) => self.launcher_configure(part, width, height),
             Some(Owner::Switcher) => self.switcher_configure(width, height),
             Some(Owner::Atlas(p)) => self.atlas_configure(p, width, height),
             Some(Owner::Picker(i)) => self.picker_configure(i, width, height),
             None if self.caffeinate_owns(layer) => self.caffeinate_configure(),
             None if self.saver_owns(layer.wl_surface()) => self.saver_configure(width, height),
             None if self.hot_corner_owns(layer) => self.hot_corner_configure(layer),
-            None if self.polkit_owns(layer) => self.polkit_configure(width, height),
+            None if self.polkit_owns(layer) => self.polkit_configure(layer, width, height),
             None => {}
         }
     }

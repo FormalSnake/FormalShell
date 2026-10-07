@@ -21,16 +21,13 @@ use crate::surface::{PixelSurface, Surface};
 use crate::surfaces::atlas::globe::{self, Out};
 use crate::surfaces::atlas::view::Shown;
 use crate::surfaces::atlas::{Atlas, Key};
-use crate::surfaces::card::Ends;
+use crate::surfaces::modal::Part;
 use crate::ui::What;
 
 const NAMESPACE: &str = "formalshell:radio";
 
 pub struct Window {
     pub shown: Shown,
-    band: Option<PixelSurface>,
-    dim: PixelSurface,
-    tone: f64,
     pressed: Option<String>,
     /// The volume track under a held button.
     sliding: bool,
@@ -42,14 +39,6 @@ pub struct State {
     pub win: Option<Window>,
     /// The radio state the atlas last saw, for what moved.
     seen: Option<radio::State>,
-}
-
-/// Which of the atlas's surfaces a Wayland surface is.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Part {
-    Card,
-    Band,
-    Dim,
 }
 
 impl App {
@@ -85,35 +74,9 @@ impl App {
             });
         }
         self.atlas.win = None;
-        let theme = &self.store.theme.theme;
-        let output = self.output_size();
-        let inset = self.top_inset();
-        let framed = self.bar.framed();
-        let ft = if framed { self.bar.frame_thickness() } else { 0.0 };
-        let ends = Ends { along: output.0, inset_start: ft, inset_end: ft, radius: if framed { theme.frame_radius } else { 0.0 } };
-        let band = (inset > 0.0).then(|| {
-            let ls = self.overlay(NAMESPACE, Layer::Top, Anchor::TOP | Anchor::LEFT | Anchor::RIGHT, (0, inset as u32), -1);
-            PixelSurface::new("radio-scrim-band", ls, &self.pixels, &self.qh, self.started)
-        });
-        let ls = self.layer_shell.create_layer_surface(&self.qh, self.compositor.create_surface(&self.qh), Layer::Top, Some(NAMESPACE), None);
-        ls.set_anchor(Anchor::all());
-        ls.set_size(0, 0);
-        ls.set_margin(inset as i32, 0, 0, 0);
-        ls.set_exclusive_zone(-1);
-        ls.set_keyboard_interactivity(KeyboardInteractivity::None);
-        if let Ok(region) = Region::new(&self.compositor) {
-            ls.set_input_region(Some(region.wl_region()));
-        }
-        ls.commit();
-        let dim = PixelSurface::new("radio-scrim", ls, &self.pixels, &self.qh, self.started);
-        let layer = self.overlay(NAMESPACE, Layer::Top, Anchor::all(), (0, 0), -1);
-        layer.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
-        layer.commit();
-        let mut surface = Surface::new("radio", layer, &self.shm, self.started);
-        surface.wait_map = true;
-        let shown = Shown::new(theme, surface, output, inset, ends, self.motion_scale, self.cast);
-        let tone = f64::from(theme.box_style("scrim", None).fill.a);
-        self.atlas.win = Some(Window { shown, band, dim, tone, pressed: None, sliding: false });
+        let modal = self.new_modal(["radio", "radio-scrim-band", "radio-scrim"], NAMESPACE, Layer::Top, Shown::DEFORM_AMOUNT);
+        let shown = Shown::new(modal, self.output_size(), self.motion_scale);
+        self.atlas.win = Some(Window { shown, pressed: None, sliding: false });
         let r = self.store.media.radio.clone();
         self.atlas.model.opened(&r, now);
         self.atlas.seen = Some(r);
@@ -126,7 +89,7 @@ impl App {
         }
         self.atlas.model.closed();
         if let Some(w) = &mut self.atlas.win {
-            w.shown.close(Instant::now());
+            w.shown.modal.close(Instant::now());
         }
         self.log("radio closing");
         self.sync_join();
@@ -163,7 +126,7 @@ impl App {
     }
 
     pub(super) fn present_atlas(&mut self, now: Instant) {
-        if self.atlas.win.as_ref().is_some_and(|w| w.shown.finished(now)) {
+        if self.atlas.win.as_ref().is_some_and(|w| w.shown.modal.finished(now)) {
             self.atlas.win = None;
             self.sync_join();
             self.log("radio unmapped");
@@ -179,77 +142,35 @@ impl App {
         let theme = &self.store.theme.theme;
         let moving = m.globe.animating();
         let animating = w.shown.animating(now) || moving;
-        if m.dirty || animating || !w.shown.surface.mapped {
-            w.shown.sync_region(&self.compositor);
+        if m.dirty || animating || !w.shown.modal.surface.mapped {
+            w.shown.modal.sync_region(&self.compositor);
             w.shown.layout(m, &r, theme, &mut self.bar.kit, now);
             m.dirty = false;
         }
         let animating = w.shown.animating(now) || m.globe.animating();
-        w.shown.surface.present(&mut w.shown.card.scene, animating, &qh);
-        let pose = w.shown.card.pose(now);
-        let attach = w.shown.card.attach(now);
-        let card_moving = w.shown.card.animating(now);
-        if let Some(b) = &mut w.band {
-            b.present(w.tone * pose * (1.0 - attach), card_moving, &qh);
-        }
-        w.dim.present(w.tone * pose, card_moving, &qh);
-        if card_moving {
+        w.shown.modal.present(animating, now, &qh);
+        if w.shown.modal.animating(now) {
             self.sync_join();
         }
     }
 
     pub(super) fn atlas_part(&self, surface: &WlSurface) -> Option<Part> {
-        let w = self.atlas.win.as_ref()?;
-        if w.shown.surface.layer.wl_surface() == surface {
-            return Some(Part::Card);
-        }
-        if w.dim.layer.wl_surface() == surface {
-            return Some(Part::Dim);
-        }
-        if w.band.as_ref().is_some_and(|b| b.layer.wl_surface() == surface) {
-            return Some(Part::Band);
-        }
-        None
+        self.atlas.win.as_ref()?.shown.modal.part(surface)
     }
 
     pub(super) fn atlas_frame(&mut self, part: Part, now: Instant) {
         let Some(w) = &mut self.atlas.win else { return };
-        match part {
-            Part::Card => {
-                let s = &mut w.shown.surface;
-                s.landed(now);
-                if s.mapped {
-                    w.shown.card.tick(now);
-                } else {
-                    s.mapped = true;
-                    w.shown.card.mapped(now);
-                }
-                self.atlas.model.dirty = true;
-                self.sync_join();
-            }
-            Part::Band | Part::Dim => {
-                let s = if part == Part::Band { w.band.as_mut() } else { Some(&mut w.dim) };
-                if let Some(s) = s {
-                    (s.frame_pending, s.mapped, s.callbacks) = (false, true, s.callbacks + 1);
-                }
-            }
+        if w.shown.modal.frame(part, now) {
+            self.atlas.model.dirty = true;
+            self.sync_join();
         }
     }
 
     pub(super) fn atlas_configure(&mut self, part: Part, width: i32, height: i32) {
         let Some(w) = &mut self.atlas.win else { return };
-        match part {
-            Part::Card => {
-                let size = w.shown.card.scene.size;
-                w.shown.surface.configure(size.w, size.h);
-                self.atlas.model.dirty = true;
-            }
-            Part::Band => {
-                if let Some(b) = &mut w.band {
-                    b.configure(width, height);
-                }
-            }
-            Part::Dim => w.dim.configure(width, height),
+        w.shown.modal.configure(part, width, height);
+        if part == Part::Card {
+            self.atlas.model.dirty = true;
         }
     }
 
@@ -260,12 +181,12 @@ impl App {
     }
 
     pub(super) fn atlas_joins(&self) -> Vec<(fs_chrome::types::Edge, f64, f64, f64)> {
-        self.atlas.win.as_ref().map_or_else(Vec::new, |w| w.shown.card.joins.iter().map(|j| (j.edge, j.x, j.width, j.reach)).collect())
+        self.atlas.win.as_ref().map_or_else(Vec::new, |w| w.shown.modal.joins().collect())
     }
 
     /// One key while the atlas holds the keyboard.
     pub(super) fn atlas_key(&mut self, event: &KeyEvent) -> bool {
-        if !self.atlas.model.open || self.atlas.win.as_ref().is_none_or(|w| !w.shown.open) {
+        if !self.atlas.model.open || self.atlas.win.as_ref().is_none_or(|w| !w.shown.modal.open) {
             return false;
         }
         let key = match event.keysym {
@@ -352,7 +273,7 @@ impl App {
                     shape = Some(Shape::Grabbing);
                 } else {
                     let hit = w.shown.hit(x, y);
-                    w.pressed = hit.as_ref().and_then(|h| h.on.clone()).or_else(|| (!w.shown.on_card(x, y)).then(|| "outside".into()));
+                    w.pressed = hit.as_ref().and_then(|h| h.on.clone()).or_else(|| (!w.shown.modal.on_card(x, y)).then(|| "outside".into()));
                     if let Some(h) = hit.filter(|h| h.on.as_deref() == Some("volume")) {
                         w.sliding = true;
                         let f = ((x - h.rect.x as f64) / h.rect.w.max(1) as f64).clamp(0.0, 1.0);
@@ -375,7 +296,7 @@ impl App {
                     return true;
                 }
                 let hit = w.shown.hit(x, y);
-                let on = hit.as_ref().and_then(|h| h.on.clone()).or_else(|| (!w.shown.on_card(x, y)).then(|| "outside".into()));
+                let on = hit.as_ref().and_then(|h| h.on.clone()).or_else(|| (!w.shown.modal.on_card(x, y)).then(|| "outside".into()));
                 if pressed.is_none() || pressed != on {
                     return true;
                 }

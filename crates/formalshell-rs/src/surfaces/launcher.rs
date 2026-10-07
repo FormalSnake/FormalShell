@@ -16,15 +16,12 @@
 
 use std::time::Instant;
 
-use fs_chrome::types::Edge;
 use fs_menu::model::{self, Mode, SectionCtx};
 use fs_menu::nav::{self, Dir, KeyAction, KeyCtx, KeyMode};
 use fs_menu::node::{Kind as NodeKind, Node};
 use fs_menu::toggles::{self, Snapshot};
 use fs_theme::theme::Theme;
 use serde_json::{Value, json};
-use smithay_client_toolkit::shell::WaylandSurface;
-use smithay_client_toolkit::shell::wlr_layer::KeyboardInteractivity;
 use vello_cpu::kurbo::Rect;
 
 use crate::motion::{Animated, Kind as Clock};
@@ -32,9 +29,8 @@ use crate::scene::{IRect, NodeId};
 use crate::services::menu::{self as index, Ask};
 use crate::services::{hyprland, state};
 use crate::store::Store;
-use crate::surface::Surface;
 use crate::surfaces::bar::cell::{Kit, Painter};
-use crate::surfaces::card::{Card, Ends};
+use crate::surfaces::modal::Modal;
 use crate::ui::{self, El, Ink, Size, Type, Ui, Weight, w};
 
 /// Which view draws the level (`menu status`'s `view`).
@@ -1504,8 +1500,7 @@ fn row_height(node: &Node, theme: &Theme, kit: &mut Kit) -> f64 {
 
 /// The window: the card, its surface and the three bands' widgets.
 pub struct Shown {
-    pub card: Card,
-    pub surface: Surface,
+    pub modal: Modal,
     head: Ui,
     body: Ui,
     preview: Ui,
@@ -1516,8 +1511,6 @@ pub struct Shown {
     pub output: (f64, f64),
     scale: f64,
     pub wake: Option<Instant>,
-    region: Option<IRect>,
-    pub open: bool,
     /// The card's top, settled: the scroll's own animation.
     scroll: Animated,
     /// The card's width and height travelling between level kinds.
@@ -1528,15 +1521,13 @@ pub struct Shown {
 }
 
 impl Shown {
-    pub fn new(theme: &Theme, surface: Surface, output: (f64, f64), line_at: f64, ends: Ends, scale: f64, cast: bool) -> Self {
-        let rest = Rect::new(0.0, line_at, 0.0, line_at);
-        let mut card = Card::build(theme, "card", Edge::Top, (output.0 as i32, output.1 as i32), line_at, rest, scale, cast, true);
-        card.ends = ends;
-        card.deform_amount = 0.1;
-        let top = card.top_node();
+    /// Menu.qml's own `deformAmount`, under Drawer.qml's default.
+    pub const DEFORM_AMOUNT: f64 = 0.1;
+
+    pub fn new(theme: &Theme, modal: Modal, output: (f64, f64), scale: f64) -> Self {
+        let top = modal.card.top_node();
         Self {
-            card,
-            surface,
+            modal,
             head: Ui::new(Some(top)),
             body: Ui::new(Some(top)),
             preview: Ui::new(Some(top)),
@@ -1546,8 +1537,6 @@ impl Shown {
             output,
             scale,
             wake: None,
-            region: None,
-            open: true,
             scroll: Animated::new(0.0, Clock::SpatialFast.curve()),
             overlays: Vec::new(),
             top_node: top,
@@ -1556,40 +1545,15 @@ impl Shown {
     }
 
     pub fn finished(&self, now: Instant) -> bool {
-        self.surface.mapped && self.card.finished(now)
+        self.modal.finished(now)
     }
 
     pub fn animating(&self, now: Instant) -> bool {
-        self.card.animating(now)
+        self.modal.animating(now)
             || self.scroll.running(now)
             || self.morph.0.running(now)
             || self.morph.1.running(now)
             || self.wake.is_some_and(|w| w <= now)
-    }
-
-    pub fn close(&mut self, now: Instant) {
-        if !self.open {
-            return;
-        }
-        self.open = false;
-        self.card.set_open(now, false);
-        self.surface.layer.set_keyboard_interactivity(KeyboardInteractivity::None);
-        self.surface.layer.commit();
-    }
-
-    /// Input everywhere while open, nowhere once closing.
-    pub fn sync_region(&mut self, compositor: &smithay_client_toolkit::compositor::CompositorState) {
-        let want = if self.open { self.card.scene.size } else { IRect::default() };
-        if self.region == Some(want) {
-            return;
-        }
-        self.region = Some(want);
-        if let Ok(region) = smithay_client_toolkit::compositor::Region::new(compositor) {
-            if !want.is_empty() {
-                region.add(want.x, want.y, want.w, want.h);
-            }
-            self.surface.layer.set_input_region(Some(region.wl_region()));
-        }
     }
 
     fn metrics(theme: &Theme, m: &Model, output_h: f64) -> (f64, f64, f64) {
@@ -1611,7 +1575,7 @@ impl Shown {
         // SizeMorph.qml: a level that changes kind travels into its size;
         // the first frame after an open lands on it.
         let (tw, th) = (m.card_width(theme), chrome + body_h);
-        if self.surface.mapped && self.open {
+        if self.modal.surface.mapped && self.modal.open {
             let ms = Clock::Spatial.ms(theme) * self.scale;
             self.morph.0.set(now, tw, ms);
             self.morph.1.set(now, th, ms);
@@ -1624,13 +1588,7 @@ impl Shown {
         let pad = s.panel_padding;
         let max_top = self.output.1 - h_ - pad;
         let y = if max_top < pad { pad } else { (self.output.1 * 0.3).clamp(pad, max_top) }.round();
-        let rest = Rect::new(x, y, x + w_, y + h_);
-        if rest != self.card.rest() {
-            self.card.set_rect(rest, rest);
-            if !self.card.animating(now) || !self.surface.mapped {
-                self.card.tick(now);
-            }
-        }
+        self.modal.place(Rect::new(x, y, x + w_, y + h_), now);
         let target = m.scroll;
         if (self.scroll.target() - target).abs() > 0.5 {
             if m.travels { self.scroll.set(now, target, Clock::SpatialFast.ms(theme) * self.scale) } else { self.scroll.jump(target) }
@@ -1640,15 +1598,15 @@ impl Shown {
 
     #[allow(clippy::too_many_arguments)]
     fn draw(&mut self, m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, now: Instant, body_h: f64) {
-        let (frame, alpha) = self.card.content;
-        let clip = self.card.clip;
+        let (frame, alpha) = self.modal.card.content;
+        let clip = self.modal.card.clip;
         let s = theme.space.clone();
         let pad = s.panel_padding;
         let (fx, fy, fw) = (frame.x as f64, frame.y as f64, frame.w as f64);
         let inner_w = (fw - pad * 2.0).max(0.0);
         let side = s.sm;
         self.wake = None;
-        let scene = &mut self.card.scene;
+        let scene = &mut self.modal.card.scene;
         self.head.motion_scale = self.scale;
         self.body.motion_scale = self.scale;
         self.foot.motion_scale = self.scale;
@@ -1737,11 +1695,6 @@ impl Shown {
     /// control.
     pub fn hit(&self, x: f64, y: f64) -> Option<crate::ui::Hit> {
         self.body.hit(x, y).or_else(|| self.head.hit(x, y)).or_else(|| self.foot.hit(x, y)).cloned()
-    }
-
-    pub fn on_card(&self, x: f64, y: f64) -> bool {
-        let r = self.card.live_rect();
-        x >= r.x as f64 && x < r.right() as f64 && y >= r.y as f64 && y < r.bottom() as f64
     }
 
     pub fn set_hover(&mut self, path: Option<String>) -> bool {

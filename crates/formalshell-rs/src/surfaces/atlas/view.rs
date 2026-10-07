@@ -6,20 +6,16 @@
 
 use std::time::Instant;
 
-use fs_chrome::types::Edge;
 use fs_media::radio::model as rm;
 use fs_theme::theme::Theme;
-use smithay_client_toolkit::shell::WaylandSurface;
-use smithay_client_toolkit::shell::wlr_layer::KeyboardInteractivity;
 use vello_cpu::kurbo::{Affine, Rect};
 
 use super::globe::Ink as GlobeInk;
 use super::{Atlas, PREFERRED};
 use crate::scene::{IRect, NodeId, Paint};
 use crate::services::radio;
-use crate::surface::Surface;
 use crate::surfaces::bar::cell::{Kit, Painter};
-use crate::surfaces::card::{Card, Ends};
+use crate::surfaces::modal::Modal;
 use crate::ui::el::Opt;
 use crate::ui::{self, El, Ink, Size, Type, Ui, Variant, Weight, w};
 
@@ -49,10 +45,7 @@ pub fn content_size(output: (f64, f64)) -> (f64, f64) {
 }
 
 pub struct Shown {
-    pub card: Card,
-    pub surface: Surface,
-    pub open: bool,
-    region: Option<IRect>,
+    pub modal: Modal,
     head: Ui,
     foot: Ui,
     side: Ui,
@@ -70,21 +63,17 @@ pub struct Shown {
 }
 
 impl Shown {
-    pub fn new(theme: &Theme, surface: Surface, output: (f64, f64), line_at: f64, ends: Ends, scale: f64, cast: bool) -> Self {
-        let rest = Rect::new(0.0, line_at, 0.0, line_at);
-        let mut card = Card::build(theme, "card", Edge::Top, (output.0 as i32, output.1 as i32), line_at, rest, scale, cast, true);
-        card.ends = ends;
-        card.deform_amount = 0.1;
+    pub const DEFORM_AMOUNT: f64 = 0.1;
+
+    pub fn new(mut modal: Modal, output: (f64, f64), scale: f64) -> Self {
+        let card = &mut modal.card;
         let top = card.top_node();
         let globe_node = card.scene.add_after(Some(top), IRect::default(), Paint::Rect { fill: fs_theme::color::Rgba::TRANSPARENT, radius: 0.0 });
         let tip_box = card.scene.add_after(Some(globe_node), IRect::default(), Paint::Rect { fill: fs_theme::color::Rgba::TRANSPARENT, radius: 0.0 });
         card.scene.set_visible(globe_node, false);
         card.scene.set_visible(tip_box, false);
         Self {
-            card,
-            surface,
-            open: true,
-            region: None,
+            modal,
             head: Ui::new(Some(top)),
             foot: Ui::new(Some(top)),
             side: Ui::new(Some(top)),
@@ -102,42 +91,8 @@ impl Shown {
         }
     }
 
-    pub fn finished(&self, now: Instant) -> bool {
-        self.surface.mapped && self.card.finished(now)
-    }
-
     pub fn animating(&self, now: Instant) -> bool {
-        self.card.animating(now) || self.animating_content
-    }
-
-    pub fn close(&mut self, now: Instant) {
-        if !self.open {
-            return;
-        }
-        self.open = false;
-        self.card.set_open(now, false);
-        self.surface.layer.set_keyboard_interactivity(KeyboardInteractivity::None);
-        self.surface.layer.commit();
-    }
-
-    /// Input everywhere while open, nowhere once closing.
-    pub fn sync_region(&mut self, compositor: &smithay_client_toolkit::compositor::CompositorState) {
-        let want = if self.open { self.card.scene.size } else { IRect::default() };
-        if self.region == Some(want) {
-            return;
-        }
-        self.region = Some(want);
-        if let Ok(region) = smithay_client_toolkit::compositor::Region::new(compositor) {
-            if !want.is_empty() {
-                region.add(want.x, want.y, want.w, want.h);
-            }
-            self.surface.layer.set_input_region(Some(region.wl_region()));
-        }
-    }
-
-    pub fn on_card(&self, x: f64, y: f64) -> bool {
-        let r = self.card.live_rect();
-        x >= r.x as f64 && x < r.right() as f64 && y >= r.y as f64 && y < r.bottom() as f64
+        self.modal.animating(now) || self.animating_content
     }
 
     pub fn hit(&self, x: f64, y: f64) -> Option<ui::Hit> {
@@ -159,20 +114,14 @@ impl Shown {
         let (w_, h_) = (cw + s.panel_padding * 2.0, ch + s.panel_padding * 2.0);
         let x = ((self.output.0 - w_) / 2.0).round();
         let y = ((self.output.1 - h_) / 2.0).round();
-        let rest = Rect::new(x, y, x + w_, y + h_);
-        if rest != self.card.rest() {
-            self.card.set_rect(rest, rest);
-            if !self.card.animating(now) || !self.surface.mapped {
-                self.card.tick(now);
-            }
-        }
+        self.modal.place(Rect::new(x, y, x + w_, y + h_), now);
         self.draw(a, r, theme, kit, now, (cw, ch));
     }
 
     #[allow(clippy::too_many_lines)]
     fn draw(&mut self, a: &mut Atlas, r: &radio::State, theme: &Theme, kit: &mut Kit, now: Instant, (cw, chh): (f64, f64)) {
-        let (frame, alpha) = self.card.content;
-        let clip = self.card.clip;
+        let (frame, alpha) = self.modal.card.content;
+        let clip = self.modal.card.clip;
         let s = theme.space.clone();
         let p = s.panel_padding;
         let bw = theme.border_width;
@@ -182,7 +131,7 @@ impl Shown {
         for u in [&mut self.head, &mut self.foot, &mut self.side, &mut self.list, &mut self.player, &mut self.help, &mut self.tip] {
             u.motion_scale = self.scale;
         }
-        let scene = &mut self.card.scene;
+        let scene = &mut self.modal.card.scene;
         let mut wake = false;
 
         // The header.
