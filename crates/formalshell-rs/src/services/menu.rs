@@ -1,5 +1,5 @@
-//! The launcher's index (Menu.qml's tree, LiveMenuSources.qml,
-//! ConditionEvaluator.qml, KeybindsProvider.qml), kept warm on the service
+//! The launcher's index (the menu tree, the live device sources, the `when`
+//! and `checked` conditions and the keybinds), kept warm on the service
 //! thread so an open only maps a surface over rows that already exist.
 //!
 //! The tree is a base (default-menu.jsonc, the self-targeted fragments, the
@@ -36,8 +36,8 @@ const CONDS_AFTER: Duration = Duration::from_millis(1000);
 /// moment an action runs.
 pub const SELF: &str = "formalshell-ipc";
 
-/// The app cell's icon edge (`controlHeight * 2`, AppGridView.qml's
-/// `iconExtent`), the size every app icon is decoded at.
+/// The app cell's icon edge (`controlHeight * 2`), the size every app
+/// icon is decoded at.
 pub const ICON_EXTENT: u32 = 64;
 
 #[derive(Default)]

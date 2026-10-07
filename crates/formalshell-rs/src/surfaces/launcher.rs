@@ -1,13 +1,13 @@
-//! Menu.qml: the launcher. One keyboard-exclusive overlay window over the
-//! output, a card budding off the top line (Drawer.qml through `Card`) to
+//! The launcher. One keyboard-exclusive overlay window over the
+//! output, a card budding off the top line (a `Card`) to
 //! rest at 30% of the output's height, three bands split by full-bleed
 //! rules: the header (back chip, search field, close), the body (the app
 //! grid, the row list or the emoji grid, sections and the empty state) and
 //! the footer (where you are, what Enter does). The scrim behind it is two
 //! single-pixel surfaces the App owns.
 //!
-//! The model ([`Model`]) lives as long as the shell, as Menu.qml's instance
-//! does: the level and the select request outlive a close. The window
+//! The model ([`Model`]) lives as long as the shell: the level and the
+//! select request outlive a close. The window
 //! ([`Shown`]) exists from an open until its exit has run.
 //!
 //! Rows come off the store's warm index (`services::menu`); a keystroke
@@ -40,9 +40,9 @@ pub enum View {
     Emoji,
     AppGrid,
     Picker,
-    /// MonitorView.qml: the metric tiles over the process table.
+    /// The metric tiles over the process table.
     Monitor,
-    /// MirrorView.qml: one camera's feed.
+    /// One camera's feed.
     Mirror,
 }
 
@@ -129,7 +129,7 @@ pub struct Model {
     pub mirror_current: String,
     /// The monitor tiles' history lines, started when the route opens.
     monitor_history: MonitorHistory,
-    /// RowListView.qml's transitions: rows that moved, arrived or left on
+    /// The row list's transitions: rows that moved, arrived or left on
     /// the last re-rank inside one level.
     motion: RowMotion,
     /// `debug motionScale`, which the row transitions run at.
@@ -199,7 +199,7 @@ fn push(q: &mut std::collections::VecDeque<f64>, v: Option<f64>) {
 pub const MONITOR_ROUTE: &str = "monitor";
 pub const MIRROR_ROUTE: &str = "mirror";
 
-/// WallpaperPickerProvider.qml: the wallpaper route lists `dir`, and in
+/// The wallpaper route lists `dir`, and in
 /// select mode answers `token` in picker-selection.txt instead of setting
 /// the wallpaper.
 #[derive(Clone, Debug, Default)]
@@ -324,7 +324,7 @@ pub fn radio_search_rows(store: &Store, q: &str) -> Vec<Node> {
     }
 }
 
-/// The four device routes' rows (LiveMenuSources.qml), off the store.
+/// The four device routes' rows, off the store.
 pub fn device_sources(store: &Store) -> Vec<(&'static str, Vec<Node>)> {
     use fs_menu::providers as p;
     let d = &store.devices;
@@ -395,12 +395,12 @@ impl Model {
         self.dirty = true;
     }
 
-    /// Menu/appviews.js: the routes that draw a whole view of their own.
+    /// The routes that draw a whole view of their own.
     pub fn app_view(&self) -> bool {
         self.mode == Mode::Menu && matches!(self.level.as_deref(), Some(MONITOR_ROUTE | MIRROR_ROUTE))
     }
 
-    /// Menu.qml's `_cardWidth`: one width per level kind, which the content
+    /// One card width per level kind, which the content
     /// is laid out at while the card itself morphs into it.
     pub fn card_width(&self, theme: &Theme) -> f64 {
         let s = &theme.space;
@@ -418,7 +418,8 @@ impl Model {
         self.card_width(theme) - theme.space.panel_padding * 2.0
     }
 
-    /// Menu.qml's `_kindHeight` and `_heightCap`.
+    /// The card's height for the level kind, capped by a share of the
+    /// output's.
     fn kind_height(&self, theme: &Theme, output_h: f64) -> f64 {
         let s = &theme.space;
         let (kind, share) = if self.app_view() {
@@ -606,7 +607,7 @@ impl Model {
         }
     }
 
-    /// Menu.qml's `_resolve` and `_levelRows` over the warm index.
+    /// The level and its rows, resolved over the warm index.
     fn resolve_rows(&self, store: &Store) -> (View, Vec<Node>, usize, Option<Node>, bool, String) {
         let menu = self.mode == Mode::Menu;
         let q = self.query.as_str();
@@ -716,7 +717,7 @@ impl Model {
         (view, rows, app_count, empty, searching, key)
     }
 
-    /// `_syncRows`: commits the rows, their headings and the cursor.
+    /// Commits the rows, their headings and the cursor.
     pub fn resolve(&mut self, store: &Store, theme: &Theme, kit: &mut Kit) {
         let (view, rows, app_count, empty, searching, key) = self.resolve_rows(store);
         let fresh = key != self.key;
@@ -820,8 +821,8 @@ impl Model {
         self.cursor_id = if valid { self.rows[index].id.clone() } else { String::new() };
     }
 
-    /// The body's slots: AppGridView.qml's cells and tail, RowListView.qml's
-    /// rows, EmojiGridView.qml's tiles.
+    /// The body's slots: the app grid's cells and tail, the row list's
+    /// rows, the emoji grid's tiles.
     fn layout(&mut self, theme: &Theme, kit: &mut Kit) {
         let s = &theme.space;
         let width = self.content_width(theme);
@@ -910,7 +911,7 @@ impl Model {
         self.layout = out;
     }
 
-    /// cursor.js `follow`: the smallest scroll that shows the cursor's slot.
+    /// The smallest scroll that shows the cursor's slot.
     fn follow(&mut self) {
         let Some(slot) = self.layout.slots.get(self.cursor) else {
             self.scroll = 0.0;
@@ -938,7 +939,6 @@ impl Model {
         }
     }
 
-    /// `_moveCursor`.
     pub fn move_cursor(&mut self, dir: Dir) {
         let n = self.rows.len();
         if n == 0 {
@@ -1042,7 +1042,6 @@ impl Model {
         })
     }
 
-    /// `_resolveRoute`.
     fn resolve_route(store: &Store, route: &str) -> Option<String> {
         let nodes = store.menu.nodes();
         if nodes.contains_key(route) {
@@ -1135,9 +1134,8 @@ impl Model {
     }
 
     /// Every input and select answer since the last call, for the in-process
-    /// token owners (shell.qml's `selectionResolved`): the token, the value
-    /// (a secret one included, held only here), and whether it was
-    /// cancelled.
+    /// token owners: the token, the value (a secret one included, held only
+    /// here), and whether it was cancelled.
     pub fn take_resolved(&mut self) -> Vec<(String, Option<String>, bool)> {
         std::mem::take(&mut self.resolved)
     }
@@ -1231,7 +1229,6 @@ impl Model {
         }
     }
 
-    /// `_activateRow`.
     pub fn activate(&mut self, store: &Store, index: usize) -> Out {
         let Some(node) = self.rows.get(index).cloned() else { return Out::None };
         if self.view == View::Monitor {
@@ -1316,7 +1313,7 @@ impl Model {
         }
     }
 
-    /// `_activateRowAlternate`: a row's own alternate, else Enter.
+    /// A row's own alternate, else Enter.
     pub fn activate_alternate(&mut self, store: &Store, index: usize) -> Out {
         let Some(node) = self.rows.get(index).cloned() else { return Out::None };
         if let Some(alt) = node.alternate.as_deref() {
@@ -1330,7 +1327,7 @@ impl Model {
         self.activate(store, index)
     }
 
-    /// One key, through Menu/nav.js's `keyAction`, or into the field.
+    /// One key, through `nav::key_action`, or into the field.
     pub fn key(&mut self, store: &Store, key: nav::Key, mods: nav::Modifiers, repeat: bool, text: Option<&str>) -> Out {
         if self.on_mirror() && matches!(key, nav::Key::Tab | nav::Key::Return | nav::Key::Enter) {
             self.mirror_cycle(store, 1);
@@ -1466,7 +1463,7 @@ fn record_launch(store: &Store, id: &str) {
     state::set(vec![state::Field::AppLaunches(serde_json::to_value(next).unwrap_or_default())]);
 }
 
-/// `_runAction`: `@ipc:` stays in process, anything else is a shell
+/// `@ipc:` stays in process, anything else is a shell
 /// command spawned through the compositor.
 fn run_action(action: &str) -> Out {
     if let Some(name) = action.strip_prefix("@ipc:") {
@@ -1482,8 +1479,7 @@ pub fn selection_path() -> std::path::PathBuf {
     state::state_path().with_file_name("menu-selection.txt")
 }
 
-/// A clipboard image row's thumbnail height, MenuRow.qml's `_thumbHeight`:
-/// twice a body line. The slot is three times as wide and letterboxes.
+/// A clipboard image row's thumbnail height: twice a body line. The slot is three times as wide and letterboxes.
 pub fn thumb_height(theme: &Theme, kit: &mut Kit) -> f64 {
     ui::measure(&w::text("Ag"), 100.0, theme, kit).1 * 2.0
 }
@@ -1526,7 +1522,7 @@ pub struct Shown {
 }
 
 impl Shown {
-    /// Menu.qml's own `deformAmount`, under Drawer.qml's default.
+    /// The launcher's deform amount, lighter than a popout card's.
     pub const DEFORM_AMOUNT: f64 = 0.1;
 
     pub fn new(theme: &Theme, modal: Modal, output: (f64, f64), scale: f64) -> Self {
@@ -1592,7 +1588,7 @@ impl Shown {
             m.body_h = body_h;
             m.follow();
         }
-        // SizeMorph.qml: a level that changes kind travels into its size;
+        // A level that changes kind travels into its size;
         // the first frame after an open lands on it.
         let (tw, th) = (m.card_width(theme), chrome + body_h);
         if self.modal.surface.mapped && self.modal.open {
@@ -1688,7 +1684,7 @@ impl Shown {
             });
             (feed, pic)
         });
-        // SplitPreview.qml: the cursor row's whole content beside the list.
+        // The split preview: the cursor row's whole content beside the list.
         if m.split() && body_h > 0.0 {
             let half = (inner_w / 2.0).round();
             let r = Rect::new(fx + pad + half + s.sm, body_top + s.lg, fx + pad + inner_w - side, body_top + body_h - s.lg);
@@ -1967,7 +1963,7 @@ fn body_el(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, scroll: f64, 
     w::column(0.0, col)
 }
 
-/// MirrorView.qml's feed: the picture in its box, or why there is none.
+/// The mirror's feed: the picture in its box, or why there is none.
 fn mirror_body(m: &Model, store: &Store, theme: &Theme) -> El {
     let s = &theme.space;
     let (w, h) = m.mirror_box(theme);
@@ -2015,7 +2011,7 @@ fn monitor_rows(store: &Store, q: &str) -> Vec<Node> {
         .collect()
 }
 
-/// MonitorView.qml's strip: CPU, Memory, GPU, Disk and Network, each a
+/// The monitor's strip: CPU, Memory, GPU, Disk and Network, each a
 /// label over one figure; a reading nobody has taken yet is a dash.
 fn monitor_strip(store: &Store, theme: &Theme, h: &MonitorHistory) -> El {
     use fs_system::monitor::format;
@@ -2094,7 +2090,7 @@ pub fn preview_box(theme: &Theme, kit: &mut Kit, w: f64, h: f64) -> (u32, u32) {
     ((w - pad).max(1.0).round() as u32, (h - head - pad).max(1.0).round() as u32)
 }
 
-/// SplitPreview.qml: "Text" or "Image" and the capture time over the full
+/// The split preview: "Text" or "Image" and the capture time over the full
 /// text, the emoji at display size, or the picture fitted to the pane.
 fn split_preview(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, width: f64, height: f64) -> El {
     let s = &theme.space;
@@ -2152,7 +2148,6 @@ fn slot_x_of(m: &Model, el: &El) -> f64 {
     m.rows.iter().position(|r| r.id == id).and_then(|i| m.layout.slots.get(i)).map_or(0.0, |s| s.x)
 }
 
-/// MenuRow.qml.
 fn menu_row(m: &Model, row: &Node, i: usize, selected: bool, checked: bool, thumb: Option<(Option<crate::scene::Bitmap>, f64)>, theme: &Theme) -> El {
     let s = &theme.space;
     let confirming = !m.confirm.is_empty() && m.confirm == row.id;

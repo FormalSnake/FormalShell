@@ -29,8 +29,7 @@ const LIGHTS_COLOR: &str = "lights-color";
 
 pub struct Window {
     pub shown: Shown,
-    /// The Wi-Fi route keeps the scanner awake while it is the level
-    /// (Menu.qml's `_wantsWifiScan`).
+    /// The Wi-Fi route keeps the scanner awake while it is the level.
     scan: Option<crate::services::devices::network::Hold>,
     pressed: Option<String>,
 }
@@ -261,7 +260,7 @@ impl App {
         }
     }
 
-    /// Menu.qml's `_dispatchInternal`, for the targets this shell serves.
+    /// An internal action, for the targets this shell serves.
     fn dispatch_internal(&mut self, name: &str) {
         if let Some((verb, value)) = name.split_once('.').map(|(_, rest)| rest.split_once(':').unwrap_or((rest, "")))
             && let Some(group) = name.split('.').next()
@@ -368,7 +367,7 @@ impl App {
         crate::surfaces::changed(self, crate::store::Topic::Notifications);
     }
 
-    /// Menu.qml's `wifi.`, `bluetooth.`, `audio.` and `radio.` actions.
+    /// The `wifi.`, `bluetooth.`, `audio.` and `radio.` actions.
     fn device_action(&mut self, group: &str, verb: &str, value: &str) {
         use crate::services::devices::{bluetooth, network as net};
         use crate::services::radio::{self, Cmd};
@@ -440,8 +439,7 @@ impl App {
         }
     }
 
-    /// shell.qml's `selectionResolved`: the answers whose token an
-    /// in-process owner holds.
+    /// The answers whose token an in-process owner holds.
     fn launcher_answers(&mut self) {
         for (token, value, cancelled) in self.launcher.take_resolved() {
             if token == WIFI_IDENTITY || token == WIFI_PASSWORD {
@@ -479,7 +477,7 @@ impl App {
         self.menu_open(Some("wifi"));
     }
 
-    /// PostActivation.qml's instant paste: the chord typed into whatever
+    /// The instant paste: the chord typed into whatever
     /// focus returns to, a settle after the window is gone so it never lands
     /// in the launcher's own field.
     fn paste_chord(&mut self) {
@@ -652,7 +650,7 @@ impl App {
         true
     }
 
-    /// MirrorIpc.qml's `status`.
+    /// `mirror status`.
     pub fn mirror_status(&self) -> String {
         let mi = &self.store.mirror;
         let showing = self.mirror_showing();
