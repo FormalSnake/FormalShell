@@ -14,8 +14,9 @@
 #               the collector's own view. It recognises exactly the one
 #               `sh -c` carrying that glob, runs it through the REAL shell so
 #               every other section stays this machine's own honest /proc,
-#               and hands back tests/fixtures/gpu-hybrid.txt's @drm rows in
-#               place of that section's own. Every other `sh -c` execs
+#               and hands back the @drm rows of
+#               crates/fs-system/tests/fixtures/gpu-hybrid.txt in place of
+#               that section's own. Every other `sh -c` execs
 #               straight through, GpuService's own nvidia-offload/prime-run
 #               probe included, which must keep answering "neither" since the
 #               env-var offload path is what this leg proves.
@@ -70,9 +71,9 @@ EOF
   # empty answer. The rows are the fixture file itself rather than a copy
   # pasted in here, so they are the same bytes the parser tests assert
   # against, captured off real hardware.
-  awk '/^@drm$/ { in_drm = 1; next } /^@/ { in_drm = 0 } in_drm' tests/fixtures/gpu-hybrid.txt > "$gpu_drm_rows_path"
+  awk '/^@drm$/ { in_drm = 1; next } /^@/ { in_drm = 0 } in_drm' crates/fs-system/tests/fixtures/gpu-hybrid.txt > "$gpu_drm_rows_path"
   if [ ! -s "$gpu_drm_rows_path" ]; then
-    echo "SMOKE_FAIL: no @drm rows in tests/fixtures/gpu-hybrid.txt, the collector shim would hand back an empty card list" >&2
+    echo "SMOKE_FAIL: no @drm rows in crates/fs-system/tests/fixtures/gpu-hybrid.txt, the collector shim would hand back an empty card list" >&2
     exit 1
   fi
 
