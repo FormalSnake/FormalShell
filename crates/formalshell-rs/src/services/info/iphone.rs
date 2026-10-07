@@ -252,9 +252,10 @@ fn spawn_bridge(args: &[&str]) -> std::io::Result<async_process::Child> {
         .spawn()
 }
 
-/// One bridge run to its exit, its lines handed to the loop.
+/// One bridge run to its exit, its lines handed to the loop. `args` is the
+/// whole argv, program first.
 async fn run_child(args: Vec<String>, inbox: async_channel::Sender<Msg>, report_failure: bool) {
-    let argv: Vec<&str> = args.iter().map(String::as_str).collect();
+    let argv: Vec<&str> = args.iter().skip(1).map(String::as_str).collect();
     let Ok(mut child) = spawn_bridge(&argv) else { return };
     let mut lines = child.stdout.take().map(|o| BufReader::new(o).lines());
     if let Some(lines) = lines.as_mut() {
