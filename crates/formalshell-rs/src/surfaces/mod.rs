@@ -4,9 +4,11 @@
 pub mod bar;
 pub mod capture;
 pub mod card;
+pub mod lock;
 pub mod panel;
 pub mod shoulders;
 pub mod tray_menu;
+pub mod toasts;
 pub mod tooltip;
 
 use crate::services::theme;
@@ -14,6 +16,10 @@ use crate::store::Topic;
 use crate::wayland::{App, theme_inputs};
 
 pub fn changed(app: &mut App, topic: Topic) {
+    app.lock_changed(topic);
+    if matches!(topic, Topic::Hyprland | Topic::State | Topic::Display | Topic::Config) {
+        crate::services::display::reconcile(&app.store);
+    }
     match topic {
         Topic::Config => {
             let settings = app.store.config.settings().clone();
@@ -32,6 +38,10 @@ pub fn changed(app: &mut App, topic: Topic) {
         Topic::Theme => app.set_bar_theme(),
         Topic::Tray => {
             app.tray_changed();
+            app.refresh_bar(Some(topic));
+        }
+        Topic::Notifications => {
+            app.toasts_changed();
             app.refresh_bar(Some(topic));
         }
         _ => app.refresh_bar(Some(topic)),

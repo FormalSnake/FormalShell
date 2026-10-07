@@ -1,4 +1,5 @@
 mod fontconfig;
+mod instance;
 mod ipc;
 mod motion;
 mod render;
@@ -29,6 +30,7 @@ fn main() {
     let started = Instant::now();
     let epoch = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default();
     eprintln!("start epoch_us={}", epoch.as_micros());
+    instance::acquire();
 
     let conn = Connection::connect_to_env().expect("no Wayland compositor to connect to");
     let (globals, queue) = registry_queue_init::<App>(&conn).expect("wl_registry");

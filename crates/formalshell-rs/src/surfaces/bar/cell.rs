@@ -52,6 +52,9 @@ pub enum Action {
     Caffeinate(bool),
     MediaNext,
     MediaPrevious,
+    /// The notification centre, open or shut.
+    Center,
+    Dnd(bool),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

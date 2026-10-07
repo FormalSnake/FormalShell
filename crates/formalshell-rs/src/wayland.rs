@@ -6,6 +6,10 @@
 
 mod caffeinate;
 mod capture;
+mod hotcorners;
+pub mod lock;
+mod polkit;
+mod toasts;
 
 use std::time::Instant;
 
@@ -127,6 +131,7 @@ enum Owner {
     Menu,
     Outgoing,
     Tooltip,
+    Toasts,
     Preview,
     Scrim,
     Zone(usize),
@@ -147,6 +152,9 @@ pub struct App {
     pub runtime: Option<Runtime>,
     pub store: Store,
     caffeinate: caffeinate::Caffeinate,
+    pub lock: lock::Lock,
+    hot: hotcorners::HotCorners,
+    polkit: Option<polkit::Dialog>,
     pub bar: Bar,
     bar_surface: Option<Surface>,
     backdrop: Option<Backdrop>,
@@ -159,6 +167,8 @@ pub struct App {
     keyboard: Option<wl_keyboard::WlKeyboard>,
     tips: tooltip::Group,
     tip_card: Option<tooltip::Card>,
+    toasts: Option<surfaces::toasts::Toasts>,
+    toasts_dirty: bool,
     /// `debug join`'s card, hung in the gap it opens.
     preview: Option<(Surface, crate::scene::Scene, Vec<NodeId>)>,
     /// The tray item menu, over whatever popout it hangs off.
@@ -211,6 +221,9 @@ impl App {
             runtime: None,
             store,
             caffeinate: caffeinate::Caffeinate::bind(globals, qh),
+            lock: lock::Lock::bind(globals, qh),
+            hot: Default::default(),
+            polkit: None,
             bar,
             bar_surface: None,
             backdrop: None,
@@ -223,6 +236,8 @@ impl App {
             keyboard: None,
             tips: tooltip::Group::default(),
             tip_card: None,
+            toasts: None,
+            toasts_dirty: false,
             preview: None,
             scrim: None,
             pointer: None,
@@ -262,6 +277,7 @@ impl App {
 
     pub fn set_handle(&mut self, handle: LoopHandle<'static, App>) {
         self.handle = Some(handle);
+        self.start_lock();
     }
 
     /// A layer surface that takes no input and reserves nothing.
@@ -357,6 +373,7 @@ impl App {
     /// The settings the bar is built from: its edge, its layout, its
     /// modules. Anything structural re-creates the window.
     pub fn apply_config(&mut self) {
+        self.sync_hot_corners();
         let bar_cfg = self.store.config.get("bar").cloned();
         let resolved = layout::resolve(bar_cfg.as_ref(), &self.store.plugins.bar_plugins());
         let modules: Vec<commands::Module> = BarRegion::ALL
@@ -483,6 +500,9 @@ impl App {
         let overflow = self.overflow_open();
         self.bar.set_open(panel.as_deref(), overflow, now);
         devices::earbuds::panel(panel.as_deref() == Some("earbuds"));
+        devices::bluetooth::panel(panel.as_deref() == Some("bluetooth"));
+        devices::audio::panel(panel.as_deref() == Some("audio"));
+        devices::power::panel(panel.as_deref() == Some("dualsense"));
         if let Some(p) = &mut self.overflow {
             for s in &mut p.slots {
                 let open = panel.as_deref().is_some_and(|n| s.view.panel == Some(n));
@@ -705,11 +725,15 @@ impl App {
     }
 
     fn open_host(&mut self, module: Box<dyn panel::Panel>, anchor: Option<f64>, nested: bool, now: Instant) {
+        let place = self.panel_place(anchor, nested);
+        self.open_host_at(module, place, now);
+    }
+
+    fn open_host_at(&mut self, module: Box<dyn panel::Panel>, place: Place, now: Instant) {
         let id = module.id();
         if self.panel.as_ref().is_some_and(|p| p.id() == id && p.is_open()) {
             return;
         }
-        let place = self.panel_place(anchor, nested);
         let layer = self.overlay("formalshell:panel", Layer::Overlay, Anchor::all(), (0, 0), -1);
         layer.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
         layer.commit();
@@ -1037,11 +1061,21 @@ impl App {
             Action::Caffeinate(on) => self.set_caffeinated(on),
             Action::MediaNext => self.store.media.next(),
             Action::MediaPrevious => self.store.media.previous(),
+            Action::Center => {
+                let open = !self.store.notifications.center_open;
+                self.set_center(open);
+            }
+            Action::Dnd(on) => {
+                self.store.notifications.set_dnd(on);
+                surfaces::changed(self, Topic::Notifications);
+            }
         }
     }
 
     pub fn present(&mut self) {
+        crate::surfaces::capture::flush(self);
         let now = Instant::now();
+        self.tick_notifications();
         if self.panel.as_ref().is_some_and(|p| p.finished(now)) {
             self.panel = None;
             self.sync_join();
@@ -1096,6 +1130,7 @@ impl App {
         }
         self.panel_dirty = false;
         self.present_tooltip(now);
+        self.present_toasts(now);
         if let Some((surface, scene, _)) = &mut self.preview {
             surface.present(scene, false, &qh);
         }
@@ -1106,6 +1141,8 @@ impl App {
             surface.present(scrim.alpha(now), scrim.animating(now), &qh);
         }
         self.present_picker(now);
+        self.present_polkit();
+        self.present_lock();
         self.arm_wake(now);
     }
 
@@ -1151,7 +1188,8 @@ impl App {
     /// nothing asks for frames while it waits.
     fn arm_wake(&mut self, now: Instant) {
         let hosts = [&self.panel, &self.outgoing];
-        let at = [self.bar.wake(now), self.tips.wake()]
+        let notifications = self.store.notifications.wake().map(|at| crate::services::notifications::instant_at(at, now));
+        let at = [self.bar.wake(now), self.tips.wake(), notifications]
             .into_iter()
             .chain(hosts.iter().filter_map(|h| h.as_ref()).flat_map(|h| [h.prime_until, h.wake.filter(|w| *w > now)]))
             .flatten()
@@ -1188,6 +1226,9 @@ impl App {
         }
         if self.tip_card.as_ref().is_some_and(|c| c.surface.layer.wl_surface() == surface) {
             return Some(Owner::Tooltip);
+        }
+        if self.toasts.as_ref().is_some_and(|t| t.surface.layer.wl_surface() == surface) {
+            return Some(Owner::Toasts);
         }
         if self.preview.as_ref().is_some_and(|(s, _, _)| s.layer.wl_surface() == surface) {
             return Some(Owner::Preview);
@@ -1256,6 +1297,7 @@ impl App {
                 m.hover(hit);
             }
         }
+        self.hover_toasts((owner == Some(Owner::Toasts)).then_some(at));
         if let Some(h) = &mut self.panel {
             let point = (owner == Some(Owner::Panel)).then_some(at);
             if h.pointer(point, &self.store, self.runtime.as_ref()) {
@@ -1320,6 +1362,13 @@ impl App {
                     self.hover(None, (x, y));
                 }
                 PointerEventKind::Press { .. } => {
+                    if owner == Some(Owner::Toasts) {
+                        if let Some(t) = &mut self.toasts {
+                            t.press(x, y);
+                        }
+                        self.pressed = Some((Owner::Toasts, 0));
+                        continue;
+                    }
                     if owner == Some(Owner::Panel) {
                         if let Some(h) = &mut self.panel {
                             h.press(x, y, &self.store, self.runtime.as_ref());
@@ -1338,6 +1387,10 @@ impl App {
                 }
                 PointerEventKind::Release { button, .. } => {
                     let Some((o, i)) = self.pressed.take() else { continue };
+                    if o == Owner::Toasts {
+                        self.release_toasts(x, y);
+                        continue;
+                    }
                     if o == Owner::Panel {
                         let out = self.panel.as_mut().map_or(Out::None, |h| h.release(x, y, &self.store, self.runtime.as_ref()));
                         if out == Out::Close {
@@ -1437,10 +1490,13 @@ impl App {
     /// One key on the keyboard: the open panel's, as KeyCatcher.qml binds
     /// them.
     fn key_event(&mut self, event: KeyEvent) {
-        if self.picker_key_event(&event) {
+        if self.lock_key(&event) || self.polkit_key(&event) || self.picker_key_event(&event) {
             return;
         }
+        let editing = self.panel.as_ref().is_some_and(|h| h.editing());
         let key = match event.keysym {
+            Keysym::space if editing => Key::Text(" ".into()),
+            Keysym::BackSpace => Key::Back,
             Keysym::Escape => Key::Escape,
             Keysym::Tab => Key::Tab(1),
             Keysym::ISO_Left_Tab => Key::Tab(-1),
@@ -1530,6 +1586,15 @@ impl CompositorHandler for App {
                     c.mapped(theme, now);
                 }
             }
+            Some(Owner::Toasts) => {
+                let Some(t) = &mut self.toasts else { return };
+                let s = &mut t.surface;
+                (s.frame_pending, s.callbacks) = (false, s.callbacks + 1);
+                if !s.mapped {
+                    s.mapped = true;
+                    self.toasts_dirty = true;
+                }
+            }
             Some(Owner::Scrim) => {
                 let Some((scrim, s)) = &mut self.scrim else { return };
                 (s.frame_pending, s.mapped, s.callbacks) = (false, true, s.callbacks + 1);
@@ -1544,7 +1609,12 @@ impl CompositorHandler for App {
                 (z.frame_pending, z.mapped, z.callbacks) = (false, true, z.callbacks + 1);
             }
             Some(Owner::Picker(i)) => self.picker_frame(i),
-            Some(Owner::Backdrop) | None => {}
+            Some(Owner::Backdrop) => {}
+            None => {
+                if !self.polkit_frame(surface) {
+                    self.lock_frame(surface);
+                }
+            }
         }
     }
 
@@ -1566,6 +1636,7 @@ impl LayerShellHandler for App {
                 self.sync_join();
             }
             Some(Owner::Tooltip) => self.tip_card = None,
+            Some(Owner::Toasts) => self.toasts = None,
             Some(Owner::Preview) => self.preview = None,
             Some(Owner::Overflow) => {
                 self.overflow = None;
@@ -1611,6 +1682,11 @@ impl LayerShellHandler for App {
                 let size = c.scene.size;
                 c.surface.configure(size.w, size.h);
             }
+            Some(Owner::Toasts) => {
+                let Some(t) = &mut self.toasts else { return };
+                let size = t.scene.size;
+                t.surface.configure(size.w, size.h);
+            }
             Some(Owner::Preview) => {
                 let Some((s, scene, _)) = &mut self.preview else { return };
                 s.configure(scene.size.w, scene.size.h);
@@ -1628,6 +1704,8 @@ impl LayerShellHandler for App {
             }
             Some(Owner::Picker(i)) => self.picker_configure(i, width, height),
             None if self.caffeinate_owns(layer) => self.caffeinate_configure(),
+            None if self.hot_corner_owns(layer) => self.hot_corner_configure(layer),
+            None if self.polkit_owns(layer) => self.polkit_configure(width, height),
             None => {}
         }
     }
@@ -1674,7 +1752,11 @@ impl SeatHandler for App {
 
 impl PointerHandler for App {
     fn pointer_frame(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_pointer::WlPointer, events: &[PointerEvent]) {
-        self.pointer_events(events);
+        self.lock_pointer(events.iter().map(|e| e.surface.clone()));
+        let rest = self.hot_corner_pointer(events);
+        if !rest.is_empty() {
+            self.pointer_events(&rest);
+        }
     }
 }
 
@@ -1716,6 +1798,8 @@ impl OutputHandler for App {
 
 impl App {
     fn on_outputs(&mut self) {
+        self.lock_outputs();
+        self.sync_hot_corners();
         let name = self.bar_output_name();
         if name != self.bar.output {
             self.bar.output = name;

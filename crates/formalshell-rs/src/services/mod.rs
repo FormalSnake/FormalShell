@@ -12,16 +12,20 @@ pub mod clock;
 pub mod commands;
 pub mod config;
 pub mod devices;
+pub mod display;
 pub mod herdr;
 pub mod hyprland;
 pub mod icons;
 pub mod media;
+pub mod notifications;
 pub mod overnight;
 pub mod info;
 pub mod plugins;
+pub mod polkit;
 pub mod proc;
 pub mod radio;
 pub mod recording;
+pub mod sleep;
 pub mod state;
 mod watch;
 pub mod theme;
@@ -52,5 +56,7 @@ pub fn start(ctx: &Ctx) {
     ctx.spawn(wants::run(ctx.clone()));
     ctx.spawn(plugins::run(ctx.clone()));
     devices::start(ctx);
+    display::start(ctx);
     ctx.spawn(tray::run(ctx.clone()));
+    ctx.spawn(notifications::run(ctx.clone()));
 }

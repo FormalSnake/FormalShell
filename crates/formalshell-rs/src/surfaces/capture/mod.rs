@@ -56,6 +56,8 @@ pub struct Capture {
     pub grab: Grab,
     pub rec: record::Rec,
     pub picker: Picker,
+    /// The actions of the notifications this family posted, by entry id.
+    local: HashMap<String, Vec<(&'static str, Act)>>,
 }
 
 impl Capture {
@@ -79,11 +81,83 @@ impl Capture {
     }
 }
 
-/// NotificationService.notify: the notification server has not landed in
-/// this shell yet, so the line goes to the log, where the QML shell's own
-/// console.warn twin would.
+/// What a notification's action does once picked.
+#[derive(Clone, Debug)]
+pub enum Act {
+    Edit(String),
+    Play(String),
+    Gif(String),
+}
+
+struct Post {
+    summary: String,
+    body: String,
+    actions: Vec<(&'static str, &'static str, Act)>,
+    image: String,
+}
+
+thread_local! {
+    /// Posted from anywhere in this module, handed to the notification
+    /// service on the next pass of the loop, where the App is free.
+    static OUTBOX: std::cell::RefCell<Vec<Post>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// NotificationService.notify(summary, body).
 pub fn notify(summary: &str, body: &str) {
-    eprintln!("notify: {summary}: {body}");
+    notify_with(summary, body, Vec::new(), "");
+}
+
+/// The same with `(key, label, act)` actions and a picture on disk.
+pub fn notify_with(summary: &str, body: &str, actions: Vec<(&'static str, &'static str, Act)>, image: &str) {
+    let post = Post { summary: summary.into(), body: body.into(), actions, image: image.into() };
+    OUTBOX.with(|o| o.borrow_mut().push(post));
+}
+
+/// Posts what was queued and runs the actions picked on earlier posts.
+pub fn flush(app: &mut App) {
+    let posts = OUTBOX.with(|o| std::mem::take(&mut *o.borrow_mut()));
+    let picked = std::mem::take(&mut app.store.notifications.local_invoked);
+    if posts.is_empty() && picked.is_empty() {
+        return;
+    }
+    for (id, key) in picked {
+        let Some(act) = app.capture.local.get(&id).and_then(|acts| acts.iter().find(|(k, _)| *k == key)).map(|(_, a)| a.clone()) else {
+            continue;
+        };
+        match act {
+            Act::Edit(path) => {
+                shot_edit(app, &path);
+            }
+            Act::Play(path) => {
+                record::play(app, &path);
+            }
+            Act::Gif(path) => {
+                record::gif(app, &path);
+            }
+        }
+    }
+    for post in posts {
+        let actions = post.actions.iter().map(|(k, l, _)| fs_info::notifications::Action { key: (*k).into(), label: (*l).into() }).collect();
+        let image = if post.image.is_empty() { String::new() } else { format!("file://{}", post.image) };
+        let id = app.store.notifications.notify_with(&post.summary, &post.body, fs_info::notifications::Urgency::Normal, actions, image);
+        if !post.actions.is_empty() {
+            app.capture.local.insert(id.clone(), post.actions.into_iter().map(|(k, _, a)| (k, a)).collect());
+        }
+        if !post.image.is_empty()
+            && let Some(rt) = &app.runtime
+        {
+            let path = post.image;
+            rt.service(move |ctx| {
+                let job = ctx.pool().run(move || crate::services::icons::load(std::path::Path::new(&path)));
+                let publisher = ctx.publisher().clone();
+                ctx.spawn(async move {
+                    let raw = job.await.flatten();
+                    publisher.publish(crate::store::Diff::Capture(Event::Image { id, raw }));
+                });
+            });
+        }
+    }
+    crate::surfaces::changed(app, crate::store::Topic::Notifications);
 }
 
 pub fn spawn(app: &App, run: Run) {
@@ -303,7 +377,12 @@ fn shot_exit(app: &mut App, e: Exit) {
                     return;
                 }
                 s.last_path = s.pending_path.clone();
-                notify("SCREENSHOT SAVED", &s.last_path.clone());
+                let saved = s.last_path.clone();
+                if s.processing == "save" {
+                    notify_with("SCREENSHOT SAVED", &saved, Vec::new(), &saved);
+                } else {
+                    notify_with("SCREENSHOT SAVED", &saved, vec![("default", "EDIT", Act::Edit(saved.clone()))], &saved);
+                }
                 return;
             }
             s.last_error = match e.stderr.trim() {
@@ -786,6 +865,12 @@ pub fn events(app: &mut App) {
                 } else {
                     app.capture.pids.insert(generation, pid);
                     record::spawned(app, generation, pid);
+                }
+            }
+            Event::Image { id, raw } => {
+                if let Some(raw) = raw {
+                    app.store.notifications.icons.insert(id, raw);
+                    crate::surfaces::changed(app, crate::store::Topic::Notifications);
                 }
             }
             Event::Frame { generation, output, frame } => {

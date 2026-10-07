@@ -9,7 +9,7 @@ use std::time::Instant;
 use fs_system::capture as model;
 use serde_json::json;
 
-use super::{App, notify, now, runtime_dir, slurp_run, spawn, SLURP_REGION};
+use super::{Act, App, notify, notify_with, now, runtime_dir, slurp_run, spawn, SLURP_REGION};
 use crate::services::capture::{Exit, Job, Run};
 use crate::services::hyprland::{self, Command};
 use crate::services::recording;
@@ -287,6 +287,18 @@ pub fn gif(app: &mut App, path: &str) -> String {
     pass1.extend(argv.pass1);
     spawn(app, Run::new(Job::Palette, g, pass1));
     out
+}
+
+/// RECORDING SAVED's PLAY action: recording.player, the same env and sh
+/// handoff the screenshot editor takes.
+pub fn play(app: &mut App, path: &str) -> String {
+    if path.is_empty() {
+        return "error: no path".into();
+    }
+    let player = config_str(app, "recording.player", "xdg-open");
+    let g = app.capture.generation();
+    spawn(app, Run::sh(Job::Player, g, r#"exec "$FS_PLAYER" "$FS_PLAY_PATH""#).env("FS_PLAYER", player).env("FS_PLAY_PATH", path));
+    "ok".into()
 }
 
 pub fn status(app: &App) -> String {
@@ -740,14 +752,24 @@ pub fn exit(app: &mut App, e: Exit) {
             }
             app.capture.rec.preview = None;
             let path = e.tag.clone();
-            notify("RECORDING SAVED", &path);
+            let preview = model::preview_frame_path(&path);
+            let image = if e.started && e.code == 0 { preview.as_str() } else { "" };
+            let actions = vec![("default", "PLAY", Act::Play(path.clone())), ("gif", "GIF", Act::Gif(path.clone()))];
+            notify_with("RECORDING SAVED", &path, actions, image);
             if e.started && e.code == 0 {
-                let preview = model::preview_frame_path(&path);
                 app.capture_after(2000, move |app| {
                     let g = app.capture.generation();
                     spawn(app, Run::new(Job::Quiet, g, vec!["rm".into(), "-f".into(), preview]));
                 });
             }
+        }
+        Job::Player => {
+            if e.started && e.code == 0 {
+                return;
+            }
+            let why = or_code(&e.stderr, format!("player exited {}", e.code));
+            eprintln!("RecordingService: player launch failed: {why}");
+            notify("PLAYER FAILED", &why);
         }
         Job::Palette => {
             if !mine(r.palette) {
@@ -775,7 +797,8 @@ pub fn exit(app: &mut App, e: Exit) {
             if e.started && e.code == 0 {
                 r.last_gif_path = r.pending_gif_path.clone();
                 r.last_error.clear();
-                notify("GIF SAVED", &r.last_gif_path.clone());
+                let gif = r.last_gif_path.clone();
+                notify_with("GIF SAVED", &gif, Vec::new(), &gif);
                 return;
             }
             r.last_error = or_code(&e.stderr, format!("paletteuse exited {}", e.code));

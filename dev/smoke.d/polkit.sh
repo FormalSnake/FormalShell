@@ -17,6 +17,7 @@
 leg_polkit_flag="--polkit"
 leg_polkit_order=280
 leg_polkit_needs="pkexec wtype"
+leg_polkit_rust=1
 
 polkit_active_path="$shot_dir/polkit-active.png"
 polkit_error_path="$shot_dir/polkit-error.png"

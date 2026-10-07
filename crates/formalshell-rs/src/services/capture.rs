@@ -34,6 +34,7 @@ pub enum Job {
     Finalize,
     FinalizeCleanup,
     Preview,
+    Player,
     Palette,
     Gif,
     Quiet,
@@ -59,6 +60,8 @@ pub enum Event {
     Exited(Exit),
     /// A freeze decoded off the UI thread.
     Frame { generation: u64, output: String, frame: Option<crate::scene::Bitmap> },
+    /// A notification's picture, loaded off the UI thread.
+    Image { id: String, raw: Option<crate::services::icons::Raw> },
 }
 
 /// Events waiting for the UI thread to act on them, in arrival order.
