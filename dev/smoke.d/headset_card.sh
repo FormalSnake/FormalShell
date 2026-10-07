@@ -1,0 +1,196 @@
+# shellcheck shell=bash
+# shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
+# --headset-card drives the headset connect card (new in the Rust shell, spec
+# 2026-10-06-rust-rewrite.md under R7) through FORMALSHELL_SMOKE_BLUETOOTH.
+# The VM has no Bluetooth controller, so the leg exports the variable as
+# `@<file>`: a JSON device list the shell reads again whenever the file
+# changes, which is how it connects and disconnects a device on this rig
+# (`address`, `name`, `connected`, and for this seam `icon` and `battery`).
+# Rust only: the QML shell has no such card, and a `@` value there is just an
+# unparsable list.
+#
+# What it proves, off the shell's own `headset card mapped` and `unmapped`
+# log lines and the frames:
+#  1. A device connected at startup raises no card.
+#  2. A headphone going from disconnected to connected raises one carrying
+#     its icon, its name, "Connected" and one ring from BlueZ's battery.
+#  3. A real pointer parked on the card holds it past its four seconds, and
+#     the pointer leaving then dismisses it. Escape is not driven: the card
+#     asks for on-demand keyboard focus (exclusive would pin the pointer to
+#     it), which Hyprland gives on a click, and a click opens the panel.
+#  4. The same device disconnecting and reconnecting a second later raises
+#     none.
+#  5. A pair of AirPods (the librepods status file staged first) raises a
+#     card with one ring each for left, right and case off the earbuds
+#     backend, and the pointer leaving the card dismisses it.
+#  6. With do-not-disturb on in state.json a connect raises none.
+#
+# The pointer is wlrctl, a real virtual-pointer client, for the reason
+# tooltip.sh documents: only one sends the surface a pointer enter.
+leg_headset_card_flag="--headset-card"
+leg_headset_card_order=177
+leg_headset_card_needs="wlrctl jq"
+leg_headset_card_rust=1
+
+headset_dir="$shot_dir/headset-card"
+headset_list="$headset_dir/bluetooth.json"
+headset_log_marks="$headset_dir/marks.txt"
+headset_bluez_png="$shot_dir/headset-card-bluez.png"
+headset_held_png="$shot_dir/headset-card-held.png"
+headset_airpods_png="$shot_dir/headset-card-airpods.png"
+headset_dnd_png="$shot_dir/headset-card-dnd.png"
+
+headset_buds_address="AC:12:2F:11:22:33"
+headset_cans_address="11:22:33:44:55:66"
+headset_pods_address="AA:BB:CC:DD:EE:01"
+
+# The band the card hangs in: below the bar's strip, centred.
+headset_region="660,30 600x150"
+headset_park_x=960
+headset_park_y=85
+
+leg_headset_card_validate() {
+  if [ "$fs_impl" != rust ]; then
+    echo "usage: --headset-card is new in the Rust shell and needs FS_IMPL=rust" >&2
+    exit 1
+  fi
+  local other
+  for other in bar_position frame fullscreen earbuds; do
+    if leg_on "$other"; then
+      echo "usage: --headset-card parks a pointer at the top bar's card and cannot combine with --${other//_/-}" >&2
+      exit 1
+    fi
+  done
+}
+
+# A fixture decoded out of a test file: one `property string <name>: "<json>"`
+# line, a QML string literal with only \" and \\ escapes being a JSON string.
+headset_fixture() {
+  sed -n "s/^ *property string $2: \(\".*\"\)\$/\1/p" "tests/$1" | "$jq_bin" -r .
+}
+
+headset_devices() {
+  # $1 buds connected, $2 cans connected, $3 pods connected (true or false)
+  printf '[{"address":"%s","name":"Liberty 4 NC","connected":%s,"battery":80},{"address":"%s","name":"Studio Cans","connected":%s,"icon":"audio-headphones","battery":55},{"address":"%s","name":"Kyan'"'"'s AirPods Pro","connected":%s}]\n' \
+    "$headset_buds_address" "$1" "$headset_cans_address" "$2" "$headset_pods_address" "$3"
+}
+
+leg_headset_card_fixture() {
+  mkdir -p "$headset_dir"
+  headset_devices true false false > "$headset_list"
+  headset_fixture tst_earbuds_airpods.qml fixturePro3 > "$headset_dir/airpods-status.json"
+  [ -s "$headset_dir/airpods-status.json" ] || { echo "headset-card: the AirPods fixture did not decode out of tests/" >&2; exit 1; }
+  export FORMALSHELL_SMOKE_BLUETOOTH="@$headset_list"
+}
+
+leg_headset_card_timing() {
+  leg_timing 66 100
+}
+
+leg_headset_card_drive() {
+  local script="$shot_dir/headset-card-drive.sh"
+  local state_dir="$iso_home/.local/state/librepods"
+  local fs_state="$iso_home/.local/state/formalshell/state.json"
+  write_script "$script" <<EOF
+#!/usr/bin/env bash
+list() { printf '[{"address":"$headset_buds_address","name":"Liberty 4 NC","connected":%s,"battery":80},{"address":"$headset_cans_address","name":"Studio Cans","connected":%s,"icon":"audio-headphones","battery":55},{"address":"$headset_pods_address","name":"Kyan'"'"'s AirPods Pro","connected":%s}]\n' "\$1" "\$2" "\$3" > "$headset_list"; }
+mapped() { grep -c 'headset card mapped' "$shell_log_path"; }
+unmapped() { grep -c 'headset card unmapped' "$shell_log_path"; }
+mark() { echo "\$1 mapped=\$(mapped) unmapped=\$(unmapped)" >> "$headset_log_marks"; }
+park() {
+  "$wlrctl_bin" pointer move -4000 -4000 > /dev/null 2>&1
+  sleep 0.5
+  "$wlrctl_bin" pointer move "\$1" "\$2" > /dev/null 2>&1
+}
+leave() {
+  "$wlrctl_bin" pointer move -4000 -4000 > /dev/null 2>&1
+  "$wlrctl_bin" pointer move 400 600 > /dev/null 2>&1
+}
+: > "$headset_log_marks"
+sleep 6
+mark startup
+list true true false
+sleep 2
+"$grim_bin" -g "$headset_region" "$headset_bluez_png" > /dev/null 2>&1
+mark connected
+park $headset_park_x $headset_park_y
+sleep 6
+"$grim_bin" -g "$headset_region" "$headset_held_png" > /dev/null 2>&1
+mark held
+leave
+sleep 2
+mark released
+list true false false
+sleep 1
+list true true false
+sleep 3
+mark reconnected
+mkdir -p "$state_dir"
+cp "$headset_dir/airpods-status.json" "$state_dir/status.json"
+sleep 4
+list true true true
+sleep 2.5
+"$grim_bin" -g "$headset_region" "$headset_airpods_png" > /dev/null 2>&1
+mark airpods
+park $headset_park_x $headset_park_y
+sleep 1
+leave
+sleep 2.5
+mark left
+list true true false
+sleep 4
+if [ -f "$fs_state" ]; then
+  "$jq_bin" '.dnd = true' "$fs_state" > "$fs_state.tmp" && mv "$fs_state.tmp" "$fs_state"
+else
+  echo '{"dnd": true}' > "$fs_state"
+fi
+sleep 2
+list true true true
+sleep 2.5
+"$grim_bin" -g "$headset_region" "$headset_dnd_png" > /dev/null 2>&1
+mark dnd
+rm -f "$state_dir/status.json"
+EOF
+  hypr_exec_once "bash $script"
+}
+
+headset_mark() {
+  # headset_mark <name> <field> prints one counter off a checkpoint line.
+  awk -v n="$1" -v f="$2=" '$1 == n { for (i = 2; i <= NF; i++) if (index($i, f) == 1) print substr($i, length(f) + 1) }' "$headset_log_marks"
+}
+
+headset_expect() {
+  # headset_expect <name> <mapped> <unmapped>
+  local got_m got_u
+  got_m=$(headset_mark "$1" mapped)
+  got_u=$(headset_mark "$1" unmapped)
+  if [ "$got_m" != "$2" ] || [ "$got_u" != "$3" ]; then
+    fail "headset card at '$1': expected $2 mapped and $3 unmapped, the shell log counted ${got_m:-none} and ${got_u:-none}"
+  fi
+}
+
+leg_headset_card_assert() {
+  local png
+  [ -s "$headset_log_marks" ] || fail "no headset card checkpoints were written"
+  cat "$headset_log_marks"
+  for png in "$headset_bluez_png" "$headset_held_png" "$headset_airpods_png" "$headset_dnd_png"; do
+    [ -s "$png" ] || fail "no screenshot at $png"
+  done
+  echo "SMOKE_HEADSET_BLUEZ $headset_bluez_png"
+  echo "SMOKE_HEADSET_HELD $headset_held_png"
+  echo "SMOKE_HEADSET_AIRPODS $headset_airpods_png"
+  echo "SMOKE_HEADSET_DND $headset_dnd_png"
+
+  headset_expect startup 0 0
+  headset_expect connected 1 0
+  # Parked on, the card outlives its four seconds; the pointer leaving lets it go.
+  headset_expect held 1 0
+  headset_expect released 1 1
+  # Off and on inside a second: no second card.
+  headset_expect reconnected 1 1
+  headset_expect airpods 2 1
+  # The pointer leaving is what dismissed the pair.
+  headset_expect left 2 2
+  headset_expect dnd 2 2
+  echo "SMOKE_HEADSET_CARD ok startup 0, connect 1, held, leave, reconnect none, airpods 1, leave, dnd none"
+}
