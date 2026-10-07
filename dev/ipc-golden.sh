@@ -133,6 +133,14 @@ ShellRoot {
         function speedstatus(): string { return "{}" }
     }
     IpcHandler {
+        target: "bluetooth"
+        function toggle(): string { return "ok" }
+        function power(state: string): string { return "power " + state }
+        function trust(address: string): string { return "trust " + address }
+        function untrust(address: string): string { return "untrust " + address }
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
         target: "monitor"
         function status(): string { return "{}" }
         function processes(query: string): string { return "processes " + query }
@@ -579,6 +587,16 @@ rec call network speedtest
 rec call network speedstatus x
 rec show network
 rec show network connectEap
+rec call bluetooth status
+rec call bluetooth status x
+rec call bluetooth toggle
+rec call bluetooth power on
+rec call bluetooth power
+rec call bluetooth trust AA:BB:CC:DD:EE:FF
+rec call bluetooth trust
+rec call bluetooth untrust AA:BB:CC:DD:EE:FF
+rec call bluetooth nope
+rec show bluetooth
 rec call monitor status
 rec call monitor status x
 rec call monitor gpu

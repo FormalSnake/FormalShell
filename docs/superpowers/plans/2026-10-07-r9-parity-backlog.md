@@ -10,17 +10,8 @@ by surface; one line each.
   does not do yet. All seven indicators are wired into the one cell.
 
 ## Panels
-- Tray menu: no click-outside dismiss, no wheel scroll past the height cap,
-  no animated height morph; second-bar card keeps its opening size when
-  items change while open; no per-item hover tooltips.
-- Wired network row click does nothing (QML connects or disconnects); the
-  Wi-Fi forget icon shows on cursor rather than hover alone.
-- `bluetooth` IPC verbs not ported.
-- Power: low-battery notification watcher, charging and tailscale-dot
-  pulses, iPhone figure in PowerFlow, "Open monitor" only closes.
-- Calendar: life-progress prompt, month-swap slide.
-- App menu populated state (hero, actions, windows) never rendered in a leg.
-- `--pantheon --systemupdate` never opens its panel (check QML too).
+- Calendar: the life-progress prompt needs the launcher's input answer routed back to the
+  panel (`wayland/launcher.rs`'s resolved tokens), which the R4b launcher agent holds.
 
 ## Notifications
 - Desktop-entry step in the icon order; iPhone source mark on cards; the

@@ -11,6 +11,7 @@ use fs_theme::color::Rgba;
 use fs_theme::theme::Theme;
 use fs_theme::tokens::WEIGHTS;
 
+use crate::motion::{Animated, SPATIAL};
 use crate::scene::{Bitmap, IRect, NodeId, Paint, Scene};
 use crate::services::tray::MenuNode;
 use crate::surfaces::bar::cell::{Kit, Painter};
@@ -90,7 +91,13 @@ pub struct Menu {
     pub cap: f64,
     /// Where along the line the card centres, for a resize to clamp again.
     pub anchor: f64,
+    /// The card's height on its way to what the rows ask for.
+    pub morph: Animated,
+    /// Rows scrolled off the top of a card capped below its rows.
+    scroll: f64,
+    /// The rows' viewport, in the card's surface.
     close_hover: bool,
+    body: IRect,
     look: Look,
     nodes: Vec<NodeId>,
     rects: Vec<IRect>,
@@ -111,7 +118,10 @@ impl Menu {
             cursor_active: false,
             cap: f64::INFINITY,
             anchor: 0.0,
+            morph: Animated::new(0.0, SPATIAL),
+            scroll: 0.0,
             close_hover: false,
+            body: IRect::default(),
             look: Look::new(theme),
             nodes: Vec::new(),
             rects: Vec::new(),
@@ -152,6 +162,7 @@ impl Menu {
             self.flatten(&root, 0, &mut rows);
         }
         self.rows = rows;
+        self.scroll = self.scroll.min(self.max_scroll());
         let bad = self.cursor.is_none_or(|c| c >= self.rows.len());
         if bad {
             self.cursor = (!self.rows.is_empty()).then_some(0);
@@ -169,9 +180,35 @@ impl Menu {
     /// The card's height with every row it holds, or its one "Empty menu"
     /// row.
     pub fn height(&self) -> f64 {
-        let l = &self.look;
-        let rows: f64 = if self.rows.is_empty() { l.control_height } else { self.rows.iter().map(|r| self.row_height(r)).sum() };
-        l.padding * 2.0 + l.control_height + self.header_gap() + rows
+        self.chrome() + self.rows_height()
+    }
+
+    /// The header and the card's own padding, which the rows do not scroll under.
+    fn chrome(&self) -> f64 {
+        self.look.padding * 2.0 + self.look.control_height + self.header_gap()
+    }
+
+    fn rows_height(&self) -> f64 {
+        if self.rows.is_empty() { self.look.control_height } else { self.rows.iter().map(|r| self.row_height(r)).sum() }
+    }
+
+    /// How far the rows can scroll inside the card at its capped height.
+    fn max_scroll(&self) -> f64 {
+        let view = self.height().min(self.cap) - self.chrome();
+        (self.rows_height() - view).max(0.0)
+    }
+
+    /// A wheel notch moves the rows by `controlHeight`; true when they moved.
+    pub fn scroll_notches(&mut self, notches: f64) -> bool {
+        let next = (self.scroll + notches * self.look.control_height).clamp(0.0, self.max_scroll());
+        let moved = next != self.scroll;
+        self.scroll = next;
+        moved
+    }
+
+    /// Whether a point is over the rows' viewport.
+    fn in_body(&self, x: i32, y: i32) -> bool {
+        x >= self.body.x && x < self.body.right() && y >= self.body.y && y < self.body.bottom()
     }
 
     /// Cursor movement skips separators; a disabled row stays reachable and
@@ -233,7 +270,7 @@ impl Menu {
         if inside(&self.close) {
             return Some(Hit::Close);
         }
-        self.rects.iter().position(inside).filter(|i| !self.rows[*i].node.separator).map(Hit::Row)
+        self.rects.iter().position(inside).filter(|i| !self.rows[*i].node.separator && self.in_body(x, y)).map(Hit::Row)
     }
 
     /// The pointer over a row takes the cursor, as TrayMenu's `onEntered`
@@ -300,10 +337,13 @@ impl Menu {
         // The rows, abutting like the launcher's.
         let left = rect.x + pad;
         let width = rect.w - pad * 2;
-        let mut y = (top as f64 + look.control_height + self.header_gap()).round() as i32;
+        let body_top = (top as f64 + look.control_height + self.header_gap()).round() as i32;
+        self.body = IRect::new(left, body_top, width, (rect.bottom() - pad - body_top).max(0));
+        p.clip = Some(clip.intersect(&rect).intersect(&self.body));
+        let mut y = body_top - self.scroll.round() as i32;
         self.rects.clear();
         if self.rows.is_empty() {
-            let style = TextStyle { family: k.sans, size: k.caption, weight: WEIGHTS.medium as f32 };
+            let style = TextStyle { family: k.sans, size: k.caption, weight: WEIGHTS.medium as f32, tracking: 0.0 };
             let label = kit.shape("Empty menu", style);
             p.text(&label, (left, y + (ch - label.line_height()) / 2), a(k.muted), &[]);
         }
@@ -426,6 +466,27 @@ mod tests {
         assert_eq!(m.rows(), 6);
         assert_eq!(m.activate(4), Outcome::Toggled(5, false));
         assert_eq!(m.rows(), 5);
+    }
+
+    #[test]
+    fn a_card_capped_below_its_rows_scrolls_by_notches_and_stops_at_the_last_row() {
+        let mut m = menu();
+        m.cap = m.height() - m.look.control_height * 2.0;
+        assert!(m.scroll_notches(1.0));
+        assert_eq!(m.scroll, m.look.control_height);
+        assert!(m.scroll_notches(5.0));
+        let end = m.rows_height() - (m.height().min(m.cap) - m.chrome());
+        assert_eq!(m.scroll, end);
+        assert!(!m.scroll_notches(1.0));
+        assert!(m.scroll_notches(-9.0));
+        assert_eq!(m.scroll, 0.0);
+    }
+
+    #[test]
+    fn a_card_that_holds_all_its_rows_does_not_scroll() {
+        let mut m = menu();
+        assert!(!m.scroll_notches(1.0));
+        assert_eq!(m.scroll, 0.0);
     }
 
     #[test]

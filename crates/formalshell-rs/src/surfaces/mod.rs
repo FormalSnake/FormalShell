@@ -2,6 +2,7 @@
 //! change to the surfaces that read that slice.
 
 pub mod bar;
+pub mod battery;
 pub mod capture;
 pub mod card;
 pub mod headset;
@@ -58,6 +59,9 @@ pub fn changed(app: &mut App, topic: Topic) {
             lights_palette(app);
         }
         Topic::Devices => {
+            if app.battery_watch.check(&mut app.store) {
+                changed(app, Topic::Notifications);
+            }
             app.osd_audio();
             app.headset_devices();
             app.launcher_devices();

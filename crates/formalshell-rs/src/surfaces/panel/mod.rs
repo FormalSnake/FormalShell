@@ -53,6 +53,9 @@ pub struct View<'a> {
     pub output: (f64, f64),
     /// The stop holding the keyboard cursor.
     pub cursor: Option<&'a str>,
+    /// The stop of the row the pointer is over, whichever of its parts it is
+    /// on; the keyboard cursor does not count.
+    pub hovered: Option<String>,
 }
 
 /// A key reaching an inline text field (Panel.qml's `inlineEditorFocused`).
@@ -71,6 +74,8 @@ pub struct Effect<'a> {
     pub runtime: Option<&'a Runtime>,
     /// Set to close the panel.
     pub close: bool,
+    /// A launcher route to open as the panel closes.
+    pub summon: Option<&'static str>,
 }
 
 impl Effect<'_> {

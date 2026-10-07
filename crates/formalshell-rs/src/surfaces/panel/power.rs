@@ -75,11 +75,12 @@ pub struct Power {
     cursor: Cell<Option<usize>>,
     _flow: Want,
     _monitor: Want,
+    _iphone: Want,
 }
 
 impl Power {
     pub fn new() -> Self {
-        Self { cursor: Cell::new(None), _flow: Want::new(Source::PowerFlow), _monitor: Want::new(Source::Monitor) }
+        Self { cursor: Cell::new(None), _flow: Want::new(Source::PowerFlow), _monitor: Want::new(Source::Monitor), _iphone: Want::new(Source::Iphone) }
     }
 }
 
@@ -123,10 +124,11 @@ impl Panel for Power {
             let charging = b.state == DeviceState::Charging;
             let held = charge_threshold_active(b.percent, b.state, b.rate, b.time_to_full, power.on_battery);
             let warn = v.store.config.f64("battery.warnPercent").unwrap_or(DEFAULT_WARN_PCT);
-            parts.push(w::hero(
+            let glyph = model::battery_icon(b.percent, power.on_battery, held, Some(warn));
+            parts.push(w::hero_with(
                 s,
                 w::Hero {
-                    glyph: model::battery_icon(b.percent, power.on_battery, held, Some(warn)).into(),
+                    glyph: String::new(),
                     title: "Battery".into(),
                     meta: charge_state_label(b.percent, b.state, power.on_battery, held).into(),
                     readout: format!("{}%", b.percent),
@@ -134,6 +136,9 @@ impl Panel for Power {
                     rail: Some(b.percent / 100.0),
                     rail_on: None,
                 },
+                false,
+                crate::ui::Type::Display,
+                Some(w::icon(glyph).size(crate::ui::Type::Heading).pulse(charging)),
             ));
 
             let flow_state = &v.store.info.power_flow;

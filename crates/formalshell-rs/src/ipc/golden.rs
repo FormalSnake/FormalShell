@@ -166,6 +166,16 @@ fn stub() -> Registry<()> {
                 ],
             },
             Target {
+                name: "bluetooth",
+                functions: vec![
+                    f("toggle", &[], Type::String, |_, _| s("ok")),
+                    f("power", &[("state", Type::String)], Type::String, |_, a| s(format!("power {}", a[0].str()))),
+                    f("trust", &[("address", Type::String)], Type::String, |_, a| s(format!("trust {}", a[0].str()))),
+                    f("untrust", &[("address", Type::String)], Type::String, |_, a| s(format!("untrust {}", a[0].str()))),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
                 name: "monitor",
                 functions: vec![
                     f("status", &[], Type::String, |_, _| s("{}")),
@@ -563,6 +573,7 @@ fn signatures_match_qml() {
         super::visualizer::target(),
         super::monitor::target(),
         super::network::target(),
+        super::bluetooth::target(),
         super::plugins::target(),
         super::caffeinate::target(),
         super::gallery::target(),

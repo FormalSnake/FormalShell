@@ -480,6 +480,18 @@ pub fn forget(ctx: &Ctx, ssid: String) {
     });
 }
 
+/// A wired row's click: down while it is up, else up on the profile
+/// NetworkManager picks.
+pub fn wired_toggle(ctx: &Ctx, interface: String, connected: bool) {
+    let Some(nm) = nm() else { return };
+    ctx.spawn(async move {
+        let done = if connected { nm.disconnect_wired(&interface).await } else { nm.connect_wired(&interface).await };
+        if let Err(err) = done {
+            eprintln!("network: {err}");
+        }
+    });
+}
+
 fn clear(kind: ActionKind, ssid: &str) {
     INNER.with_borrow_mut(|i| {
         if i.action.as_ref().is_some_and(|(k, s)| *k == kind && s == ssid) {

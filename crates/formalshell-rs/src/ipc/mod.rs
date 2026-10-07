@@ -8,6 +8,7 @@
 //! client.
 
 mod airplay;
+mod bluetooth;
 mod bar;
 mod caffeinate;
 mod calendar;
@@ -74,6 +75,7 @@ fn registry() ->&'static Registry<App> {
             media::target(),
             radio::target(),
             airplay::target(),
+            bluetooth::target(),
             visualizer::target(),
             tray::target(),
             overnight::target(),

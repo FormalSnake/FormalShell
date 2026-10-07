@@ -338,6 +338,30 @@ impl Cx<'_> {
         a.value(now)
     }
 
+    /// A swap of what a node shows (CalendarPanel's month step): the new
+    /// content fades up from one spacing step off rest, on the side it came
+    /// from. A swap still running keeps its own direction and finishes.
+    /// Returns the progress, 0 to 1, and that direction.
+    pub fn swap(&mut self, path: &str, token: i64) -> (f64, f64) {
+        let (tok, prog, dir) = (format!("{path}.token"), format!("{path}.swap"), format!("{path}.dir"));
+        let now = self.now;
+        let peek = |ui: &Ui, key: &str| match ui.tweens.get(key).map(|t| &t.value) {
+            Some(TweenValue::Num(a)) => Some(a.value(now)),
+            _ => None,
+        };
+        let previous = peek(self.ui, &tok);
+        let running = peek(self.ui, &prog).is_some_and(|p| p < 1.0 - 1e-6);
+        self.jump(&tok, token as f64, Clock::Effects);
+        if let Some(p) = previous.filter(|p| *p != token as f64 && !running) {
+            self.jump(&dir, if token as f64 >= p { 1.0 } else { -1.0 }, Clock::Effects);
+            self.jump(&prog, 0.0, Clock::Effects);
+        }
+        let progress = self.tween(&prog, 1.0, Clock::Effects);
+        let sign = peek(self.ui, &dir).unwrap_or(1.0);
+        self.jump(&dir, sign, Clock::Effects);
+        (progress, sign)
+    }
+
     /// Puts a tween's value at `value` with nothing running.
     pub fn jump(&mut self, key: &str, value: f64, kind: Clock) {
         let frame = self.ui.frame;

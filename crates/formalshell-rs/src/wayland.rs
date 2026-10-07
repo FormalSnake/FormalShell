@@ -89,6 +89,8 @@ pub struct Popout {
     surface: Surface,
     pub slots: Vec<Slot>,
     pub hover: Option<usize>,
+    /// Where along the line the card centres, for a resize to centre it again.
+    pub anchor: f64,
     /// A tray item's dbusmenu in place of cells (`traymenu`).
     menu: Option<Menu>,
 }
@@ -219,6 +221,7 @@ pub struct App {
     pointer_on: Option<Owner>,
     pressed: Option<(Owner, usize)>,
     bar_dirty: bool,
+    pub battery_watch: surfaces::battery::Watch,
     wake: Option<Instant>,
     /// `debug motionScale`: every duration multiplied by this.
     pub motion_scale: f64,
@@ -302,6 +305,7 @@ impl App {
             pointer_on: None,
             pressed: None,
             bar_dirty: true,
+            battery_watch: Default::default(),
             wake: None,
             motion_scale: 1.0,
             cast: false,
@@ -495,6 +499,16 @@ impl App {
             for s in &mut p.slots {
                 if topic.is_none_or(|t| s.cell.reads().contains(&t)) {
                     s.refresh(&mut self.bar.kit, &env, false, false, 0.0, now);
+                }
+            }
+            // The tray's second bar follows the icons it holds as they come and go.
+            if p.name == "trayoverflow" && p.card.is_open() {
+                if let Some(s) = p.slots.first() {
+                    let look = &self.bar.kit.look;
+                    let across = if env_edge.is_vertical() { look.cell_width } else { look.cell_height };
+                    let size = (s.natural + look.panel_padding * 2.0, across + look.panel_padding * 2.0);
+                    let pad = self.store.theme.theme.space.screen_padding;
+                    p.card.resize(now, p.anchor, self.bar.length(), pad, size);
                 }
             }
         }
@@ -704,6 +718,7 @@ impl App {
             surface,
             slots,
             hover: None,
+            anchor: 0.0,
             menu: None,
         });
         self.sync_open(now);
@@ -806,7 +821,7 @@ impl App {
         let mut surface = Surface::new("panel", layer, &self.shm, self.started);
         surface.wait_map = true;
         let mut host = Host::new(module, place, &self.store.theme.theme, surface, self.motion_scale, self.cast);
-        host.module.start(&mut panel::Effect { store: &self.store, runtime: self.runtime.as_ref(), close: false });
+        host.module.start(&mut panel::Effect { store: &self.store, runtime: self.runtime.as_ref(), close: false, summon: None });
         match self.panel.take() {
             Some(mut old) if old.is_open() => {
                 host.take_over(old.card.live(), now);
@@ -846,6 +861,7 @@ impl App {
             surface,
             slots: vec![slot],
             hover: None,
+            anchor,
             menu: None,
         });
         self.sync_open(now);
@@ -863,7 +879,9 @@ impl App {
     /// The input region over a popout's resting rect.
     fn set_popout_input(&self, p: &Popout) {
         if let Ok(region) = Region::new(&self.compositor) {
-            let r = p.card.rest_rect();
+            // A menu takes input everywhere on its surface: a click off the
+            // card dismisses it.
+            let r = if p.menu.is_some() { IRect::new(0, 0, p.card.scene.size.w, p.card.scene.size.h) } else { p.card.rest_rect() };
             region.add(r.x, r.y, r.w, r.h);
             p.surface.layer.set_input_region(Some(region.wl_region()));
         }
@@ -903,6 +921,7 @@ impl App {
         let mut card = Card::new(theme, edge, self.bar.length(), line_at, anchor, oriented(menu.cap), self.motion_scale, self.cast);
         card.menu(theme, self.cast);
         card.resize(now, anchor, self.bar.length(), pad, oriented(menu.height().min(menu.cap)));
+        menu.morph.jump(menu.height().min(menu.cap));
         let surface = self.popout_surface(&card, Layer::Overlay);
         self.menu = Some(Popout {
             name: "traymenu".to_owned(),
@@ -911,8 +930,12 @@ impl App {
             surface,
             slots: Vec::new(),
             hover: None,
+            anchor,
             menu: Some(menu),
         });
+        if let Some(p) = &self.menu {
+            self.set_popout_input(p);
+        }
         let key = item.key;
         if let Some(rt) = &self.runtime {
             rt.service(move |ctx| tray::open_menu(ctx, key));
@@ -945,14 +968,38 @@ impl App {
         let length = self.bar.length();
         let pad = self.store.theme.theme.space.screen_padding;
         if let Some(p) = &mut self.menu {
-            if let Some(m) = &p.menu {
+            let mapped = p.card.is_open() && p.surface.mapped;
+            if let Some(m) = &mut p.menu {
                 let (w, h) = (m.width(), m.height().min(m.cap));
-                p.card.resize(now, m.anchor, length, pad, if vertical { (h, w) } else { (w, h) });
+                // The first size lands at once; every later one morphs.
+                if mapped && m.morph.target() > 0.0 {
+                    let ms = crate::motion::Kind::Spatial.ms(&self.store.theme.theme) * self.motion_scale;
+                    m.morph.set(now, h, ms);
+                } else {
+                    m.morph.jump(h);
+                }
+                let hv = m.morph.value(now);
+                let anchor = m.anchor;
+                p.card.resize(now, anchor, length, pad, if vertical { (hv, w) } else { (w, hv) });
             }
         }
         if let Some(p) = &self.menu {
             self.set_popout_input(p);
         }
+    }
+
+    /// The menu's card on its way to the height its rows ask for, a frame at a time.
+    fn step_menu(&mut self, now: Instant) {
+        let vertical = self.bar.edge().is_vertical();
+        let length = self.bar.length();
+        let pad = self.store.theme.theme.space.screen_padding;
+        let Some(p) = &mut self.menu else { return };
+        let Some(m) = &p.menu else { return };
+        if !m.morph.running(now) {
+            return;
+        }
+        let (w, h) = (m.width(), m.morph.value(now));
+        p.card.resize(now, m.anchor, length, pad, if vertical { (h, w) } else { (w, h) });
     }
 
     /// The tray changed: a menu waiting on its tree gets it, one whose item
@@ -1185,11 +1232,13 @@ impl App {
         if let Some(s) = &mut self.bar_surface {
             s.present(&mut self.bar.scene, animating, &qh);
         }
+        self.step_menu(now);
         for p in [&mut self.overflow, &mut self.menu].into_iter().flatten() {
             p.layout(&mut self.bar, now);
             let kit = &self.bar.kit;
             let content = p.slots.iter_mut().any(|s| s.animating(kit, true, now));
-            let animating = p.card.animating(now) || content;
+            let morphing = p.menu.as_ref().is_some_and(|m| m.morph.running(now));
+            let animating = p.card.animating(now) || content || morphing;
             p.surface.present(&mut p.card.scene, animating, &qh);
         }
         let theme = &self.store.theme.theme;
@@ -1504,6 +1553,16 @@ impl App {
                         Some(Owner::Menu) => self.menu.as_ref().and_then(|p| p.menu_hit(x, y)),
                         _ => None,
                     };
+                    if owner == Some(Owner::Menu) && hit.is_none() {
+                        let outside = self.menu.as_ref().is_some_and(|p| {
+                            let r = p.card.live_rect();
+                            !(x >= r.x as f64 && x < r.right() as f64 && y >= r.y as f64 && y < r.bottom() as f64)
+                        });
+                        if outside {
+                            self.close_tray_menu();
+                            continue;
+                        }
+                    }
                     self.pressed = owner.zip(hit);
                 }
                 PointerEventKind::Release { button, .. } => {
@@ -1514,9 +1573,7 @@ impl App {
                     }
                     if o == Owner::Panel {
                         let out = self.panel.as_mut().map_or(Out::None, |h| h.release(x, y, &self.store, self.runtime.as_ref()));
-                        if out == Out::Close {
-                            self.close_panels();
-                        }
+                        self.panel_out(out);
                         self.panel_dirty = true;
                         continue;
                     }
@@ -1536,13 +1593,18 @@ impl App {
                         self.panel_dirty = true;
                         continue;
                     }
-                    let v = if vertical.discrete != 0 { vertical.discrete as f64 } else { vertical.absolute };
-                    if v == 0.0 {
+                    let (v, h) = (notches(&vertical), notches(&horizontal));
+                    if v == 0.0 && h == 0.0 {
                         continue;
                     }
-                    let up = v < 0.0;
+                    if owner == Some(Owner::Menu) {
+                        if let Some(m) = self.open_menu_mut() {
+                            m.scroll_notches(v);
+                        }
+                        continue;
+                    }
                     if let Some(i) = self.bar.hit(x, y).filter(|_| owner == Some(Owner::Bar)) {
-                        let action = self.bar.wheel(i, up, &self.store);
+                        let action = self.bar.wheel(i, v, h, &self.store);
                         let anchor = self.bar.slot_anchor(i);
                         self.act(action, anchor);
                     }
@@ -1640,8 +1702,18 @@ impl App {
         let Some(h) = &mut self.panel else { return };
         let out = h.key(key, &self.store, self.runtime.as_ref());
         self.panel_dirty = true;
-        if out == Out::Close {
-            self.close_panels();
+        self.panel_out(out);
+    }
+
+    /// What an input to the open panel asked of the shell outside it.
+    fn panel_out(&mut self, out: Out) {
+        match out {
+            Out::None => {}
+            Out::Close => self.close_panels(),
+            Out::Summon(route) => {
+                self.close_panels();
+                self.menu_open(Some(route));
+            }
         }
     }
 
