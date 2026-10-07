@@ -139,6 +139,28 @@ pub enum Paint {
     /// A row of terminal cells (the screensaver's): plain rects and glyph
     /// outlines placed at their own origins, each in its own colour.
     Cells { rects: Vec<(Rect, Rgba)>, glyphs: Vec<(std::sync::Arc<BezPath>, f64, f64, Rgba)> },
+    /// A canvas's draw list (Radio Atlas's globe), in device pixels; one
+    /// list is one picture, so a node keeps the same `Arc` while nothing on
+    /// it moved and damages nothing.
+    Vector(Arc<Vec<VOp>>),
+}
+
+/// What a vector op fills or strokes with.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Brush {
+    Solid(Rgba),
+    /// Canvas2D's `createRadialGradient` with one centre: stops between
+    /// radius `r0` and `r1`.
+    Radial { centre: (f64, f64), r0: f64, r1: f64, stops: Vec<(f32, Rgba)> },
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum VOp {
+    Fill(BezPath, Brush),
+    Stroke(BezPath, Brush, f64),
+    /// Everything up to the matching `Pop` is cut to the path.
+    Clip(BezPath),
+    Pop,
 }
 
 pub struct Node {
@@ -327,6 +349,7 @@ fn paint_eq(a: &Paint, b: &Paint) -> bool {
         (Paint::Face { from: f1, to: t1, radius: r1 }, Paint::Face { from: f2, to: t2, radius: r2 }) => {
             f1 == f2 && t1 == t2 && r1 == r2
         }
+        (Paint::Vector(a), Paint::Vector(b)) => Arc::ptr_eq(a, b),
         (Paint::Cells { rects: r1, glyphs: g1 }, Paint::Cells { rects: r2, glyphs: g2 }) => {
             r1 == r2
                 && g1.len() == g2.len()

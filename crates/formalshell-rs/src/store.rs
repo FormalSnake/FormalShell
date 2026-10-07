@@ -42,6 +42,9 @@ pub struct Store {
     pub picker: picker::State,
     pub localsend: localsend::State,
     pub mirror: mirror::State,
+    /// Radio Browser answers and the country outlines, waiting for the
+    /// atlas to take them.
+    pub atlas: Vec<crate::services::radio::Reply>,
 }
 
 /// One service's change, tagged with the slice it applies to.
@@ -79,6 +82,7 @@ pub enum Diff {
     Picker(picker::Diff),
     Localsend(localsend::Diff),
     Mirror(mirror::Diff),
+    Atlas(crate::services::radio::Reply),
 }
 
 /// The slice a diff changed, for the surfaces that read it.
@@ -119,6 +123,7 @@ pub enum Topic {
     Picker,
     Localsend,
     Mirror,
+    Atlas,
 }
 
 impl Store {
@@ -168,6 +173,10 @@ impl Store {
             Diff::Picker(d) => self.picker.apply(d).then_some(Topic::Picker),
             Diff::Localsend(d) => self.localsend.apply(d).then_some(Topic::Localsend),
             Diff::Mirror(d) => self.mirror.apply(d).then_some(Topic::Mirror),
+            Diff::Atlas(r) => {
+                self.atlas.push(r);
+                Some(Topic::Atlas)
+            }
         }
     }
 }

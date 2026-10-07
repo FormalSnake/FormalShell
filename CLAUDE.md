@@ -512,6 +512,12 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   kind, title and playing, `media players` listing it once, its own Pipewire
   stream not listed again as an app), the media panel's source menu opened
   on real keys and photographed, and the source gone after `radio stop`.
+- `radio_atlas.sh` `--radio-atlas`: Radio Atlas opened with `panel open
+  radio` over a world cache holding one loopback-served station, Enter on a
+  real key playing it and turning the globe to centre it (the globe's box
+  differing from the open frame), and after `radio stop` a real click on
+  the globe's centre picking it again, read off `radio status`; Escape
+  closes it.
 - `reminder.sh` `--reminder`: a real countdown firing inside the run and
   bypassing DND into the popup tier.
 - `retro.sh` `--retro`: pins `theme.preset` to `retro` in the settings

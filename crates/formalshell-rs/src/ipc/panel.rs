@@ -31,17 +31,26 @@ fn known(name: &str) -> Option<&'static str> {
 
 fn open(app: &mut App, args: &[Value]) -> Value {
     let Some(name) = known(args[0].str()) else { return text(format!("error: unknown panel '{}'", args[0].str())) };
+    if name == "radio" {
+        app.atlas_show();
+        return text("ok");
+    }
     app.set_panel(name, true, None);
     text("ok")
 }
 
 fn close(app: &mut App, _: &[Value]) -> Value {
+    app.atlas_close();
     app.close_panels();
     text("ok")
 }
 
 fn toggle(app: &mut App, args: &[Value]) -> Value {
     let Some(name) = known(args[0].str()) else { return text(format!("error: unknown panel '{}'", args[0].str())) };
+    if name == "radio" {
+        app.atlas_toggle();
+        return text("ok");
+    }
     let open = app.panel_open() != Some(name);
     // A toggle hangs the card under the cell that owns it; `open` is the
     // anchorless route, at the line's end.
@@ -61,5 +70,8 @@ fn toggle_at(app: &mut App, args: &[Value]) -> Value {
 }
 
 fn state(app: &mut App, _: &[Value]) -> Value {
+    if app.atlas_open() {
+        return text("radio");
+    }
     text(app.panel_open().unwrap_or(""))
 }

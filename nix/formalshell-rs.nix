@@ -21,6 +21,7 @@ rustCommon.craneLib.buildPackage (rustCommon.commonArgs // {
       ../shell/Core/Theme.qml
       ../shell/Menu/default-menu.jsonc
       ../shell/Menu/emoji.json
+      ../shell/Radio/countries.json
     ];
   };
   postUnpack = ''
