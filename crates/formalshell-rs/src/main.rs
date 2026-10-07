@@ -44,6 +44,7 @@ fn main() {
     if let Some(cmd) = args.get(1).filter(|a| matches!(a.as_str(), "install" | "update" | "uninstall")) {
         std::process::exit(install::main(cmd, &args[2..]));
     }
+    tune_malloc();
     // Every `t=` in the log counts from here; this line puts that zero on the
     // wall clock, so a cold start reads against the launcher's own stamp.
     let started = *STARTED.get_or_init(Instant::now);
@@ -125,6 +126,44 @@ pub fn thread_ticks() {
         out.push(format!("{}={}", comm.trim(), tick(11) + tick(12)));
     }
     eprintln!("phase threads {}", out.join(" "));
+}
+
+/// glibc's mmap threshold climbs to 32 MiB once a large block is freed, and
+/// a canvas or scene after that comes out of the heap and stays in RSS
+/// after it is dropped (the screensaver's, the launcher's). Pinned, every
+/// such buffer is its own mapping, gone with its owner. Fewer arenas keep
+/// the threads' small allocations from each holding their own slack.
+fn tune_malloc() {
+    #[cfg(target_env = "gnu")]
+    // SAFETY: mallopt only sets allocator parameters, before any thread.
+    unsafe {
+        libc::mallopt(libc::M_MMAP_THRESHOLD, 256 * 1024);
+        libc::mallopt(libc::M_ARENA_MAX, 2);
+    }
+}
+
+/// Hands freed heap pages back to the kernel, after a large surface goes.
+pub fn trim_heap() {
+    #[cfg(target_env = "gnu")]
+    // SAFETY: malloc_trim is thread-safe.
+    unsafe {
+        libc::malloc_trim(0);
+    }
+}
+
+/// `FS_TRACE` set: every commit is a line on stderr, which the smoke rig's
+/// budget legs read. Unset, a shell left running writes nothing per frame.
+pub fn tracing() -> bool {
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("FS_TRACE").is_some())
+}
+
+/// One trace line in one write: unbuffered stderr would take a syscall
+/// per formatted piece.
+pub fn trace(mut line: String) {
+    use std::io::Write;
+    line.push('\n');
+    let _ = std::io::stderr().write_all(line.as_bytes());
 }
 
 /// CPU time the calling thread has run, in microseconds.

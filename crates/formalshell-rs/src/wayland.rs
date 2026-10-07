@@ -251,6 +251,8 @@ pub struct App {
     launch_kept: Option<crate::surface::Kept>,
     /// The same for the launcher's content layer.
     layer_kept: Option<crate::surface::Kept>,
+    /// Bumped on each close, so only the last close's timer releases.
+    kept_generation: u64,
     /// The launcher's conditions and binds were asked for once its tree
     /// first arrived, so the first open has results to draw on.
     fresh_asked: bool,
@@ -340,6 +342,7 @@ impl App {
             faces_warmed: false,
             launch_kept: None,
             layer_kept: None,
+            kept_generation: 0,
             fresh_asked: false,
             wifi_pending: None,
             mods: Default::default(),

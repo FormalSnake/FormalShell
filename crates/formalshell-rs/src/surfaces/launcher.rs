@@ -1614,10 +1614,14 @@ impl Shown {
 
     #[allow(clippy::too_many_arguments)]
     fn draw(&mut self, m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, now: Instant, body_h: f64) {
-        // On a layer the content is laid out where the card rests, opaque
-        // and uncut: the compositor moves, crops and fades it.
+        // On a layer the content is laid out in the layer's own pixels,
+        // opaque, cut only while it crosses the line: the compositor moves
+        // and fades it with the card.
         let (frame, alpha, clip) = match &self.modal.layer {
-            Some(_) => (self.modal.card.content_rest(), 1.0, crate::surfaces::modal::Layer::crop(&self.modal.card, !self.modal.animating(now))),
+            Some(_) => {
+                let rest = self.modal.card.content_rest();
+                (IRect::new(0, 0, rest.w, rest.h), 1.0, crate::surfaces::modal::Layer::crop(&self.modal.card, !self.modal.animating(now)))
+            }
             None => (self.modal.card.content.0, self.modal.card.content.1, self.modal.card.clip),
         };
         self.crop = self.modal.layer.as_ref().map(|_| clip);
@@ -1627,8 +1631,17 @@ impl Shown {
         let inner_w = (fw - pad * 2.0).max(0.0);
         let side = s.sm;
         self.wake = None;
+        // Where the layer's pixels sit on the output once settled, for the
+        // rects reported out.
+        let on_output = match &self.modal.layer {
+            Some(_) => { let r = self.modal.card.content_rest(); (r.x, r.y) }
+            None => (0, 0),
+        };
         let scene = match &mut self.modal.layer {
-            Some(l) => &mut l.scene,
+            Some(l) => {
+                l.fit(frame.w, frame.h);
+                &mut l.scene
+            }
             None => &mut self.modal.card.scene,
         };
         self.head.motion_scale = self.scale;
@@ -1682,7 +1695,8 @@ impl Shown {
                 let (bw, bh) = (b.pixmap.width() as i32, b.pixmap.height() as i32);
                 IRect::new(feed.x + (feed.w - bw) / 2, feed.y + (feed.h - bh) / 2, bw, bh)
             });
-            (feed, pic)
+            let out = |r: IRect| IRect::new(r.x + on_output.0, r.y + on_output.1, r.w, r.h);
+            (out(feed), pic.map(out))
         });
         // The split preview: the cursor row's whole content beside the list.
         if m.split() && body_h > 0.0 {
@@ -1718,8 +1732,13 @@ impl Shown {
     /// What is under the pointer: a body row or cell, a header or footer
     /// control.
     pub fn hit(&self, x: f64, y: f64) -> Option<crate::ui::Hit> {
-        let (dx, dy) = if self.modal.layer.is_some() && self.modal.animating(Instant::now()) { crate::surfaces::modal::Layer::offset(&self.modal.card, false) } else { (0.0, 0.0) };
-        let (x, y) = (x - dx, y - dy);
+        let (x, y) = match &self.modal.layer {
+            Some(_) => {
+                let at = crate::surfaces::modal::Layer::place(&self.modal.card, !self.modal.animating(Instant::now()));
+                (x - f64::from(at.x), y - f64::from(at.y))
+            }
+            None => (x, y),
+        };
         self.body.hit(x, y).or_else(|| self.head.hit(x, y)).or_else(|| self.foot.hit(x, y)).cloned()
     }
 

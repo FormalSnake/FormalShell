@@ -210,45 +210,60 @@ pub struct Layer {
 }
 
 impl Layer {
-    pub fn new(surface: Surface<Sub>, fade: WpAlphaModifierSurfaceV1, size: (i32, i32)) -> Self {
-        let mut scene = Scene::clear(size.0, size.1);
+    /// Starts one pixel square; the first layout sizes it to the card.
+    pub fn new(surface: Surface<Sub>, fade: WpAlphaModifierSurfaceV1) -> Self {
+        let mut scene = Scene::clear(1, 1);
         let top = scene.add(IRect::default(), Paint::Shape { fill: None, strokes: Vec::new() });
         scene.set_visible(top, false);
-        Self { scene, surface, fade, top, shown: None }
+        let mut layer = Self { scene, surface, fade, top, shown: None };
+        layer.surface.configure(1, 1);
+        layer
     }
 
-    /// The card's offset since its content was laid out where it rests.
-    /// Once the card has settled it is none: the content rect may have
-    /// moved on before the card next steps.
-    fn shift(card: &Card, settled: bool) -> (i32, i32) {
+    /// Room for content of `w` by `h`. The layer only grows: a size morph
+    /// back and forth keeps its buffers.
+    pub fn fit(&mut self, w: i32, h: i32) {
+        let (w, h) = (w.max(self.scene.size.w), h.max(self.scene.size.h));
+        if (w, h) != (self.scene.size.w, self.scene.size.h) {
+            self.scene.resize(w, h);
+            self.surface.configure(w, h);
+        }
+    }
+
+    /// Where the content's top-left is this frame on the card's surface:
+    /// the resting rect, moved by the card's pose. Once the card has
+    /// settled it is the resting rect, which may have moved on before the
+    /// card next steps.
+    pub fn place(card: &Card, settled: bool) -> IRect {
         let (now, rest) = (card.content.0, card.content_rest());
-        if settled { (0, 0) } else { (now.x - rest.x, now.y - rest.y) }
+        if settled { rest } else { IRect::new(now.x, now.y, rest.w, rest.h) }
     }
 
     /// The part of the content that shows this frame, in the layer's own
-    /// coordinates: the resting rect cut to the card's clip.
+    /// coordinates: the content cut to the card's clip.
     pub fn crop(card: &Card, settled: bool) -> IRect {
-        let rest = card.content_rest();
-        let (dx, dy) = Self::shift(card, settled);
-        let now = IRect::new(rest.x + dx, rest.y + dy, rest.w, rest.h);
-        let shown = card.clip.intersect(&now);
-        IRect::new(shown.x - dx, shown.y - dy, shown.w, shown.h)
+        let at = Self::place(card, settled);
+        let shown = card.clip.intersect(&at);
+        if shown.is_empty() {
+            return IRect::default();
+        }
+        IRect::new(shown.x - at.x, shown.y - at.y, shown.w, shown.h)
     }
 
-    /// The layer's draw, then its offset and fade off the card's pose. True
+    /// The layer's draw, then its place and fade off the card's pose. True
     /// when anything reached the subsurface, which only shows once the
     /// card commits too.
     fn present(&mut self, card: &Card, settled: bool, qh: &QueueHandle<App>) -> bool {
         let before = self.surface.commits();
         self.surface.present(&mut self.scene, false, qh);
-        let (dx, dy) = Self::shift(card, settled);
+        let at = Self::place(card, settled);
         let alpha = if Self::crop(card, settled).is_empty() { 0.0 } else { card.content.1.clamp(0.0, 1.0) };
-        let want = (dx, dy, (f64::from(alpha) * f64::from(u32::MAX)).round() as u32);
+        let want = (at.x, at.y, (f64::from(alpha) * f64::from(u32::MAX)).round() as u32);
         if self.shown == Some(want) {
             return self.surface.commits() != before;
         }
         self.shown = Some(want);
-        self.surface.layer.sub.set_position(dx, dy);
+        self.surface.layer.sub.set_position(at.x, at.y);
         self.fade.set_multiplier(want.2);
         self.surface.layer.role_commit();
         true
@@ -258,12 +273,6 @@ impl Layer {
     pub fn keep(self) -> crate::surface::Kept {
         self.fade.destroy();
         self.surface.keep()
-    }
-
-    /// From the card's surface coordinates to the layer's, for a pointer.
-    pub fn offset(card: &Card, settled: bool) -> (f64, f64) {
-        let (dx, dy) = Self::shift(card, settled);
-        (f64::from(dx), f64::from(dy))
     }
 }
 

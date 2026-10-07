@@ -624,10 +624,17 @@ impl App {
     pub(super) fn present_saver(&mut self, now: Instant) {
         let alpha = self.saver.opacity.value(now).clamp(0.0, 1.0);
         let fading = self.saver.opacity.running(now);
-        let Some(mapped) = self.saver.overlay.as_ref().map(|o| o.surface.mapped) else { return };
-        if !self.saver.active && !fading && mapped {
+        if self.saver.overlay.is_none() {
+            return;
+        }
+        // Stopped and faded out: gone, whether or not it ever mapped (a
+        // session lock over it holds its frames back, so it may not have).
+        if !self.saver.active && !fading {
             self.saver.overlay = None;
             self.log("screensaver unmapped");
+            if let Some(runtime) = &self.runtime {
+                runtime.pool().submit(crate::trim_heap);
+            }
             self.hot_corner_action_ended("screensaver");
             return;
         }

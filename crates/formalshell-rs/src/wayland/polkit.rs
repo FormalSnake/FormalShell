@@ -77,7 +77,7 @@ impl App {
             Event::Begin { message, identity } => {
                 let own = !identity.is_empty() && std::env::var("USER").is_ok_and(|u| u == identity);
                 let mut modal = self.new_modal(["polkit", "polkit-scrim-band", "polkit-scrim"], NAMESPACE, Layer::Top, DEFORM_AMOUNT);
-                let content = self.content_layer("polkit-content", &modal.surface, modal.card.scene.size);
+                let content = self.content_layer("polkit-content", &modal.surface);
                 let top = content.top;
                 modal.layer = Some(content);
                 self.polkit = Some(Dialog {
@@ -252,13 +252,15 @@ impl App {
         let x0 = ((w as f64 - card_w) / 2.0).round();
         let y0 = ((h as f64 - card_h) / 2.0).round();
         d.modal.place(Rect::new(x0, y0, x0 + card_w, y0 + card_h), now);
-        // Laid out where the card rests, on the content layer the card's
+        // Laid out in the content layer's own pixels, which the card's
         // travel and fade move; cut only while it crosses the line.
-        let frame = d.modal.card.content_rest();
+        let rest = d.modal.card.content_rest();
+        let frame = crate::scene::IRect::new(0, 0, rest.w, rest.h);
         let alpha = 1.0;
         let clip = ContentLayer::crop(&d.modal.card, !d.modal.animating(now));
         d.crop = Some(clip);
         let Some(layer) = &mut d.modal.layer else { return };
+        layer.fit(frame.w, frame.h);
         let top = layer.top;
         let scene = &mut layer.scene;
         let (x, y) = (frame.x as f64 + s.panel_padding, frame.y as f64 + s.panel_padding);

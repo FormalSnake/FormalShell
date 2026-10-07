@@ -22,6 +22,8 @@ use crate::text::{Family, TextStyle};
 
 /// How long one loop turn draws the launcher before handing the loop back.
 const LAUNCHER_SLICE: std::time::Duration = std::time::Duration::from_millis(3);
+/// How long the launcher's buffers outlive its last close.
+const KEPT_FOR: std::time::Duration = std::time::Duration::from_secs(300);
 const WIFI_PASSWORD: &str = "wifi-password";
 const WIFI_IDENTITY: &str = "wifi-identity";
 const REMINDER_SET: &str = "reminder-set";
@@ -97,7 +99,28 @@ impl App {
                 self.layer_kept = Some(layer.keep());
             }
             self.launch_kept = Some(modal.surface.keep());
+            self.release_kept_later();
         }
+    }
+
+    /// What is kept for the next open goes after a while shut: a launcher
+    /// used now and then opens on warm buffers, one left alone for long
+    /// gives their memory back.
+    fn release_kept_later(&mut self) {
+        use calloop::timer::{TimeoutAction, Timer};
+        let Some(handle) = &self.handle else { return };
+        self.kept_generation += 1;
+        let generation = self.kept_generation;
+        let _ = handle.insert_source(Timer::from_duration(KEPT_FOR), move |_, _, app| {
+            if app.kept_generation == generation && app.launch.is_none() {
+                app.launch_kept = None;
+                app.layer_kept = None;
+                if let Some(runtime) = &app.runtime {
+                    runtime.pool().submit(crate::trim_heap);
+                }
+            }
+            TimeoutAction::Drop
+        });
     }
 
     /// The first open's pool and canvas, faulted in while the launcher is
@@ -110,12 +133,12 @@ impl App {
         let (w, h) = self.output_size();
         let size = (w as i32, h as i32);
         self.launch_kept = crate::surface::Kept::prefaulted(&self.shm, size, runtime.pool());
-        self.layer_kept = crate::surface::Kept::prefaulted(&self.shm, size, runtime.pool());
+        self.release_kept_later();
     }
 
-    /// A content layer on `card`, the size of its scene, taking no input:
-    /// the pointer lands on the card underneath.
-    pub(super) fn content_layer(&self, name: &'static str, card: &Surface, size: crate::scene::IRect) -> crate::surfaces::modal::Layer {
+    /// A content layer on `card`, sized by its first layout, taking no
+    /// input: the pointer lands on the card underneath.
+    pub(super) fn content_layer(&self, name: &'static str, card: &Surface) -> crate::surfaces::modal::Layer {
         use crate::surface::{Ignore, Sub};
         let surface = self.compositor.create_surface(&self.qh);
         let sub = self.pixels.subcompositor.get_subsurface(&surface, card.layer.wl_surface(), &self.qh, Ignore);
@@ -123,9 +146,8 @@ impl App {
             surface.set_input_region(Some(region.wl_region()));
         }
         let fade = self.pixels.alpha.get_surface(&surface, &self.qh, Ignore);
-        let mut s = Surface::new(name, Sub { surface, sub }, &self.shm, self.started);
-        s.configure(size.w, size.h);
-        crate::surfaces::modal::Layer::new(s, fade, (size.w, size.h))
+        let s = Surface::new(name, Sub { surface, sub }, &self.shm, self.started);
+        crate::surfaces::modal::Layer::new(s, fade)
     }
 
     /// The window for an open, created fresh unless one is already up.
@@ -140,12 +162,10 @@ impl App {
             modal.surface.adopt(kept);
         }
         modal.surface.raster_budget = Some(LAUNCHER_SLICE);
-        let size = modal.card.scene.size;
-        let mut content = self.content_layer("menu-content", &modal.surface, size);
+        let mut content = self.content_layer("menu-content", &modal.surface);
         if let Some(kept) = self.layer_kept.take() {
             content.surface.adopt(kept);
         }
-        content.surface.configure(size.w, size.h);
         content.surface.raster_budget = Some(LAUNCHER_SLICE);
         modal.layer = Some(content);
         let shown = Shown::new(&self.store.theme.theme, modal, self.output_size(), self.motion_scale);
