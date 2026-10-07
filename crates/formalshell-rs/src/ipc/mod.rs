@@ -18,6 +18,7 @@ mod display;
 mod earbuds;
 mod gallery;
 mod iphone;
+mod lock;
 #[cfg(test)]
 mod golden;
 mod media;
@@ -74,6 +75,7 @@ fn registry() ->&'static Registry<App> {
             plugins::target(),
             caffeinate::target(),
             gallery::target(),
+            lock::target(),
             calendar::target(),
             iphone::target(),
             notifications::target(),

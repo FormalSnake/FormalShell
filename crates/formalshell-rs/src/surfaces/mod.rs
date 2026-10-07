@@ -3,6 +3,7 @@
 
 pub mod bar;
 pub mod card;
+pub mod lock;
 pub mod panel;
 pub mod shoulders;
 pub mod tray_menu;
@@ -14,6 +15,7 @@ use crate::store::Topic;
 use crate::wayland::{App, theme_inputs};
 
 pub fn changed(app: &mut App, topic: Topic) {
+    app.lock_changed(topic);
     if matches!(topic, Topic::Hyprland | Topic::State | Topic::Display | Topic::Config) {
         crate::services::display::reconcile(&app.store);
     }

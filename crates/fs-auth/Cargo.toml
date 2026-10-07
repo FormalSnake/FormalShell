@@ -9,6 +9,6 @@ async-channel = "2.5"
 async-io = "2.6"
 futures-lite = "2.6"
 libc = "0.2"
-pam-client2 = { version = "0.5", default-features = false }
+pam-sys2 = "1.0"
 zbus = { version = "5", default-features = false, features = ["async-io"] }
 zeroize = "1.8"

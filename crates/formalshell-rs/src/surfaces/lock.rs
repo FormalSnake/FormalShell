@@ -1,0 +1,423 @@
+//! One output's lock screen (LockSurface.qml with AuthPrompt.qml): the
+//! wallpaper under the modal scrim, or the flat background without one,
+//! and the avatar, clock, date and password field as one column at its
+//! centre. The clock's ink is chosen per output against the wallpaper under
+//! it (Lock/model.js's `ink`), never the screen.
+
+use std::sync::Arc;
+use std::time::Instant;
+
+use chrono::{DateTime, Local};
+use fs_theme::color::Rgba;
+use fs_theme::style::Glow;
+use fs_theme::theme::Theme;
+use fs_theme::tokens::WEIGHTS;
+use image::imageops::{self, FilterType};
+use serde_json::{Value, json};
+use vello_cpu::kurbo::Rect;
+
+use crate::scene::{Bitmap, IRect, NodeId, Scene};
+use crate::services::wallpaper::Picture;
+use crate::surfaces::bar::cell::{Kit, Painter};
+use crate::text::TextStyle;
+use crate::ui::el::{Kind, Opt};
+use crate::ui::{self, El, Ink, Size, Type, Ui, w};
+
+/// The modal scrim's opacity over the wallpaper (LockSurface.qml's `_scrimAlpha`).
+pub const SCRIM: f64 = 0.5;
+
+/// What every output shows the same.
+pub struct Shared<'a> {
+    pub now: DateTime<Local>,
+    pub dots: usize,
+    pub error: &'a str,
+    pub checking: bool,
+    /// `state.json`'s wallpaper is set.
+    pub has_wallpaper: bool,
+    /// The decoded wallpaper, scrim baked in, at its own size.
+    pub backdrop: Option<&'a Bitmap>,
+    /// The wallpaper as the desktop shows it, for the ink sampler.
+    pub picture: Option<&'a Arc<Picture>>,
+    pub avatar: Option<&'a Bitmap>,
+    pub media: Option<NowPlaying<'a>>,
+    /// The column's entrance: its opacity and how far it still has to rise.
+    pub enter: (f32, f64),
+    /// Idle-blanked: nothing but black.
+    pub blanked: bool,
+}
+
+/// LockNowPlaying.qml's block, shown while a player that is not a stream
+/// has a track.
+pub struct NowPlaying<'a> {
+    pub title: &'a str,
+    pub artist: &'a str,
+    pub playing: bool,
+    pub can_previous: bool,
+    pub can_toggle: bool,
+    pub can_next: bool,
+    /// Position over length, when the player has a timeline.
+    pub progress: Option<f64>,
+    pub art: Option<&'a Bitmap>,
+    /// The transport cursor, -1 while the field has every key.
+    pub cursor: i32,
+}
+
+/// The transport's three buttons, in order.
+pub const TRANSPORT: usize = 3;
+
+/// Lock/model.js's `transportKey`: where a key moves the transport cursor,
+/// whether the field must not see it, and whether it pressed the button.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Step {
+    pub index: i32,
+    pub taken: bool,
+    pub press: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TKey {
+    Tab,
+    Backtab,
+    Left,
+    Right,
+    Enter,
+    Escape,
+    Modifier,
+    Other,
+}
+
+pub fn transport_key(index: i32, count: i32, key: TKey) -> Step {
+    let mut out = Step { index, taken: false, press: false };
+    if count <= 0 {
+        out.index = -1;
+        return out;
+    }
+    if index >= count {
+        out.index = count - 1;
+    }
+    match key {
+        TKey::Modifier => {}
+        TKey::Tab => (out.index, out.taken) = (if out.index + 1 >= count { -1 } else { out.index + 1 }, true),
+        TKey::Backtab => (out.index, out.taken) = (if out.index < 0 { count - 1 } else { out.index - 1 }, true),
+        _ if out.index < 0 => {}
+        TKey::Left => (out.index, out.taken) = ((out.index - 1).max(0), true),
+        TKey::Right => (out.index, out.taken) = ((out.index + 1).min(count - 1), true),
+        TKey::Enter => (out.press, out.taken) = (true, true),
+        TKey::Escape => (out.index, out.taken) = (-1, true),
+        TKey::Other => out.index = -1,
+    }
+    out
+}
+
+pub struct View {
+    pub scene: Scene,
+    ui: Ui,
+    nodes: Vec<NodeId>,
+    /// `lock status`'s per-output report.
+    pub report: Value,
+}
+
+impl View {
+    pub fn new(width: i32, height: i32) -> Self {
+        Self { scene: Scene::new(width, height), ui: Ui::new(None), nodes: Vec::new(), report: Value::Null }
+    }
+
+    pub fn resize(&mut self, width: i32, height: i32) {
+        if (self.scene.size.w, self.scene.size.h) != (width, height) {
+            self.scene.resize(width, height);
+            self.scene.touch(self.scene.size);
+        }
+    }
+
+    pub fn draw(&mut self, s: &Shared, theme: &Theme, kit: &mut Kit, now: Instant) -> bool {
+        let (w, h) = (self.scene.size.w, self.scene.size.h);
+        let full = IRect::new(0, 0, w, h);
+        if s.blanked {
+            let mut p = Painter::new(&mut self.scene, &mut self.nodes, None);
+            p.rect(full, Rgba { r: 0.0, g: 0.0, b: 0.0, a: 1.0 }, 0.0);
+            p.finish();
+            self.ui.hide(&mut self.scene);
+            return false;
+        }
+        let (fade, rise) = s.enter;
+        let font = &theme.font_size;
+        let space = &theme.space;
+        let big = (font.display_large * 3.0).round();
+
+        let clock = kit.shape(&s.now.format("%H:%M").to_string(), TextStyle { family: kit.look.mono, size: big as f32, weight: WEIGHTS.semibold as f32 });
+        let date = kit.shape(&s.now.format("%A, %B %-d").to_string(), TextStyle { family: kit.look.sans, size: font.caption as f32, weight: WEIGHTS.medium as f32 });
+        let error = (!s.error.is_empty()).then_some(s.error);
+        let field = w::input(&"\u{2022}".repeat(s.dots), "Password", !s.checking, error).width(Size::Px(space.popup_width_narrow)).enabled(!s.checking);
+        let (field_w, field_h) = ui::measure(&field, space.popup_width_narrow, theme, kit);
+
+        let avatar = s.avatar.map(|_| big);
+        let clock_w = clock.width.max(date.width) as f64;
+        let clock_h = clock.line_height() as f64 + space.lg + date.line_height() as f64;
+        let total = avatar.map_or(0.0, |a| a + space.lg) + clock_h + space.lg + field_h;
+        let mut y = ((h as f64 - total) / 2.0).round() + rise.round();
+        let cx = w as f64 / 2.0;
+
+        let avatar_at = avatar.map(|a| {
+            let at = ((cx - a / 2.0).round() as i32, y as i32);
+            y += a + space.lg;
+            at
+        });
+        let clock_rect = IRect::new((cx - clock_w / 2.0).round() as i32, y as i32, clock_w.round() as i32, clock_h.round() as i32);
+        y += clock_h + space.lg;
+        let field_at = ((cx - field_w / 2.0).round(), y);
+
+        let rest = IRect::new(clock_rect.x, clock_rect.y - rise.round() as i32, clock_rect.w, clock_rect.h);
+        let (ink_name, luma, sampled) = ink(s, theme, rest, (w, h));
+        let style = theme.box_style("lock.ink", Some(ink_name));
+        let glow: Vec<Glow<Rgba>> = style.ink_shadow.clone();
+
+        let mut p = Painter::new(&mut self.scene, &mut self.nodes, None);
+        match s.backdrop.filter(|b| (b.pixmap.width() as i32, b.pixmap.height() as i32) == (w, h)) {
+            Some(b) => p.image(b, (0, 0), 1.0),
+            None => {
+                p.rect(full, theme.colors.get("background"), 0.0);
+                if s.has_wallpaper {
+                    p.rect(full, Rgba { r: 0.0, g: 0.0, b: 0.0, a: SCRIM as f32 }, 0.0);
+                }
+            }
+        }
+        if let (Some(b), Some(at)) = (s.avatar, avatar_at) {
+            p.image(b, at, fade);
+        }
+        let clock_ink = style.ink.with_alpha(style.ink.a * fade);
+        let clock_x = clock_rect.x + ((clock_w - clock.width as f64) / 2.0).round() as i32;
+        p.text(&clock, (clock_x, clock_rect.y), clock_ink, &glow);
+        let date_x = clock_rect.x + ((clock_w - date.width as f64) / 2.0).round() as i32;
+        p.text(&date, (date_x, clock_rect.y + clock.line_height() + space.lg as i32), clock_ink, &glow);
+        // The now-playing block hangs `sectionGap * 2` under the field,
+        // centred, `popupWidthNarrow` wide.
+        let media_rect = s.media.as_ref().map(|m| {
+            let block = now_playing(m, theme, kit, Rgba::TRANSPARENT, Rgba::TRANSPARENT);
+            let (bw, bh) = ui::measure(&block, space.popup_width_narrow, theme, kit);
+            IRect::new((cx - bw / 2.0).round() as i32, (field_at.1 + field_h + space.section_gap * 2.0).round() as i32, bw.round() as i32, bh.round() as i32)
+        });
+        let (media_ink, media_luma) = match media_rect {
+            Some(r) => {
+                let (i, l, _) = ink(s, theme, r, (w, h));
+                (i, l)
+            }
+            None => {
+                let fallback = if s.has_wallpaper { 0.0 } else { luma_of(theme.colors.get("background")) };
+                (ink_of(fallback), fallback)
+            }
+        };
+        let media_style = theme.box_style("lock.ink", Some(media_ink));
+        if let (Some(m), Some(r)) = (s.media.as_ref(), media_rect)
+            && let Some(art) = m.art
+        {
+            p.image(art, (r.x, r.y), fade);
+        }
+        let last = p.last();
+        p.finish();
+
+        self.ui.anchor = last;
+        let mut column = vec![field];
+        let mut height = field_h;
+        if let (Some(m), Some(r)) = (s.media.as_ref(), media_rect) {
+            let gap = r.y as f64 - (field_at.1 + field_h);
+            column.push(w::space(gap));
+            column.push(now_playing(m, theme, kit, media_style.ink, media_style.ink).width(Size::Px(r.w as f64)).centred());
+            height += gap + r.h as f64;
+        }
+        let cursor = s.media.as_ref().map_or(-1, |m| m.cursor);
+        self.ui.cursor = (cursor >= 0).then(|| "transport".to_owned());
+        self.ui.ring = cursor >= 0;
+        let body = w::column(0.0, column);
+        let x0 = (cx - space.popup_width_narrow / 2.0).round();
+        let drawn = self.ui.draw(&body, Rect::new(x0, field_at.1, x0 + space.popup_width_narrow, field_at.1 + height), None, fade, theme, kit, &mut self.scene, now);
+        let media = media_ink;
+        let fallback = media_luma;
+        self.report = json!({
+            "clockInk": ink_name,
+            "clockLuma": js(luma),
+            "clockSampled": sampled,
+            "clockRect": {"x": rest.x, "y": rest.y, "width": rest.w, "height": rest.h},
+            "mediaInk": media,
+            "mediaLuma": js(fallback),
+            "nowPlaying": s.media.is_some(),
+            "transportCursor": cursor,
+        });
+        drawn.animating
+    }
+}
+
+/// The block's words and controls; the cover is painted under it.
+fn now_playing(m: &NowPlaying, theme: &Theme, _kit: &mut Kit, ink: Rgba, sub: Rgba) -> El {
+    let s = &theme.space;
+    let title = if m.title.is_empty() { "Unknown title" } else { m.title };
+    let mut words = vec![w::label(title).ink(Ink::Color(ink)).elide()];
+    if !m.artist.is_empty() {
+        words.push(w::text(m.artist).size(Type::BodySmall).ink(Ink::Color(sub)).elide());
+    }
+    let mut info = Vec::new();
+    if m.art.is_some() {
+        info.push(w::space(s.control_height * 2.0));
+    }
+    info.push(w::column(s.xxs, words).fill());
+    let mut rows = vec![w::row(s.lg, info).fill()];
+    if let Some(p) = m.progress {
+        rows.push(w::track(p.clamp(0.0, 1.0)).fill());
+    }
+    let icon = |id: &str| match id {
+        "previous" => "skip-back",
+        "next" => "skip-forward",
+        _ if m.playing => "pause",
+        _ => "play",
+    };
+    let enabled = [m.can_previous, m.can_toggle, m.can_next];
+    let options: Vec<Opt> = ["previous", "playpause", "next"]
+        .iter()
+        .zip(enabled)
+        .map(|(id, on)| {
+            let mut o = Opt::new("").icon(icon(id));
+            o.enabled = on;
+            o
+        })
+        .collect();
+    let mut group = w::group(options, usize::MAX, false).stop("transport");
+    if let Kind::Group { cursor_index, .. } = &mut group.kind {
+        *cursor_index = m.cursor.max(0) as usize;
+    }
+    rows.push(group.centred());
+    w::column(s.md, rows)
+}
+
+/// How `JSON.stringify` prints a number: whole values without a fraction.
+fn js(v: f64) -> Value {
+    if v.fract() == 0.0 && v.abs() < 1e15 { json!(v as i64) } else { json!(v) }
+}
+
+/// Lock/model.js's `lumaOf`, on 0..1 channels.
+fn luma_of(c: Rgba) -> f64 {
+    255.0 * (0.299 * c.r as f64 + 0.587 * c.g as f64 + 0.114 * c.b as f64)
+}
+
+fn linear(v: f64) -> f64 {
+    let c = v.clamp(0.0, 255.0) / 255.0;
+    if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
+}
+
+fn contrast(a: f64, b: f64) -> f64 {
+    (a.max(b) + 0.05) / (a.min(b) + 0.05)
+}
+
+/// Lock/model.js's `ink` on an already composited backdrop luma.
+fn ink_of(backdrop: f64) -> &'static str {
+    let l = linear(backdrop);
+    if contrast(1.0, l) >= contrast(0.0, l) { "light" } else { "dark" }
+}
+
+/// The ink over `rect`, the backdrop luma it was chosen against, and
+/// whether that luma was read off the wallpaper (BarPaint's `sampled`).
+fn ink(s: &Shared, theme: &Theme, rect: IRect, size: (i32, i32)) -> (&'static str, f64, bool) {
+    let fallback = if s.has_wallpaper { 0.0 } else { luma_of(theme.colors.get("background")) };
+    let mean = s.picture.filter(|p| (p.width as i32, p.height as i32) == size).and_then(|p| mean_luma(p, rect));
+    let scrim = if s.has_wallpaper { SCRIM } else { 0.0 };
+    match mean {
+        Some(m) => {
+            let l = m * (1.0 - scrim);
+            (ink_of(l), l, true)
+        }
+        None => (ink_of(fallback), fallback, false),
+    }
+}
+
+/// The mean luma (0..255) of the picture under `rect`, every pixel read.
+fn mean_luma(p: &Picture, rect: IRect) -> Option<f64> {
+    let r = rect.intersect(&IRect::new(0, 0, p.width as i32, p.height as i32));
+    if r.is_empty() {
+        return None;
+    }
+    let mut sum = 0.0;
+    for y in r.y..r.bottom() {
+        let row = &p.bgra[(y as usize * p.width as usize + r.x as usize) * 4..(y as usize * p.width as usize + r.right() as usize) * 4];
+        for px in row.chunks_exact(4) {
+            sum += 0.299 * px[2] as f64 + 0.587 * px[1] as f64 + 0.114 * px[0] as f64;
+        }
+    }
+    Some(sum / r.area() as f64)
+}
+
+/// The desktop's picture with the scrim baked in, for the pool.
+pub fn backdrop(p: &Picture) -> Bitmap {
+    let keep = 1.0 - SCRIM;
+    let mut rgba = Vec::with_capacity(p.bgra.len());
+    for px in p.bgra.chunks_exact(4) {
+        rgba.extend_from_slice(&[(px[2] as f64 * keep) as u8, (px[1] as f64 * keep) as u8, (px[0] as f64 * keep) as u8, 255]);
+    }
+    Bitmap::from_rgba(p.width as u16, p.height as u16, rgba)
+}
+
+/// By its bytes, not its name: `~/.face` has no extension.
+fn decode(path: &str) -> Option<image::RgbaImage> {
+    Some(image::ImageReader::open(path).ok()?.with_guessed_format().ok()?.decode().ok()?.to_rgba8())
+}
+
+/// Cover.qml at `size`: the track's art (a file or a data URL) cover-cropped
+/// square, for the pool.
+pub fn cover(url: &str, size: u32) -> Option<Bitmap> {
+    let img = match url.strip_prefix("data:") {
+        Some(data) => {
+            use base64::Engine;
+            let (_, payload) = data.split_once(";base64,")?;
+            let bytes = base64::engine::general_purpose::STANDARD.decode(payload.trim()).ok()?;
+            image::load_from_memory(&bytes).ok()?.to_rgba8()
+        }
+        None => decode(url.strip_prefix("file://")?)?,
+    };
+    let side = img.width().min(img.height());
+    let crop = imageops::crop_imm(&img, (img.width() - side) / 2, (img.height() - side) / 2, side, side).to_image();
+    let out = imageops::resize(&crop, size, size, FilterType::Triangle);
+    Some(Bitmap::from_rgba(size as u16, size as u16, out.into_raw()))
+}
+
+/// Avatar.qml: the picture cover-cropped into a `size` disc, for the pool.
+/// None when there is no readable picture, which hides the avatar.
+pub fn avatar(path: &str, size: u32) -> Option<Bitmap> {
+    let img = decode(path)?;
+    let side = img.width().min(img.height());
+    let crop = imageops::crop_imm(&img, (img.width() - side) / 2, (img.height() - side) / 2, side, side).to_image();
+    let mut out = imageops::resize(&crop, size, size, FilterType::Triangle);
+    let r = size as f64 / 2.0;
+    for (x, y, px) in out.enumerate_pixels_mut() {
+        let d = ((x as f64 + 0.5 - r).powi(2) + (y as f64 + 0.5 - r).powi(2)).sqrt();
+        let cover = (r - d + 0.5).clamp(0.0, 1.0);
+        px.0[3] = (px.0[3] as f64 * cover).round() as u8;
+    }
+    Some(Bitmap::from_rgba(size as u16, size as u16, out.into_raw()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ink_follows_the_backdrop() {
+        assert_eq!(ink_of(0.0), "light");
+        assert_eq!(ink_of(255.0), "dark");
+    }
+
+    #[test]
+    fn transport_keys_follow_the_model() {
+        let t = |i, k| transport_key(i, 3, k);
+        assert_eq!(t(-1, TKey::Tab), Step { index: 0, taken: true, press: false });
+        assert_eq!(t(0, TKey::Right), Step { index: 1, taken: true, press: false });
+        assert_eq!(t(1, TKey::Enter), Step { index: 1, taken: true, press: true });
+        assert_eq!(t(2, TKey::Tab), Step { index: -1, taken: true, press: false });
+        assert_eq!(t(-1, TKey::Backtab).index, 2);
+        assert_eq!(t(1, TKey::Other), Step { index: -1, taken: false, press: false });
+        assert_eq!(t(-1, TKey::Enter), Step { index: -1, taken: false, press: false });
+        assert_eq!(transport_key(1, 0, TKey::Tab).index, -1);
+    }
+
+    #[test]
+    fn whole_numbers_print_like_js() {
+        assert_eq!(js(0.0).to_string(), "0");
+        assert_eq!(js(12.5).to_string(), "12.5");
+    }
+}
