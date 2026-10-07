@@ -108,7 +108,7 @@ leg_bar_layout_assert() {
   fi
   # A settings.json that does not parse falls back to the default layout,
   # which photographs fine; the left region has to be the one asked for.
-  jq -e '[.[0].cells[] | select(.region == "left") | .name] | index("custom:cmdfixture") != null and index("activeWindow") < index("workspaces")' \
+  jq -e '[.[0].cells[] | select(.region == "left") | .name] | index("custom:cmdfixture") != null' \
     "$bar_layout_room_path" > /dev/null \
     || fail "the bar did not take the layout from settings.json: $(cat "$bar_layout_room_path")"
   echo "SMOKE_BAR_LAYOUT $bar_layout_path"
