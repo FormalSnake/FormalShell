@@ -14,8 +14,8 @@ use vello_cpu::kurbo::Rect;
 use zeroize::Zeroizing;
 
 use super::App;
-use super::lock::field;
-use crate::scene::{IRect, NodeId, Scene};
+use super::lock::{LockMsg, field};
+use crate::scene::{Bitmap, IRect, NodeId, Scene};
 use crate::services::polkit::{self, Cmd, Event};
 use crate::surface::Surface;
 use crate::surfaces::bar::cell::Painter;
@@ -28,6 +28,9 @@ pub struct Dialog {
     scene: Scene,
     ui: Ui,
     nodes: Vec<NodeId>,
+    avatar_nodes: Vec<NodeId>,
+    /// The identity's picture, when it is this session's own account.
+    avatar: Option<Bitmap>,
     message: String,
     identity: String,
     prompt: String,
@@ -38,6 +41,13 @@ pub struct Dialog {
     error: bool,
     text: Zeroizing<String>,
     dirty: bool,
+}
+
+impl Dialog {
+    pub(super) fn set_avatar(&mut self, avatar: Option<Bitmap>) {
+        self.avatar = avatar;
+        self.dirty = true;
+    }
 }
 
 /// Text.qml's `WordWrap` for body text: greedy lines no wider than `width`.
@@ -62,6 +72,7 @@ impl App {
     pub(super) fn polkit_event(&mut self, event: Event) {
         match event {
             Event::Begin { message, identity } => {
+                let own = !identity.is_empty() && std::env::var("USER").is_ok_and(|u| u == identity);
                 let surface = self.compositor.create_surface(&self.qh);
                 let layer = self.layer_shell.create_layer_surface(&self.qh, surface, Layer::Top, Some(NAMESPACE), None);
                 layer.set_anchor(Anchor::all());
@@ -73,6 +84,8 @@ impl App {
                     scene: Scene::new(1, 1),
                     ui: Ui::new(None),
                     nodes: Vec::new(),
+                    avatar_nodes: Vec::new(),
+                    avatar: None,
                     message,
                     identity,
                     prompt: String::new(),
@@ -83,6 +96,14 @@ impl App {
                     text: field(),
                     dirty: true,
                 });
+                if own && let (Some(rt), Some(tx)) = (&self.runtime, self.lock.tx.clone()) {
+                    let home = std::env::var("HOME").unwrap_or_default();
+                    let path = self.store.config.avatar_path(&home);
+                    let px = (self.store.theme.theme.space.xxl * 2.0).round() as u32;
+                    rt.pool().submit(move || {
+                        let _ = tx.send(LockMsg::PolkitAvatar(crate::surfaces::lock::avatar(&path, px)));
+                    });
+                }
             }
             Event::Prompt { prompt, echo } => {
                 if let Some(d) = &mut self.polkit {
@@ -170,8 +191,23 @@ impl App {
         };
         let mut rows: Vec<El> = vec![w::section_label(s, "Authentication required", None, false)];
         rows.push(w::column(0.0, wrap(&d.message, inner, theme, kit).into_iter().map(w::text).collect()));
+        // Avatar.qml's slot: the picture goes in over the space the row
+        // leaves for it.
+        let avatar = d.avatar.as_ref().map(|b| b.pixmap.width() as f64);
+        let mut avatar_row = None;
         if !d.identity.is_empty() {
-            rows.push(w::column(s.row_gap, vec![w::section_label(s, "Identity", None, false), w::value(&d.identity).elide()]));
+            let name = w::value(&d.identity).elide();
+            let line = match avatar {
+                Some(size) => {
+                    // The name sits centred on the picture's own height.
+                    let h = ui::measure(&name, inner, theme, kit).1;
+                    let v = ((size - h) / 2.0).max(0.0);
+                    w::row(s.icon_gap, vec![w::space(size), name.fill().pad(0.0, v, 0.0, v)])
+                }
+                None => name,
+            };
+            avatar_row = Some(rows.len());
+            rows.push(w::column(s.row_gap, vec![w::section_label(s, "Identity", None, false), line]));
         }
         rows.push(w::input(&shown, &placeholder, enabled, d.error.then_some("Wrong password")).width(Size::Px(inner)).enabled(enabled));
         let cancel = w::button("Cancel").variant(Variant::Outline);
@@ -179,6 +215,7 @@ impl App {
         let buttons = w::row(s.control_gap, vec![cancel, auth]);
         let (buttons_w, _) = ui::measure(&buttons, inner, theme, kit);
         rows.push(w::row(0.0, vec![w::space((inner - buttons_w).max(0.0)), buttons]));
+        let heights: Vec<f64> = rows.iter().map(|r| ui::measure(r, inner, theme, kit).1).collect();
         let body = w::column(s.section_gap, rows).width(Size::Px(inner));
         let (_, body_h) = ui::measure(&body, inner, theme, kit);
         let card_w = inner + s.panel_padding * 2.0;
@@ -195,6 +232,22 @@ impl App {
         p.finish();
         d.ui.anchor = last;
         let (x, y) = (card.x as f64 + s.panel_padding, card.y as f64 + s.panel_padding);
+        if let (Some(i), Some(b)) = (avatar_row, d.avatar.as_ref()) {
+            // Under the Identity label and its gap, centred on the row.
+            let label_h = ui::measure(&w::section_label(s, "Identity", None, false), inner, theme, kit).1;
+            let above: f64 = heights[..i].iter().map(|h| h + s.section_gap).sum();
+            let side = b.pixmap.width() as f64;
+            let line_h = (heights[i] - label_h - s.row_gap).max(side);
+            let at = (x.round() as i32, (y + above + label_h + s.row_gap + (line_h - side) / 2.0).round() as i32);
+            let mut p = Painter::new(&mut d.scene, &mut d.avatar_nodes, None).after(last);
+            p.image(b, at, 1.0);
+            let after = p.last();
+            p.finish();
+            d.ui.anchor = after;
+        } else {
+            let p = Painter::new(&mut d.scene, &mut d.avatar_nodes, None);
+            p.finish();
+        }
         d.ui.draw(&body, Rect::new(x, y, x + inner, y + body_h), None, 1.0, theme, kit, &mut d.scene, Instant::now());
         let qh = self.qh.clone();
         d.surface.present(&mut d.scene, false, &qh);

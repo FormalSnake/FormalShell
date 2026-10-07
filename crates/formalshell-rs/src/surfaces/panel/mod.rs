@@ -167,6 +167,8 @@ pub trait Panel {
     fn tab(&mut self, _stop: Option<&str>, _direction: i32) -> Option<String> {
         None
     }
+    /// After every key: the stop now holding the cursor.
+    fn reached(&mut self, _stop: &str, _fx: &mut Effect) {}
     /// `x` on a stop.
     fn delete(&mut self, _stop: &str, _fx: &mut Effect) {}
     /// A printable key no binding took.

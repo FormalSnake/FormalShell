@@ -19,16 +19,18 @@ by surface; one line each.
   restack springs, the arrive translate and the velocity deform, about 300 lines.
 
 ## Lock and auth
-- Polkit card's slide-in off the top line and its identity avatar.
-- Lock wake from idle blank is instant, not a fade.
-- Hot corners don't hide under fullscreen.
+- Polkit card's slide-in off the top line: the dialog is one full-output
+  surface with the scrim baked in; the Drawer/join pipeline (Card, scrim
+  band and dim surfaces, bar join) is launcher-specific and would need to
+  be generalised first.
 
 ## Media
-- Lyrics resync button in the header, not the pane corner; unlit rows lack
-  the 0.85 scale; no lit-row arrival fade; keyboard cursor can't enter the
-  lines; sink latency polled from pw-dump every 10 s, not PipeWire events.
-- Header Radio button and the animated album art not ported.
-- `media outputs`/`output` and pipewire `stream:` rows.
+- Sink latency is read off `pw-dump` on a poke and every 10 s; QML does the
+  same (its graph events only trigger the re-read), but the Rust side lacks
+  the default-sink and link-change triggers. A PipeWire-event read needs
+  port, link and Latency param pods in fs-audio: kept as is.
+- Header Radio button (needs the Radio Atlas surface, Globe and search, not
+  ported) and the animated album art (needs a video decode path) not ported.
 
 ## Launcher
 - Clipboard split preview, width/height size morph, row add/remove motion.

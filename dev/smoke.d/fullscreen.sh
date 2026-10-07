@@ -91,6 +91,7 @@ leg_fullscreen_assert() {
   echo "before: bar=$bar_before frame-zone=$frame_before hotcorner=$corner_before"
   [ "$bar_before" -ge 1 ] || fail "no bar surface before fullscreen"
   [ "$frame_before" -eq 4 ] || fail "expected four frame zones before fullscreen, got $frame_before"
+  [ "$corner_before" -ge 1 ] || fail "no hot corner before fullscreen; the hide would be untested"
 
   # A window really is fullscreen in the middle dump, so the chrome vanishing
   # is the auto-hide firing, not the fixture window having closed.

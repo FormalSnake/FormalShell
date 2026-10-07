@@ -18,7 +18,7 @@ use fs_theme::color::Rgba;
 use fs_theme::style::Glow;
 use vello_cpu::kurbo::{Affine, Rect};
 
-use super::{Cx, Hit, HitWhat, irect};
+use super::{Cx, Hit, HitWhat, Stop, irect};
 use crate::motion::Kind as Clock;
 use crate::scene::IRect;
 use crate::text::{self, ShapedText, TextStyle};
@@ -32,6 +32,8 @@ pub struct View {
     pub blur: bool,
     pub strength: f64,
     pub height: f64,
+    /// The keyboard cursor's row, or `lines.len()` for the resync control.
+    pub cursor: Option<usize>,
 }
 
 struct Piece {
@@ -58,12 +60,16 @@ pub struct Pane {
     last_y: f64,
     following: bool,
     last_anchor: usize,
+    /// Which rows were lit last frame, for the arrival fade.
+    lit: Vec<bool>,
+    /// Rows whose scale was still travelling last frame.
+    moving: std::collections::HashSet<usize>,
     pub seen: u64,
 }
 
 impl Pane {
     fn new(seen: u64) -> Self {
-        Self { laid: None, rows: Vec::new(), wheel_y: 0.0, last_y: 0.0, following: true, last_anchor: 0, seen }
+        Self { laid: None, rows: Vec::new(), wheel_y: 0.0, last_y: 0.0, following: true, last_anchor: 0, lit: Vec::new(), moving: Default::default(), seen }
     }
 
     /// A wheel's `delta` px over the pane: the first one takes the column
@@ -234,6 +240,7 @@ pub fn paint(cx: &mut Cx, r: Rect, v: &View, path: &str) {
         let pane = cx.ui.panes.entry(path.to_owned()).or_insert_with(|| Pane::new(frame));
         pane.rows = rows;
         pane.laid = Some(key);
+        pane.lit.clear();
     }
 
     let main = model::main_line_indices(lines);
@@ -241,8 +248,18 @@ pub fn paint(cx: &mut Cx, r: Rect, v: &View, path: &str) {
     let secondary = model::active_secondary_lines(lines, &main, v.t, active);
     let pane = cx.ui.panes.get_mut(path).expect("pane");
     pane.seen = frame;
-    let anchor = active.or_else(|| secondary.iter().max().copied()).unwrap_or(pane.last_anchor);
-    pane.last_anchor = anchor;
+    let lit_anchor = active.or_else(|| secondary.iter().max().copied()).unwrap_or(pane.last_anchor);
+    pane.last_anchor = lit_anchor;
+    // The keyboard cursor takes the anchor over while it sits on a line.
+    let on_line = v.cursor.filter(|c| *c < lines.len());
+    let anchor = on_line.unwrap_or(lit_anchor);
+    let lit_now: Vec<bool> = (0..lines.len()).map(|i| Some(i) == active || secondary.contains(&i)).collect();
+    let arriving: Vec<bool> = if pane.lit.len() == lit_now.len() {
+        lit_now.iter().zip(&pane.lit).map(|(now, was)| *now && !*was).collect()
+    } else {
+        vec![false; lit_now.len()]
+    };
+    pane.lit = lit_now;
     let vh = vp.height();
     let total: f64 = pane.rows.last().map_or(0.0, |r| r.y + r.h);
     let pitch = if lines.is_empty() { 0.0 } else { total / lines.len() as f64 };
@@ -274,7 +291,15 @@ pub fn paint(cx: &mut Cx, r: Rect, v: &View, path: &str) {
         let (ry, rh) = rows[i];
         let top = col_y + ry;
         let rpath = format!("{path}/{i}");
+        let cursor_row = v.cursor == Some(i);
         if top + rh < -1.0 || top > vh + 1.0 {
+            if cursor_row {
+                // Off the viewport while the column is still travelling to
+                // it: the cursor keeps its place in the stop order.
+                let edge = if top < 0.0 { vpi.y } else { vpi.bottom() - 1 };
+                cx.stop(Stop { key: format!("lyric:{i}"), rect: IRect::new(vpi.x, edge, vpi.w, 1), radius: t.radii.md });
+                cx.animate();
+            }
             continue;
         }
         let lit = Some(i) == active || secondary.contains(&i);
@@ -282,9 +307,16 @@ pub fn paint(cx: &mut Cx, r: Rect, v: &View, path: &str) {
         let span = if distance < 0.0 { spans.above } else { spans.below };
         let edge = model::edge_fraction(top, rh, vh, Some(ramp));
         let depth = if lit { 1.0 } else { model::depth_opacity(distance, Some(span)) };
-        let row_alpha = cx.tween(&format!("{rpath}.a"), depth * if line.background { 0.7 } else { 1.0 }, Clock::Effects) * edge;
+        // A line arriving at lit fades in from 0.68 rather than stepping to
+        // its depth opacity (kopuz's fadeLineIn).
+        let arrival_key = format!("{rpath}.arrival");
+        if arriving[i] {
+            cx.jump(&arrival_key, 0.68, Clock::EffectsSlow);
+        }
+        let arrival = cx.tween(&arrival_key, 1.0, Clock::EffectsSlow);
+        let row_alpha = cx.tween(&format!("{rpath}.a"), depth * if line.background { 0.7 } else { 1.0 }, Clock::Effects) * edge * arrival;
         let hovered = cx.ui.hover.as_deref() == Some(rpath.as_str());
-        let blur_target = if !v.blur || lit || hovered { 0.0 } else { model::blur_for(distance, v.strength, Some(span)) };
+        let blur_target = if !v.blur || lit || hovered || cursor_row { 0.0 } else { model::blur_for(distance, v.strength, Some(span)) };
         let blur = cx.tween(&format!("{rpath}.blur"), blur_target, Clock::Effects);
         let blur = (blur / model::BLUR_QUANTUM_PX).round() * model::BLUR_QUANTUM_PX;
         let a = (row_alpha as f32) * alpha;
@@ -342,21 +374,68 @@ pub fn paint(cx: &mut Cx, r: Rect, v: &View, path: &str) {
             }
         }
         let row_rect = IRect::new(vpi.x, (vp.y0 + top).round() as i32, vpi.w, rh.round() as i32);
+        // The lit/dark tell is a transform, never a relayout: a row keeps
+        // its shape and scales about its own reading edge (a note about its
+        // centre).
+        let scale_target = if lit { if line.background || line.interlude { 0.9 } else { 1.0 } } else { 0.85 };
+        let scale = cx.tween(&format!("{rpath}.scale"), scale_target, Clock::SpatialFast);
+        let origin_x = if line.interlude && !opposite {
+            vp.x0 + vp.width() / 2.0
+        } else if line.opposite_turn {
+            vp.x1 - s.control_padding_x
+        } else {
+            vp.x0 + s.control_padding_x
+        };
+        let origin_y = vp.y0 + top + rh / 2.0;
+        let about = Affine::translate((origin_x, origin_y)) * Affine::scale(scale) * Affine::translate((-origin_x, -origin_y));
+        // A wrapped row's lines shrink toward the row's middle, which can
+        // leave their own boxes: the whole row is damaged while it moves.
+        let moving = (scale - scale_target).abs() > 1e-3;
+        let pane = cx.ui.panes.get_mut(path).expect("pane");
+        let damaged = moving || pane.moving.contains(&i);
+        if moving {
+            pane.moving.insert(i);
+        } else {
+            pane.moving.remove(&i);
+        }
+        let shown = row_rect.intersect(&vpi);
+        if damaged && !shown.is_empty() {
+            cx.scene.touch(shown);
+        }
         let mut p = cx.painter(&rpath);
         for (shaped, at, color, c, glows, b) in draws {
             if b > 0.0 {
-                p.blurred(&shaped, at, color, b, Some(c.map_or(clip, |c| c.intersect(&clip))));
+                p.blurred_with(&shaped, at, color, b, Some(c.map_or(clip, |c| c.intersect(&clip))), about);
                 continue;
             }
             let (w, h) = shaped.box_size();
             let bounds = IRect::new(at.0 - text::PAD, at.1 - text::PAD, w, h);
             let c = c.map_or(clip, |c| c.intersect(&clip));
-            p.text_in(&shaped, bounds, Affine::IDENTITY, Some(c), color, &glows);
+            p.text_in(&shaped, bounds, about, Some(c), color, &glows);
         }
         let last = p.last();
         p.finish();
         cx.done(last);
+        if cursor_row {
+            cx.stop(Stop { key: format!("lyric:{i}"), rect: row_rect.intersect(&vpi), radius: t.radii.md });
+            cx.animate();
+        } else if v.cursor.is_some_and(|c| c < lines.len()) {
+            cx.stop(Stop { key: format!("lyric:{i}"), rect: row_rect.intersect(&vpi), radius: t.radii.md });
+        }
         cx.hit(Hit { rect: row_rect.intersect(&clip), path: rpath, on: Some(format!("lyric:{i}")), tip: None, stop: None, what: HitWhat::Click });
+    }
+
+    // The resync control (spec P9): present once a wheel has taken the
+    // column over, and the last entry in the keyboard's order while it is.
+    let shown = !v.follow || v.cursor == Some(lines.len());
+    let fade = cx.tween(&format!("{path}.resync"), if shown { 1.0 } else { 0.0 }, Clock::Effects);
+    if fade > 0.0 {
+        let size = s.control_height;
+        let button = super::w::icon_button("refresh-cw").tip("Follow the song").stop("lyric-resync").on("lyrics-follow");
+        let before = cx.alpha;
+        cx.alpha = before * fade as f32;
+        super::draw::paint(cx, &button, Rect::new(r.x1 - size, r.y1 - size, r.x1, r.y1), &format!("{path}/resync"));
+        cx.alpha = before;
     }
 }
 

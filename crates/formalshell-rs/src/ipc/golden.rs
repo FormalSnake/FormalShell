@@ -103,6 +103,8 @@ fn stub() -> Registry<()> {
                     f("volume", &[("percent", Type::Int)], Type::String, |_, a| s(format!("volume {}", a[0].int()))),
                     f("raise", &[], Type::String, |_, _| s("raise")),
                     f("select", &[("id", Type::String)], Type::String, |_, a| s(format!("select {}", a[0].str()))),
+                    f("output", &[("name", Type::String)], Type::String, |_, a| s(format!("output {}", a[0].str()))),
+                    f("outputs", &[], Type::String, |_, _| s("[]")),
                     f("players", &[], Type::String, |_, _| s("[]")),
                     f("status", &[], Type::String, |_, _| s("{}")),
                     f("lyrics", &[], Type::String, |_, _| s("{}")),

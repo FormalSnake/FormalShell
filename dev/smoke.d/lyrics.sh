@@ -849,7 +849,7 @@ hi = max(v for _, v in vals)
 floor = lo + (hi - lo) * 0.15
 ink = [y for y, v in vals if v > floor]
 peak = max(vals, key=lambda p: p[1])[0]
-print("%d %d %d" % (peak, max(ink) if ink else -1, len(ink)))
+print("%d %d %d %d" % (peak, max(ink) if ink else -1, len(ink), min(ink) if ink else -1))
 '
 }
 
@@ -1505,8 +1505,8 @@ print("%d %d" % (lit, len(peaks) - lit - 1))
   while read -r burst_name; do
     burst_frame="$shot_dir/lyrics-burst-${burst_name}.png"
     [ -f "$burst_frame" ] || fail "line-change burst frame $burst_name was never taken"
-    read -r peak_row last_row ink_rows < <(lyrics_ink_profile "$(lyrics_burst_body "$burst_frame")" "$burst_crop")
-    printf '%s %s %s %s\n' "$burst_name" "$peak_row" "$last_row" "$ink_rows" >> "$lyrics_burst_profile_path"
+    read -r peak_row last_row ink_rows first_row < <(lyrics_ink_profile "$(lyrics_burst_body "$burst_frame")" "$burst_crop")
+    printf '%s %s %s %s %s\n' "$burst_name" "$peak_row" "$last_row" "$ink_rows" "$first_row" >> "$lyrics_burst_profile_path"
     # Eight inked rows is a third of what any of these frames carries: it
     # separates a pane mid-change from one that has emptied out, and says
     # nothing about how many lines happen to be under the lit one, which the
@@ -1525,9 +1525,12 @@ print("%d %d" % (lit, len(peaks) - lit - 1))
   # five frames of a burst span a second and a half, well past the 500ms the
   # column's own travel takes, so a row still moving there is one whose own
   # box is still settling under it.
+  # The top of the ink rather than its brightest row: the unlit rows are
+  # drawn at 0.85 of their size, so which row is brightest swaps as the lit
+  # one's wipe advances while neither moves.
   local burst_phase tail_peaks first_peak
   for burst_phase in a b; do
-    tail_peaks=$(grep "^${burst_phase}-" "$lyrics_burst_profile_path" | tail -5 | awk '{ print $2 }')
+    tail_peaks=$(grep "^${burst_phase}-" "$lyrics_burst_profile_path" | tail -5 | awk '{ print $5 }')
     first_peak=$(printf '%s\n' "$tail_peaks" | head -1)
     [ -n "$first_peak" ] || fail "burst $burst_phase produced no ink profile at all"
     while read -r peak_row; do
@@ -1536,7 +1539,7 @@ print("%d %d" % (lit, len(peaks) - lit - 1))
       fi
     done < <(printf '%s\n' "$tail_peaks")
   done
-  echo "SMOKE_LYRICS_BURST_SETTLED a=$(grep '^a-' "$lyrics_burst_profile_path" | tail -5 | awk '{ print $2 }' | tr '\n' ' ')b=$(grep '^b-' "$lyrics_burst_profile_path" | tail -5 | awk '{ print $2 }' | tr '\n' ' ')"
+  echo "SMOKE_LYRICS_BURST_SETTLED a=$(grep '^a-' "$lyrics_burst_profile_path" | tail -5 | awk '{ print $5 }' | tr '\n' ' ')b=$(grep '^b-' "$lyrics_burst_profile_path" | tail -5 | awk '{ print $5 }' | tr '\n' ' ')"
 
   # The output latency. The shell reads 250ms off the stream mpv plays on
   # once it is routed through the delayed sink, and the lit line moves by

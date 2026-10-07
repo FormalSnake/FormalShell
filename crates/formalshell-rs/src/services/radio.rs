@@ -26,7 +26,7 @@ use crate::store;
 const USER_AGENT: &str = "Radio Atlas (FormalShell)";
 /// What mpv names its Pipewire stream, which is how an audio graph tells the
 /// radio's stream from any other mpv's.
-const CLIENT_NAME: &str = "FormalShell Radio";
+pub const CLIENT_NAME: &str = "FormalShell Radio";
 const SAVE_DELAY: Duration = Duration::from_millis(600);
 const STOP_GRACE: Duration = Duration::from_millis(1500);
 const CONNECT_EVERY: Duration = Duration::from_millis(100);
@@ -139,6 +139,8 @@ pub enum Cmd {
     Stop,
     Random,
     SetVolume(f64),
+    /// A sink name, or "" for the default one.
+    SetOutput(String),
     RandomRows(Option<Vec<Station>>),
     Refreshed(Vec<Station>),
     /// Saved when it is not a favourite, dropped when it is.
@@ -720,6 +722,18 @@ impl Radio {
             Cmd::Previous => self.step(-1).await,
             Cmd::Stop => self.stop().await,
             Cmd::Random => self.tune_random(),
+            Cmd::SetOutput(sink) => {
+                if !sink.is_empty() && !fs_media::radio::stations::is_sink(&sink) {
+                    self.st.player_error = "Unknown audio output".into();
+                    return;
+                }
+                if self.ready() {
+                    let device = if sink.is_empty() { "auto".to_owned() } else { format!("pulse/{sink}") };
+                    self.write(json!(["set_property", "audio-device", device])).await;
+                }
+                self.st.output = sink;
+                self.save_at = Some(Instant::now() + SAVE_DELAY);
+            }
             Cmd::SetVolume(v) => {
                 let v = v.round().clamp(0.0, 100.0) as i64;
                 if v == self.st.volume {

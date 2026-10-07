@@ -19,6 +19,7 @@ use std::time::{Duration, Instant};
 use fs_media::visualizer::styles;
 
 use super::{Effect, Panel, View};
+use crate::services::devices::audio;
 use crate::services::lyrics;
 use crate::services::media::Active;
 use crate::services::visualizer::{self, Avail};
@@ -31,7 +32,8 @@ const VOLUME_STEP: f64 = 0.05;
 const SPECTRUM_COLUMNS: usize = 12;
 
 pub struct Media {
-    menu: bool,
+    /// The inline menu open under its trigger: "source", "output" or none.
+    menu: &'static str,
     /// The transport button the keyboard sits on.
     transport: usize,
     /// Whether the cursor sits on a stop Left and Right step rather than walk,
@@ -39,6 +41,8 @@ pub struct Media {
     stepping: Cell<bool>,
     spectrum: Cell<bool>,
     open: bool,
+    /// The cursor sat on a lyric row after the last key.
+    in_lyrics: bool,
     /// The stops of each keyboard section present in the last body, in Tab
     /// order: the transport, the tracks, the menu.
     sections: std::cell::RefCell<Vec<Vec<String>>>,
@@ -46,13 +50,14 @@ pub struct Media {
 
 impl Default for Media {
     fn default() -> Self {
-        Self { menu: false, transport: 1, stepping: Cell::new(false), spectrum: Cell::new(false), open: true, sections: Default::default() }
+        Self { menu: "", transport: 1, stepping: Cell::new(false), spectrum: Cell::new(false), open: true, in_lyrics: false, sections: Default::default() }
     }
 }
 
 impl Drop for Media {
     fn drop(&mut self) {
         visualizer::set_panel(false);
+        audio::routing_wanted(0, false);
     }
 }
 
@@ -146,14 +151,21 @@ fn spectrum_enabled(v: &View) -> bool {
 }
 
 impl Media {
-    fn source_menu(&self, v: &View) -> Vec<El> {
+    /// The rows of the open menu: source (Auto, then every player) or
+    /// output (every sink, the one the source plays on checked).
+    fn menu_rows(&self, v: &View) -> Vec<El> {
         let s = &v.theme.space;
         let m = &v.store.media;
-        let mut rows = vec![("".to_owned(), "Auto".to_owned(), "", false)];
-        rows.extend(m.players().into_iter().map(|p| (p.id.clone(), p.label.clone(), source_icon(&p.kind), p.is_playing)));
+        let mut rows = Vec::new();
+        if self.menu == "output" {
+            let on = m.output_id();
+            rows.extend(m.outputs().iter().map(|(id, label)| (id.clone(), label.clone(), "speaker", false, *id == on)));
+        } else {
+            rows.push((String::new(), "Auto".to_owned(), "", false, m.selected.is_empty()));
+            rows.extend(m.players().into_iter().map(|p| (p.id.clone(), p.label.clone(), source_icon(&p.kind), p.is_playing, m.selected == p.id)));
+        }
         rows.into_iter()
-            .map(|(id, label, icon, playing)| {
-                let current = m.selected == id;
+            .map(|(id, label, icon, playing, current)| {
                 let glyph = if current { "check" } else { icon };
                 let mut parts = vec![
                     w::icon(if glyph.is_empty() { "check" } else { glyph })
@@ -170,9 +182,18 @@ impl Media {
     }
 
     fn pick(&mut self, id: &str, fx: &Effect) {
+        if self.menu == "output" {
+            fx.store.media.set_output(id);
+            self.menu = "";
+            return;
+        }
         let id = id.to_owned();
         fx.service(move |ctx| ctx.publish(store::Diff::Media(crate::services::media::Diff::Select(id))));
-        self.menu = false;
+        self.menu = "";
+    }
+
+    fn toggle_menu(&mut self, name: &'static str) {
+        self.menu = if self.menu == name { "" } else { name };
     }
 
     fn step_volume(&self, fx: &Effect, by: f64) {
@@ -212,9 +233,6 @@ impl Panel for Media {
 
     fn actions(&self, v: &View) -> Vec<El> {
         let mut out = Vec::new();
-        if v.store.lyrics.synced() && !v.store.lyrics.follow {
-            out.push(w::icon_button("refresh-cw").tip("Follow the song").on("lyrics-follow").key("lyrics-follow"));
-        }
         if v.store.media.active().is_some_and(|a| a.can_raise) {
             out.push(w::icon_button("external-link").on("raise").key("raise"));
         }
@@ -222,17 +240,20 @@ impl Panel for Media {
     }
 
     fn opened(&mut self) {
-        self.menu = false;
+        self.menu = "";
+        self.in_lyrics = false;
         self.transport = 1;
     }
 
     fn closed(&mut self) {
         self.open = false;
         visualizer::set_panel(false);
+        audio::routing_wanted(0, false);
     }
 
     fn start(&mut self, fx: &mut Effect) {
         set_follow(fx, true);
+        audio::routing_wanted(0, true);
         let on = fx.store.config.bool("media.visualizer").unwrap_or(true);
         self.spectrum.set(on);
         visualizer::set_panel(on);
@@ -259,9 +280,16 @@ impl Panel for Media {
 
         let label = m.players().into_iter().find(|r| r.id == a.id).map(|r| r.label).unwrap_or_default();
         let label = if m.selected.is_empty() { format!("Auto · {label}") } else { label };
-        col.push(w::row(0.0, vec![w::trigger(s, source_icon(a.kind), &label, self.menu).stop("source").on("source")]));
-        if self.menu {
-            col.push(w::column(0.0, self.source_menu(v)));
+        let source = w::trigger(s, source_icon(a.kind), &label, self.menu == "source").stop("source").on("source");
+        let mut triggers = vec![w::row(0.0, vec![source]).fill()];
+        if m.can_route() {
+            let on = m.output_id();
+            let named = m.outputs().iter().find(|(id, _)| *id == on).map_or("Output", |(_, l)| l.as_str());
+            triggers.push(w::trigger(s, "speaker", named, self.menu == "output").stop("output").on("output"));
+        }
+        col.push(w::row(s.sm, triggers).fill());
+        if !self.menu.is_empty() {
+            col.push(w::column(0.0, self.menu_rows(v)));
         }
 
         let mut info = Vec::new();
@@ -333,10 +361,16 @@ impl Panel for Media {
         let body = if v.store.lyrics.synced() {
             let settings = lyrics::Settings::read(&v.store.config);
             let ly = &v.store.lyrics;
+            let cursor = v.cursor.and_then(|k| match k {
+                "lyric-resync" => Some(ly.lines.len()),
+                _ => k.strip_prefix("lyric:").and_then(|i| i.parse::<usize>().ok()),
+            });
+            let on_line = cursor.is_some_and(|c| c < ly.lines.len());
             let pane = El::new(crate::ui::el::Kind::Lyrics(crate::ui::lyrics::View {
                 lines: ly.lines.clone(),
                 t: fs_media::lyrics::led_position(a.position, settings.hold(ly.latency)),
-                follow: ly.follow,
+                follow: ly.follow || on_line,
+                cursor,
                 blur: settings.blur,
                 strength: settings.strength,
                 height: s.control_height * 6.0,
@@ -354,9 +388,18 @@ impl Panel for Media {
         if !tracks.is_empty() {
             sections.push(tracks);
         }
+        if v.store.lyrics.synced() {
+            let n = v.store.lyrics.lines.len();
+            sections.push((0..n).map(|i| format!("lyric:{i}")).chain(std::iter::once("lyric-resync".to_owned())).collect());
+        }
         let mut menu = vec!["source".to_owned()];
-        if self.menu {
+        if m.can_route() {
+            menu.push("output".to_owned());
+        }
+        if self.menu == "source" {
             menu.extend(std::iter::once("pick:".to_owned()).chain(m.players().into_iter().map(|p| format!("pick:{}", p.id))));
+        } else if self.menu == "output" {
+            menu.extend(m.outputs().iter().map(|(id, _)| format!("pick:{id}")));
         }
         sections.push(menu);
         *self.sections.borrow_mut() = sections;
@@ -394,7 +437,8 @@ impl Panel for Media {
             ("raise", _) => fx.store.media.raise(),
             ("lyrics-follow", _) => set_follow(fx, true),
             ("lyrics-pane", What::Scroll(..)) => set_follow(fx, false),
-            ("source", _) => self.menu = !self.menu,
+            ("source", _) => self.toggle_menu("source"),
+            ("output", _) => self.toggle_menu("output"),
             ("transport", What::Pick(i)) => {
                 if let Some(a) = &a
                     && let Some(id) = transport(a).get(*i)
@@ -425,8 +469,16 @@ impl Panel for Media {
             self.pick(id, fx);
             return;
         }
+        if let Some(i) = stop.strip_prefix("lyric:").and_then(|i| i.parse::<usize>().ok()) {
+            if let Some(line) = fx.store.lyrics.lines.get(i) {
+                fx.store.media.seek_to(line.time);
+            }
+            return;
+        }
         match stop {
-            "source" => self.menu = !self.menu,
+            "lyric-resync" => set_follow(fx, true),
+            "source" => self.toggle_menu("source"),
+            "output" => self.toggle_menu("output"),
             "transport" => {
                 if let Some(a) = fx.store.media.active() {
                     let ids = transport(&a);
@@ -472,8 +524,19 @@ impl Panel for Media {
         self.stepping.get()
     }
 
+    /// Reaching the lyrics parks the column back on the song: the cursor
+    /// is about to drive it, and a column left where a wheel put it would
+    /// answer the first Up with a jump.
+    fn reached(&mut self, stop: &str, fx: &mut Effect) {
+        let now = stop.starts_with("lyric");
+        if now && !self.in_lyrics {
+            set_follow(fx, true);
+        }
+        self.in_lyrics = now;
+    }
+
     fn escape(&mut self) -> bool {
-        std::mem::take(&mut self.menu)
+        !std::mem::take(&mut self.menu).is_empty()
     }
 }
 

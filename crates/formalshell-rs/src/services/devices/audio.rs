@@ -54,6 +54,60 @@ pub struct Lists {
     pub source: Option<Row>,
 }
 
+/// What the media panel routes by, read only while it is open or a stream
+/// is the picked source: the sinks a stream can move to and every playback
+/// stream with what it is linked into.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Routing {
+    /// Node name and label of each sink.
+    pub sinks: Vec<(String, String)>,
+    pub streams: Vec<StreamInfo>,
+    pub default_sink: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct StreamInfo {
+    pub id: u32,
+    /// application.name, application.process.binary, application.id and
+    /// node.name, what a player is recognised by.
+    pub keys: [Option<String>; 4],
+    pub label: String,
+    /// media.name.
+    pub title: String,
+    pub volume: Option<f64>,
+    /// The sink it is linked into.
+    pub target: String,
+}
+
+fn routing(graph: &Graph) -> Routing {
+    let key = |n: &Node, k: &str| n.props.get(k).cloned();
+    Routing {
+        sinks: graph
+            .nodes
+            .values()
+            .filter(|n| !n.is_stream() && n.is_sink() && n.audio.is_some())
+            .map(|n| {
+                let label = [n.description.as_str(), n.nick.as_str(), n.name.as_str()].into_iter().find(|l| !l.is_empty()).unwrap_or("");
+                (n.name.clone(), label.to_owned())
+            })
+            .collect(),
+        streams: graph
+            .nodes
+            .values()
+            .filter(|n| n.is_stream() && n.is_sink() && n.ready)
+            .map(|n| StreamInfo {
+                id: n.id,
+                keys: [key(n, "application.name"), key(n, "application.process.binary"), key(n, "application.id"), Some(n.name.clone())],
+                label: n.label().to_owned(),
+                title: n.props.get("media.name").cloned().unwrap_or_default(),
+                volume: n.audio.as_ref().map(|a| a.volume() as f64),
+                target: graph.stream_target(n.id).map(|t| t.name.clone()).unwrap_or_default(),
+            })
+            .collect(),
+        default_sink: graph.default_sink().map(|n| n.name.clone()).unwrap_or_default(),
+    }
+}
+
 struct Client {
     handle: fs_audio::Audio,
     graph: Graph,
@@ -110,7 +164,23 @@ fn snapshot(graph: &Graph) -> Audio {
 }
 
 static PANEL: AtomicBool = AtomicBool::new(false);
+/// The media panel is open, or a stream is the picked source.
+static ROUTING: [AtomicBool; 2] = [AtomicBool::new(false), AtomicBool::new(false)];
 static POKE: LazyLock<(Sender<()>, Receiver<()>)> = LazyLock::new(async_channel::unbounded);
+static WRITES: LazyLock<(Sender<Command>, Receiver<Command>)> = LazyLock::new(async_channel::unbounded);
+
+/// One of the two reasons to keep the routing lists published: `slot` 0 is
+/// the media panel being open, 1 a stream being the picked source.
+pub fn routing_wanted(slot: usize, on: bool) {
+    if ROUTING[slot].swap(on, Ordering::Relaxed) != on {
+        let _ = POKE.0.try_send(());
+    }
+}
+
+/// A write from the UI thread, carried out on the service thread.
+pub fn write(c: Command) {
+    let _ = WRITES.0.try_send(c);
+}
 
 /// The panel open or closed: its lists are published only while it is.
 pub fn panel(open: bool) {
@@ -141,8 +211,16 @@ pub async fn run(ctx: Ctx) {
         }
     };
     CLIENT.with_borrow_mut(|c| *c = Some(Client { handle, graph: Graph::default() }));
+    let mut sent = Routing::default();
     loop {
-        let event = async { events.recv().await.ok().map(Some) }.or(async { POKE.1.recv().await.ok().map(|_| None) }).await;
+        let event = async { events.recv().await.ok().map(Some) }
+            .or(async { POKE.1.recv().await.ok().map(|_| None) })
+            .or(async {
+                let write = WRITES.1.recv().await.ok()?;
+                command(write);
+                Some(None)
+            })
+            .await;
         let Some(event) = event else { return };
         let audio = CLIENT.with_borrow_mut(|c| {
             let c = c.as_mut()?;
@@ -153,10 +231,14 @@ pub async fn run(ctx: Ctx) {
             while let Ok(more) = events.try_recv() {
                 c.graph.apply(more);
             }
-            Some(snapshot(&c.graph))
+            Some((snapshot(&c.graph), ROUTING.iter().any(|r| r.load(Ordering::Relaxed)).then(|| routing(&c.graph)).unwrap_or_default()))
         });
-        if let Some(audio) = audio {
+        if let Some((audio, routed)) = audio {
             publish(&ctx, audio);
+            if routed != sent {
+                sent = routed.clone();
+                ctx.publish(store::Diff::Media(crate::services::media::Diff::Routing(routed)));
+            }
         }
     }
 }

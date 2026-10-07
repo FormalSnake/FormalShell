@@ -87,7 +87,12 @@ impl App {
         let outputs: Vec<(WlOutput, String)> =
             self.outputs.outputs().map(|o| (o.clone(), self.outputs.info(&o).and_then(|i| i.name).unwrap_or_default())).collect();
         let names: Vec<String> = outputs.iter().map(|(_, n)| n.clone()).collect();
-        let windows = corners::windows(&config, &names);
+        // Down while a fullscreen window covers the output, so its scanout
+        // is free and a corner cannot fire mid-game.
+        let hide = self.store.config.bool("fullscreen.hideChrome").unwrap_or(true);
+        let covered = &self.store.hyprland.compositor.fullscreen_outputs;
+        let windows: Vec<_> =
+            corners::windows(&config, &names).into_iter().filter(|w| !(hide && covered.contains(&w.screen))).collect();
         let key: Vec<(String, Corner, String, i64)> =
             windows.iter().map(|w| (w.screen.clone(), w.corner, w.action.as_str().to_owned(), config.size)).collect();
         self.hot.config = Some(config.clone());
