@@ -19,6 +19,17 @@ use crate::store::Diff;
 pub const POOL_THREADS: usize = 2;
 pub const POOL_IDLE: Duration = Duration::from_secs(5);
 
+/// Every thread but the UI's runs at nice 10, and the threads it starts
+/// (zbus, PipeWire, `blocking`) inherit it: on a starved CPU the UI loop's
+/// frame goes first and the rest takes the slack.
+pub fn lower_priority() {
+    // Linux applies PRIO_PROCESS with who 0 to the calling thread alone.
+    #[cfg(target_os = "linux")]
+    unsafe {
+        libc::setpriority(libc::PRIO_PROCESS, 0, 10);
+    }
+}
+
 /// What reaches the UI thread.
 pub enum Msg {
     Diff(Diff),

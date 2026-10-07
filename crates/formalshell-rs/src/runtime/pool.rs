@@ -71,6 +71,7 @@ impl Pool {
 }
 
 fn worker(inner: Arc<Inner>) {
+    super::lower_priority();
     let mut queue = inner.queue.lock().unwrap();
     loop {
         if let Some(job) = queue.jobs.pop_front() {

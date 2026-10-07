@@ -639,6 +639,7 @@ dependencies = [
  "indexmap",
  "inotify",
  "libc",
+ "memmap2",
  "parley",
  "resvg",
  "serde",

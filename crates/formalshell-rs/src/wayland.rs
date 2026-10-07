@@ -240,6 +240,11 @@ pub struct App {
     /// at the next idle frame, so the first open finds the text and rows
     /// already laid out.
     launcher_warm: bool,
+    /// The styles the launcher's last layout shaped in, for warming its
+    /// rows' words on the pool before the next open.
+    launcher_styles: Vec<crate::text::TextStyle>,
+    /// The launcher's faces are warmed once, after the bar is on screen.
+    faces_warmed: bool,
     /// The network the launcher's password step is for, and the identity
     /// an enterprise one was given first (WifiService.pendingSsid).
     wifi_pending: Option<(String, String)>,
@@ -321,6 +326,8 @@ impl App {
             launch: None,
             launcher_resolve: true,
             launcher_warm: false,
+            launcher_styles: Vec::new(),
+            faces_warmed: false,
             wifi_pending: None,
             mods: Default::default(),
             menu_buttons: None,
@@ -368,6 +375,27 @@ impl App {
         }
         ls.commit();
         ls
+    }
+
+    /// The bar's faces built on a thread of their own while the compositor
+    /// answers the bar's first configure: their hinting instances are most
+    /// of the first frame's cost.
+    pub fn warm_bar_faces(&self) {
+        use crate::text::{Family, TextStyle};
+        use fs_theme::tokens::WEIGHTS;
+        let look = &self.bar.kit.look;
+        let mut jobs: Vec<(String, TextStyle)> = Vec::new();
+        for w in [WEIGHTS.normal, WEIGHTS.medium, WEIGHTS.semibold] {
+            jobs.push(("0".into(), look.label(w as f32)));
+            jobs.push(("a".into(), look.sans(w as f32)));
+            jobs.push(("0".into(), TextStyle { family: look.sans, size: look.caption, weight: w as f32, tracking: look.meta_tracking }));
+        }
+        for name in ["circle", "wifi", "volume-2", "battery", "bell", "bluetooth", "cpu"] {
+            let g = fs_theme::icons::glyph(&look.icon_set, name);
+            jobs.push((g.text.to_owned(), TextStyle { family: Family::Named(g.family), size: look.body, weight: 400.0, tracking: 0.0 }));
+        }
+        let text = self.bar.kit.text.clone();
+        let _ = std::thread::Builder::new().name("fs-warm".into()).spawn(move || text.warm(&jobs));
     }
 
     fn log(&self, what: &str) {
@@ -1135,16 +1163,24 @@ impl App {
     }
 
     pub fn receive(&mut self, msg: Msg) {
-        match msg {
+        let t0 = Instant::now();
+        let what = match msg {
             Msg::Diff(diff) => {
-                if let Some(topic) = self.store.apply(diff) {
+                let topic = self.store.apply(diff);
+                if let Some(topic) = topic {
                     surfaces::changed(self, topic);
                 }
+                format!("diff {topic:?}")
             }
             Msg::Call(request, reply) => {
-                self.log(&format!("{request:?}"));
+                let what = format!("{request:?}");
+                self.log(&what);
                 let _ = reply.try_send(ipc::dispatch(self, &request));
+                what
             }
+        };
+        if t0.elapsed().as_millis() >= 8 {
+            eprintln!("event loop: slow receive t={}ms {what} us={}", self.started.elapsed().as_millis(), t0.elapsed().as_micros());
         }
     }
 
@@ -1249,6 +1285,12 @@ impl App {
         }
         if let Some(s) = &mut self.bar_surface {
             s.present(&mut self.bar.scene, animating, &qh);
+        }
+        if !self.faces_warmed && self.bar_surface.as_ref().is_some_and(|s| s.mapped) {
+            self.faces_warmed = true;
+            crate::phase("bar mapped");
+            self.warm_faces();
+            self.launcher_warm = true;
         }
         self.step_menu(now);
         for p in [&mut self.overflow, &mut self.menu].into_iter().flatten() {
@@ -1905,6 +1947,9 @@ impl LayerShellHandler for App {
                 self.bar.resize(w, h);
                 let size = self.bar.scene.size;
                 if let Some(s) = &mut self.bar_surface {
+                    if !s.configured {
+                        crate::phase("bar configured");
+                    }
                     s.configure(size.w, size.h);
                 }
                 self.set_input_region();

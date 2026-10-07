@@ -1,4 +1,4 @@
-{ lib, stdenvNoCC, rustCommon, makeWrapper, lucide-font, nerd-fonts, noto-fonts-color-emoji, matugen, brightnessctl, ddcutil, wlsunset
+{ lib, stdenvNoCC, rustCommon, makeBinaryWrapper, lucide-font, nerd-fonts, noto-fonts-color-emoji, matugen, brightnessctl, ddcutil, wlsunset
 , wireplumber, cava, mpv, curl, util-linux, uxplay, iphone-bridge, openscq30, nothingctl, earbuds, formalshell-eds, git, qrencode, networkmanager
 , wl-clipboard, grim, slurp, wf-recorder, tesseract, ffmpeg-headless, pulseaudio, xdg-utils, tensaku, ttfx
 , clipssh, localsend-cli, wtype, openssh }:
@@ -34,7 +34,7 @@ rustCommon.craneLib.buildPackage (rustCommon.commonArgs // {
   # itself alone; `cargo test` at the workspace root covers the rest.
   cargoExtraArgs = "--locked --package formalshell-rs";
 
-  nativeBuildInputs = rustCommon.commonArgs.nativeBuildInputs ++ [ makeWrapper ];
+  nativeBuildInputs = rustCommon.commonArgs.nativeBuildInputs ++ [ makeBinaryWrapper ];
 
   # The icon fonts by path, registered with parley at startup: the same
   # lucide and font-logos builds nix/package.nix hands Qt through

@@ -552,22 +552,15 @@ impl<'a> Painter<'a> {
     }
 }
 
-#[derive(Hash, PartialEq, Eq)]
-struct ShapeKey {
-    text: String,
-    family: String,
-    size: u32,
-    weight: u32,
-    tracking: u32,
-}
-
 /// Shaping, cached by text and style, with the look it shapes for.
 pub struct Kit {
     pub text: Text,
     pub look: Look,
     /// `debug motionScale`, on top of the theme's own clocks.
     pub motion_scale: f64,
-    cache: HashMap<ShapeKey, ShapedText>,
+    /// While set, every style shaped in, so a surface's styles can be
+    /// warmed ahead of its next open.
+    pub seen: Option<Vec<TextStyle>>,
 }
 
 /// One measured view: its extent along the strip, and where its free label
@@ -617,29 +610,20 @@ impl Measured {
 
 impl Kit {
     pub fn new(theme: &Theme) -> Self {
-        Self { text: Text::new(), look: Look::new(theme), motion_scale: 1.0, cache: HashMap::new() }
+        Self { text: Text::new(), look: Look::new(theme), motion_scale: 1.0, seen: None }
     }
 
     pub fn set_theme(&mut self, theme: &Theme) {
         self.look = Look::new(theme);
-        self.cache.clear();
     }
 
     pub fn shape(&mut self, source: &str, style: TextStyle) -> ShapedText {
-        let family = match style.family {
-            Family::Generic(g) => format!("{g:?}"),
-            Family::Named(n) => n.to_owned(),
-        };
-        let key = ShapeKey { text: source.to_owned(), family, size: style.size.to_bits(), weight: style.weight.to_bits(), tracking: style.tracking.to_bits() };
-        if let Some(s) = self.cache.get(&key) {
-            return s.clone();
+        if let Some(seen) = &mut self.seen
+            && !seen.contains(&style)
+        {
+            seen.push(style);
         }
-        if self.cache.len() > 1024 {
-            self.cache.clear();
-        }
-        let shaped = self.text.shape(source, style);
-        self.cache.insert(key, shaped.clone());
-        shaped
+        self.text.shape(source, style)
     }
 
     pub fn icon(&mut self, name: &str) -> ShapedText {
