@@ -87,6 +87,8 @@ pub struct Saver {
     opacity: Animated,
     hold: Option<RegistrationToken>,
     tick: Option<RegistrationToken>,
+    /// `screensaver.lockAfterSeconds`' timer, running only while shown.
+    chain: Option<RegistrationToken>,
 }
 
 impl Default for Saver {
@@ -108,6 +110,7 @@ impl Default for Saver {
             opacity: Animated::new(0.0, EFFECTS_SLOW),
             hold: None,
             tick: None,
+            chain: None,
         }
     }
 }
@@ -285,6 +288,28 @@ impl App {
         }
         self.saver_start_run();
         self.saver_arm_tick();
+        self.saver_arm_chain();
+    }
+
+    /// Continued inactivity under the screensaver chains into the lock; 0
+    /// (the default) leaves it off.
+    fn saver_arm_chain(&mut self) {
+        if let (Some(t), Some(h)) = (self.saver.chain.take(), &self.handle) {
+            h.remove(t);
+        }
+        let seconds = self.store.config.f64("screensaver.lockAfterSeconds").unwrap_or(0.0);
+        if !self.saver.active || seconds <= 0.0 {
+            return;
+        }
+        let Some(handle) = &self.handle else { return };
+        let token = handle.insert_source(Timer::from_duration(Duration::from_secs_f64(seconds)), |_, _, app: &mut App| {
+            app.saver.chain = None;
+            if app.saver.active {
+                let _ = app.lock();
+            }
+            TimeoutAction::Drop
+        });
+        self.saver.chain = token.ok();
     }
 
     fn saver_reveal_ms(&self) -> f64 {

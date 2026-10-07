@@ -1789,7 +1789,7 @@ impl KeyboardHandler for App {
     fn leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: &wl_surface::WlSurface, _: u32) {}
 
     fn press_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, event: KeyEvent) {
-        if self.saver.active {
+        if self.saver.active && !self.lock.locked {
             self.saver_pointer(screensaver::SaverInput::Key);
             return;
         }
