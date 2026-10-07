@@ -568,6 +568,13 @@ impl Card {
         }
     }
 
+    /// Where content goes once the card has settled on its live rect: an
+    /// owner drawing on a [`crate::surfaces::modal::Layer`] lays out here,
+    /// and the layer is moved by the difference.
+    pub fn content_rest(&self) -> IRect {
+        Scene::cover(self.live, self.edge_map(), 0.0)
+    }
+
     /// The band past the line, where content may draw.
     pub fn content_clip(&self) -> IRect {
         if self.clip.is_empty() {

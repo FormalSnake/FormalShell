@@ -247,8 +247,10 @@ pub struct App {
     faces_warmed: bool,
     /// The launcher card's pool, buffers and canvas while it is shut.
     launch_kept: Option<crate::surface::Kept>,
+    /// The same for the launcher's content layer.
+    layer_kept: Option<crate::surface::Kept>,
     /// The launcher's conditions and binds were asked for once its tree
-    /// first arrived; every close asks again.
+    /// first arrived, so the first open has results to draw on.
     fresh_asked: bool,
     /// The network the launcher's password step is for, and the identity
     /// an enterprise one was given first (WifiService.pendingSsid).
@@ -334,6 +336,7 @@ impl App {
             launcher_styles: Vec::new(),
             faces_warmed: false,
             launch_kept: None,
+            layer_kept: None,
             fresh_asked: false,
             wifi_pending: None,
             mods: Default::default(),

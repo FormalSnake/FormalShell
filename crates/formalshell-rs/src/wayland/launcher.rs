@@ -93,8 +93,11 @@ impl App {
     /// for the next open.
     fn drop_launch(&mut self) {
         if let Some(w) = self.launch.take() {
-            self.launch_kept = Some(w.shown.modal.surface.keep());
-            self.launcher.ask_fresh(&self.store);
+            let modal = w.shown.modal;
+            if let Some(layer) = modal.layer {
+                self.layer_kept = Some(layer.keep());
+            }
+            self.launch_kept = Some(modal.surface.keep());
         }
     }
 
@@ -106,8 +109,24 @@ impl App {
             return;
         }
         let (w, h) = self.output_size();
-        let size = (w as i32, (h - self.top_inset()) as i32);
+        let size = (w as i32, h as i32);
         self.launch_kept = crate::surface::Kept::prefaulted(&self.shm, size, runtime.pool());
+        self.layer_kept = crate::surface::Kept::prefaulted(&self.shm, size, runtime.pool());
+    }
+
+    /// A content layer on `card`, the size of its scene, taking no input:
+    /// the pointer lands on the card underneath.
+    pub(super) fn content_layer(&self, card: &Surface, size: crate::scene::IRect) -> crate::surfaces::modal::Layer {
+        use crate::surface::{Ignore, Sub};
+        let surface = self.compositor.create_surface(&self.qh);
+        let sub = self.pixels.subcompositor.get_subsurface(&surface, card.layer.wl_surface(), &self.qh, Ignore);
+        if let Ok(region) = Region::new(&self.compositor) {
+            surface.set_input_region(Some(region.wl_region()));
+        }
+        let fade = self.pixels.alpha.get_surface(&surface, &self.qh, Ignore);
+        let mut s = Surface::new("menu-content", Sub { surface, sub }, &self.shm, self.started);
+        s.configure(size.w, size.h);
+        crate::surfaces::modal::Layer::new(s, fade, (size.w, size.h))
     }
 
     /// The window for an open, created fresh unless one is already up.
@@ -122,6 +141,14 @@ impl App {
             modal.surface.adopt(kept);
         }
         modal.surface.raster_budget = Some(LAUNCHER_SLICE);
+        let size = modal.card.scene.size;
+        let mut content = self.content_layer(&modal.surface, size);
+        if let Some(kept) = self.layer_kept.take() {
+            content.surface.adopt(kept);
+        }
+        content.surface.configure(size.w, size.h);
+        content.surface.raster_budget = Some(LAUNCHER_SLICE);
+        modal.layer = Some(content);
         let shown = Shown::new(&self.store.theme.theme, modal, self.output_size(), self.motion_scale);
         self.launch = Some(Window { shown, scan: None, pressed: None });
         self.log("menu mapped");
@@ -756,11 +783,20 @@ impl App {
         let qh = self.qh.clone();
         let theme = &self.store.theme.theme;
         let Some(w) = &mut self.launch else { return };
-        let animating = w.shown.animating(now) || self.launcher.rows_moving(now);
+        let moving = w.shown.content_animating(now) || self.launcher.rows_moving(now);
         let t1 = Instant::now();
         // A frame still being drawn in slices keeps the scene it started on.
-        let rastering = w.shown.modal.surface.rastering();
-        if !rastering && (self.launcher.dirty || animating || !w.shown.modal.surface.mapped) {
+        let rastering = match &w.shown.modal.layer {
+            Some(l) => l.surface.rastering(),
+            None => w.shown.modal.surface.rastering(),
+        };
+        let wants = self.launcher.dirty || moving || !w.shown.modal.surface.mapped;
+        // A layout held back by a sliced frame runs once it is out, even
+        // when whatever moved has stopped by then.
+        if rastering && wants {
+            self.launcher.dirty = true;
+        }
+        if !rastering && wants {
             w.shown.modal.sync_region(&self.compositor);
             self.bar.kit.seen = Some(std::mem::take(&mut self.launcher_styles));
             w.shown.layout(&mut self.launcher, &self.store, theme, &mut self.bar.kit, now);
@@ -772,7 +808,7 @@ impl App {
         w.shown.modal.present(animating, now, &qh);
         // The rest of a sliced frame on the next turn, after whatever the
         // loop has waiting (the bar's callback first).
-        if w.shown.modal.surface.rastering()
+        if (w.shown.modal.surface.rastering() || w.shown.modal.layer.as_ref().is_some_and(|l| l.surface.rastering()))
             && let Some(handle) = &self.handle
         {
             handle.insert_idle(|_| {});
