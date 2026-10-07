@@ -10,7 +10,6 @@ pub enum Type {
     String,
     Int,
     Bool,
-    #[cfg_attr(not(test), expect(dead_code))]
     Real,
 }
 
@@ -69,6 +68,13 @@ impl Value {
 
     pub fn bool(&self) -> bool {
         matches!(self, Value::Bool(true))
+    }
+
+    pub fn real(&self) -> f64 {
+        match self {
+            Value::Real(r) => *r,
+            _ => 0.0,
+        }
     }
 
     /// `IpcValueSlot::toString`; `None` for a void function, which prints

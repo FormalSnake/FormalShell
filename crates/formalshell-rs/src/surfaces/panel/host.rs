@@ -21,7 +21,7 @@ use smithay_client_toolkit::shell::WaylandSurface;
 use smithay_client_toolkit::shell::wlr_layer::KeyboardInteractivity;
 use vello_cpu::kurbo::Rect;
 
-use super::{Effect, Panel, View};
+use super::{Edit, Effect, Panel, View};
 use crate::motion::{Animated, Kind as Clock, SPATIAL};
 use crate::runtime::Runtime;
 use crate::scene::{IRect, NodeId, Paint};
@@ -113,6 +113,9 @@ pub struct Host {
     scale: f64,
     /// The input region last set, so it is sent only on a change.
     region: Option<IRect>,
+    /// The frame's height, the most the output leaves it and whether the
+    /// content was cut to that, as of the last layout.
+    pub fit: std::cell::Cell<(f64, f64, bool)>,
 }
 
 const PRIME_MS: u64 = 75;
@@ -158,6 +161,7 @@ impl Host {
             wake: None,
             scale,
             region: None,
+            fit: std::cell::Cell::new((0.0, 0.0, false)),
         }
     }
 
@@ -167,6 +171,11 @@ impl Host {
 
     pub fn is_open(&self) -> bool {
         self.open
+    }
+
+    /// A text field in the body holds the keyboard.
+    pub fn editing(&self) -> bool {
+        self.open && self.module.editing()
     }
 
     /// Gone from the screen: closed and landed, or cut by a handoff.
@@ -179,6 +188,7 @@ impl Host {
             return;
         }
         self.open = false;
+        self.module.closed();
         self.cursor.active = false;
         self.handoff = None;
         self.card.set_bypass(now, false);
@@ -190,6 +200,7 @@ impl Host {
     /// screen and no longer joined, until the incoming card starts moving.
     pub fn hand_over(&mut self) {
         self.open = false;
+        self.module.closed();
         self.cursor.active = false;
         self.card.set_joined(false);
         self.set_keyboard(KeyboardInteractivity::None);
@@ -264,6 +275,7 @@ impl Host {
         };
         let max_content = (max_frame - s.panel_padding * 2.0 - head - gap).max(0.0);
         let height = s.panel_padding * 2.0 + head + gap + content_h.min(max_content);
+        self.fit.set((height, max_frame, content_h > max_content));
         (width, height, content_h)
     }
 
@@ -516,6 +528,18 @@ impl Host {
         }
         let mut fx = Self::effect(store, runtime);
         let stop = self.cursor.key.clone().filter(|_| self.cursor.active);
+        if self.module.editing() {
+            let edit = match name {
+                Key::Escape => Edit::Cancel,
+                Key::Tab(_) => Edit::Tab,
+                Key::Activate => Edit::Submit,
+                Key::Back => Edit::Back,
+                Key::Text(t) => Edit::Insert(t),
+                Key::Move(..) => return Out::None,
+            };
+            self.module.edit(edit, &mut fx);
+            return if fx.close { Out::Close } else { Out::None };
+        }
         match name {
             Key::Escape => return Out::Close,
             Key::Tab(_) => {
@@ -523,6 +547,7 @@ impl Host {
                 self.cursor.keyed = true;
             }
             Key::Move(dx, dy) => self.move_cursor(dx, dy, &mut fx),
+            Key::Back => {}
             Key::Activate => {
                 if let Some(k) = stop.filter(|_| !self.body.stops.is_empty()) {
                     self.module.activate(&k, &mut fx);
@@ -728,5 +753,6 @@ pub enum Key {
     Tab(i32),
     Move(i32, i32),
     Activate,
+    Back,
     Text(String),
 }

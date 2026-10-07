@@ -7,7 +7,7 @@
 //! and a commit, and nothing draws or ticks while it is down.
 //!
 //! When the overlay unmaps, the end of its fade, the hot corner that fired
-//! it is told the action ended (`hotcorner_action_ended`): that is the
+//! it is told the action ended (`hot_corner_action_ended`): that is the
 //! moment the pointer comes back to a corner it may never have left.
 
 use std::collections::HashMap;
@@ -603,7 +603,7 @@ impl App {
         if !self.saver.active && !fading && mapped {
             self.saver.overlay = None;
             self.log("screensaver unmapped");
-            self.hotcorner_action_ended("screensaver");
+            self.hot_corner_action_ended("screensaver");
             return;
         }
         let Some(o) = &mut self.saver.overlay else { return };

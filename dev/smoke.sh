@@ -807,16 +807,40 @@ fi
 if [ "$fs_impl" = rust ]; then
   grep -E '^(start|commit|exit|ipc|text:|hyprland:|event loop:) ' "$shell_log_path" 2>/dev/null || true
   if [ ${#active_legs[@]} -eq 0 ]; then
-    theme='"theme":{"radius":10,"radiusXl":14,"borderWidth":1,"barPosition":"top","edgeInset":40}'
-    diff -u - "$rs_ipc_path" <<EOF || fail "debug's replies over formalshell-ipc differ (diff above)"
+    # `debug dump` is the one reply that grows with the shell, so it is
+    # read as data: every key must be one DebugIpc.qml's dump() emits and
+    # the numbers this rig pins must read back. Every other reply must
+    # match QML byte for byte.
+    [ -s "$rs_ipc_path" ] || fail "the rust drive wrote no debug replies"
+    need_jq
+    qml_dump_keys=$(awk '/function dump\(\)/{f=1;next} f&&/^    }/{exit} f&&/^            [a-zA-Z]+:/{sub(/:.*/,"");gsub(/ /,"");print}' shell/Ipc/DebugIpc.qml | "$jq_bin" -R . | "$jq_bin" -sc .)
+    dumps=$(awk 'prev=="> debug dump"{print} {prev=$0}' "$rs_ipc_path")
+    [ "$(printf '%s\n' "$dumps" | wc -l)" -eq 2 ] || fail "expected two debug dump replies in $rs_ipc_path"
+    check_dump() {
+      printf '%s' "$1" | "$jq_bin" -e --argjson qml "$qml_dump_keys" --argjson join "$2" '
+        (keys - $qml) == []
+        and (["compositor","configLoaded","join","bar","frame","theme"] - keys) == []
+        and .compositor == "hyprland"
+        and (.bar | length) == 1
+        and (.frame | keys) == ["enabled","habit","requested","thickness"]
+        and (.theme | del(.edgeInset)) == {"radius":10,"radiusXl":14,"borderWidth":1,"barPosition":"top"}
+        and (.theme.edgeInset | keys) == ["bottom","left","right","top"]
+        and (if $join == null then .join == null
+             else (.join | del(.screen)) == $join and (.join.screen | type) == "string" end)' >/dev/null
+    }
+    first_dump=$(printf '%s\n' "$dumps" | sed -n 1p)
+    second_dump=$(printf '%s\n' "$dumps" | sed -n 2p)
+    check_dump "$first_dump" null || fail "debug dump (no join) is not what DebugIpc.qml's keys allow: $first_dump"
+    check_dump "$second_dump" '{"edge":"top","x":100,"width":200,"reach":14}' || fail "debug dump (joined) is not what DebugIpc.qml's keys allow: $second_dump"
+    diff -u - <(awk 'prev=="> debug dump"{print "<checked>"; prev=$0; next} {print; prev=$0}' "$rs_ipc_path") <<EOF || fail "debug's replies over formalshell-ipc differ (diff above)"
 > debug dump
-{"join":null,$theme}
+<checked>
 exit 0
 > debug join top 100 200
 ok
 exit 0
 > debug dump
-{"join":{"edge":"top","x":100,"width":200,"reach":14},$theme}
+<checked>
 exit 0
 > debug joinClear
 ok

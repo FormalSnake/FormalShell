@@ -3,8 +3,8 @@
 //! [`Store::apply`].
 
 use crate::services::{
-    appicon, barpaint, caffeinate, clock, commands, config, devices, herdr, hotcorners, hyprland, info, media, plugins, recording, screensaver, state,
-    theme, tray, visualizer, wallpaper,
+    appicon, barpaint, caffeinate, capture, clock, commands, config, devices, display, herdr, hyprland, info, media, notifications,
+    plugins, recording, screensaver, state, theme, tray, visualizer, wallpaper,
 };
 
 #[derive(Default)]
@@ -17,6 +17,7 @@ pub struct Store {
     pub media: media::State,
     pub visualizer: visualizer::State,
     pub devices: devices::State,
+    pub display: display::State,
     pub commands: commands::State,
     pub bar_paint: barpaint::State,
     pub wallpaper: wallpaper::State,
@@ -27,8 +28,9 @@ pub struct Store {
     pub caffeinate: caffeinate::State,
     pub plugins: plugins::State,
     pub recording: recording::State,
+    pub capture: capture::Inbox,
+    pub notifications: notifications::State,
     pub screensaver: screensaver::State,
-    pub hotcorners: hotcorners::State,
 }
 
 /// One service's change, tagged with the slice it applies to.
@@ -41,6 +43,7 @@ pub enum Diff {
     Media(media::Diff),
     Visualizer(visualizer::Diff),
     Devices(devices::Diff),
+    Display(display::Diff),
     Commands(commands::Diff),
     BarPaint(barpaint::Diff),
     Wallpaper(wallpaper::Diff),
@@ -52,8 +55,9 @@ pub enum Diff {
     Plugins(plugins::Diff),
     #[allow(dead_code)]
     Recording(recording::Diff),
+    Capture(capture::Event),
+    Notifications(notifications::Diff),
     Screensaver(screensaver::Diff),
-    HotCorners(hotcorners::Diff),
 }
 
 /// The slice a diff changed, for the surfaces that read it.
@@ -67,6 +71,7 @@ pub enum Topic {
     Media,
     Visualizer,
     Devices,
+    Display,
     Commands,
     BarPaint,
     Wallpaper,
@@ -80,8 +85,9 @@ pub enum Topic {
     /// What a plugin shows changed.
     PluginOutput,
     Recording,
+    Capture,
+    Notifications,
     Screensaver,
-    HotCorners,
 }
 
 impl Store {
@@ -96,6 +102,7 @@ impl Store {
             Diff::Media(d) => self.media.apply(d).then_some(Topic::Media),
             Diff::Visualizer(d) => self.visualizer.apply(d).then_some(Topic::Visualizer),
             Diff::Devices(d) => self.devices.apply(d).then_some(Topic::Devices),
+            Diff::Display(d) => self.display.apply(d).then_some(Topic::Display),
             Diff::Commands(d) => self.commands.apply(d).then_some(Topic::Commands),
             Diff::BarPaint(d) => self.bar_paint.apply(d).then_some(Topic::BarPaint),
             Diff::Wallpaper(d) => self.wallpaper.apply(d).then_some(Topic::Wallpaper),
@@ -108,9 +115,10 @@ impl Store {
                 plugins::Change::Output => Topic::PluginOutput,
             }),
             Diff::Recording(d) => self.recording.apply(d).then_some(Topic::Recording),
+            Diff::Capture(e) => self.capture.apply(e).then_some(Topic::Capture),
             Diff::Caffeinate(d) => self.caffeinate.apply(d).then_some(Topic::Caffeinate),
+            Diff::Notifications(d) => self.notifications.apply(d).then_some(Topic::Notifications),
             Diff::Screensaver(d) => self.screensaver.apply(d).then_some(Topic::Screensaver),
-            Diff::HotCorners(d) => self.hotcorners.apply(d).then_some(Topic::HotCorners),
         }
     }
 }

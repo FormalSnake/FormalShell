@@ -9,10 +9,12 @@
 # type conversion, error strings, output framing and exit codes. `debug`,
 # `theme` and `wallpaper` carry DebugIpc.qml's, ThemeIpc.qml's and
 # WallpaperIpc.qml's exact signatures, `bar`, `panel`, `media`, `radio`,
-# `airplay`, `visualizer`, `overnight`, `earbuds` and `workspaces` their own
-# IPC files' (WorkspacesIpc.qml's `status` only: peek and close wait for the
-# preview), `calendar`, `iphone`, `console` and `screensaver` their own; `probe` covers every type qs
-# converts and the function names that collide with qs's subcommands.
+# `airplay`, `visualizer`, `overnight`, `earbuds`, `display`, `hdr` and
+# `workspaces` their own IPC files' (WorkspacesIpc.qml's `status` only: peek
+# and close wait for the preview), `calendar`, `iphone`, `notifications`,
+# `reminder`, `screenshot`, `capture` and `record` their own; `probe` covers
+# every type qs converts and the function names that collide with qs's
+# subcommands.
 set -euo pipefail
 
 dir=$(mktemp -d)
@@ -119,6 +121,16 @@ ShellRoot {
         function status(): string { return "{}" }
     }
     IpcHandler {
+        target: "network"
+        function status(): string { return "{}" }
+        function connect(ssid: string, psk: string): string { return "connect " + ssid + " " + psk }
+        function connectEap(ssid: string, identity: string, password: string): string { return "connectEap " + ssid + " " + identity + " " + password }
+        function forget(ssid: string): string { return "forget " + ssid }
+        function wifi(enabled: bool): string { return "wifi " + enabled }
+        function speedtest(): string { return "ok" }
+        function speedstatus(): string { return "{}" }
+    }
+    IpcHandler {
         target: "monitor"
         function status(): string { return "{}" }
         function gpu(): string { return "{}" }
@@ -135,6 +147,12 @@ ShellRoot {
         function toggle(): string { return "ok" }
         function enable(): string { return "ok" }
         function disable(): string { return "ok" }
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "lock"
+        function lock(): string { return "ok" }
+        function isLocked(): string { return "false" }
         function status(): string { return "{}" }
     }
     IpcHandler {
@@ -157,6 +175,73 @@ ShellRoot {
         function dismiss(id: string): string { return "dismiss " + id }
         function clear(): string { return "ok" }
         function markRead(): string { return "ok" }
+    }
+    IpcHandler {
+        target: "screenshot"
+        function full(processing: string): string { return "full " + processing }
+        function region(processing: string): string { return "region " + processing }
+        function cancel(): string { return "ok" }
+        function pick(mode: string, processing: string): string { return "pick " + mode + " " + processing }
+        function key(name: string): string { return "key " + name }
+        function pickerStatus(): string { return "{}" }
+        function edit(path: string): string { return "edit " + path }
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "capture"
+        function text(): string { return "ok" }
+        function color(): string { return "ok" }
+        function textAt(geometry: string): string { return "textAt " + geometry }
+        function colorAt(geometry: string): string { return "colorAt " + geometry }
+        function cancel(): string { return "ok" }
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "record"
+        function start(scope: string, audio: string): string { return "start " + scope + " " + audio }
+        function startCapped(scope: string, audio: string, maxHeight: string): string { return "startCapped " + scope + " " + audio + " " + maxHeight }
+        function startAt(geometry: string, audio: string): string { return "startAt " + geometry + " " + audio }
+        function stop(): string { return "ok" }
+        function toggle(scope: string, audio: string): string { return "toggle " + scope + " " + audio }
+        function gif(path: string): string { return "gif " + path }
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "display"
+        function scale(output: string, scale: real): string { return "scale " + output + " " + scale }
+        function mirror(output: string, source: string): string { return "mirror " + output + " " + source }
+        function enable(output: string, enabled: bool): string { return "enable " + output + " " + enabled }
+    }
+    IpcHandler {
+        target: "hdr"
+        function toggle(): string { return "ok" }
+        function enable(): string { return "ok" }
+        function disable(): string { return "ok" }
+        function setOutput(output: string, enabled: bool): string { return "setOutput " + output + " " + enabled }
+        function rule(output: string): string { return "rule " + output }
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "notifications"
+        function status(): string { return "{}" }
+        function dndState(): string { return "off" }
+        function toggleDnd(): string { return "on" }
+        function setDnd(on: bool): string { return on ? "on" : "off" }
+        function showHistory(): string { return "ok" }
+        function clear(): string { return "ok" }
+        function clearPending(): string { return "ok" }
+        function markAllSeen(): string { return "ok" }
+        function dismissAll(): string { return "ok" }
+        function dismissOne(): string { return "none" }
+        function invokeLast(): string { return "ok" }
+        function expand(state: string): string { return "expand " + state }
+    }
+    IpcHandler {
+        target: "reminder"
+        function set(duration: string, message: string): string { return "set " + duration + " " + message }
+        function show(): string { return "ok" }
+        function clear(): string { return "ok: cleared 0" }
+        function status(): string { return "{}" }
     }
     IpcHandler {
         target: "console"
@@ -415,6 +500,19 @@ rec show earbuds set
 rec call workspaces status
 rec call workspaces status x
 rec show workspaces
+rec call network status
+rec call network connect FORMALTEST
+rec call network connect FORMALTEST psk
+rec call network connect 'a b' ''
+rec call network connectEap FORMALTEST-EAP id pw
+rec call network forget FORMALTEST
+rec call network wifi true
+rec call network wifi 0
+rec call network wifi maybe
+rec call network speedtest
+rec call network speedstatus x
+rec show network
+rec show network connectEap
 rec call monitor status
 rec call monitor status x
 rec call monitor gpu
@@ -434,6 +532,10 @@ rec call caffeinate disable
 rec call caffeinate status
 rec call caffeinate status x
 rec show caffeinate
+rec call lock isLocked
+rec call lock status
+rec call lock status x
+rec call lock unlock
 rec call gallery open
 rec call gallery status
 rec call gallery status x
@@ -470,6 +572,59 @@ rec call screensaver frame x
 rec call screensaver frame
 rec call screensaver frameInfo
 rec show screensaver
+rec call screenshot full ''
+rec call screenshot full
+rec call screenshot pick smart default
+rec call screenshot pick smart
+rec call screenshot key ctrl-return
+rec call screenshot pickerStatus
+rec call screenshot edit '/tmp/a b.png'
+rec call screenshot status
+rec show screenshot
+rec call capture text
+rec call capture textAt '0,0 10x10'
+rec call capture colorAt
+rec call capture status x
+rec show capture
+rec call record start screen desktop
+rec call record start screen
+rec call record startCapped region none 720
+rec call record startAt '0,0 1x1' none
+rec call record toggle '' ''
+rec call record gif ''
+rec call record stop
+rec show record
+rec call display scale DP-1 1.5
+rec call display scale DP-1 x
+rec call display scale DP-1
+rec call display mirror DP-1 ''
+rec call display mirror DP-1 eDP-1
+rec call display enable DP-1 false
+rec call display enable DP-1 1
+rec show display
+rec call hdr toggle
+rec call hdr enable
+rec call hdr disable
+rec call hdr setOutput DP-1 true
+rec call hdr setOutput DP-1
+rec call hdr rule DP-1
+rec call hdr status
+rec call hdr status x
+rec show hdr
+rec call notifications status
+rec call notifications setDnd true
+rec call notifications setDnd 1
+rec call notifications setDnd
+rec call notifications dismissOne
+rec call notifications expand on
+rec call notifications expand
+rec call notifications nope
+rec show notifications
+rec call reminder set 12s 'SMOKE REMINDER FIXTURE'
+rec call reminder set 25m
+rec call reminder set 25m ''
+rec call reminder clear
+rec show reminder
 
 kill "$qs_pid"
 wait "$qs_pid" 2>/dev/null || true

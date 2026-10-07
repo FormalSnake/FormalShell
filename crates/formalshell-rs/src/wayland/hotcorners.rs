@@ -1,286 +1,265 @@
-//! Hot corners (Surfaces/HotCorners/HotCorners.qml): one `hotCorners.size`
-//! square of nothing per active corner per output, on the Top layer so the
-//! screensaver and the lock plate cover it once fired. The arming rules are
-//! fs-chrome's `arm`; this file feeds them real enters, leaves and the end
-//! of each action.
-//!
-//! An action ends when its covering surface unmaps, and whether the cursor
-//! is still in the corner then is asked of the compositor (`j/cursorpos`):
-//! hover cannot say, since the covering surface held the pointer until that
-//! moment.
+//! Hot corners (HotCorners.qml): a transparent `hotCorners.size` square on
+//! the top layer in every corner whose action is not "none", firing after a
+//! dwell or on a click. Arming is fs-chrome's `arm` rule: an action that
+//! reports its end (the lock, the screensaver) ends when its covering
+//! surface unmaps, and the corner is told whether the compositor's cursor
+//! sits on it at that moment, so a cursor parked in the corner through an
+//! unlock never fires it again.
 
 use std::collections::HashMap;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 use calloop::RegistrationToken;
 use calloop::timer::{TimeoutAction, Timer};
 use fs_chrome::hot_corners::arm::{self, ArmState};
-use fs_chrome::hot_corners::corners::{self, Action, Corner};
+use fs_chrome::hot_corners::corners::{self, Action, Config, Corner};
+use smithay_client_toolkit::reexports::client::protocol::wl_buffer::WlBuffer;
+use smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput;
 use smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface;
+use smithay_client_toolkit::reexports::protocols::wp::viewporter::client::wp_viewport::WpViewport;
+use smithay_client_toolkit::seat::pointer::{PointerEvent, PointerEventKind};
 use smithay_client_toolkit::shell::WaylandSurface;
-use smithay_client_toolkit::shell::wlr_layer::{Anchor, KeyboardInteractivity, Layer};
+use smithay_client_toolkit::shell::wlr_layer::{Anchor, KeyboardInteractivity, Layer, LayerSurface};
 
 use super::App;
-use crate::services::hotcorners::Diff;
+use super::lock::LockMsg;
 use crate::services::hyprland;
-use crate::store;
-use crate::surface::PixelSurface;
+use crate::surface::Ignore;
 
 const NAMESPACE: &str = "formalshell:hotcorner";
 
-struct Window {
-    output: String,
+struct Win {
+    output: WlOutput,
     corner: Corner,
     action: Action,
-    surface: PixelSurface,
+    layer: LayerSurface,
+    viewport: WpViewport,
+    buffer: Option<WlBuffer>,
     arm: ArmState,
     dwell: Option<RegistrationToken>,
 }
 
+impl Drop for Win {
+    fn drop(&mut self) {
+        self.viewport.destroy();
+        if let Some(b) = self.buffer.take() {
+            b.destroy();
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct HotCorners {
-    windows: Vec<Window>,
-    /// What the windows were built from: (output, corner, action, size).
-    built: Vec<(String, Corner, String, i64)>,
-    delay_ms: i64,
-    size: i64,
+    config: Option<Config>,
+    /// What the windows were built from, so an unchanged model keeps them.
+    key: Vec<(String, Corner, String, i64)>,
+    wins: Vec<Win>,
+    /// When each action last ended, on [`App::corner_ms`]'s clock.
     ended_at: HashMap<String, i64>,
 }
 
-fn now_ms() -> i64 {
-    SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64)
-}
-
-fn anchor(corner: Corner) -> Anchor {
-    let e = corners::edges(corner);
-    let mut a = Anchor::empty();
-    for (on, side) in [(e.top, Anchor::TOP), (e.bottom, Anchor::BOTTOM), (e.left, Anchor::LEFT), (e.right, Anchor::RIGHT)] {
-        if on {
-            a |= side;
-        }
-    }
-    a
-}
-
 impl App {
-    fn hotcorner_action_active(&self, action: &Action) -> bool {
+    /// A monotonic millisecond clock that never reads 0, which `arm` takes
+    /// to mean "never".
+    fn corner_ms(&self) -> i64 {
+        self.started.elapsed().as_millis() as i64 + 1_000_000
+    }
+
+    fn action_active(&self, action: &Action) -> bool {
         match action {
+            Action::Lock => self.lock.locked && !self.lock_external(),
             Action::Screensaver => self.saver.active || self.saver_mapped(),
             _ => false,
         }
     }
 
-    /// The corners the config, the outputs and fullscreen want, rebuilt
-    /// whole when that set changes; each new window adopts what its action
-    /// is doing right now.
-    pub fn hotcorners_sync(&mut self) {
-        let config = corners::resolve(self.store.config.get("hotCorners"));
+    /// Builds the corners the config and the output list ask for.
+    pub(super) fn sync_hot_corners(&mut self) {
         if !self.store.config.loaded {
             return;
         }
-        let covered = &self.store.hyprland.compositor.fullscreen_outputs;
-        let screens: Vec<String> = self
-            .outputs
-            .outputs()
-            .filter_map(|o| self.outputs.info(&o).and_then(|i| i.name))
-            .filter(|name| !covered.contains(name))
-            .collect();
-        let want: Vec<(String, Corner, String, i64)> = corners::windows(&config, &screens)
-            .into_iter()
-            .map(|w| (w.screen, w.corner, w.action.as_str().to_owned(), config.size))
-            .collect();
-        self.hotcorners.delay_ms = config.delay_ms;
-        if want == self.hotcorners.built {
-            return;
-        }
-        for w in &config.warnings {
-            eprintln!("hotcorners: {w}");
-        }
-        for w in self.hotcorners.windows.drain(..) {
-            if let (Some(t), Some(h)) = (w.dwell, &self.handle) {
-                h.remove(t);
+        let config = corners::resolve(self.store.config.get("hotCorners"));
+        if self.hot.config.as_ref().map(|c| &c.warnings) != Some(&config.warnings) {
+            for w in &config.warnings {
+                eprintln!("HotCorners: {w}");
             }
         }
-        let now = now_ms();
-        let outputs: Vec<_> = self.outputs.outputs().collect();
-        let mut windows = Vec::new();
-        for w in corners::windows(&config, &screens) {
-            let output = outputs.iter().find(|o| self.outputs.info(o).and_then(|i| i.name).as_deref() == Some(w.screen.as_str()));
+        let outputs: Vec<(WlOutput, String)> =
+            self.outputs.outputs().map(|o| (o.clone(), self.outputs.info(&o).and_then(|i| i.name).unwrap_or_default())).collect();
+        let names: Vec<String> = outputs.iter().map(|(_, n)| n.clone()).collect();
+        let windows = corners::windows(&config, &names);
+        let key: Vec<(String, Corner, String, i64)> =
+            windows.iter().map(|w| (w.screen.clone(), w.corner, w.action.as_str().to_owned(), config.size)).collect();
+        self.hot.config = Some(config.clone());
+        if key == self.hot.key {
+            return;
+        }
+        self.hot.key = key;
+        self.hot.wins.clear();
+        let now = self.corner_ms();
+        for w in windows {
+            let Some((output, _)) = outputs.iter().find(|(_, n)| *n == w.screen) else { continue };
+            let edges = corners::edges(w.corner);
+            let mut anchor = Anchor::empty();
+            for (on, a) in [(edges.top, Anchor::TOP), (edges.bottom, Anchor::BOTTOM), (edges.left, Anchor::LEFT), (edges.right, Anchor::RIGHT)] {
+                if on {
+                    anchor |= a;
+                }
+            }
             let surface = self.compositor.create_surface(&self.qh);
-            let layer = self.layer_shell.create_layer_surface(&self.qh, surface, Layer::Top, Some(NAMESPACE), output);
-            layer.set_anchor(anchor(w.corner));
+            let layer = self.layer_shell.create_layer_surface(&self.qh, surface, Layer::Top, Some(NAMESPACE), Some(output));
+            layer.set_anchor(anchor);
             layer.set_size(config.size as u32, config.size as u32);
             layer.set_exclusive_zone(-1);
             layer.set_keyboard_interactivity(KeyboardInteractivity::None);
             layer.commit();
-            let running = self.hotcorner_action_active(&w.action);
-            let ended = self.hotcorners.ended_at.get(w.action.as_str()).copied().unwrap_or(0);
-            windows.push(Window {
-                output: w.screen,
-                corner: w.corner,
-                arm: arm::adopt(now, running, ended),
-                action: w.action,
-                surface: PixelSurface::new("hotcorner", layer, &self.pixels, &self.qh, self.started),
-                dwell: None,
-            });
-        }
-        self.hotcorners.windows = windows;
-        self.hotcorners.built = want;
-        self.hotcorners.size = config.size;
-    }
-
-    fn hotcorner_index(&self, surface: &WlSurface) -> Option<usize> {
-        self.hotcorners.windows.iter().position(|w| w.surface.layer.wl_surface() == surface)
-    }
-
-    pub(super) fn hotcorner_owns(&self, surface: &WlSurface) -> bool {
-        self.hotcorner_index(surface).is_some()
-    }
-
-    pub(super) fn hotcorner_configure(&mut self, surface: &WlSurface, width: i32, height: i32) {
-        if let Some(i) = self.hotcorner_index(surface) {
-            self.hotcorners.windows[i].surface.configure(width.max(1), height.max(1));
+            let viewport = self.pixels.viewporter.get_viewport(layer.wl_surface(), &self.qh, Ignore);
+            let ended = self.hot.ended_at.get(w.action.as_str()).copied().unwrap_or(0);
+            let state = arm::adopt(now, self.action_active(&w.action), ended);
+            self.hot.wins.push(Win { output: output.clone(), corner: w.corner, action: w.action, layer, viewport, buffer: None, arm: state, dwell: None });
         }
     }
 
-    pub(super) fn hotcorner_frame(&mut self, surface: &WlSurface) {
-        if let Some(i) = self.hotcorner_index(surface) {
-            let s = &mut self.hotcorners.windows[i].surface;
-            (s.frame_pending, s.mapped, s.callbacks) = (false, true, s.callbacks + 1);
-        }
+    pub(super) fn hot_corner_owns(&self, layer: &LayerSurface) -> bool {
+        self.hot.wins.iter().any(|w| w.layer.wl_surface() == layer.wl_surface())
     }
 
-    pub(super) fn hotcorner_closed(&mut self, surface: &WlSurface) {
-        if let Some(i) = self.hotcorner_index(surface) {
-            let w = self.hotcorners.windows.remove(i);
-            if let (Some(t), Some(h)) = (w.dwell, &self.handle) {
-                h.remove(t);
+    /// Mapped with one transparent pixel stretched over the square; its
+    /// default input region is the whole square.
+    pub(super) fn hot_corner_configure(&mut self, layer: &LayerSurface) {
+        let size = self.hot.config.as_ref().map_or(corners::DEFAULT_SIZE, |c| c.size) as i32;
+        let Some(w) = self.hot.wins.iter_mut().find(|w| w.layer.wl_surface() == layer.wl_surface()) else { return };
+        if w.buffer.is_some() {
+            return;
+        }
+        let buffer = self.pixels.single_pixel.create_u32_rgba_buffer(0, 0, 0, 0, &self.qh, Ignore);
+        w.viewport.set_destination(size, size);
+        let surface = w.layer.wl_surface();
+        surface.attach(Some(&buffer), 0, 0);
+        surface.damage_buffer(0, 0, 1, 1);
+        w.layer.commit();
+        w.buffer = Some(buffer);
+    }
+
+    /// Takes the events on a corner and hands back the rest.
+    pub(super) fn hot_corner_pointer(&mut self, events: &[PointerEvent]) -> Vec<PointerEvent> {
+        let mut rest = Vec::new();
+        for e in events {
+            let Some(i) = self.corner_of(&e.surface) else {
+                rest.push(e.clone());
+                continue;
+            };
+            let now = self.corner_ms();
+            match e.kind {
+                PointerEventKind::Enter { .. } => {
+                    let w = &self.hot.wins[i];
+                    let armed = arm::is_armed(w.arm, now);
+                    let active = self.action_active(&w.action);
+                    self.hot.wins[i].arm = arm::on_enter(w.arm, now);
+                    if armed && !active {
+                        self.start_dwell(i);
+                    }
+                }
+                PointerEventKind::Leave { .. } => {
+                    self.stop_dwell(i);
+                    let w = &mut self.hot.wins[i];
+                    w.arm = arm::on_exit(w.arm);
+                }
+                PointerEventKind::Release { .. } => self.fire_corner(i),
+                _ => {}
             }
         }
+        rest
     }
 
-    pub(super) fn present_hotcorners(&mut self) {
-        let qh = self.qh.clone();
-        for w in &mut self.hotcorners.windows {
-            w.surface.present(0.0, false, &qh);
-        }
+    fn corner_of(&self, surface: &WlSurface) -> Option<usize> {
+        self.hot.wins.iter().position(|w| w.layer.wl_surface() == surface)
     }
 
-    pub(super) fn hotcorner_enter(&mut self, surface: &WlSurface) {
-        let Some(i) = self.hotcorner_index(surface) else { return };
-        let now = now_ms();
-        let w = &mut self.hotcorners.windows[i];
-        let armed = arm::is_armed(w.arm, now);
-        w.arm = arm::on_enter(w.arm, now);
-        let action = w.action.clone();
-        if armed && !self.hotcorner_action_active(&action) {
-            self.hotcorner_dwell(i);
-        }
-    }
-
-    pub(super) fn hotcorner_leave(&mut self, surface: &WlSurface) {
-        let Some(i) = self.hotcorner_index(surface) else { return };
-        let w = &mut self.hotcorners.windows[i];
-        if let (Some(t), Some(h)) = (w.dwell.take(), &self.handle) {
-            h.remove(t);
-        }
-        w.arm = arm::on_exit(w.arm);
-    }
-
-    /// A click on a 4px corner is deliberate: it fires outright.
-    pub(super) fn hotcorner_press(&mut self, surface: &WlSurface) {
-        if let Some(i) = self.hotcorner_index(surface) {
-            self.hotcorner_fire(i);
-        }
-    }
-
-    fn hotcorner_dwell(&mut self, i: usize) {
+    fn start_dwell(&mut self, i: usize) {
+        self.stop_dwell(i);
+        let delay = self.hot.config.as_ref().map_or(corners::DEFAULT_DELAY_MS, |c| c.delay_ms);
         let Some(handle) = &self.handle else { return };
-        let delay = Duration::from_millis(self.hotcorners.delay_ms.max(0) as u64);
-        let surface = self.hotcorners.windows[i].surface.layer.wl_surface().clone();
-        let token = handle.insert_source(Timer::from_duration(delay), move |_, _, app: &mut App| {
-            if let Some(i) = app.hotcorner_index(&surface) {
-                app.hotcorners.windows[i].dwell = None;
-                app.hotcorner_fire(i);
+        let surface = self.hot.wins[i].layer.wl_surface().clone();
+        let token = handle.insert_source(Timer::from_duration(Duration::from_millis(delay as u64)), move |_, _, app: &mut App| {
+            if let Some(i) = app.corner_of(&surface) {
+                app.hot.wins[i].dwell = None;
+                app.fire_corner(i);
             }
             TimeoutAction::Drop
         });
-        self.hotcorners.windows[i].dwell = token.ok();
+        self.hot.wins[i].dwell = token.ok();
     }
 
-    fn hotcorner_fire(&mut self, i: usize) {
-        let now = now_ms();
-        let w = &mut self.hotcorners.windows[i];
-        if let (Some(t), Some(h)) = (w.dwell.take(), &self.handle) {
-            h.remove(t);
+    fn stop_dwell(&mut self, i: usize) {
+        if let (Some(handle), Some(t)) = (&self.handle, self.hot.wins[i].dwell.take()) {
+            handle.remove(t);
         }
-        let reports = arm::reports_end(&w.action, false);
-        w.arm = arm::on_fire(w.arm, now, reports);
-        let action = w.action.clone();
-        eprintln!("hotcorners: {} fired {}", w.corner.name(), action.as_str());
-        if self.hotcorner_action_active(&action) {
+    }
+
+    fn fire_corner(&mut self, i: usize) {
+        self.stop_dwell(i);
+        let now = self.corner_ms();
+        let external = self.lock_external();
+        let action = self.hot.wins[i].action.clone();
+        let reports = arm::reports_end(&action, external);
+        self.hot.wins[i].arm = arm::on_fire(self.hot.wins[i].arm, now, reports);
+        if self.action_active(&action) {
             return;
         }
         if !reports {
-            self.hotcorners.ended_at.insert(action.as_str().to_owned(), now);
+            self.hot.ended_at.insert(action.as_str().to_owned(), now);
         }
-        match action {
+        match &action {
+            Action::Lock => {
+                let _ = self.lock();
+            }
             Action::Screensaver => self.saver_start(),
-            Action::Lock => eprintln!("hotcorners: lock has no surface in this shell yet"),
-            Action::Launcher(a) => eprintln!("hotcorners: launcher action {a} has no launcher in this shell yet"),
-            Action::None => {}
+            other => eprintln!("HotCorners: {} has no surface in this shell yet", other.as_str()),
         }
     }
 
-    /// `action`'s covering surface is gone. The cursor is asked for where
-    /// it is now, and each of the action's corners hears the end with it.
-    pub fn hotcorner_action_ended(&mut self, action: &str) {
-        let at = now_ms();
-        self.hotcorners.ended_at.insert(action.to_owned(), at);
+    /// The covering surface of `action` has unmapped: every corner running
+    /// it hears whether the compositor's cursor is on it now. The screensaver
+    /// calls this from its own unmap.
+    pub fn hot_corner_action_ended(&mut self, action: &str) {
+        let at = self.corner_ms();
+        self.hot.ended_at.insert(action.to_owned(), at);
+        let (Some(rt), Some(tx)) = (&self.runtime, self.lock.tx.clone()) else { return };
         let action = action.to_owned();
-        let Some(rt) = &self.runtime else { return };
         rt.service(move |ctx| {
-            let task_ctx = ctx.clone();
             ctx.spawn(async move {
-                let cursor = hyprland::request("j/cursorpos").await.ok().and_then(|text| {
-                    let v: serde_json::Value = serde_json::from_str(&text).ok()?;
+                let pos = hyprland::request("j/cursorpos").await.ok().and_then(|s| {
+                    let v: serde_json::Value = serde_json::from_str(&s).ok()?;
                     Some((v.get("x")?.as_f64()?, v.get("y")?.as_f64()?))
                 });
-                task_ctx.publish(store::Diff::HotCorners(Diff::Ended(action, at, cursor)));
+                let _ = tx.send(LockMsg::ActionEnded { action, at, cursor: pos });
             });
         });
     }
 
-    /// An unknown cursor counts as still in the corner: no leave is
-    /// invented, so only a real one re-arms it.
-    pub fn hotcorners_changed(&mut self) {
-        let Some((action, at, cursor)) = self.store.hotcorners.ended.take() else { return };
-        let size = self.hotcorners.size as f64;
-        let boxes: HashMap<String, (f64, f64, f64, f64)> = self
-            .outputs
-            .outputs()
-            .filter_map(|o| self.outputs.info(&o))
-            .filter_map(|i| {
-                let (x, y) = i.logical_position.unwrap_or((0, 0));
-                let (w, h) = i.logical_size?;
-                Some((i.name?, (f64::from(x), f64::from(y), f64::from(w), f64::from(h))))
-            })
-            .collect();
-        for w in &mut self.hotcorners.windows {
-            if w.action.as_str() != action {
+    /// The cursor position the end was judged on. With none (the socket
+    /// failed), a corner is taken to still hold the cursor, which asks for
+    /// a real leave rather than inventing one.
+    pub(super) fn hot_corner_ended(&mut self, action: &str, at: i64, cursor: Option<(f64, f64)>) {
+        let size = self.hot.config.as_ref().map_or(corners::DEFAULT_SIZE, |c| c.size) as f64;
+        for i in 0..self.hot.wins.len() {
+            if self.hot.wins[i].action.as_str() != action {
                 continue;
             }
-            let inside = match (cursor, boxes.get(&w.output)) {
-                (Some((cx, cy)), Some(&(x, y, ow, oh))) => {
-                    let e = corners::edges(w.corner);
-                    let left = if e.left { x } else { x + ow - size };
-                    let top = if e.top { y } else { y + oh - size };
-                    cx >= left && cx < left + size && cy >= top && cy < top + size
+            let inside = match (cursor, self.outputs.info(&self.hot.wins[i].output)) {
+                (Some((x, y)), Some(info)) => {
+                    let (ox, oy) = (info.logical_position.unwrap_or((0, 0)).0 as f64, info.logical_position.unwrap_or((0, 0)).1 as f64);
+                    let (ow, oh) = info.logical_size.map_or((0.0, 0.0), |(w, h)| (w as f64, h as f64));
+                    let edges = corners::edges(self.hot.wins[i].corner);
+                    let x0 = if edges.right { ox + ow - size } else { ox };
+                    let y0 = if edges.bottom { oy + oh - size } else { oy };
+                    x >= x0 && x < x0 + size && y >= y0 && y < y0 + size
                 }
                 _ => true,
             };
+            let w = &mut self.hot.wins[i];
             w.arm = arm::on_action_end(w.arm, at, inside);
-            eprintln!("hotcorners: {} {action} ended, cursor {cursor:?} in corner {inside}", w.corner.name());
         }
     }
 }

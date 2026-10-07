@@ -2,10 +2,13 @@
 //! change to the surfaces that read that slice.
 
 pub mod bar;
+pub mod capture;
 pub mod card;
+pub mod lock;
 pub mod panel;
 pub mod shoulders;
 pub mod tray_menu;
+pub mod toasts;
 pub mod tooltip;
 
 use crate::services::theme;
@@ -13,6 +16,10 @@ use crate::store::Topic;
 use crate::wayland::{App, theme_inputs};
 
 pub fn changed(app: &mut App, topic: Topic) {
+    app.lock_changed(topic);
+    if matches!(topic, Topic::Hyprland | Topic::State | Topic::Display | Topic::Config) {
+        crate::services::display::reconcile(&app.store);
+    }
     match topic {
         Topic::Config => {
             let settings = app.store.config.settings().clone();
@@ -22,10 +29,8 @@ pub fn changed(app: &mut App, topic: Topic) {
             app.apply_config();
             theme_inputs(app);
             app.saver_config();
-            app.hotcorners_sync();
         }
         Topic::Screensaver => app.saver_changed(),
-        Topic::HotCorners => app.hotcorners_changed(),
         Topic::Caffeinate => {
             app.saver_idle_changed();
             app.refresh_bar(Some(topic));
@@ -34,18 +39,19 @@ pub fn changed(app: &mut App, topic: Topic) {
             app.saver_update();
             app.refresh_bar(Some(topic));
         }
-        Topic::Hyprland => {
-            app.hotcorners_sync();
-            app.refresh_bar(Some(topic));
-        }
         Topic::State => {
             theme_inputs(app);
             app.refresh_bar(Some(topic));
         }
         Topic::Plugins => app.apply_config(),
+        Topic::Capture => capture::events(app),
         Topic::Theme => app.set_bar_theme(),
         Topic::Tray => {
             app.tray_changed();
+            app.refresh_bar(Some(topic));
+        }
+        Topic::Notifications => {
+            app.toasts_changed();
             app.refresh_bar(Some(topic));
         }
         _ => app.refresh_bar(Some(topic)),

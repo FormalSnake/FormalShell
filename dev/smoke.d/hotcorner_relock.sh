@@ -40,13 +40,10 @@
 # back. The screensaver's overlay covers the corner through its exit fade,
 # so the hand-back enter arrives when the overlay unmaps, after any cooldown
 # counted from the dismiss itself has run out.
-#
-# A shell that serves no `lock` target yet (FS_IMPL=rust before the lock
-# lands) runs the screensaver half alone.
 leg_hotcorner_relock_flag="--hotcorner-relock"
-leg_hotcorner_relock_rust=1
 leg_hotcorner_relock_order=161
 leg_hotcorner_relock_needs="wlrctl wtype jq"
+leg_hotcorner_relock_rust=1
 # The frames here are the ordinary desktop and the lock plate over it, so
 # the base run's fixture window stays where it is.
 leg_hotcorner_relock_fixture_window=keep
@@ -67,7 +64,6 @@ hotcorner_relock_s3_path="$shot_dir/hotcorner-relock-3-parked.txt"
 hotcorner_relock_s4_path="$shot_dir/hotcorner-relock-4-again.txt"
 hotcorner_relock_s5_path="$shot_dir/hotcorner-relock-5-final.txt"
 hotcorner_relock_moves_path="$shot_dir/hotcorner-relock-moves.txt"
-hotcorner_relock_nolock_path="$shot_dir/hotcorner-relock-nolock.txt"
 hotcorner_relock_saver_on_path="$shot_dir/hotcorner-relock-6-saver-on.json"
 hotcorner_relock_saver_parked_path="$shot_dir/hotcorner-relock-7-saver-parked.json"
 hotcorner_relock_saver_again_path="$shot_dir/hotcorner-relock-8-saver-again.json"
@@ -106,9 +102,6 @@ saver_corner() {
   "$wlrctl_bin" pointer move 2 $hotcorner_relock_y >> "$hotcorner_relock_moves_path" 2>&1
 }
 sleep 6
-if $ipc call lock isLocked 2>&1 | grep -q '^Target not found'; then
-  echo "no lock target" > "$hotcorner_relock_nolock_path"
-else
 corner
 # 400ms of dwell, then the lock plate.
 sleep 2
@@ -147,7 +140,6 @@ sleep 1
 "$wtype_bin" -k Return
 sleep 4
 ipc "$hotcorner_relock_s5_path"
-fi
 corners true
 sleep 2
 saver_corner
@@ -203,11 +195,6 @@ leg_hotcorner_relock_assert() {
   [ -f "$hotcorner_relock_saver_shot_path" ] || fail "no screensaver corner frame produced"
   echo "SMOKE_HOTCORNER_RELOCK_SAVER $hotcorner_relock_saver_shot_path"
   echo "SMOKE_HOTCORNER_RELOCK_SAVER_PARKED $hotcorner_relock_saver_parked_shot_path"
-  if [ -f "$hotcorner_relock_nolock_path" ]; then
-    [ "$fs_impl" = rust ] || fail "the QML shell answered no lock target"
-    echo "SMOKE_HOTCORNER_RELOCK lock half skipped: this shell serves no lock target yet"
-    return 0
-  fi
   hotcorner_relock_expect "$hotcorner_relock_s1_path" true \
     "the bottom-right corner locked the session"
   hotcorner_relock_expect "$hotcorner_relock_s2_path" false \

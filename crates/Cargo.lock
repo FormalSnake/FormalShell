@@ -233,9 +233,6 @@ name = "bitflags"
 version = "2.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06"
-dependencies = [
- "serde_core",
-]
 
 [[package]]
 name = "blocking"
@@ -615,17 +612,21 @@ dependencies = [
  "async-executor",
  "async-io",
  "async-process",
+ "base64",
  "calloop",
  "chrono",
  "fastrand",
  "fs-audio",
+ "fs-auth",
  "fs-bluez",
  "fs-chrome",
  "fs-devices",
  "fs-info",
+ "fs-js",
  "fs-media",
  "fs-mpris",
  "fs-network",
+ "fs-notifd",
  "fs-screensaver",
  "fs-system",
  "fs-theme",
@@ -634,6 +635,7 @@ dependencies = [
  "futures-lite",
  "image",
  "inotify",
+ "libc",
  "parley",
  "resvg",
  "serde",
@@ -644,6 +646,7 @@ dependencies = [
  "vello_cpu",
  "yeslogic-fontconfig-sys",
  "zbus",
+ "zeroize",
 ]
 
 [[package]]
@@ -663,7 +666,7 @@ dependencies = [
  "async-io",
  "futures-lite",
  "libc",
- "pam-client2",
+ "pam-sys2",
  "zbus",
  "zeroize",
 ]
@@ -694,6 +697,7 @@ dependencies = [
 name = "fs-devices"
 version = "0.1.1"
 dependencies = [
+ "fs-info",
  "fs-js",
  "percent-encoding",
  "regex",
@@ -1462,18 +1466,6 @@ checksum = "9aa2b01e1d916879f73a53d01d1d6cee68adbb31d6d9177a8cfce093cced1d50"
 dependencies = [
  "futures-core",
  "pin-project-lite",
-]
-
-[[package]]
-name = "pam-client2"
-version = "0.5.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "407daa00f98b05147dbbaa6d2f6bce574e76794fa4952a5b38764681a23dde5f"
-dependencies = [
- "bitflags 2.13.2",
- "libc",
- "pam-sys2",
- "rustversion",
 ]
 
 [[package]]

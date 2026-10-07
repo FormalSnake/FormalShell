@@ -5,9 +5,9 @@
 //! JSONL, restarted on a doubling backoff, and the verbs the panel drives it
 //! with: invoke, dismiss, clear, pair. No bridge on PATH is
 //! `installed: false` and the cell never appears; a bridge whose daemon does
-//! not own its bus name is not `observer`. Neither fakes a phone. The
-//! notification mirror belongs to the notification milestone and the Apple
-//! Media Service half to [`ams`](crate::services::ams).
+//! not own its bus name is not `observer`. Neither fakes a phone. Each
+//! arrival the routing lets through is mirrored into the notification
+//! service; the Apple Media Service half is [`ams`](crate::services::ams).
 //!
 //! The service owns the phone's own history (`recent`), newest first, and
 //! publishes the whole state as one snapshot.
@@ -23,6 +23,7 @@ use futures_lite::{AsyncBufReadExt, FutureExt, StreamExt};
 
 use super::settings;
 use crate::runtime::Ctx;
+use crate::services::notifications;
 use crate::services::proc::MISSING;
 use crate::services::ams;
 use crate::store;
@@ -102,6 +103,8 @@ struct Session {
     pair_generation: u64,
     finish_pairing: bool,
     restart_timer: bool,
+    /// What the notification mirror is handed, drained after each line.
+    mirror: Vec<notifications::Diff>,
 }
 
 fn now_ms() -> f64 {
@@ -145,15 +148,22 @@ impl Session {
             }
             Event::Notification(entry) => {
                 let cfg = settings();
-                let block = block_list();
-                if !iphone::is_blocked(&entry, &block) {
+                let route = iphone::RouteConfig {
+                    enable: cfg.flag("iphone.notifications.enable", true),
+                    block: block_list(),
+                    focus: cfg.str("iphone.notifications.focus").unwrap_or("respect").to_owned(),
+                };
+                match iphone::route(&entry, &route) {
+                    Verdict::Drop => {}
+                    v => self.mirror.push(notifications::Diff::Phone { record: entry.clone(), quiet: v == Verdict::Quiet }),
+                }
+                if !iphone::is_blocked(&entry, &route.block) {
                     if self.state.session != entry.session && entry.session != 0 {
                         self.state.session = entry.session;
                     }
                     let fresh = self.known.insert(entry.id);
                     if fresh {
-                        let mode = cfg.str("iphone.notifications.focus").unwrap_or("respect");
-                        if iphone::focus_verdict(Some(&entry), mode) != Verdict::Drop {
+                        if iphone::focus_verdict(Some(&entry), &route.focus) != Verdict::Drop {
                             self.state.unread += 1;
                         }
                         if !entry.preexisting {
@@ -166,6 +176,7 @@ impl Session {
             Event::Dismiss { id } => {
                 self.known.remove(&id);
                 self.state.recent = iphone::remove_by_id(&self.state.recent, id);
+                self.mirror.push(notifications::Diff::DropPhone(id));
             }
             Event::PairingCode { code } => self.state.pairing_code = code,
             Event::Advertising { hci, .. } => {
@@ -344,6 +355,9 @@ async fn listen(ctx: &Ctx, session: &mut Session, inbox: &(async_channel::Sender
         next_age = (!session.arrivals.is_empty()).then(|| Instant::now() + FOCUS_TICK);
         if changed {
             publish(ctx, &session.state);
+        }
+        for d in session.mirror.drain(..) {
+            ctx.publish(store::Diff::Notifications(d));
         }
     }
     child.status().await.ok().and_then(|s| s.code()).unwrap_or(-1)

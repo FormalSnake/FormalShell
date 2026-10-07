@@ -168,6 +168,25 @@ fn stub() -> Registry<()> {
                 ],
             },
             Target {
+                name: "network",
+                functions: vec![
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                    f("connect", &[("ssid", Type::String), ("psk", Type::String)], Type::String, |_, a| {
+                        s(format!("connect {} {}", a[0].str(), a[1].str()))
+                    }),
+                    f(
+                        "connectEap",
+                        &[("ssid", Type::String), ("identity", Type::String), ("password", Type::String)],
+                        Type::String,
+                        |_, a| s(format!("connectEap {} {} {}", a[0].str(), a[1].str(), a[2].str())),
+                    ),
+                    f("forget", &[("ssid", Type::String)], Type::String, |_, a| s(format!("forget {}", a[0].str()))),
+                    f("wifi", &[("enabled", Type::Bool)], Type::String, |_, a| s(format!("wifi {}", a[0].bool()))),
+                    f("speedtest", &[], Type::String, |_, _| s("ok")),
+                    f("speedstatus", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
                 name: "plugins",
                 functions: vec![
                     f("list", &[], Type::String, |_, _| s("[]")),
@@ -181,6 +200,14 @@ fn stub() -> Registry<()> {
                     f("toggle", &[], Type::String, |_, _| s("ok")),
                     f("enable", &[], Type::String, |_, _| s("ok")),
                     f("disable", &[], Type::String, |_, _| s("ok")),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
+                name: "lock",
+                functions: vec![
+                    f("lock", &[], Type::String, |_, _| s("ok")),
+                    f("isLocked", &[], Type::String, |_, _| s("false")),
                     f("status", &[], Type::String, |_, _| s("{}")),
                 ],
             },
@@ -211,6 +238,107 @@ fn stub() -> Registry<()> {
                     f("dismiss", &[("id", Type::String)], Type::String, |_, a| s(format!("dismiss {}", a[0].str()))),
                     f("clear", &[], Type::String, |_, _| s("ok")),
                     f("markRead", &[], Type::String, |_, _| s("ok")),
+                ],
+            },
+            Target {
+                name: "screenshot",
+                functions: vec![
+                    f("full", &[("processing", Type::String)], Type::String, |_, a| s(format!("full {}", a[0].str()))),
+                    f("region", &[("processing", Type::String)], Type::String, |_, a| s(format!("region {}", a[0].str()))),
+                    f("cancel", &[], Type::String, |_, _| s("ok")),
+                    f("pick", &[("mode", Type::String), ("processing", Type::String)], Type::String, |_, a| {
+                        s(format!("pick {} {}", a[0].str(), a[1].str()))
+                    }),
+                    f("key", &[("name", Type::String)], Type::String, |_, a| s(format!("key {}", a[0].str()))),
+                    f("pickerStatus", &[], Type::String, |_, _| s("{}")),
+                    f("edit", &[("path", Type::String)], Type::String, |_, a| s(format!("edit {}", a[0].str()))),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
+                name: "display",
+                functions: vec![
+                    f("scale", &[("output", Type::String), ("scale", Type::Real)], Type::String, |_, a| {
+                        s(format!("scale {} {}", a[0].str(), js_number(a[1].real())))
+                    }),
+                    f("mirror", &[("output", Type::String), ("source", Type::String)], Type::String, |_, a| {
+                        s(format!("mirror {} {}", a[0].str(), a[1].str()))
+                    }),
+                    f("enable", &[("output", Type::String), ("enabled", Type::Bool)], Type::String, |_, a| {
+                        s(format!("enable {} {}", a[0].str(), a[1].bool()))
+                    }),
+                ],
+            },
+            Target {
+                name: "hdr",
+                functions: vec![
+                    f("toggle", &[], Type::String, |_, _| s("ok")),
+                    f("enable", &[], Type::String, |_, _| s("ok")),
+                    f("disable", &[], Type::String, |_, _| s("ok")),
+                    f("setOutput", &[("output", Type::String), ("enabled", Type::Bool)], Type::String, |_, a| {
+                        s(format!("setOutput {} {}", a[0].str(), a[1].bool()))
+                    }),
+                    f("rule", &[("output", Type::String)], Type::String, |_, a| s(format!("rule {}", a[0].str()))),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
+                name: "capture",
+                functions: vec![
+                    f("text", &[], Type::String, |_, _| s("ok")),
+                    f("color", &[], Type::String, |_, _| s("ok")),
+                    f("textAt", &[("geometry", Type::String)], Type::String, |_, a| s(format!("textAt {}", a[0].str()))),
+                    f("colorAt", &[("geometry", Type::String)], Type::String, |_, a| s(format!("colorAt {}", a[0].str()))),
+                    f("cancel", &[], Type::String, |_, _| s("ok")),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
+                name: "record",
+                functions: vec![
+                    f("start", &[("scope", Type::String), ("audio", Type::String)], Type::String, |_, a| {
+                        s(format!("start {} {}", a[0].str(), a[1].str()))
+                    }),
+                    f("startCapped", &[("scope", Type::String), ("audio", Type::String), ("maxHeight", Type::String)], Type::String, |_, a| {
+                        s(format!("startCapped {} {} {}", a[0].str(), a[1].str(), a[2].str()))
+                    }),
+                    f("startAt", &[("geometry", Type::String), ("audio", Type::String)], Type::String, |_, a| {
+                        s(format!("startAt {} {}", a[0].str(), a[1].str()))
+                    }),
+                    f("stop", &[], Type::String, |_, _| s("ok")),
+                    f("toggle", &[("scope", Type::String), ("audio", Type::String)], Type::String, |_, a| {
+                        s(format!("toggle {} {}", a[0].str(), a[1].str()))
+                    }),
+                    f("gif", &[("path", Type::String)], Type::String, |_, a| s(format!("gif {}", a[0].str()))),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
+                name: "notifications",
+                functions: vec![
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                    f("dndState", &[], Type::String, |_, _| s("off")),
+                    f("toggleDnd", &[], Type::String, |_, _| s("on")),
+                    f("setDnd", &[("on", Type::Bool)], Type::String, |_, a| s(if a[0].bool() { "on" } else { "off" })),
+                    f("showHistory", &[], Type::String, |_, _| s("ok")),
+                    f("clear", &[], Type::String, |_, _| s("ok")),
+                    f("clearPending", &[], Type::String, |_, _| s("ok")),
+                    f("markAllSeen", &[], Type::String, |_, _| s("ok")),
+                    f("dismissAll", &[], Type::String, |_, _| s("ok")),
+                    f("dismissOne", &[], Type::String, |_, _| s("none")),
+                    f("invokeLast", &[], Type::String, |_, _| s("ok")),
+                    f("expand", &[("state", Type::String)], Type::String, |_, a| s(format!("expand {}", a[0].str()))),
+                ],
+            },
+            Target {
+                name: "reminder",
+                functions: vec![
+                    f("set", &[("duration", Type::String), ("message", Type::String)], Type::String, |_, a| {
+                        s(format!("set {} {}", a[0].str(), a[1].str()))
+                    }),
+                    f("show", &[], Type::String, |_, _| s("ok")),
+                    f("clear", &[], Type::String, |_, _| s("ok: cleared 0")),
+                    f("status", &[], Type::String, |_, _| s("{}")),
                 ],
             },
             Target {
@@ -347,11 +475,20 @@ fn signatures_match_qml() {
         super::airplay::target(),
         super::visualizer::target(),
         super::monitor::target(),
+        super::network::target(),
         super::plugins::target(),
         super::caffeinate::target(),
         super::gallery::target(),
         super::calendar::target(),
         super::iphone::target(),
+        super::screenshot::target(),
+        super::capture::target(),
+        super::record::target(),
+        super::display::target(),
+        super::display::hdr(),
+        super::notifications::target(),
+        super::notifications::reminder(),
+        super::lock::target(),
     ] {
         let defs: Vec<String> = real.functions.iter().map(|f| f.definition()).collect();
         let qml = stub.targets.iter().find(|t| t.name == real.name).expect("a stub target");

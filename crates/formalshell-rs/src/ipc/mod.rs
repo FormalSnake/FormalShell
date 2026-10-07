@@ -11,23 +11,30 @@ mod airplay;
 mod bar;
 mod caffeinate;
 mod calendar;
+mod capture;
 mod console;
 #[cfg(test)]
 mod cli;
 mod debug;
+mod display;
 mod earbuds;
 mod gallery;
 mod iphone;
+mod lock;
 #[cfg(test)]
 mod golden;
 mod media;
+mod notifications;
 mod overnight;
 mod monitor;
+mod network;
 mod panel;
 mod plugins;
 mod radio;
+mod record;
 mod screensaver;
 pub mod registry;
+mod screenshot;
 mod theme;
 mod tray;
 mod visualizer;
@@ -65,15 +72,24 @@ fn registry() ->&'static Registry<App> {
             tray::target(),
             overnight::target(),
             earbuds::target(),
+            display::target(),
+            display::hdr(),
             workspaces::target(),
             monitor::target(),
+            network::target(),
             plugins::target(),
             caffeinate::target(),
             gallery::target(),
+            lock::target(),
             calendar::target(),
             iphone::target(),
             console::target(),
             screensaver::target(),
+            screenshot::target(),
+            capture::target(),
+            record::target(),
+            notifications::target(),
+            notifications::reminder(),
         ],
     })
 }
