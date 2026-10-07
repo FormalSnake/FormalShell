@@ -245,6 +245,8 @@ pub struct App {
     launcher_styles: Vec<crate::text::TextStyle>,
     /// The launcher's faces are warmed once, after the bar is on screen.
     faces_warmed: bool,
+    /// The launcher card's pool, buffers and canvas while it is shut.
+    launch_kept: Option<crate::surface::Kept>,
     /// The network the launcher's password step is for, and the identity
     /// an enterprise one was given first (WifiService.pendingSsid).
     wifi_pending: Option<(String, String)>,
@@ -328,6 +330,7 @@ impl App {
             launcher_warm: false,
             launcher_styles: Vec::new(),
             faces_warmed: false,
+            launch_kept: None,
             wifi_pending: None,
             mods: Default::default(),
             menu_buttons: None,
@@ -1291,6 +1294,7 @@ impl App {
             self.faces_warmed = true;
             crate::phase("bar mapped");
             self.warm_faces();
+            self.prefault_launcher();
             self.launcher_warm = true;
         }
         self.step_menu(now);

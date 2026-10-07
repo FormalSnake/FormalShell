@@ -41,6 +41,25 @@ impl Renderer {
         &self.canvas
     }
 
+    pub fn canvas_bytes_mut(&mut self) -> &mut [u8] {
+        self.canvas.data_as_u8_slice_mut()
+    }
+
+    /// `rect` back to transparent, without drawing anything.
+    pub fn clear(&mut self, rect: IRect) {
+        let size = IRect::new(0, 0, self.width() as i32, self.height() as i32);
+        let rect = rect.intersect(&size);
+        if rect.is_empty() {
+            return;
+        }
+        let stride = self.width() as usize * 4;
+        let bytes = self.canvas.data_as_u8_slice_mut();
+        for row in rect.y..rect.bottom() {
+            let start = row as usize * stride + rect.x as usize * 4;
+            bytes[start..start + rect.w as usize * 4].fill(0);
+        }
+    }
+
     pub fn render(&mut self, scene: &Scene, rect: IRect) {
         let rect = rect.intersect(&scene.size);
         if rect.is_empty() {

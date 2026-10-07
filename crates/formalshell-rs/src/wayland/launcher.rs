@@ -20,6 +20,8 @@ use crate::surfaces::launcher::{Out, Shown};
 use crate::surfaces::modal::{Modal, Part};
 use crate::text::{Family, TextStyle};
 
+/// How long one loop turn draws the launcher before handing the loop back.
+const LAUNCHER_SLICE: std::time::Duration = std::time::Duration::from_millis(3);
 const WIFI_PASSWORD: &str = "wifi-password";
 const WIFI_IDENTITY: &str = "wifi-identity";
 const REMINDER_SET: &str = "reminder-set";
@@ -87,14 +89,38 @@ impl App {
         Modal::new(theme, surface, band, dim, output, inset, ends, self.motion_scale, self.cast, deform_amount)
     }
 
+    /// The launcher's window gone, its card's pool, buffers and canvas kept
+    /// for the next open.
+    fn drop_launch(&mut self) {
+        if let Some(w) = self.launch.take() {
+            self.launch_kept = Some(w.shown.modal.surface.keep());
+        }
+    }
+
+    /// The first open's pool and canvas, faulted in while the launcher is
+    /// shut; every later open takes over the last one's.
+    pub(super) fn prefault_launcher(&mut self) {
+        let Some(runtime) = &self.runtime else { return };
+        if self.launch_kept.is_some() || self.launch.is_some() {
+            return;
+        }
+        let (w, h) = self.output_size();
+        let size = (w as i32, (h - self.top_inset()) as i32);
+        self.launch_kept = crate::surface::Kept::prefaulted(&self.shm, size, runtime.pool());
+    }
+
     /// The window for an open, created fresh unless one is already up.
     fn show_launcher(&mut self) {
         self.launcher_resolve = true;
         if self.launch.as_ref().is_some_and(|w| w.shown.modal.open) {
             return;
         }
-        self.launch = None;
-        let modal = self.new_modal(["menu", "menu-scrim-band", "menu-scrim"], "formalshell:menu", Layer::Overlay, Shown::DEFORM_AMOUNT);
+        self.drop_launch();
+        let mut modal = self.new_modal(["menu", "menu-scrim-band", "menu-scrim"], "formalshell:menu", Layer::Overlay, Shown::DEFORM_AMOUNT);
+        if let Some(kept) = self.launch_kept.take() {
+            modal.surface.adopt(kept);
+        }
+        modal.surface.raster_budget = Some(LAUNCHER_SLICE);
         let shown = Shown::new(&self.store.theme.theme, modal, self.output_size(), self.motion_scale);
         self.launch = Some(Window { shown, scan: None, pressed: None });
         self.log("menu mapped");
@@ -679,12 +705,15 @@ impl App {
     }
 
     /// Every face and size the launcher draws its words in, warmed once the
-    /// bar is up with the glyphs most rows use.
+    /// bar is up with the glyphs most rows use, a glyph per job so the
+    /// shaper's lock is never held for more than one outline. Glyph by
+    /// glyph across every style, so each face exists after the first round.
     pub(super) fn warm_faces(&mut self) {
         let Some(runtime) = &self.runtime else { return };
-        let sample = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,:;-_/()'";
+        let sample = "aABCDEFGHIJKLMNOPQRSTUVWXYZbcdefghijklmnopqrstuvwxyz0123456789.,:;-_/()'";
+        let styles = warm_styles(&self.bar.kit.look, &self.store.theme.theme.font_size);
         let jobs: Vec<(String, TextStyle)> =
-            warm_styles(&self.bar.kit.look, &self.store.theme.theme.font_size).into_iter().map(|st| (sample.to_owned(), st)).collect();
+            sample.chars().flat_map(|c| styles.iter().map(move |st| (c.to_string(), *st))).collect();
         let text = self.bar.kit.text.clone();
         runtime.pool().submit(move || text.warm(&jobs));
     }
@@ -699,7 +728,7 @@ impl App {
             }
         }
         if self.launch.as_ref().is_some_and(|w| w.finished(now)) {
-            self.launch = None;
+            self.drop_launch();
             self.sync_join();
             self.log("menu unmapped");
             if std::mem::take(&mut self.launcher.paste) && !self.launcher.open {
@@ -724,7 +753,9 @@ impl App {
         let Some(w) = &mut self.launch else { return };
         let animating = w.shown.animating(now) || self.launcher.rows_moving(now);
         let t1 = Instant::now();
-        if self.launcher.dirty || animating || !w.shown.modal.surface.mapped {
+        // A frame still being drawn in slices keeps the scene it started on.
+        let rastering = w.shown.modal.surface.rastering();
+        if !rastering && (self.launcher.dirty || animating || !w.shown.modal.surface.mapped) {
             w.shown.modal.sync_region(&self.compositor);
             self.bar.kit.seen = Some(std::mem::take(&mut self.launcher_styles));
             w.shown.layout(&mut self.launcher, &self.store, theme, &mut self.bar.kit, now);
@@ -734,6 +765,13 @@ impl App {
         let laid = t1.elapsed();
         let animating = w.shown.animating(now) || self.launcher.rows_moving(now);
         w.shown.modal.present(animating, now, &qh);
+        // The rest of a sliced frame on the next turn, after whatever the
+        // loop has waiting (the bar's callback first).
+        if w.shown.modal.surface.rastering()
+            && let Some(handle) = &self.handle
+        {
+            handle.insert_idle(|_| {});
+        }
         if t0.elapsed().as_millis() >= 8 {
             eprintln!(
                 "event loop: slow launcher t={}ms resolve_us={} layout_us={} total_us={}",
@@ -773,7 +811,7 @@ impl App {
     }
 
     pub(super) fn launcher_closed(&mut self) {
-        self.launch = None;
+        self.drop_launch();
         self.launcher.close();
         self.sync_join();
     }
