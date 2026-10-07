@@ -1164,24 +1164,25 @@ impl App {
 
     pub fn receive(&mut self, msg: Msg) {
         let t0 = Instant::now();
-        let what = match msg {
-            Msg::Diff(diff) => {
-                let topic = self.store.apply(diff);
-                if let Some(topic) = topic {
-                    surfaces::changed(self, topic);
-                }
-                format!("diff {topic:?}")
-            }
-            Msg::Call(request, reply) => {
-                let what = format!("{request:?}");
-                self.log(&what);
-                let _ = reply.try_send(ipc::dispatch(self, &request));
-                what
-            }
-        };
-        if t0.elapsed().as_millis() >= 8 {
-            eprintln!("event loop: slow receive t={}ms {what} us={}", self.started.elapsed().as_millis(), t0.elapsed().as_micros());
+        let Msg::Diff(diff) = msg;
+        let topic = self.store.apply(diff);
+        if let Some(topic) = topic {
+            surfaces::changed(self, topic);
         }
+        if t0.elapsed().as_millis() >= 8 {
+            eprintln!("event loop: slow receive t={}ms diff {topic:?} us={}", self.started.elapsed().as_millis(), t0.elapsed().as_micros());
+        }
+    }
+
+    /// One IPC call, answered here on the UI loop.
+    pub fn call(&mut self, request: &ipc::Request) -> String {
+        let t0 = Instant::now();
+        self.log(&format!("{request:?}"));
+        let reply = ipc::dispatch(self, request);
+        if t0.elapsed().as_millis() >= 8 {
+            eprintln!("event loop: slow call t={}ms {request:?} us={}", self.started.elapsed().as_millis(), t0.elapsed().as_micros());
+        }
+        reply
     }
 
     /// What an input on a cell asks for. `anchor` is that cell's centre

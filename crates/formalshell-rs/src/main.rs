@@ -76,6 +76,7 @@ fn main() {
     app.runtime = Some(runtime);
     phase("runtime");
     app.set_handle(handle.clone());
+    ipc::listen(&handle);
 
     let signal = event_loop.get_signal();
     let mut cpu_mark = thread_cpu_us();
