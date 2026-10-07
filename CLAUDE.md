@@ -53,10 +53,10 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
   wrong password then the real one over `wtype`) and pulls
   `artifacts/greeter/`. It fails unless the session log shows a real
   `pam_authenticate: AUTH_ERR` on the wrong attempt.
-- `crates/formalshell-rs/tests/ipc-golden.jsonl` is the IPC contract,
-  fixed: every target, function, argument error and output string, replayed
-  through `formalshell-ipc`'s parser and the registry by `ipc/golden.rs`.
-  A change to the IPC surface changes this file in the same commit.
+- `crates/formalshell-rs/tests/ipc-golden.jsonl` is the recorded IPC
+  contract, kept fixed: argument parsing, argument errors and output
+  strings, replayed through `formalshell-ipc`'s parser and the registry by
+  `ipc/golden.rs`. The live list of targets is `formalshell-ipc show`.
 - `just tarball`: the release tarball install.sh unpacks
   (`dev/tarball.sh`), built for this machine's arch in a debian:bookworm
   container, into `artifacts/tarball/`. It fails on a binary needing glibc
