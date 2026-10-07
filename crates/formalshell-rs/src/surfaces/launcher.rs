@@ -133,6 +133,48 @@ pub struct Model {
     pub mirror_current: String,
     /// The monitor tiles' history lines, started when the route opens.
     monitor_history: MonitorHistory,
+    /// RowListView.qml's transitions: rows that moved, arrived or left on
+    /// the last re-rank inside one level.
+    motion: RowMotion,
+    /// `debug motionScale`, which the row transitions run at.
+    pub motion_scale: f64,
+}
+
+/// AddTransition, MoveTransition and RemoveTransition: an arriving row
+/// fades in, one that kept its place in the list slides from where it was,
+/// one that left fades out where it stood. Only inside one level and one
+/// view, and not past `ROW_RESET_LIMIT` rows, where the list is refilled.
+#[derive(Default)]
+struct RowMotion {
+    level: Option<Option<String>>,
+    view: Option<View>,
+    moved: std::collections::HashMap<String, (f64, Instant)>,
+    added: std::collections::HashMap<String, Instant>,
+    left: Vec<(Node, Slot, Instant)>,
+    ms: (f64, f64, f64),
+}
+
+const ROW_RESET_LIMIT: usize = 64;
+
+impl RowMotion {
+    fn progress(at: Instant, ms: f64, now: Instant) -> f64 {
+        if ms <= 0.0 { 1.0 } else { (now.saturating_duration_since(at).as_secs_f64() * 1000.0 / ms).min(1.0) }
+    }
+
+    fn running(&self, now: Instant) -> bool {
+        self.moved.values().any(|(_, at)| Self::progress(*at, self.ms.0, now) < 1.0)
+            || self.added.values().any(|at| Self::progress(*at, self.ms.1, now) < 1.0)
+            || self.left.iter().any(|(_, _, at)| Self::progress(*at, self.ms.2, now) < 1.0)
+    }
+
+    /// The slide still owed to a row, in body pixels.
+    fn offset(&self, id: &str, now: Instant) -> f64 {
+        self.moved.get(id).map_or(0.0, |(dy, at)| dy * (1.0 - Clock::Spatial.curve().ease(Self::progress(*at, self.ms.0, now))))
+    }
+
+    fn alpha(&self, id: &str, now: Instant) -> f32 {
+        self.added.get(id).map_or(1.0, |at| Clock::Effects.curve().ease(Self::progress(*at, self.ms.1, now)) as f32)
+    }
 }
 
 /// One reading per monitor tick: CPU, memory, GPU, and the network's
@@ -209,6 +251,8 @@ impl Default for Model {
             monitor_armed: None,
             mirror_current: String::new(),
             monitor_history: MonitorHistory::default(),
+            motion: RowMotion::default(),
+            motion_scale: 1.0,
             placed: false,
             want: String::new(),
             from_keys: true,
@@ -355,6 +399,42 @@ impl Model {
         self.dirty = true;
     }
 
+    /// Menu/appviews.js: the routes that draw a whole view of their own.
+    pub fn app_view(&self) -> bool {
+        self.mode == Mode::Menu && matches!(self.level.as_deref(), Some(MONITOR_ROUTE | MIRROR_ROUTE))
+    }
+
+    /// Menu.qml's `_cardWidth`: one width per level kind, which the content
+    /// is laid out at while the card itself morphs into it.
+    pub fn card_width(&self, theme: &Theme) -> f64 {
+        let s = &theme.space;
+        if self.app_view() {
+            s.popup_width_menu_app
+        } else if self.split() {
+            s.popup_width_menu_split
+        } else {
+            s.popup_width_menu
+        }
+    }
+
+    /// The width inside the card's padding.
+    pub fn content_width(&self, theme: &Theme) -> f64 {
+        self.card_width(theme) - theme.space.panel_padding * 2.0
+    }
+
+    /// Menu.qml's `_kindHeight` and `_heightCap`.
+    fn kind_height(&self, theme: &Theme, output_h: f64) -> f64 {
+        let s = &theme.space;
+        let (kind, share) = if self.app_view() {
+            (s.popup_height_menu_app, fs_theme::tokens::LAUNCHER.app_height_share)
+        } else if self.split() {
+            (s.popup_height_menu_split, fs_theme::tokens::LAUNCHER.height_share)
+        } else {
+            (s.popup_height_menu, fs_theme::tokens::LAUNCHER.height_share)
+        };
+        if output_h > 0.0 { kind.min(output_h * share) } else { kind }
+    }
+
     pub fn on_mirror(&self) -> bool {
         self.mode == Mode::Menu && self.level.as_deref() == Some(MIRROR_ROUTE)
     }
@@ -373,7 +453,7 @@ impl Model {
     /// The feed box: the body's width, a 4:3 share of its height.
     pub fn mirror_box(&self, theme: &Theme) -> (f64, f64) {
         let s = &theme.space;
-        let w = s.popup_width_menu - s.panel_padding * 2.0 - s.sm * 2.0;
+        let w = self.content_width(theme) - s.sm * 2.0;
         (w.round(), (w * 3.0 / 4.0).min(self.body_h - s.lg * 2.0).max(1.0).round())
     }
 
@@ -658,6 +738,12 @@ impl Model {
             },
         );
         let view_changed = view != self.view;
+        let before: std::collections::HashMap<String, (Node, Slot)> = if matches!(view, View::Rows | View::AppGrid) {
+            let skip = if self.view == View::AppGrid { self.app_count } else { 0 };
+            self.rows.iter().cloned().zip(self.layout.slots.iter().copied()).skip(skip).map(|(n, s)| (n.id.clone(), (n, s))).collect()
+        } else {
+            Default::default()
+        };
         self.rows = rows;
         self.sections = sections;
         self.view = view;
@@ -671,15 +757,64 @@ impl Model {
         let ids: Vec<&str> = self.rows.iter().map(|r| r.id.as_str()).collect();
         let index = nav::rederive(&self.want, self.cursor as i64, &ids, fresh, self.placed);
         self.key = key;
-        self.monitor_strip_h = if view == View::Monitor { ui::measure(&monitor_strip(store, theme, &self.monitor_history), theme.space.popup_width_menu, theme, kit).1 } else { 0.0 };
+        self.monitor_strip_h = if view == View::Monitor { ui::measure(&monitor_strip(store, theme, &self.monitor_history), self.content_width(theme), theme, kit).1 } else { 0.0 };
         self.picker_switch_h = if self.picker_switch(store) { ui::measure(&picker_switch(self), 400.0, theme, kit).1 } else { 0.0 };
         self.layout(theme, kit);
+        self.row_motion(before, view, theme);
         self.place(index, false);
         if fresh || view_changed {
             self.scroll = 0.0;
             self.follow();
         }
         self.dirty = true;
+    }
+
+    /// Starts the transitions a re-rank owes, from where each row was.
+    fn row_motion(&mut self, before: std::collections::HashMap<String, (Node, Slot)>, view: View, theme: &Theme) {
+        let now = Instant::now();
+        let same = self.motion.level.as_ref() == Some(&self.level) && self.motion.view == Some(view);
+        self.motion.level = Some(self.level.clone());
+        self.motion.view = Some(view);
+        let k = self.motion_scale;
+        let m = &mut self.motion;
+        m.ms = (Clock::Spatial.ms(theme) * k, Clock::Effects.ms(theme) * k, Clock::EffectsFast.ms(theme) * k);
+        m.moved.retain(|_, (_, at)| RowMotion::progress(*at, m.ms.0, now) < 1.0);
+        m.added.retain(|_, at| RowMotion::progress(*at, m.ms.1, now) < 1.0);
+        m.left.retain(|(_, _, at)| RowMotion::progress(*at, m.ms.2, now) < 1.0);
+        let animate = same && matches!(view, View::Rows | View::AppGrid) && !before.is_empty() && before.len() <= ROW_RESET_LIMIT && self.rows.len() <= ROW_RESET_LIMIT;
+        if !animate {
+            m.moved.clear();
+            m.added.clear();
+            m.left.clear();
+            return;
+        }
+        let mut seen = std::collections::HashSet::new();
+        let skip = if view == View::AppGrid { self.app_count } else { 0 };
+        for (row, slot) in self.rows.iter().zip(self.layout.slots.iter()).skip(skip) {
+            seen.insert(row.id.as_str());
+            match before.get(&row.id) {
+                Some((_, was)) => {
+                    let owed = m.moved.get(&row.id).map_or(0.0, |(dy, at)| dy * (1.0 - Clock::Spatial.curve().ease(RowMotion::progress(*at, m.ms.0, now))));
+                    let dy = was.y + owed - slot.y;
+                    if dy.abs() > 0.5 {
+                        m.moved.insert(row.id.clone(), (dy, now));
+                    }
+                }
+                None => {
+                    m.added.insert(row.id.clone(), now);
+                }
+            }
+        }
+        for (id, (node, slot)) in before {
+            if !seen.contains(id.as_str()) && node.kind != NodeKind::Note {
+                m.left.push((node, slot, now));
+            }
+        }
+    }
+
+    /// A transition is still running, so the body draws again.
+    pub fn rows_moving(&self, now: Instant) -> bool {
+        self.motion.running(now)
     }
 
     fn place(&mut self, index: usize, travels: bool) {
@@ -693,7 +828,7 @@ impl Model {
     /// rows, EmojiGridView.qml's tiles.
     fn layout(&mut self, theme: &Theme, kit: &mut Kit) {
         let s = &theme.space;
-        let width = theme.space.popup_width_menu - s.panel_padding * 2.0;
+        let width = self.content_width(theme);
         let inset = s.lg;
         let gutter = s.sm;
         let heading_h = ui::measure(&w::section_label(s, "Ag", None, true), width, theme, kit).1;
@@ -1385,6 +1520,11 @@ pub struct Shown {
     pub open: bool,
     /// The card's top, settled: the scroll's own animation.
     scroll: Animated,
+    /// The card's width and height travelling between level kinds.
+    morph: (Animated, Animated),
+    /// One widget tree per row mid-transition, drawn over the body.
+    overlays: Vec<Ui>,
+    top_node: NodeId,
 }
 
 impl Shown {
@@ -1409,6 +1549,9 @@ impl Shown {
             region: None,
             open: true,
             scroll: Animated::new(0.0, Clock::SpatialFast.curve()),
+            overlays: Vec::new(),
+            top_node: top,
+            morph: (Animated::new(theme.space.popup_width_menu, Clock::Spatial.curve()), Animated::new(0.0, Clock::Spatial.curve())),
         }
     }
 
@@ -1417,7 +1560,11 @@ impl Shown {
     }
 
     pub fn animating(&self, now: Instant) -> bool {
-        self.card.animating(now) || self.scroll.running(now) || self.wake.is_some_and(|w| w <= now)
+        self.card.animating(now)
+            || self.scroll.running(now)
+            || self.morph.0.running(now)
+            || self.morph.1.running(now)
+            || self.wake.is_some_and(|w| w <= now)
     }
 
     pub fn close(&mut self, now: Instant) {
@@ -1449,8 +1596,7 @@ impl Shown {
         let s = &theme.space;
         let band = s.control_height + s.panel_padding * 2.0 + theme.border_width;
         let chrome = band * 2.0;
-        let cap = if output_h > 0.0 { output_h * fs_theme::tokens::LAUNCHER.height_share } else { s.popup_height_menu };
-        let body = if m.mode == Mode::Input { 0.0 } else { (s.popup_height_menu.min(cap) - chrome).max(0.0) };
+        let body = if m.mode == Mode::Input { 0.0 } else { (m.kind_height(theme, output_h) - chrome).max(0.0) };
         (band, chrome, body)
     }
 
@@ -1462,7 +1608,18 @@ impl Shown {
             m.body_h = body_h;
             m.follow();
         }
-        let (w_, h_) = (s.popup_width_menu, chrome + body_h);
+        // SizeMorph.qml: a level that changes kind travels into its size;
+        // the first frame after an open lands on it.
+        let (tw, th) = (m.card_width(theme), chrome + body_h);
+        if self.surface.mapped && self.open {
+            let ms = Clock::Spatial.ms(theme) * self.scale;
+            self.morph.0.set(now, tw, ms);
+            self.morph.1.set(now, th, ms);
+        } else {
+            self.morph.0.jump(tw);
+            self.morph.1.jump(th);
+        }
+        let (w_, h_) = (self.morph.0.value(now).round(), self.morph.1.value(now).round());
         let x = ((self.output.0 - w_) / 2.0).round();
         let pad = s.panel_padding;
         let max_top = self.output.1 - h_ - pad;
@@ -1513,13 +1670,28 @@ impl Shown {
         let viewport = IRect::new((fx + pad).round() as i32, body_top.round() as i32, inner_w.round() as i32, body_h.round() as i32);
         let body_clip = viewport.intersect(&clip);
         let scroll = self.scroll.value(now);
-        let body = if body_h > 0.0 { body_el(m, store, theme, kit, scroll, body_h) } else { w::space(0.0) };
+        let mut overlays = Vec::new();
+        let body = if body_h > 0.0 { body_el(m, store, theme, kit, scroll, body_h, &mut overlays) } else { w::space(0.0) };
         self.body.halo_owned = false;
         self.body.cursor = None;
         let origin = (fx + pad, body_top - scroll);
         let d = self.body.draw(&body, Rect::new(origin.0, origin.1, origin.0 + inner_w, origin.1 + m.layout.content_h), Some(body_clip), alpha, theme, kit, scene, now);
         if d.animating {
             self.wake = Some(now);
+        }
+        while self.overlays.len() < overlays.len() {
+            self.overlays.push(Ui::new(Some(self.top_node)));
+        }
+        for (i, ui) in self.overlays.iter_mut().enumerate() {
+            match overlays.get(i) {
+                Some((el, r)) => {
+                    let at = Rect::new(origin.0 + r.x0, origin.1 + r.y0, origin.0 + r.x1, origin.1 + r.y1);
+                    ui.draw(el, at, Some(body_clip), alpha, theme, kit, scene, now);
+                }
+                None => {
+                    ui.draw(&w::space(0.0), Rect::new(0.0, 0.0, 0.0, 0.0), Some(body_clip), alpha, theme, kit, scene, now);
+                }
+            }
         }
         self.feed = (m.view == View::Mirror).then(|| {
             let (w, h) = m.mirror_box(theme);
@@ -1663,7 +1835,10 @@ fn footer(m: &Model, store: &Store, theme: &Theme) -> El {
 }
 
 /// The body's widgets for the slots inside the viewport, the rest as room.
-fn body_el(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, scroll: f64, view_h: f64) -> El {
+/// Rows mid-transition go to `overlays` instead, each with its own rect in
+/// body coordinates: they cross other rows, which the stacked column cannot.
+fn body_el(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, scroll: f64, view_h: f64, overlays: &mut Vec<(El, Rect)>) -> El {
+    let now = Instant::now();
     let s = &theme.space;
     let lay = &m.layout;
     if m.view == View::Mirror {
@@ -1753,11 +1928,29 @@ fn body_el(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, scroll: f64, 
                 .width(Size::Px(slot.w))
         } else {
             let checked = toggles::checked_for(Some(row), Some(&snap), Some(&store.menu.checked));
+            let alpha = m.motion.alpha(&row.id, now);
             let thumb = (!row.thumb_source.is_empty())
                 .then(|| (store.clipboard.thumbs.get(&row.thumb_source).cloned().flatten(), f64::from(store.clipboard.thumb_box.1)));
-            menu_row(m, row, i, selected, checked, thumb, theme).width(Size::Px(slot.w))
+            let el = menu_row(m, row, i, selected, checked, thumb, theme).width(Size::Px(slot.w));
+            if alpha < 1.0 { el.fade(alpha) } else { el }
         };
+        let dy = if i >= cells && matches!(m.view, View::Rows | View::AppGrid) { m.motion.offset(&row.id, now) } else { 0.0 };
+        if dy.abs() > 0.5 {
+            let top = slot.y + slot.band + dy;
+            overlays.push((el, Rect::new(slot.x, top, slot.x + slot.w, top + slot.h - slot.band)));
+            continue;
+        }
         items.push((slot.y + slot.band, slot.h - slot.band, el.pad_start(0.0)));
+    }
+    for (node, slot, at) in &m.motion.left {
+        let t = RowMotion::progress(*at, m.motion.ms.2, now);
+        if t >= 1.0 || !visible(slot.y, slot.h) {
+            continue;
+        }
+        let fade = 1.0 - Clock::EffectsFast.curve().ease(t) as f32;
+        let el = menu_row(m, node, usize::MAX, false, false, None, theme).width(Size::Px(slot.w)).fade(fade);
+        let top = slot.y + slot.band;
+        overlays.push((El { on: None, ..el }, Rect::new(slot.x, top, slot.x + slot.w, top + slot.h - slot.band)));
     }
     // Absolutely placed by stacking: a column of rows, each a row of what
     // shares its top.

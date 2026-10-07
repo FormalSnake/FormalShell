@@ -270,6 +270,8 @@ pub struct El {
     /// An icon on a disc over the bottom-right corner (a notification's
     /// source mark).
     pub badge: Option<&'static str>,
+    /// The node's whole opacity, for a parent that fades it itself.
+    pub fade: Option<f32>,
 }
 
 impl El {
@@ -281,7 +283,12 @@ impl El {
             Kind::Input { .. } | Kind::Para { .. } | Kind::Matrix { .. } | Kind::Lyrics(_) => Size::Fill,
             _ => Size::Hug,
         };
-        Self { kind, width, pad: [0.0; 4], key: None, stop: false, on: None, tip: None, centred: false, top: false, mid: false, gauge: None, pulse: false, swap: None, badge: None }
+        Self { kind, width, pad: [0.0; 4], key: None, stop: false, on: None, tip: None, centred: false, top: false, mid: false, gauge: None, pulse: false, swap: None, badge: None, fade: None }
+    }
+
+    pub fn fade(mut self, alpha: f32) -> Self {
+        self.fade = Some(alpha);
+        self
     }
 
     pub fn badge(mut self, icon: &'static str) -> Self {

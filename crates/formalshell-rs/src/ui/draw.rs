@@ -371,11 +371,14 @@ fn child_path(path: &str, el: &El, i: usize) -> String {
 /// Paints `el` into `rect` (its full measured box, padding included).
 pub fn paint(cx: &mut Cx, el: &El, rect: Rect, path: &str) {
     let pulse = el.pulse && cx.theme.motion_enabled;
-    if !pulse && el.swap.is_none() && el.badge.is_none() {
+    if !pulse && el.swap.is_none() && el.badge.is_none() && el.fade.is_none() {
         return paint_body(cx, el, rect, path);
     }
     let saved = cx.alpha;
     let mut rect = rect;
+    if let Some(f) = el.fade {
+        cx.alpha *= f.clamp(0.0, 1.0);
+    }
     if pulse {
         let born = cx.born(path);
         cx.animate();

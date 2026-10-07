@@ -184,6 +184,7 @@ impl App {
     pub fn resolve_launcher(&mut self) {
         if self.launcher_resolve {
             self.launcher_resolve = false;
+            self.launcher.motion_scale = self.motion_scale;
             self.launcher.resolve(&self.store, &self.store.theme.theme, &mut self.bar.kit);
         }
     }
@@ -550,7 +551,7 @@ impl App {
         let Some(path) = self.launcher.rows.get(self.launcher.cursor).map(|r| r.thumb_source.clone()).filter(|p| !p.is_empty()) else { return };
         let theme = &self.store.theme.theme;
         let s = &theme.space;
-        let inner = s.popup_width_menu - s.panel_padding * 2.0;
+        let inner = self.launcher.content_width(theme);
         let width = inner - (inner / 2.0).round() - s.sm * 2.0;
         let height = self.launcher.body_height() - s.lg * 2.0;
         if height <= 0.0 {
@@ -683,7 +684,7 @@ impl App {
         let qh = self.qh.clone();
         let theme = &self.store.theme.theme;
         let Some(w) = &mut self.launch else { return };
-        let animating = w.shown.animating(now);
+        let animating = w.shown.animating(now) || self.launcher.rows_moving(now);
         let t1 = Instant::now();
         if self.launcher.dirty || animating || !w.shown.surface.mapped {
             w.shown.sync_region(&self.compositor);
@@ -691,7 +692,7 @@ impl App {
             self.launcher.dirty = false;
         }
         let laid = t1.elapsed();
-        let animating = w.shown.animating(now);
+        let animating = w.shown.animating(now) || self.launcher.rows_moving(now);
         w.shown.surface.present(&mut w.shown.card.scene, animating, &qh);
         if t0.elapsed().as_millis() >= 8 {
             eprintln!(
