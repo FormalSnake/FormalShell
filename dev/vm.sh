@@ -292,6 +292,18 @@ cmd_shell() {
     "cd formalshell && export XDG_RUNTIME_DIR=/run/user/1000 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus WAYLAND_DISPLAY=\$(systemctl --user show-environment | sed -n 's/^WAYLAND_DISPLAY=//p') && exec \$SHELL -l"
 }
 
+# A run that skipped dev/vm-lock.sh would share a slot with the lock's holder,
+# and dev/scoped-run.sh stops every run scope it finds, so it would kill that
+# holder's session. Anything that touches the VM's checkout or sessions goes
+# through the lock.
+case "${1:-}" in
+  sync|run|smoke|pull)
+    if [ -z "${FS_VM_LOCK_HELD:-}" ]; then
+      exec "$(dirname "$0")/vm-lock.sh" "$0" "$@"
+    fi
+    ;;
+esac
+
 case "${1:-}" in
   start) cmd_start ;;
   stop) cmd_stop ;;

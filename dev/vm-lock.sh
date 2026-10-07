@@ -29,6 +29,7 @@ while True:
             lock.close()
             continue
         os.environ["FS_VM_SLOT"] = str(n)
+        os.environ["FS_VM_LOCK_HELD"] = "1"
         print("vm-lock: slot %d" % n, file=sys.stderr)
         up = subprocess.run([vm_sh, "status"], stdout=subprocess.PIPE, text=True)
         if "ssh reachable" not in up.stdout:
