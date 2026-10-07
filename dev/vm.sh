@@ -274,6 +274,13 @@ cmd_smoke() {
   out=$(vm_run "${FS_IMPL:+FS_IMPL=$FS_IMPL }${FS_CPU_QUOTA:+FS_CPU_QUOTA=$FS_CPU_QUOTA }${FS_CPU_QUOTA_PERIOD:+FS_CPU_QUOTA_PERIOD=$FS_CPU_QUOTA_PERIOD }${prebuilt}$script $*" 2>&1) || status=$?
   echo "$out"
   if [ "$status" -ne 0 ]; then
+    # A failed run's own logs, so the failure can be read on the mac.
+    mkdir -p "$repo_root/artifacts"
+    local failed_log
+    for failed_log in $(printf '%s\n' "$out" | grep -oE '^SMOKE_[A-Z0-9_]+ [^[:space:]]+\.log' | awk '{print $2}'); do
+      scp "${scp_opts[@]}" "test@localhost:$failed_log" "$repo_root/artifacts/$(basename "$failed_log")" > /dev/null 2>&1 \
+        && echo "pulled log: $repo_root/artifacts/$(basename "$failed_log")"
+    done
     echo "testvm: smoke run failed (exit $status)" >&2
     exit "$status"
   fi

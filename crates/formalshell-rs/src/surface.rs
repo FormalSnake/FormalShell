@@ -19,6 +19,8 @@ use smithay_client_toolkit::reexports::protocols::wp::alpha_modifier::v1::client
 use smithay_client_toolkit::reexports::protocols::wp::single_pixel_buffer::v1::client::wp_single_pixel_buffer_manager_v1::WpSinglePixelBufferManagerV1;
 use smithay_client_toolkit::reexports::protocols::wp::viewporter::client::wp_viewport::WpViewport;
 use smithay_client_toolkit::reexports::protocols::wp::viewporter::client::wp_viewporter::WpViewporter;
+use smithay_client_toolkit::reexports::client::protocol::wl_subcompositor::WlSubcompositor;
+use smithay_client_toolkit::reexports::client::protocol::wl_subsurface::WlSubsurface;
 use smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface;
 use smithay_client_toolkit::session_lock::SessionLockSurface;
 use smithay_client_toolkit::shell::WaylandSurface;
@@ -65,9 +67,35 @@ impl Role for SessionLockSurface {
     }
 }
 
+/// A synchronized subsurface: its commits wait for its parent's.
+pub struct Sub {
+    pub surface: WlSurface,
+    pub sub: WlSubsurface,
+}
+
+impl Role for Sub {
+    fn role_surface(&self) -> &WlSurface {
+        &self.surface
+    }
+
+    fn role_commit(&self) {
+        self.surface.commit();
+    }
+}
+
+impl Drop for Sub {
+    fn drop(&mut self) {
+        self.sub.destroy();
+        self.surface.destroy();
+    }
+}
+
 pub struct Surface<R: Role = LayerSurface> {
     pub name: &'static str,
     pub layer: R,
+    /// ABGR8888 where the compositor takes it: the canvas's own byte order,
+    /// copied without a swizzle.
+    format: wl_shm::Format,
     pool: SlotPool,
     buffers: Vec<ShmBuffer>,
     renderer: Renderer,
@@ -154,6 +182,10 @@ impl Kept {
 }
 
 impl<R: Role> Surface<R> {
+    pub fn commits(&self) -> u64 {
+        self.commits
+    }
+
     /// The pool, buffers and canvas, for [`Surface::adopt`] on the next
     /// window of this kind.
     pub fn keep(self) -> Kept {
@@ -180,6 +212,7 @@ impl<R: Role> Surface<R> {
         Self {
             name,
             layer,
+            format: if shm.formats().contains(&wl_shm::Format::Abgr8888) { wl_shm::Format::Abgr8888 } else { wl_shm::Format::Argb8888 },
             pool: SlotPool::new(4096, shm).expect("wl_shm pool"),
             buffers: Vec::new(),
             renderer: Renderer::new(1, 1),
@@ -327,7 +360,7 @@ impl<R: Role> Surface<R> {
             None => {
                 let (buffer, _) = self
                     .pool
-                    .create_buffer(size.w, size.h, size.w * 4, wl_shm::Format::Argb8888)
+                    .create_buffer(size.w, size.h, size.w * 4, self.format)
                     .expect("wl_shm buffer");
                 let stale = if self.pool_clean { self.drawn.into_iter().collect() } else { vec![size] };
                 self.buffers.push(ShmBuffer { buffer, stale });
@@ -348,18 +381,37 @@ impl<R: Role> Surface<R> {
         let target = &mut self.buffers[at];
         let mut copy = std::mem::take(&mut target.stale);
         copy.extend_from_slice(&damage);
+        // A rect inside another is copied with it.
+        let copy: Vec<IRect> = copy
+            .iter()
+            .enumerate()
+            .filter(|(i, r)| !copy.iter().enumerate().any(|(j, o)| j != *i && o.contains(r) && (o != *r || j < *i)))
+            .map(|(_, r)| r.intersect(&size))
+            .filter(|r| !r.is_empty())
+            .collect();
         let canvas = target.buffer.canvas(&mut self.pool).expect("released buffer");
-        let src = self.renderer.canvas().data();
         let stride = self.renderer.width() as usize;
-        for rect in &copy {
-            let rect = rect.intersect(&size);
-            for row in rect.y..rect.bottom() {
-                let start = row as usize * stride + rect.x as usize;
-                let pixels = &src[start..start + rect.w as usize];
-                let out = &mut canvas[start * 4..(start + rect.w as usize) * 4];
-                // wl_shm ARGB8888 is premultiplied BGRA in memory on little endian.
-                for (px, dst) in pixels.iter().zip(out.chunks_exact_mut(4)) {
-                    dst.copy_from_slice(&[px.b, px.g, px.r, px.a]);
+        if self.format == wl_shm::Format::Abgr8888 {
+            // ABGR8888 is the canvas's own RGBA byte order: rows copy whole.
+            let src = self.renderer.canvas().data_as_u8_slice();
+            for rect in &copy {
+                for row in rect.y..rect.bottom() {
+                    let start = (row as usize * stride + rect.x as usize) * 4;
+                    let end = start + rect.w as usize * 4;
+                    canvas[start..end].copy_from_slice(&src[start..end]);
+                }
+            }
+        } else {
+            let src = self.renderer.canvas().data();
+            for rect in &copy {
+                for row in rect.y..rect.bottom() {
+                    let start = row as usize * stride + rect.x as usize;
+                    let pixels = &src[start..start + rect.w as usize];
+                    let out = &mut canvas[start * 4..(start + rect.w as usize) * 4];
+                    // wl_shm ARGB8888 is premultiplied BGRA in memory on little endian.
+                    for (px, dst) in pixels.iter().zip(out.chunks_exact_mut(4)) {
+                        dst.copy_from_slice(&[px.b, px.g, px.r, px.a]);
+                    }
                 }
             }
         }
@@ -517,6 +569,7 @@ impl Drop for PixelSurface {
 
 /// The three globals a [`PixelSurface`] is made of.
 pub struct Pixels {
+    pub subcompositor: WlSubcompositor,
     pub viewporter: WpViewporter,
     pub single_pixel: WpSinglePixelBufferManagerV1,
     pub alpha: WpAlphaModifierV1,
@@ -525,6 +578,7 @@ pub struct Pixels {
 impl Pixels {
     pub fn bind(globals: &GlobalList, qh: &QueueHandle<App>) -> Result<Self, BindError> {
         Ok(Self {
+            subcompositor: globals.bind(qh, 1..=1, Ignore)?,
             viewporter: globals.bind(qh, 1..=1, Ignore)?,
             single_pixel: globals.bind(qh, 1..=1, Ignore)?,
             alpha: globals.bind(qh, 1..=1, Ignore)?,
@@ -544,7 +598,7 @@ macro_rules! ignore_events {
     )*};
 }
 
-ignore_events!(WpViewporter, WpViewport, WpSinglePixelBufferManagerV1, WpAlphaModifierV1, WpAlphaModifierSurfaceV1, WlBuffer);
+ignore_events!(WlSubcompositor, WlSubsurface, WpViewporter, WpViewport, WpSinglePixelBufferManagerV1, WpAlphaModifierV1, WpAlphaModifierSurfaceV1, WlBuffer);
 
 /// The desktop's own layer (Background.qml): the theme's background colour,
 /// or the wallpaper's ready pixels over the whole output. A new wallpaper

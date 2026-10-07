@@ -9,7 +9,6 @@
 //! implements [`Custom`] instead. `cells::build` is where a cell is
 //! registered against its `bar.layout` name.
 
-use std::collections::HashMap;
 use std::time::Instant;
 
 use fs_chrome::types::{Edge, Region};

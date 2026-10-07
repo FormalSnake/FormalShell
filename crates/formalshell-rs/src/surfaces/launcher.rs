@@ -1055,6 +1055,7 @@ impl Model {
     /// prefill at the root.
     pub fn open(&mut self, store: &Store, route: Option<&str>) {
         self.abandon_select();
+        self.ask_fresh(store);
         let route = route.filter(|r| !r.is_empty());
         let prefill = route.filter(|r| r.starts_with(':')).unwrap_or("").to_owned();
         let mut target = None;
@@ -1074,10 +1075,11 @@ impl Model {
         self.key.clear();
     }
 
-    /// The conditions and the binds, asked for once the bar is up and after
-    /// every close, so the next open finds them ready instead of spawning a
-    /// shell per condition while its card comes up. The apps follow their
-    /// own entry watch and launch counts.
+    /// The conditions and the binds, asked for once the tree first arrives
+    /// and again on every open. An open draws on the last results; each
+    /// check runs on the service thread and only a changed one lands, so
+    /// just its row moves. The apps follow their own entry watch and launch
+    /// counts.
     pub fn ask_fresh(&self, store: &Store) {
         let conds: Vec<(String, String, bool)> = store
             .menu
@@ -1518,6 +1520,9 @@ pub struct Shown {
     /// One widget tree per row mid-transition, drawn over the body.
     overlays: Vec<Ui>,
     top_node: NodeId,
+    /// The cut the layer's content was last laid out under, while it
+    /// crosses the line.
+    crop: Option<IRect>,
 }
 
 impl Shown {
@@ -1525,7 +1530,7 @@ impl Shown {
     pub const DEFORM_AMOUNT: f64 = 0.1;
 
     pub fn new(theme: &Theme, modal: Modal, output: (f64, f64), scale: f64) -> Self {
-        let top = modal.card.top_node();
+        let top = modal.layer.as_ref().map_or(modal.card.top_node(), |l| l.top);
         Self {
             modal,
             head: Ui::new(Some(top)),
@@ -1540,6 +1545,7 @@ impl Shown {
             scroll: Animated::new(0.0, Clock::SpatialFast.curve()),
             overlays: Vec::new(),
             top_node: top,
+            crop: None,
             morph: (Animated::new(theme.space.popup_width_menu, Clock::Spatial.curve()), Animated::new(0.0, Clock::Spatial.curve())),
         }
     }
@@ -1550,6 +1556,20 @@ impl Shown {
 
     pub fn animating(&self, now: Instant) -> bool {
         self.modal.animating(now)
+            || self.scroll.running(now)
+            || self.morph.0.running(now)
+            || self.morph.1.running(now)
+            || self.wake.is_some_and(|w| w <= now)
+    }
+
+    /// Whether the content itself moves, past the card carrying it: on a
+    /// layer, the card's own motion needs no new layout, only the cut of it
+    /// while it crosses the line.
+    pub fn content_animating(&self, now: Instant) -> bool {
+        let cut = self.modal.layer.as_ref().is_some_and(|_| {
+            self.crop != Some(crate::surfaces::modal::Layer::crop(&self.modal.card, !self.modal.animating(now)))
+        });
+        cut || (self.modal.layer.is_none() && self.modal.animating(now))
             || self.scroll.running(now)
             || self.morph.0.running(now)
             || self.morph.1.running(now)
@@ -1598,15 +1618,23 @@ impl Shown {
 
     #[allow(clippy::too_many_arguments)]
     fn draw(&mut self, m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, now: Instant, body_h: f64) {
-        let (frame, alpha) = self.modal.card.content;
-        let clip = self.modal.card.clip;
+        // On a layer the content is laid out where the card rests, opaque
+        // and uncut: the compositor moves, crops and fades it.
+        let (frame, alpha, clip) = match &self.modal.layer {
+            Some(_) => (self.modal.card.content_rest(), 1.0, crate::surfaces::modal::Layer::crop(&self.modal.card, !self.modal.animating(now))),
+            None => (self.modal.card.content.0, self.modal.card.content.1, self.modal.card.clip),
+        };
+        self.crop = self.modal.layer.as_ref().map(|_| clip);
         let s = theme.space.clone();
         let pad = s.panel_padding;
         let (fx, fy, fw) = (frame.x as f64, frame.y as f64, frame.w as f64);
         let inner_w = (fw - pad * 2.0).max(0.0);
         let side = s.sm;
         self.wake = None;
-        let scene = &mut self.modal.card.scene;
+        let scene = match &mut self.modal.layer {
+            Some(l) => &mut l.scene,
+            None => &mut self.modal.card.scene,
+        };
         self.head.motion_scale = self.scale;
         self.body.motion_scale = self.scale;
         self.foot.motion_scale = self.scale;
@@ -1694,6 +1722,8 @@ impl Shown {
     /// What is under the pointer: a body row or cell, a header or footer
     /// control.
     pub fn hit(&self, x: f64, y: f64) -> Option<crate::ui::Hit> {
+        let (dx, dy) = if self.modal.layer.is_some() && self.modal.animating(Instant::now()) { crate::surfaces::modal::Layer::offset(&self.modal.card, false) } else { (0.0, 0.0) };
+        let (x, y) = (x - dx, y - dy);
         self.body.hit(x, y).or_else(|| self.head.hit(x, y)).or_else(|| self.foot.hit(x, y)).cloned()
     }
 

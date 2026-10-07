@@ -15,10 +15,10 @@ use zeroize::Zeroizing;
 
 use super::App;
 use super::lock::{LockMsg, field};
-use crate::scene::{Bitmap, NodeId};
+use crate::scene::{Bitmap, IRect, NodeId};
 use crate::services::polkit::{self, Cmd, Event};
 use crate::surfaces::bar::cell::Painter;
-use crate::surfaces::modal::{Modal, Part};
+use crate::surfaces::modal::{Layer as ContentLayer, Modal, Part};
 use crate::ui::{self, El, Size, Ui, Variant, w};
 
 const NAMESPACE: &str = "formalshell:polkit";
@@ -42,6 +42,8 @@ pub struct Dialog {
     error: bool,
     text: Zeroizing<String>,
     dirty: bool,
+    /// The cut the content was last laid out under, on its layer.
+    crop: Option<IRect>,
 }
 
 impl Dialog {
@@ -74,8 +76,10 @@ impl App {
         match event {
             Event::Begin { message, identity } => {
                 let own = !identity.is_empty() && std::env::var("USER").is_ok_and(|u| u == identity);
-                let modal = self.new_modal(["polkit", "polkit-scrim-band", "polkit-scrim"], NAMESPACE, Layer::Top, DEFORM_AMOUNT);
-                let top = modal.card.top_node();
+                let mut modal = self.new_modal(["polkit", "polkit-scrim-band", "polkit-scrim"], NAMESPACE, Layer::Top, DEFORM_AMOUNT);
+                let content = self.content_layer("polkit-content", &modal.surface, modal.card.scene.size);
+                let top = content.top;
+                modal.layer = Some(content);
                 self.polkit = Some(Dialog {
                     modal,
                     ui: Ui::new(Some(top)),
@@ -90,6 +94,7 @@ impl App {
                     error: false,
                     text: field(),
                     dirty: true,
+                    crop: None,
                 });
                 if own && let (Some(rt), Some(tx)) = (&self.runtime, self.lock.tx.clone()) {
                     let home = std::env::var("HOME").unwrap_or_default();
@@ -185,8 +190,10 @@ impl App {
         }
         let qh = self.qh.clone();
         let Some(d) = &mut self.polkit else { return };
-        let animating = d.modal.animating(now);
-        if (d.dirty || animating || !d.modal.surface.mapped) && d.modal.surface.configured {
+        // The card's own motion moves the content layer; only its cut while
+        // it crosses the line needs a new layout.
+        let cut = Some(ContentLayer::crop(&d.modal.card, !d.modal.animating(now))) != d.crop;
+        if (d.dirty || cut || !d.modal.surface.mapped) && d.modal.surface.configured {
             d.dirty = false;
             d.modal.sync_region(&self.compositor);
             Self::lay_polkit(d, &self.store.theme.theme, &mut self.bar.kit, now);
@@ -245,11 +252,15 @@ impl App {
         let x0 = ((w as f64 - card_w) / 2.0).round();
         let y0 = ((h as f64 - card_h) / 2.0).round();
         d.modal.place(Rect::new(x0, y0, x0 + card_w, y0 + card_h), now);
-        // The content rides the card's own travel and fades in on its pose.
-        let (frame, alpha) = d.modal.card.content;
-        let clip = d.modal.card.clip;
-        let top = d.modal.card.top_node();
-        let scene = &mut d.modal.card.scene;
+        // Laid out where the card rests, on the content layer the card's
+        // travel and fade move; cut only while it crosses the line.
+        let frame = d.modal.card.content_rest();
+        let alpha = 1.0;
+        let clip = ContentLayer::crop(&d.modal.card, !d.modal.animating(now));
+        d.crop = Some(clip);
+        let Some(layer) = &mut d.modal.layer else { return };
+        let top = layer.top;
+        let scene = &mut layer.scene;
         let (x, y) = (frame.x as f64 + s.panel_padding, frame.y as f64 + s.panel_padding);
         let mut p = Painter::new(scene, &mut d.avatar_nodes, Some(clip)).after(Some(top));
         if let (Some(i), Some(b)) = (avatar_row, d.avatar.as_ref()) {
