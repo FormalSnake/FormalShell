@@ -541,6 +541,29 @@ impl App {
         localsend::command(Cmd::Send { peer, payload });
     }
 
+    /// Asks for the split pane's picture when the cursor sits on an image
+    /// row whose picture is not decoded at the pane's size yet.
+    fn launcher_preview(&mut self) {
+        if !self.launcher.split() {
+            return;
+        }
+        let Some(path) = self.launcher.rows.get(self.launcher.cursor).map(|r| r.thumb_source.clone()).filter(|p| !p.is_empty()) else { return };
+        let theme = &self.store.theme.theme;
+        let s = &theme.space;
+        let inner = s.popup_width_menu - s.panel_padding * 2.0;
+        let width = inner - (inner / 2.0).round() - s.sm * 2.0;
+        let height = self.launcher.body_height() - s.lg * 2.0;
+        if height <= 0.0 {
+            return;
+        }
+        let size = crate::surfaces::launcher::preview_box(theme, &mut self.bar.kit, width, height);
+        let have = self.store.clipboard.preview.as_ref().is_some_and(|(p, sz, _)| *p == path && *sz == size);
+        if !have && self.preview_asked.as_ref() != Some(&(path.clone(), size)) {
+            self.preview_asked = Some((path.clone(), size));
+            crate::services::clipboard::command(crate::services::clipboard::Cmd::Preview(path, size));
+        }
+    }
+
     /// The clipssh route's rows off the saved aliases.
     pub fn launcher_clipssh(&mut self) {
         let rows = fs_menu::providers::clipssh_rows(&self.store.clipssh.aliases);
@@ -603,6 +626,7 @@ impl App {
         }
         let t0 = Instant::now();
         self.resolve_launcher();
+        self.launcher_preview();
         let resolved = t0.elapsed();
         let qh = self.qh.clone();
         let theme = &self.store.theme.theme;

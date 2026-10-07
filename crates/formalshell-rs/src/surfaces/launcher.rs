@@ -300,6 +300,16 @@ impl Model {
         }
     }
 
+    /// The clipboard routes' 50/50 split: the list, then the cursor row's
+    /// whole content.
+    pub fn split(&self) -> bool {
+        self.mode == Mode::Menu && matches!(self.level.as_deref(), Some("clipboard" | "share.history"))
+    }
+
+    pub fn body_height(&self) -> f64 {
+        self.body_h
+    }
+
     pub fn on_picker(&self) -> bool {
         self.mode == Mode::Menu && self.level.as_deref() == Some(PICKER_ROUTE)
     }
@@ -673,6 +683,7 @@ impl Model {
             View::Rows | View::Monitor => {
                 out.columns = 1;
                 let side = s.sm;
+                let width = if self.split() { (width / 2.0).round() } else { width };
                 if self.monitor_strip_h > 0.0 {
                     y += self.monitor_strip_h + s.section_gap;
                 }
@@ -1270,6 +1281,7 @@ pub struct Shown {
     pub surface: Surface,
     head: Ui,
     body: Ui,
+    preview: Ui,
     foot: Ui,
     rules: Vec<NodeId>,
     pub output: (f64, f64),
@@ -1293,6 +1305,7 @@ impl Shown {
             surface,
             head: Ui::new(Some(top)),
             body: Ui::new(Some(top)),
+            preview: Ui::new(Some(top)),
             foot: Ui::new(Some(top)),
             rules: Vec::new(),
             output,
@@ -1412,6 +1425,18 @@ impl Shown {
         let d = self.body.draw(&body, Rect::new(origin.0, origin.1, origin.0 + inner_w, origin.1 + m.layout.content_h), Some(body_clip), alpha, theme, kit, scene, now);
         if d.animating {
             self.wake = Some(now);
+        }
+        // SplitPreview.qml: the cursor row's whole content beside the list.
+        if m.split() && body_h > 0.0 {
+            let half = (inner_w / 2.0).round();
+            let r = Rect::new(fx + pad + half + s.sm, body_top + s.lg, fx + pad + inner_w - side, body_top + body_h - s.lg);
+            let el = split_preview(m, store, theme, kit, r.width(), r.height());
+            let d = self.preview.draw(&el, r, Some(body_clip), alpha, theme, kit, scene, now);
+            if d.animating {
+                self.wake = Some(now);
+            }
+        } else {
+            self.preview.draw(&w::space(0.0), Rect::new(0.0, 0.0, 0.0, 0.0), Some(body_clip), alpha, theme, kit, scene, now);
         }
         let _ = side;
 
@@ -1743,6 +1768,43 @@ fn proc_row(m: &Model, row: &Node, i: usize, selected: bool, theme: &Theme) -> E
         .cell_state(|st| st.destructive = armed)
         .on(format!("row:{i}"))
         .key(format!("r:{}", row.id))
+}
+
+/// The split pane's picture box for an area `w` by `h`.
+pub fn preview_box(theme: &Theme, kit: &mut Kit, w: f64, h: f64) -> (u32, u32) {
+    let head = ui::measure(&w::section_label(&theme.space, "Ag", None, false), w, theme, kit).1 + theme.space.row_gap;
+    let pad = theme.space.control_padding_x * 2.0;
+    ((w - pad).max(1.0).round() as u32, (h - head - pad).max(1.0).round() as u32)
+}
+
+/// SplitPreview.qml: "Text" or "Image" and the capture time over the full
+/// text, the emoji at display size, or the picture fitted to the pane.
+fn split_preview(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, width: f64, height: f64) -> El {
+    let s = &theme.space;
+    let Some(row) = m.rows.get(m.cursor).filter(|r| r.kind != NodeKind::Note) else { return w::space(0.0) };
+    let image = !row.thumb_source.is_empty();
+    let head = w::row(
+        s.sm,
+        vec![w::section_label(s, if image { "Image" } else { "Text" }, None, false), w::caption(row.time.clone()).mono().ink(Ink::Muted)],
+    );
+    let body = if image {
+        let (bw, bh) = preview_box(theme, kit, width, height);
+        let bitmap = store.clipboard.preview.as_ref().filter(|(p, size, _)| *p == row.thumb_source && *size == (bw, bh)).and_then(|(_, _, b)| b.clone());
+        w::picture(bitmap, f64::from(bw.max(bh))).width(Size::Px(f64::from(bw)))
+    } else if row.emoji_only {
+        w::text(row.full_text.clone()).size(Type::Display).centred()
+    } else {
+        let line = ui::measure(&w::text("Ag"), width, theme, kit).1.max(1.0);
+        let lines = ((height - line * 2.0) / line).floor().max(1.0) as usize;
+        w::para(row.full_text.clone(), Type::Body, Weight::Normal, Ink::Fg, lines)
+    };
+    // The pane keeps its height whatever it holds: room under a text,
+    // and an emoji centred in it.
+    let head_h = ui::measure(&w::section_label(s, "Ag", None, false), width, theme, kit).1;
+    let body_h = ui::measure(&body, width, theme, kit).1;
+    let room = (height - head_h - s.row_gap * 3.0 - s.control_padding_y * 2.0 - body_h).max(0.0);
+    let above = if row.emoji_only { (room / 2.0).floor() } else { 0.0 };
+    w::cell(w::column(s.row_gap, vec![head, w::space(above), body, w::space(room - above)]).fill()).fill()
 }
 
 /// The wallpaper route's Dark | Light switcher.

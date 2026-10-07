@@ -240,6 +240,8 @@ pub struct App {
     wifi_pending: Option<(String, String)>,
     mods: fs_menu::nav::Modifiers,
     menu_buttons: Option<crate::services::menu::BaseInputs>,
+    /// The split pane's last picture request, so a frame asks once.
+    preview_asked: Option<(String, (u32, u32))>,
     menu_launches: Option<serde_json::Value>,
     pub capture: crate::surfaces::capture::Capture,
     pickers: picker::Pickers,
@@ -315,6 +317,7 @@ impl App {
             wifi_pending: None,
             mods: Default::default(),
             menu_buttons: None,
+            preview_asked: None,
             menu_launches: None,
             capture: Default::default(),
             pickers: Default::default(),
