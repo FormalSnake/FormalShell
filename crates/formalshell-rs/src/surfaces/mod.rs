@@ -60,6 +60,17 @@ pub fn changed(app: &mut App, topic: Topic) {
         }
         Topic::Notifications => {
             app.toasts_changed();
+            app.launcher_store_changed();
+            app.refresh_bar(Some(topic));
+        }
+        Topic::Clipboard => app.launcher_clipboard(),
+        Topic::Clipssh => {
+            app.launcher_clipssh();
+            app.refresh_bar(Some(topic));
+        }
+        Topic::Lights | Topic::NightLight => {
+            app.launcher_inputs();
+            app.launcher_store_changed();
             app.refresh_bar(Some(topic));
         }
         Topic::Media => {

@@ -11,6 +11,7 @@ mod airplay;
 mod bar;
 mod caffeinate;
 mod calendar;
+mod clipboard;
 #[cfg(test)]
 mod cli;
 mod debug;
@@ -88,6 +89,7 @@ fn registry() ->&'static Registry<App> {
             osd::target(),
             nightlight::target(),
             lights::target(),
+            clipboard::target(),
         ],
     })
 }

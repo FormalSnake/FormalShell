@@ -70,6 +70,8 @@ pub enum Op {
     /// Center.qml's "Clear all": pending and seen both go.
     ClearHistory,
     Invoke(String, String),
+    /// NotificationService.notify() for a service on its own thread.
+    Notify(String, String, Urgency),
 }
 
 #[derive(Default)]
@@ -165,6 +167,7 @@ impl State {
                         self.dismiss_group(&past);
                     }
                     Op::Invoke(id, key) => self.invoke_action(&id, &key),
+                    Op::Notify(summary, body, urgency) => self.notify(&summary, &body, urgency),
                 }
                 true
             }

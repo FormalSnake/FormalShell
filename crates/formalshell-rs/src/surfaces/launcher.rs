@@ -109,6 +109,8 @@ pub struct Model {
     body_h: f64,
     /// The rows changed since the window last drew.
     pub dirty: bool,
+    /// A `pasteAfter` row ran: the chord goes out once the window is gone.
+    pub paste: bool,
 }
 
 impl Default for Model {
@@ -132,6 +134,7 @@ impl Default for Model {
             key: String::new(),
             cursor: 0,
             cursor_id: String::new(),
+            paste: false,
             placed: false,
             want: String::new(),
             from_keys: true,
@@ -157,7 +160,15 @@ pub fn snapshot(store: &Store) -> Snapshot {
     let d = &store.devices;
     let radio = &store.media.radio;
     let connected: Vec<String> = d.bluetooth.devices.iter().filter(|x| x.connected).map(|x| x.address.to_uppercase()).collect();
+    let l = &store.lights;
     toggles::snapshot(Some(&json!({
+        "nightlight.active": store.nightlight.active,
+        "lights.on": l.brightness > 0,
+        "lights.effect": l.effect,
+        "lights.source": l.source,
+        "lights.colour": if l.source == "custom" { l.custom_colour.as_str() } else { "" },
+        "lights.speed": l.speed,
+        "lights.brightness": l.brightness.to_string(),
         "theme.dark": store.state.data.mode == "dark",
         "caffeinate.active": store.caffeinate.active,
         "notifications.dnd": store.notifications.model.dnd,
@@ -308,7 +319,7 @@ impl Model {
         let keys_q = if menu { fs_menu::keybinds::trigger_query(q) } else { None };
         let radio_q = if menu { fs_menu::providers::radio_trigger_query(q) } else { None };
         let emoji = menu && (level == Some("emoji") || emoji_q.is_some());
-        let route_rows = matches!(level, Some("nix" | "keybinds" | "calc" | "radio.search"));
+        let route_rows = matches!(level, Some("nix" | "keybinds" | "calc" | "radio.search" | "clipboard" | "share.history"));
         let grid_wanted = store.config.bool("menu.appGrid").unwrap_or(true);
         let view = if emoji {
             View::Emoji
@@ -328,6 +339,15 @@ impl Model {
                     .collect()
             }
             Mode::Input => Vec::new(),
+            Mode::Menu if matches!(level, Some("clipboard" | "share.history")) => {
+                let history: Vec<Node> = model::visible_children(nodes, level, cond).into_iter().cloned().collect();
+                if history.is_empty() {
+                    vec![fs_menu::providers::clipboard_empty_row()]
+                } else {
+                    let matched: Vec<Node> = fs_menu::providers::clipboard_search(&history, q).into_iter().cloned().collect();
+                    if matched.is_empty() { vec![fs_menu::providers::clipboard_no_match_row()] } else { matched }
+                }
+            }
             Mode::Menu if emoji => {
                 let uses: Vec<fs_menu::frecency::Record> = serde_json::from_value(store.state.data.emoji_uses.clone()).unwrap_or_default();
                 let paste = store.config.bool("clipboard.paste").unwrap_or(true);
@@ -815,6 +835,9 @@ impl Model {
                     return Out::None;
                 }
                 let out = run_action(node.action.as_deref().unwrap_or(""));
+                if node.paste_after {
+                    self.paste = true;
+                }
                 if node.id.starts_with("emoji.") {
                     let uses: Vec<fs_menu::frecency::Record> = serde_json::from_value(store.state.data.emoji_uses.clone()).unwrap_or_default();
                     let next = fs_menu::frecency::record(&uses, &node.id, now_ms(), None);
@@ -956,7 +979,8 @@ impl Model {
                 index::ask(Ask::Emoji);
                 return json!([]);
             };
-            return Value::Array(index.rows(eq, true, &[], None).iter().map(|n| json!({"id": n.id, "label": n.label, "icon": n.icon, "kind": n.kind.as_str()})).collect());
+            let uses: Vec<fs_menu::frecency::Record> = serde_json::from_value(store.state.data.emoji_uses.clone()).unwrap_or_default();
+            return Value::Array(index.rows(eq, true, &uses, None).iter().map(|n| json!({"id": n.id, "label": n.label, "icon": n.icon, "kind": n.kind.as_str()})).collect());
         }
         if let Some(kq) = fs_menu::keybinds::trigger_query(q) {
             index::ask(Ask::Binds);
@@ -1024,8 +1048,17 @@ pub fn selection_path() -> std::path::PathBuf {
     state::state_path().with_file_name("menu-selection.txt")
 }
 
+/// A clipboard image row's thumbnail height, MenuRow.qml's `_thumbHeight`:
+/// twice a body line. The slot is three times as wide and letterboxes.
+pub fn thumb_height(theme: &Theme, kit: &mut Kit) -> f64 {
+    ui::measure(&w::text("Ag"), 100.0, theme, kit).1 * 2.0
+}
+
 fn row_height(node: &Node, theme: &Theme, kit: &mut Kit) -> f64 {
     let s = &theme.space;
+    if !node.thumb_source.is_empty() {
+        return thumb_height(theme, kit) + s.control_padding_y * 2.0;
+    }
     if node.emoji_only {
         let h = ui::measure(&w::text("Ag").size(Type::Display), 100.0, theme, kit).1;
         return h + s.control_padding_y * 2.0;
@@ -1368,7 +1401,9 @@ fn body_el(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, scroll: f64, 
                 .width(Size::Px(slot.w))
         } else {
             let checked = toggles::checked_for(Some(row), Some(&snap), Some(&store.menu.checked));
-            menu_row(m, row, i, selected, checked, theme).width(Size::Px(slot.w))
+            let thumb = (!row.thumb_source.is_empty())
+                .then(|| (store.clipboard.thumbs.get(&row.thumb_source).cloned().flatten(), f64::from(store.clipboard.thumb_box.1)));
+            menu_row(m, row, i, selected, checked, thumb, theme).width(Size::Px(slot.w))
         };
         items.push((slot.y + slot.band, slot.h - slot.band, el.pad_start(0.0)));
     }
@@ -1412,10 +1447,13 @@ fn slot_x_of(m: &Model, el: &El) -> f64 {
 }
 
 /// MenuRow.qml.
-fn menu_row(m: &Model, row: &Node, i: usize, selected: bool, checked: bool, theme: &Theme) -> El {
+fn menu_row(m: &Model, row: &Node, i: usize, selected: bool, checked: bool, thumb: Option<(Option<crate::scene::Bitmap>, f64)>, theme: &Theme) -> El {
     let s = &theme.space;
     let confirming = !m.confirm.is_empty() && m.confirm == row.id;
     let mut lead = Vec::new();
+    if let Some((image, h)) = thumb {
+        lead.push(w::picture(image, h).width(Size::Px(h * 3.0)));
+    }
     let glyph = fs_menu::icons::icon_for(Some(row));
     let drawn = if !glyph.is_empty() {
         glyph.to_owned()

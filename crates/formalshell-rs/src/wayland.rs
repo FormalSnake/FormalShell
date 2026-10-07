@@ -213,7 +213,7 @@ pub struct App {
     /// an enterprise one was given first (WifiService.pendingSsid).
     wifi_pending: Option<(String, String)>,
     mods: fs_menu::nav::Modifiers,
-    menu_buttons: Option<serde_json::Value>,
+    menu_buttons: Option<crate::services::menu::BaseInputs>,
     menu_launches: Option<serde_json::Value>,
 }
 

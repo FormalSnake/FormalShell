@@ -25,6 +25,7 @@
 # of the image, and the image row is the only one whose label matches.
 leg_clipssh_image_flag="--clipssh-image"
 leg_clipssh_image_order=136
+leg_clipssh_image_rust=1
 leg_clipssh_image_needs="wl-copy wl-paste convert"
 
 clipssh_image_shim_dir="$shot_dir/clipssh-image-shim"

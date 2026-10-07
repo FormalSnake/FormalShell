@@ -242,10 +242,11 @@ pub fn state_path() -> PathBuf {
 
 /// Temp file beside the target, then a rename over it, so a reader (or a
 /// crash) never sees half a file.
-fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
+pub fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
     let dir = path.parent().unwrap_or(Path::new("."));
     std::fs::create_dir_all(dir)?;
-    let tmp = dir.join(format!(".state.json.{}.tmp", std::process::id()));
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let tmp = dir.join(format!(".{name}.{}.tmp", std::process::id()));
     let result = (|| {
         let mut file = std::fs::File::create(&tmp)?;
         file.write_all(text.as_bytes())?;

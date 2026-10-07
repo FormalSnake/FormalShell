@@ -22,6 +22,7 @@ use crate::surfaces::launcher::{Out, Shown};
 const WIFI_PASSWORD: &str = "wifi-password";
 const WIFI_IDENTITY: &str = "wifi-identity";
 const REMINDER_SET: &str = "reminder-set";
+const LIGHTS_COLOR: &str = "lights-color";
 
 pub struct Window {
     pub shown: Shown,
@@ -151,6 +152,28 @@ impl App {
             return false;
         }
         self.resolve_launcher();
+        // A clipboard image row goes over ssh rather than onto the
+        // clipboard: straight there with an alias resolved, else copied and
+        // the alias route asked.
+        if alternate
+            && let Some(node) = self.launcher.rows.get(index).filter(|n| n.alternate.is_none() && !n.clipssh_path.is_empty()).cloned()
+        {
+            use crate::services::clipssh;
+            let configured = self.store.config.str("clipssh.alias").unwrap_or("");
+            match clipssh::resolve_alias(configured, &self.store.clipssh.aliases) {
+                Some(alias) => {
+                    clipssh::command(clipssh::Cmd::SendImage(alias, node.clipssh_path.clone()));
+                    self.menu_close();
+                }
+                None => {
+                    if let Some(name) = node.action.as_deref().and_then(|a| a.strip_prefix("@ipc:")) {
+                        self.dispatch_internal(name);
+                    }
+                    self.menu_open(Some("clipssh"));
+                }
+            }
+            return true;
+        }
         let out = if alternate { self.launcher.activate_alternate(&self.store, index) } else { self.launcher.activate(&self.store, index) };
         self.launcher_out(out);
         true
@@ -187,6 +210,15 @@ impl App {
         {
             return self.device_action(group, verb, value);
         }
+        if let Some((verb, value)) = name.strip_prefix("lights.").and_then(|r| r.split_once(':')) {
+            return self.call_self("lights", verb, &[value]);
+        }
+        if let Some(alias) = name.strip_prefix("clipssh.send:") {
+            return crate::services::clipssh::command(crate::services::clipssh::Cmd::Send(alias.to_owned()));
+        }
+        if let Some(id) = name.strip_prefix("clipboard.copy:") {
+            return crate::services::clipboard::command(crate::services::clipboard::Cmd::Copy(id.to_owned()));
+        }
         match name {
             "theme.toggleMode" => {
                 let key = crate::services::theme::mode_key(self.store.config.settings());
@@ -201,6 +233,9 @@ impl App {
             // The rest go through the same in-process handlers the IPC
             // targets answer with.
             "lock.lock" => self.call_self("lock", "lock", &[]),
+            "nightlight.toggle" => self.call_self("nightlight", "toggle", &[]),
+            "lights.toggle" => self.call_self("lights", "toggle", &[]),
+            "lights.colorInput" => self.menu_input_as("Hex color (ff8800)", LIGHTS_COLOR, false),
             "hdr.toggle" => self.call_self("hdr", "toggle", &[]),
             "overnight.toggle" => self.call_self("overnight", "toggle", &[]),
             "notifications.toggleDnd" => self.call_self("notifications", "toggleDnd", &[]),
@@ -208,15 +243,16 @@ impl App {
             "reminder.show" => self.call_self("reminder", "show", &[]),
             "reminder.clear" => self.call_self("reminder", "clear", &[]),
             "reminder.set" => self.menu_input_as("Reminder (25m coffee)", REMINDER_SET, false),
-            // NightLightService, LightsService, ClipboardService,
-            // ClipsshService, LocalsendService and ConsoleService have no
-            // counterpart in this shell yet.
             other => eprintln!("Menu: no service for internal action: {}", other.split(':').next().unwrap_or(other)),
         }
     }
 
     /// One call into this shell's own IPC targets, answered in process.
     fn call_self(&mut self, target: &str, function: &str, args: &[&str]) {
+        self.call_self_reply(target, function, args);
+    }
+
+    fn call_self_reply(&mut self, target: &str, function: &str, args: &[&str]) -> String {
         let request = crate::ipc::wire::Request::Call {
             target: target.into(),
             function: function.into(),
@@ -225,6 +261,20 @@ impl App {
         let reply = crate::ipc::dispatch(self, &request);
         if reply.starts_with("error") {
             eprintln!("Menu: {target}.{function}: {}", reply.trim());
+        }
+        reply
+    }
+
+    /// LightsService.resolveInput.
+    fn lights_answer(&mut self, value: Option<String>, cancelled: bool) {
+        let value = value.unwrap_or_default();
+        if cancelled {
+            return;
+        }
+        if self.call_self_reply("lights", "color", &[&value]).starts_with("error") {
+            let body = format!("\"{value}\" is not a hex colour like ff8800");
+            self.store.notifications.notify("Keyboard Lights", &body, fs_info::notifications::Urgency::Normal);
+            crate::surfaces::changed(self, crate::store::Topic::Notifications);
         }
     }
 
@@ -330,6 +380,8 @@ impl App {
                 self.wifi_answer(&token, value, cancelled);
             } else if token == REMINDER_SET {
                 self.reminder_answer(value, cancelled);
+            } else if token == LIGHTS_COLOR {
+                self.lights_answer(value, cancelled);
             }
         }
     }
@@ -357,6 +409,69 @@ impl App {
             rt.service(move |ctx| net::connect(ctx, ssid, secret));
         }
         self.menu_open(Some("wifi"));
+    }
+
+    /// PostActivation.qml's instant paste: the chord typed into whatever
+    /// focus returns to, a settle after the window is gone so it never lands
+    /// in the launcher's own field.
+    fn paste_chord(&mut self) {
+        let chord = self.store.config.str("clipboard.pasteChord").unwrap_or("ctrl+v").to_owned();
+        let Some(keys) = fs_menu::providers::paste_argv(&chord) else {
+            eprintln!("Menu: clipboard.pasteChord is not a wtype chord: {chord} - copied but not pasted");
+            return;
+        };
+        let mut argv = crate::services::proc::argv(&["sh", "-c", "command -v wtype >/dev/null 2>&1 || exit 127; exec wtype \"$@\"", "sh"]);
+        argv.extend(keys);
+        if let Some(rt) = &self.runtime {
+            rt.service(move |ctx| {
+                ctx.spawn(async move {
+                    async_io::Timer::after(std::time::Duration::from_millis(150)).await;
+                    let done = crate::services::proc::capture(&argv, std::time::Duration::from_secs(5)).await;
+                    match done.code {
+                        0 => {}
+                        127 => eprintln!("Menu: wtype not on PATH, copied but not pasted"),
+                        c => eprintln!("Menu: wtype failed (exit {c}), copied but not pasted"),
+                    }
+                });
+            });
+        }
+    }
+
+    /// The clipboard route's rows off the ledger, and its image rows'
+    /// thumbnails asked for at the row's own size.
+    pub fn launcher_clipboard(&mut self) {
+        if std::mem::take(&mut self.store.clipboard.captured) {
+            use crate::services::clipssh;
+            clipssh::command(clipssh::Cmd::AutoImage {
+                configured: self.store.config.str("clipssh.alias").unwrap_or("").to_owned(),
+                enabled: self.store.config.bool("clipssh.autoSendImages").unwrap_or(false),
+            });
+        }
+        let c = &self.store.clipboard;
+        let paste = self.store.config.bool("clipboard.paste").unwrap_or(true);
+        let rows = fs_menu::providers::clipboard_provider(&c.items, fs_menu::providers::ClipMode::Copy, paste);
+        let h = crate::surfaces::launcher::thumb_height(&self.store.theme.theme, &mut self.bar.kit).round() as u32;
+        let size = (h * 3, h);
+        let want: Vec<String> = c
+            .items
+            .iter()
+            .filter_map(|e| e.path.clone())
+            .filter(|p| size != c.thumb_box || !c.thumbs.contains_key(p))
+            .collect();
+        if !want.is_empty() {
+            crate::services::clipboard::command(crate::services::clipboard::Cmd::Thumbs(want, size));
+        }
+        if self.store.menu.apply(index::Diff::Source("clipboard".into(), rows)) {
+            self.launcher_store_changed();
+        }
+    }
+
+    /// The clipssh route's rows off the saved aliases.
+    pub fn launcher_clipssh(&mut self) {
+        let rows = fs_menu::providers::clipssh_rows(&self.store.clipssh.aliases);
+        if self.store.menu.apply(index::Diff::Source("clipssh".into(), rows)) {
+            self.launcher_store_changed();
+        }
     }
 
     /// The device routes' rows, again from the store.
@@ -399,6 +514,9 @@ impl App {
             self.launch = None;
             self.sync_join();
             self.log("menu unmapped");
+            if std::mem::take(&mut self.launcher.paste) && !self.launcher.open {
+                self.paste_chord();
+            }
             return;
         }
         if self.launch.is_none() {
@@ -618,10 +736,16 @@ impl App {
 
     /// What every store change the launcher's index reads asks of it.
     pub fn launcher_inputs(&mut self) {
-        let buttons = self.store.config.get("menu.customPowerButtons").cloned().unwrap_or_default();
-        if self.menu_buttons.as_ref() != Some(&buttons) || !self.store.config.loaded {
-            self.menu_buttons = Some(buttons.clone());
-            index::ask(Ask::Base(buttons));
+        let l = &self.store.lights;
+        let inputs = index::BaseInputs {
+            buttons: self.store.config.get("menu.customPowerButtons").cloned().unwrap_or_default(),
+            lights: l.available.then(|| {
+                l.effects.iter().map(|(id, label)| fs_menu::providers::LightEffect { id: id.clone(), label: label.clone() }).collect()
+            }),
+        };
+        if self.menu_buttons.as_ref() != Some(&inputs) || !self.store.config.loaded {
+            self.menu_buttons = Some(inputs.clone());
+            index::ask(Ask::Base(inputs));
         }
         let launches = self.store.state.data.app_launches.clone();
         if self.menu_launches.as_ref() != Some(&launches) {

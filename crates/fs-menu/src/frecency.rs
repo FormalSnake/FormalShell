@@ -23,9 +23,15 @@ pub const MAX_ENTRIES: usize = 200;
 #[serde(default)]
 pub struct Record {
     pub id: String,
+    #[serde(serialize_with = "js_number")]
     pub count: f64,
-    #[serde(rename = "lastMs")]
+    #[serde(rename = "lastMs", serialize_with = "js_number")]
     pub last_ms: f64,
+}
+
+/// A whole number written the way JSON.stringify writes it, `1` not `1.0`.
+fn js_number<S: serde::Serializer>(x: &f64, s: S) -> Result<S::Ok, S::Error> {
+    if x.fract() == 0.0 && x.abs() < 9.0e15 { s.serialize_i64(*x as i64) } else { s.serialize_f64(*x) }
 }
 
 impl Record {

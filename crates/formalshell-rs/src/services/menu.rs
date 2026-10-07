@@ -150,9 +150,17 @@ fn ipc_client() -> String {
         .map_or_else(|| "formalshell-ipc".to_owned(), |p| p.to_string_lossy().into_owned())
 }
 
+/// What the base tree is built from besides the files.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct BaseInputs {
+    pub buttons: Value,
+    /// The keyboard lights' effects, `None` while no keyboard was found.
+    pub lights: Option<Vec<providers::LightEffect>>,
+}
+
 pub enum Ask {
-    /// `menu.customPowerButtons` changed, or a refresh: the base again.
-    Base(Value),
+    /// An input of the base changed, or a refresh: the base again.
+    Base(BaseInputs),
     /// The apps source again, rescanning only when a directory moved.
     Apps(Vec<Record>),
     /// Run these `when`/`checked` commands, `(id, command, is_when)`.
@@ -176,16 +184,17 @@ pub async fn run(ctx: Ctx) {
     let (tx, rx) = async_channel::unbounded();
     // Warm before anything asks: the tree and the apps exist by the first
     // summon even with no settings.json and no state.json yet.
-    let _ = tx.try_send(Ask::Base(Value::Null));
+    let _ = tx.try_send(Ask::Base(BaseInputs::default()));
     let _ = tx.try_send(Ask::Apps(Vec::new()));
+    let _ = tx.try_send(Ask::Emoji);
     ctx.spawn(watch_entries(tx.clone()));
     let _ = ASK.set(tx);
     let mut launches_seen: Vec<Record> = Vec::new();
     let scan = Arc::new(std::sync::Mutex::new(Scan::default()));
     while let Ok(a) = rx.recv().await {
         match a {
-            Ask::Base(buttons) => {
-                if let Some(tree) = ctx.pool().run(move || base(&buttons)).await {
+            Ask::Base(inputs) => {
+                if let Some(tree) = ctx.pool().run(move || base(&inputs)).await {
                     ctx.publish(store::Diff::Menu(Diff::Base(tree)));
                 }
             }
@@ -235,12 +244,17 @@ pub async fn run(ctx: Ctx) {
 
 /// default-menu.jsonc merged with the self-targeted fragments and the
 /// custom power buttons, then the user's overlay over it.
-fn base(buttons: &Value) -> Tree {
+fn base(inputs: &BaseInputs) -> Tree {
     let mut merged: Entries = parse_jsonc(DEFAULT_MENU).ok().and_then(|v| entries_from_value(&v).ok()).unwrap_or_default();
     for (k, v) in providers::capture_entries(SELF) {
         merged.insert(k, v);
     }
-    for (k, v) in providers::custom_power_button_entries(&power_buttons(buttons)) {
+    if let Some(effects) = &inputs.lights {
+        for (k, v) in providers::lights_entries(true, effects) {
+            merged.insert(k, v);
+        }
+    }
+    for (k, v) in providers::custom_power_button_entries(&power_buttons(&inputs.buttons)) {
         merged.insert(k, v);
     }
     let user = user_menu_path();
