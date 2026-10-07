@@ -327,14 +327,15 @@ pub fn paint(cx: &mut Cx, r: Rect, v: &View, path: &str) {
                     let progress = model::chunk_progress(&line.words, ci, line_end, v.t, line.estimated);
                     let frac = row.bands.get(&ci).map_or(progress, |b| model::row_wipe(b, k, progress));
                     if frac > 0.0 {
-                        let glow = model::chunk_glow(&line.words, ci, line_end, v.t);
-                        let glows = if glow > 0.0 {
-                            vec![Glow { x: 0.0, y: 0.0, blur: 4.0 + glow * 6.0, color: fg.with_alpha(fg.a * 0.3 * glow as f32) }]
-                        } else {
-                            Vec::new()
-                        };
                         let c = IRect::new(at.0 - text::PAD, at.1 - text::PAD, (piece.w * frac).round() as i32 + text::PAD, piece.text.line_height() + text::PAD * 2);
-                        draws.push((piece.text.clone(), at, fg.with_alpha(fg.a * a), Some(c), glows, 0.0));
+                        // MultiEffect's shadow under the sung part: a
+                        // Gaussian of (4 + 6g)px at 0.3g of the ink.
+                        let glow = model::chunk_glow(&line.words, ci, line_end, v.t);
+                        if glow > 0.0 {
+                            let sigma = ((4.0 + glow * 6.0) / 2.0) as f32;
+                            draws.push((piece.text.clone(), at, fg.with_alpha(fg.a * 0.3 * glow as f32 * a), Some(c), Vec::new(), sigma));
+                        }
+                        draws.push((piece.text.clone(), at, fg.with_alpha(fg.a * a), Some(c), Vec::new(), 0.0));
                     }
                 }
                 _ => draws.push((piece.text.clone(), at, ink.with_alpha(ink.a * a), None, Vec::new(), blur as f32)),
@@ -344,7 +345,7 @@ pub fn paint(cx: &mut Cx, r: Rect, v: &View, path: &str) {
         let mut p = cx.painter(&rpath);
         for (shaped, at, color, c, glows, b) in draws {
             if b > 0.0 {
-                p.blurred(&shaped, at, color, b, Some(clip));
+                p.blurred(&shaped, at, color, b, Some(c.map_or(clip, |c| c.intersect(&clip))));
                 continue;
             }
             let (w, h) = shaped.box_size();
