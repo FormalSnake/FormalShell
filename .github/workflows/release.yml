@@ -1,7 +1,7 @@
 name: release
 on:
   push: { tags: ["v*"] }
-  # Rebuilds and re-uploads an existing tag's packages with the workflow as it
+  # Rebuilds and re-uploads an existing tag's tarballs with the workflow as it
   # is on the dispatching branch, since a rerun of the tag's own run keeps the
   # workflow file the tag points at.
   workflow_dispatch:
@@ -20,60 +20,19 @@ jobs:
       - run: gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --generate-notes --verify-tag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  arch:
+  # install.sh downloads formalshell-<arch>-linux.tar.gz from the latest
+  # release. dev/tarball.sh builds it on bookworm, the glibc floor.
+  tarball:
     needs: release
-    runs-on: ubuntu-latest
-    container: archlinux:latest
-    steps:
-      - run: pacman -Syu --noconfirm --needed base-devel git github-cli sudo
-      - uses: actions/checkout@v4
-        with: { ref: "${{ env.TAG }}" }
-      - name: makepkg
-        run: |
-          useradd -m builder
-          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
-          chown -R builder: .
-          su builder -c "packaging/arch/build.sh --tag $TAG --syncdeps --noconfirm"
-      # The staged PKGBUILD, .SRCINFO and install scripts are the AUR
-      # submission for this tag, checksums pinned.
-      - run: |
-          cd packaging/arch/build
-          tar czf "formalshell-aur-$TAG.tar.gz" PKGBUILD .SRCINFO *.install
-          gh release upload "$TAG" --clobber *.pkg.tar.zst "formalshell-aur-$TAG.tar.gz"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-  debian:
-    needs: release
-    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { image: "debian:trixie", suite: trixie }
-          - { image: "debian:testing", suite: forky }
-          - { image: "debian:unstable", suite: sid }
-          - { image: "ubuntu:26.04", suite: resolute }
-    container: ${{ matrix.image }}
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
     steps:
-      - run: apt-get update && apt-get install -y --no-install-recommends ca-certificates git
       - uses: actions/checkout@v4
         with: { ref: "${{ env.TAG }}" }
-      - run: packaging/debian/build.sh --tag "$TAG" --suite ${{ matrix.suite }} --install-deps
-      # gh is not packaged in every suite, so the upload runs on the host.
-      - uses: actions/upload-artifact@v4
-        with:
-          name: debs-${{ matrix.suite }}
-          path: packaging/debian/build/*.deb
-  debian-upload:
-    needs: debian
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with: { pattern: "debs-*", merge-multiple: true, path: debs }
-      # Every file name carries the suite.
-      - run: gh release upload "$TAG" --clobber debs/*.deb
+      - run: docker run --rm -v "$PWD:/src" -e VERSION="${TAG#v}" debian:bookworm /src/dev/tarball.sh /src/dist
+      - run: gh release upload "$TAG" --clobber dist/*.tar.gz
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}

@@ -1,5 +1,6 @@
 mod fontconfig;
 mod greeter;
+mod install;
 mod instance;
 mod ipc;
 mod motion;
@@ -39,6 +40,9 @@ fn main() {
     if args.get(1).is_some_and(|a| a == "greeter") {
         greeter::main(&args[2..]);
         return;
+    }
+    if let Some(cmd) = args.get(1).filter(|a| matches!(a.as_str(), "install" | "update" | "uninstall")) {
+        std::process::exit(install::main(cmd, &args[2..]));
     }
     // Every `t=` in the log counts from here; this line puts that zero on the
     // wall clock, so a cold start reads against the launcher's own stamp.

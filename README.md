@@ -122,62 +122,24 @@ so one line is left for you:
 dofile(os.getenv("HOME") .. "/.config/hypr/formalshell.lua")
 ```
 
-### Arch
+### Arch, Debian, Ubuntu and Fedora
 
-x86_64 and aarch64. Each release publishes an AUR tarball with the checksums
-pinned. It builds `formalshell` and its tool packages (`formalshell-eds`,
-`-ttfx`, `-tensaku`, `-clipssh`, `-localsend-cli`, `-iphone-bridge`,
-`-ancs4linux`):
+x86_64 and aarch64, no Nix:
 
 ```sh
-gh release download --repo FormalSnake/FormalShell --pattern 'formalshell-aur-*.tar.gz'
-tar xzf formalshell-aur-*.tar.gz
-makepkg -si
+curl -fsSL https://raw.githubusercontent.com/FormalSnake/FormalShell/main/install.sh | sh
 ```
 
-From a checkout, `packaging/arch/build.sh -si` builds the same packages from
-the working tree. Then enable the units:
-
-```sh
-systemctl --user enable formalshell.service formalshell-watchdog.timer
-sudo systemctl enable --now formalshell-power-poll.service
-```
-
-The second one feeds USB-C and CPU draw to the power panel. Load the Hyprland
-file:
-
-```lua
--- ~/.config/hypr/hyprland.lua
-dofile("/usr/share/formalshell/examples/hyprland/formalshell.lua")
-```
-
-### Debian and Ubuntu
-
-Debian 13 (trixie), testing (forky), unstable (sid) and Ubuntu 26.04. Each
-release attaches one set of `.deb` files per suite, the suite in every file
-name (`formalshell_0.1.1-1+trixie_amd64.deb`). Swap `trixie` for `forky`,
-`sid` or `resolute` (Ubuntu 26.04):
-
-```sh
-gh release download --repo FormalSnake/FormalShell --pattern '*trixie*.deb'
-sudo apt install ./*trixie*.deb
-```
-
-Enable the user units, which are installed but not started:
-
-```sh
-systemctl --user enable formalshell.service formalshell-watchdog.timer
-```
-
-Load the Hyprland file:
-
-```lua
--- ~/.config/hypr/hyprland.lua
-dofile("/usr/share/formalshell/examples/hyprland/formalshell.lua")
-```
-
-Trixie's Qt 6.8 lacks the rectangular shadow the pantheon theme draws its
-cast with, so that theme has no drop shadows there.
+It installs Hyprland and the shell's runtime tools with pacman, apt or dnf,
+unpacks the latest release under `~/.local` (`--system` for `/usr/local`),
+and runs `formalshell install`: the systemd user units, the Hyprland files
+(`~/.config/hypr/formalshell.lua`, a `hyprland.lua` that loads it, and your
+own `hypr-user.lua`, which already holds any `hyprland.lua` you had), and,
+after asking, the lock screen's PAM file and a greetd config for the greeter.
+A tool your distro does not carry is skipped and its widget says so.
+`formalshell update` moves to the newest release; `formalshell uninstall`
+puts everything back. Where the distro carries no Hyprland (Debian before
+forky, Fedora), bring Hyprland 0.56 or newer yourself.
 
 ## Usage
 

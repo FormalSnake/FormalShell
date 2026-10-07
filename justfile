@@ -12,6 +12,14 @@ lint:
 test:
     nix develop -c env QT_QPA_PLATFORM=offscreen QML_XHR_ALLOW_FILE_READ=1 qmltestrunner -import tests/stubs -input tests
 
+# The release tarball for this machine's arch, built in debian:bookworm as
+# release.yml builds it (dev/tarball.sh), into artifacts/tarball/. The
+# volume keeps the toolchains and cargo caches between runs.
+tarball:
+    ${CONTAINER:-docker} run --rm -v "$PWD:/src" -v formalshell-tarball:/build \
+      -e VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' crates/formalshell-rs/Cargo.toml | head -1)+$(git rev-parse --short HEAD)" \
+      debian:bookworm /src/dev/tarball.sh /src/artifacts/tarball
+
 vm-up:
     ./dev/vm.sh start
 vm-down:
