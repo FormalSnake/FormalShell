@@ -90,6 +90,7 @@ pub fn changed(app: &mut App, topic: Topic) {
         Topic::Picker => app.launcher_picker(),
         Topic::Info => {
             if app.launcher.open && app.launcher.level.as_deref() == Some(crate::surfaces::launcher::MONITOR_ROUTE) {
+                app.launcher.monitor_sample(&app.store);
                 app.launcher_store_changed();
             }
             app.refresh_bar(Some(topic));

@@ -131,6 +131,31 @@ pub struct Model {
     monitor_armed: Option<u64>,
     /// The camera the mirror shows, by node path.
     pub mirror_current: String,
+    /// The monitor tiles' history lines, started when the route opens.
+    monitor_history: MonitorHistory,
+}
+
+/// One reading per monitor tick: CPU, memory, GPU, and the network's
+/// receive and send rates. A reading nobody could take is left out.
+#[derive(Default)]
+struct MonitorHistory {
+    sampled: Option<u64>,
+    cpu: std::collections::VecDeque<f64>,
+    mem: std::collections::VecDeque<f64>,
+    gpu: std::collections::VecDeque<f64>,
+    rx: std::collections::VecDeque<f64>,
+    tx: std::collections::VecDeque<f64>,
+}
+
+const HISTORY: usize = 60;
+
+fn push(q: &mut std::collections::VecDeque<f64>, v: Option<f64>) {
+    if let Some(v) = v.filter(|v| v.is_finite()) {
+        if q.len() == HISTORY {
+            q.pop_front();
+        }
+        q.push_back(v);
+    }
 }
 
 pub const MONITOR_ROUTE: &str = "monitor";
@@ -183,6 +208,7 @@ impl Default for Model {
             monitor_wants: None,
             monitor_armed: None,
             mirror_current: String::new(),
+            monitor_history: MonitorHistory::default(),
             placed: false,
             want: String::new(),
             from_keys: true,
@@ -311,6 +337,22 @@ impl Model {
     /// whole content.
     pub fn split(&self) -> bool {
         self.mode == Mode::Menu && matches!(self.level.as_deref(), Some("clipboard" | "share.history"))
+    }
+
+    /// One monitor tick onto the tiles' history lines.
+    pub fn monitor_sample(&mut self, store: &Store) {
+        let m = &store.info.monitor;
+        if m.sampled_ms.is_none() || m.sampled_ms == self.monitor_history.sampled {
+            return;
+        }
+        let h = &mut self.monitor_history;
+        h.sampled = m.sampled_ms;
+        push(&mut h.cpu, m.cpu.aggregate);
+        push(&mut h.mem, m.mem.as_ref().map(|x| x.used_fraction));
+        push(&mut h.gpu, m.gpu_busy());
+        push(&mut h.rx, m.net_available.then(|| m.net.iter().map(|n| n.rx_bytes_per_sec).sum()));
+        push(&mut h.tx, m.net_available.then(|| m.net.iter().map(|n| n.tx_bytes_per_sec).sum()));
+        self.dirty = true;
     }
 
     pub fn on_mirror(&self) -> bool {
@@ -629,7 +671,7 @@ impl Model {
         let ids: Vec<&str> = self.rows.iter().map(|r| r.id.as_str()).collect();
         let index = nav::rederive(&self.want, self.cursor as i64, &ids, fresh, self.placed);
         self.key = key;
-        self.monitor_strip_h = if view == View::Monitor { ui::measure(&monitor_strip(store, theme), theme.space.popup_width_menu, theme, kit).1 } else { 0.0 };
+        self.monitor_strip_h = if view == View::Monitor { ui::measure(&monitor_strip(store, theme, &self.monitor_history), theme.space.popup_width_menu, theme, kit).1 } else { 0.0 };
         self.picker_switch_h = if self.picker_switch(store) { ui::measure(&picker_switch(self), 400.0, theme, kit).1 } else { 0.0 };
         self.layout(theme, kit);
         self.place(index, false);
@@ -1020,6 +1062,9 @@ impl Model {
             crate::services::mirror::command(crate::services::mirror::Cmd::List);
         } else if self.level.as_deref() == Some(MIRROR_ROUTE) {
             crate::services::mirror::command(crate::services::mirror::Cmd::Stream(None));
+        }
+        if id.as_deref() == Some(MONITOR_ROUTE) && self.level.as_deref() != Some(MONITOR_ROUTE) {
+            self.monitor_history = MonitorHistory::default();
         }
         self.monitor_wants = (id.as_deref() == Some(MONITOR_ROUTE)).then(|| {
             use crate::services::wants::{Source, Want};
@@ -1649,7 +1694,7 @@ fn body_el(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, scroll: f64, 
         }
     }
     if m.monitor_strip_h > 0.0 {
-        items.push((lay.slots.first().map_or(s.lg, |s0| s0.y) - m.monitor_strip_h - s.section_gap, m.monitor_strip_h, monitor_strip(store, theme)));
+        items.push((lay.slots.first().map_or(s.lg, |s0| s0.y) - m.monitor_strip_h - s.section_gap, m.monitor_strip_h, monitor_strip(store, theme, &m.monitor_history)));
     }
     if m.picker_switch_h > 0.0 {
         let top = lay.slots.first().map_or(0.0, |s0| s0.y) - m.picker_switch_h - s.row_gap;
@@ -1796,7 +1841,7 @@ fn monitor_rows(store: &Store, q: &str) -> Vec<Node> {
 
 /// MonitorView.qml's strip: CPU, Memory, GPU, Disk and Network, each a
 /// label over one figure; a reading nobody has taken yet is a dash.
-fn monitor_strip(store: &Store, theme: &Theme) -> El {
+fn monitor_strip(store: &Store, theme: &Theme, h: &MonitorHistory) -> El {
     use fs_system::monitor::format;
     let s = &theme.space;
     let m = &store.info.monitor;
@@ -1811,18 +1856,26 @@ fn monitor_strip(store: &Store, theme: &Theme) -> El {
     };
     let disk = m.disk.iter().find(|d| d.mount == "/").or_else(|| m.disk.first());
     let rx: Option<f64> = m.net_available.then(|| m.net.iter().map(|n| n.rx_bytes_per_sec).sum());
+    let line = |q: &std::collections::VecDeque<f64>, second: Option<&std::collections::VecDeque<f64>>, ceiling: f64| {
+        w::sparkline(q.iter().copied().collect(), second.map_or_else(Vec::new, |s| s.iter().copied().collect()), ceiling, HISTORY)
+    };
+    let net_ceiling = h.rx.iter().chain(h.tx.iter()).copied().fold(1.0, f64::max);
+    // Disk fill has no history worth drawing: a groove instead.
     let tiles = [
-        ("CPU", format::pct(m.cpu.aggregate)),
-        ("Memory", format::pct(m.mem.as_ref().map(|x| x.used_fraction))),
-        ("GPU", gpu_figure),
-        ("Disk", format::pct(disk.map(|d| d.fraction))),
-        ("Network", format::rate(rx)),
+        ("CPU", format::pct(m.cpu.aggregate), line(&h.cpu, None, 1.0)),
+        ("Memory", format::pct(m.mem.as_ref().map(|x| x.used_fraction)), line(&h.mem, None, 1.0)),
+        ("GPU", gpu_figure, line(&h.gpu, None, 1.0)),
+        ("Disk", format::pct(disk.map(|d| d.fraction)), w::column(0.0, vec![w::space((s.control_height - s.track_thickness).max(0.0)), w::track(disk.map_or(0.0, |d| d.fraction.clamp(0.0, 1.0)))])),
+        ("Network", format::rate(rx), line(&h.rx, Some(&h.tx), net_ceiling)),
     ];
     let cells = tiles
         .into_iter()
-        .map(|(label, figure)| {
-            w::cell(w::column(s.xxs, vec![w::section_label(s, label, None, false), w::text(figure).size(Type::Title).mono().weight(Weight::Semibold)]))
-                .fill()
+        .map(|(label, figure, plot)| {
+            w::cell(w::column(
+                s.xxs,
+                vec![w::section_label(s, label, None, false), w::text(figure).size(Type::Title).mono().weight(Weight::Semibold), plot],
+            ))
+            .fill()
         })
         .collect();
     w::row(s.sm, cells).fill().pad(s.sm, 0.0, s.sm, 0.0)
