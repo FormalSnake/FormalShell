@@ -606,6 +606,18 @@ for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
 done
 shell_bin="$PWD/result/bin/formalshell"
 if [ "$fs_impl" = rust ]; then shell_bin="$PWD/result-rs/bin/formalshell-rs"; fi
+# FS_CPU_QUOTA=25% runs the shell alone under a CPU quota, in a transient
+# user scope of its own, so a fast machine stands in for e1504g's N305 in
+# power saver. systemd-run reaches the user manager over its private socket,
+# never the session's own bus. The scope is stopped after the session, and
+# its name puts it under dev/scoped-run.sh's sweep of leftover fs-run-*.
+shell_prefix=""
+shell_unit=""
+if [ -n "${FS_CPU_QUOTA:-}" ]; then
+  shell_unit="fs-run-shell-$$"
+  shell_prefix="systemd-run --user --scope --quiet --collect --unit=$shell_unit -p CPUQuota=$FS_CPU_QUOTA -p CPUQuotaPeriodSec=${FS_CPU_QUOTA_PERIOD:-100ms} -p RuntimeMaxSec=2h --"
+  echo "shell cpu quota: $FS_CPU_QUOTA per ${FS_CPU_QUOTA_PERIOD:-100ms}"
+fi
 if [ -n "$shell_launcher" ]; then
   "$shell_launcher" "$shell_start_script"
 else
@@ -624,7 +636,7 @@ export LIBGL_ALWAYS_SOFTWARE=1
 # screenshot script reads for its memory sample; the wrapper execs
 # quickshell in place, so the pid stays the shell's own.
 $wayland_debug_line
-"$shell_bin" > "$shell_log_path" 2>&1 &
+$shell_prefix "$shell_bin" > "$shell_log_path" 2>&1 &
 echo \$! > "$shot_dir/shell.pid"
 wait
 EOF
@@ -742,9 +754,32 @@ echo "session mode: $session_mode${vkms_device:+ ($vkms_device)}"
 
 # -k 10 force-kills 10s after the initial SIGTERM: Hyprland's SIGTERM
 # handler can hang instead of exiting, and a stuck session would sit on the
-# card (or on the host's screen) indefinitely.
-env "${session_env[@]}" dbus-run-session -- \
+# card (or on the host's screen) indefinitely. That only reaches the pid
+# timeout started, and on NixOS that is /run/wrappers/bin/Hyprland, a
+# capability wrapper whose real compositor can outlive it, reparented to
+# pid 1 (e1504g, 2026-10-07). So the whole session runs in a transient user
+# scope of its own and is torn down as a cgroup: every process in it gets
+# SIGTERM, then SIGKILL five seconds on, wherever it was reparented to.
+# systemd-run reaches the user manager over its private socket, never the
+# session bus. Its fs-run- name puts a leftover under dev/scoped-run.sh's
+# sweep in the VM.
+hypr_unit="fs-run-hypr-$$"
+session_scope=()
+if systemd-run --user --scope --quiet --collect --unit="$hypr_unit-probe" true > /dev/null 2>&1; then
+  session_scope=(systemd-run --user --scope --quiet --collect --unit="$hypr_unit"
+    -p TimeoutStopSec=5 -p RuntimeMaxSec=$((session_timeout + 60)) --)
+fi
+env "${session_env[@]}" ${session_scope[@]+"${session_scope[@]}"} dbus-run-session -- \
   timeout -k 10 "$session_timeout" $hyprland_bin --config "$cfg" > "$hypr_log_path" 2>&1 || true
+if [ -n "$shell_unit" ]; then systemctl --user stop "$shell_unit.scope" 2>/dev/null || true; fi
+if [ ${#session_scope[@]} -gt 0 ]; then systemctl --user stop "$hypr_unit.scope" 2>/dev/null || true; fi
+# The config path is this run's own, so anything still carrying it is a
+# leftover of this session, whichever way it was started.
+if leftover=$(pgrep -f -- "--config $cfg"); then
+  kill -KILL $leftover 2>/dev/null || true
+  echo "SMOKE_FAIL: the nested compositor outlived its session (pids $(echo $leftover)), killed" >&2
+  exit 1
+fi
 
 host_notifications_owner_after=$(host_notifications_owner)
 if [ "$host_notifications_owner_before" != "$host_notifications_owner_after" ]; then

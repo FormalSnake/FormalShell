@@ -18,6 +18,7 @@ use crate::surface::{PixelSurface, Surface};
 use crate::surfaces::card::Ends;
 use crate::surfaces::launcher::{Out, Shown};
 use crate::surfaces::modal::{Modal, Part};
+use crate::text::{Family, TextStyle};
 
 const WIFI_PASSWORD: &str = "wifi-password";
 const WIFI_IDENTITY: &str = "wifi-identity";
@@ -655,6 +656,39 @@ impl App {
         }
     }
 
+    /// The rows' words shaped on the pool in every style the launcher last
+    /// drew in (the theme's row styles before its first open), so an open
+    /// finds them in the shared cache instead of shaping on this thread.
+    fn warm_launcher_text(&mut self) {
+        let Some(runtime) = &self.runtime else { return };
+        let styles = if self.launcher_styles.is_empty() { warm_styles(&self.bar.kit.look, &self.store.theme.theme.font_size) } else { self.launcher_styles.clone() };
+        let words: Vec<String> = self
+            .launcher
+            .rows
+            .iter()
+            .flat_map(|n| [n.label.clone(), n.desc.clone().unwrap_or_default()])
+            .filter(|w| !w.is_empty())
+            .collect();
+        let jobs: Vec<(String, TextStyle)> = styles
+            .iter()
+            .filter(|st| !matches!(st.family, Family::Named(_)))
+            .flat_map(|st| words.iter().map(move |w| (w.clone(), *st)))
+            .collect();
+        let text = self.bar.kit.text.clone();
+        runtime.pool().submit(move || text.warm(&jobs));
+    }
+
+    /// Every face and size the launcher draws its words in, warmed once the
+    /// bar is up with the glyphs most rows use.
+    pub(super) fn warm_faces(&mut self) {
+        let Some(runtime) = &self.runtime else { return };
+        let sample = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,:;-_/()'";
+        let jobs: Vec<(String, TextStyle)> =
+            warm_styles(&self.bar.kit.look, &self.store.theme.theme.font_size).into_iter().map(|st| (sample.to_owned(), st)).collect();
+        let text = self.bar.kit.text.clone();
+        runtime.pool().submit(move || text.warm(&jobs));
+    }
+
     /// The launcher's frame, its scrim on the card's own pose.
     pub(super) fn present_launcher(&mut self, now: Instant) {
         self.launcher_answers();
@@ -677,6 +711,7 @@ impl App {
             if self.launcher_warm && !self.launcher.open {
                 self.launcher_warm = false;
                 self.launcher.resolve(&self.store, &self.store.theme.theme, &mut self.bar.kit);
+                self.warm_launcher_text();
             }
             return;
         }
@@ -691,7 +726,9 @@ impl App {
         let t1 = Instant::now();
         if self.launcher.dirty || animating || !w.shown.modal.surface.mapped {
             w.shown.modal.sync_region(&self.compositor);
+            self.bar.kit.seen = Some(std::mem::take(&mut self.launcher_styles));
             w.shown.layout(&mut self.launcher, &self.store, theme, &mut self.bar.kit, now);
+            self.launcher_styles = self.bar.kit.seen.take().unwrap_or_default();
             self.launcher.dirty = false;
         }
         let laid = t1.elapsed();
@@ -725,9 +762,13 @@ impl App {
 
     pub(super) fn launcher_configure(&mut self, part: Part, width: i32, height: i32) {
         let Some(w) = &mut self.launch else { return };
+        let first = part == Part::Card && !w.shown.modal.surface.configured;
         w.shown.modal.configure(part, width, height);
         if part == Part::Card {
             self.launcher.dirty = true;
+        }
+        if first {
+            self.log("menu configured");
         }
     }
 
@@ -886,4 +927,22 @@ impl App {
             index::ask(Ask::Apps(crate::surfaces::launcher::launches(&self.store)));
         }
     }
+}
+
+/// The type roles a launcher row, its header and its trailing slot use, in
+/// the weights they come in.
+fn warm_styles(look: &crate::surfaces::bar::cell::Look, f: &fs_theme::tokens::FontTokens) -> Vec<TextStyle> {
+    use fs_theme::tokens::WEIGHTS;
+    let mut out = Vec::new();
+    for size in [f.caption, f.body_small, f.body, f.subtitle] {
+        for weight in [WEIGHTS.normal, WEIGHTS.medium] {
+            out.push(TextStyle { family: look.sans, size: size as f32, weight: weight as f32, tracking: 0.0 });
+        }
+    }
+    for size in [f.caption, f.body_small] {
+        for weight in [WEIGHTS.normal, WEIGHTS.medium] {
+            out.push(TextStyle { family: look.mono, size: size as f32, weight: weight as f32, tracking: 0.0 });
+        }
+    }
+    out
 }

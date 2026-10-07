@@ -58,6 +58,7 @@ leg_menu_budget_assert() {
     function t(line) { match(line, /t=[0-9]+ms/); return substr(line, RSTART + 2, RLENGTH - 4) + 0 }
     /^ipc t=.*function: "toggle"/ && /target: "menu"/ { n++; if (n % 2 == 1 && n <= 10) { open[++o] = t($0) } ; if (n == 11) rest = t($0) }
     /^commit surface=menu / { mc[++m] = t($0) }
+    /^ipc t=.* menu configured$/ { cf[++c] = t($0) }
     function us(line, key) { if (!match(line, key "=[0-9]+")) return 0; return substr(line, RSTART + length(key) + 1, RLENGTH - length(key) - 1) + 0 }
     /^commit surface=bar / { bc[++b] = t($0); bw[b] = us($0, "last_wait_us"); br[b] = us($0, "react_us") }
     /^event loop: slow present / { pt[++q] = t($0); pu[q] = us($0, "present_us") }
@@ -66,6 +67,11 @@ leg_menu_budget_assert() {
       for (i = 1; i <= o; i++) {
         first = -1
         for (j = 1; j <= m; j++) if (mc[j] >= open[i]) { first = mc[j] - open[i]; break }
+        # The compositor share of that: the toggle to the first configure
+        # of the card, which a new layer surface has to wait for.
+        conf = 0
+        for (j = 1; j <= c; j++) if (cf[j] >= open[i]) { conf = cf[j] - open[i]; break }
+        if (conf > first) conf = 0
         # Each bar gap split in two: what the shell held it for (the
         # callback to the commit, plus every present of 8 ms or more that
         # ran inside the gap) and what the compositor did (its callback
@@ -83,8 +89,10 @@ leg_menu_budget_assert() {
           }
           last = bc[j]
         }
-        printf "open %d first_commit_ms=%d bar_gap_ms=%d shell_ms=%d compositor_wait_ms=%d\n", i, first, gap, shell, wait
+        printf "open %d first_commit_ms=%d configure_ms=%d bar_gap_ms=%d shell_ms=%d compositor_wait_ms=%d\n", i, first, conf, gap, shell, wait
         if (first < 0 || first > worst_first) worst_first = (first < 0 ? 99999 : first)
+        if (first >= 0 && first - conf > worst_own) worst_own = first - conf
+        if (conf > worst_conf) worst_conf = conf
         if (gap > worst_gap) worst_gap = gap
         if (shell > worst_shell) worst_shell = shell
         if (wait > worst_wait) worst_wait = wait
@@ -96,7 +104,7 @@ leg_menu_budget_assert() {
       base = k ? sum / k : 0
       quiet = 0
       for (j = 1; j <= m; j++) if (mc[j] > rest + 2000 && mc[j] < rest + 7000) quiet++
-      printf "worst first_commit_ms=%d bar_gap_ms=%d shell_ms=%d compositor_wait_ms=%d rest_commits=%d opens=%d frame_ms=%d\n", worst_first, worst_gap, worst_shell, worst_wait, quiet, o, base
+      printf "worst first_commit_ms=%d first_own_ms=%d configure_ms=%d bar_gap_ms=%d shell_ms=%d compositor_wait_ms=%d rest_commits=%d opens=%d frame_ms=%d\n", worst_first, worst_own, worst_conf, worst_gap, worst_shell, worst_wait, quiet, o, base
     }' "$shell_log_path")
   echo "$out" | sed 's/^/SMOKE_MENU_BUDGET /'
   # Every commit, callback wait and slow loop turn of the run, for reading
@@ -111,7 +119,18 @@ leg_menu_budget_assert() {
   quiet=$(echo "$worst" | sed -n 's/.*rest_commits=\([0-9]*\).*/\1/p')
   opens=$(echo "$worst" | sed -n 's/.*opens=\([0-9]*\).*/\1/p')
   [ "${opens:-0}" -eq 5 ] || fail "menu budget: saw ${opens:-0} launcher opens in the shell log, wanted 5"
-  [ "$first" -le 50 ] || fail "menu budget: a launcher open took ${first}ms to its first commit (budget 50)"
+  local own conf
+  own=$(echo "$worst" | sed -n 's/.*first_own_ms=\([0-9]*\).*/\1/p')
+  conf=$(echo "$worst" | sed -n 's/.*configure_ms=\([0-9]*\).*/\1/p')
+  # The VM's llvmpipe Hyprland takes 100 to 400 ms to configure a new layer
+  # surface, so there the budget is read on the shell's own share: the
+  # configure to the commit.
+  if [ "${conf:-0}" -gt 20 ]; then
+    echo "SMOKE_MENU_BUDGET first commit compositor-bound here: configures waited up to ${conf}ms, the shell's own share ${own}ms"
+    [ "$own" -le 50 ] || fail "menu budget: a launcher open took ${own}ms from its configure to its first commit (budget 50)"
+  else
+    [ "$first" -le 50 ] || fail "menu budget: a launcher open took ${first}ms to its first commit (budget 50)"
+  fi
   local shell wait
   shell=$(echo "$worst" | sed -n 's/.*shell_ms=\([0-9]*\).*/\1/p')
   wait=$(echo "$worst" | sed -n 's/.*compositor_wait_ms=\([0-9]*\).*/\1/p')

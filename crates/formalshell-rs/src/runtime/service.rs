@@ -48,6 +48,7 @@ pub fn spawn(
     std::thread::Builder::new()
         .name("fs-service".into())
         .spawn(move || {
+            super::lower_priority();
             let ctx = Ctx { executor: Rc::new(LocalExecutor::new()), publisher, pool };
             services(&ctx);
             let executor = ctx.executor.clone();

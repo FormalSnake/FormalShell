@@ -60,6 +60,14 @@ How a run works:
   Hyprland in the running session, and the VM, whose pixman sway parent
   advertises no `zwp_linux_dmabuf_v1` and hands out no render node, runs it
   on the `vkms` software KMS card instead (`nix/testvm.nix`).
+- The nested session runs in a transient user scope of its own
+  (`fs-run-hypr-<pid>`) and is stopped as a cgroup at teardown, so a
+  compositor that outlives `timeout` (NixOS's `/run/wrappers/bin/Hyprland`)
+  goes with it; a leftover carrying the run's config path fails the run.
+- `FS_CPU_QUOTA=10% FS_CPU_QUOTA_PERIOD=2ms` runs the shell alone under that
+  CPU quota in a scope of its own, the stand-in for e1504g in power saver
+  (its launcher and cold start numbers land in the same range). Every
+  budget leg (`--menu-budget`, `--idle`) is read under it.
 - Flags combine into one session: `leg_<n>_order` sets the order, timings are
   max-merged so a combination outlives its slowest half, and a leg that
   cannot share the session takes the run over (`--screensaver-gif`).
@@ -268,6 +276,12 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   unavailable" line, and `hdr rule <output>` (the rule an enable would
   send, unsent) restating the mode, position, scale, transform and vrr
   `hyprctl monitors all -j` reports. The real toggle is g815's to confirm.
+- `idle.sh` `--idle`: the rust spec's idle and cold start budgets under the
+  default bar: the launch stamp to the bar's first commit with the shell's
+  `phase` lines between (the bar's configure among them, the compositor's
+  share), then 60 s undriven, CPU ticks and voluntary switches (wakeups)
+  per thread and the commits made, then 20 s of `strace -f` naming each
+  waker. Rust only.
 - `hotcorner.sh` `--hotcorner`: both hot corner surfaces mapped on the right
   layer, which is all a rig with no synthetic pointer can observe.
 - `hotcorner_relock.sh` `--hotcorner-relock`: locks from the corner, unlocks
@@ -384,7 +398,9 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   item whole inside the viewport (`viewCursor.top`/`bottom`).
 - `menu_budget.sh` `--menu-budget`: the rust spec's launcher budget off the
   shell's own commit log, the bar's badge spinning throughout five `menu
-  toggle` opens: toggle to the launcher's first commit under 50 ms, the
+  toggle` opens: toggle to the launcher's first commit under 50 ms (read
+  from the card's first configure where the compositor took over 20 ms to
+  send it, as the VM's llvmpipe Hyprland does), the
   shell's own hold on any bar frame under 16 ms (each gap split into the
   compositor's callback wait and the shell's turn), no gap between bar
   commits over 33 ms where the compositor kept 60 Hz, and no launcher

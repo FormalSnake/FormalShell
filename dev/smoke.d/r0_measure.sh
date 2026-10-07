@@ -87,7 +87,7 @@ leg_r0_measure_shell() {
 #!/usr/bin/env bash
 $software
 date '+%s%N %z' > "$r0_start_path"
-"$shell_bin" $extra > "$shell_log_path" 2>&1 &
+$shell_prefix "$shell_bin" $extra > "$shell_log_path" 2>&1 &
 echo \$! > "$shot_dir/shell.pid"
 wait
 EOF

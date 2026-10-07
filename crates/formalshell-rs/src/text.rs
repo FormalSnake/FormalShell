@@ -5,7 +5,7 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use parley::fontique::Blob;
 use parley::{
@@ -15,7 +15,7 @@ use parley::{
 use skrifa::bitmap::{BitmapData, BitmapStrikes};
 use skrifa::instance::{LocationRef, NormalizedCoord, Size};
 use skrifa::outline::{
-    DrawSettings, Engine, HintingInstance, HintingOptions, OutlinePen, SmoothMode, Target,
+    DrawSettings, Engine, GlyphStyles, HintingInstance, HintingOptions, OutlinePen, SmoothMode, Target,
 };
 use skrifa::raw::types::F2Dot14;
 use skrifa::string::StringId;
@@ -23,6 +23,16 @@ use skrifa::{FontRef, GlyphId, MetadataProvider};
 use vello_cpu::kurbo::BezPath;
 
 use crate::fontconfig::{self, HintStyle, Rendering};
+
+/// A font file mapped rather than read: the emoji face alone is ~10 MB,
+/// and only the tables a glyph needs are ever paged in.
+fn map_font(path: impl AsRef<std::path::Path>) -> std::io::Result<Blob<u8>> {
+    let file = std::fs::File::open(path)?;
+    // SAFETY: the font files come from the read-only nix store or a
+    // package's share dir; nothing truncates them under a running shell.
+    let map = unsafe { memmap2::Mmap::map(&file)? };
+    Ok(Blob::new(Arc::new(map)))
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Family {
@@ -102,7 +112,80 @@ struct GlyphKey {
     glyph: u32,
 }
 
-pub struct Text {
+/// The shaper, shared: the UI thread shapes through it, and a pool job
+/// warms it ahead of a surface (faces, outlines, whole strings) so the UI
+/// thread finds them cached. The lock is taken per string, so the UI waits
+/// on at most one shape.
+#[derive(Clone)]
+pub struct Text(Arc<Shared>);
+
+struct Shared {
+    inner: Mutex<Option<Inner>>,
+    /// fontconfig and the font collection, loaded on a thread of their own
+    /// while the compositor answers the bar's first configure.
+    loading: Mutex<Option<std::thread::JoinHandle<Inner>>>,
+}
+
+#[derive(Hash, PartialEq, Eq)]
+struct ShapeKey {
+    text: String,
+    family: String,
+    size: u32,
+    weight: u32,
+    tracking: u32,
+}
+
+impl ShapeKey {
+    fn new(text: &str, style: TextStyle) -> Self {
+        let family = match style.family {
+            Family::Generic(g) => format!("{g:?}"),
+            Family::Named(n) => n.to_owned(),
+        };
+        Self { text: text.to_owned(), family, size: style.size.to_bits(), weight: style.weight.to_bits(), tracking: style.tracking.to_bits() }
+    }
+}
+
+const SHAPED_LIMIT: usize = 4096;
+
+impl Text {
+    pub fn new() -> Self {
+        let loading = std::thread::Builder::new().name("fs-fonts".into()).spawn(Inner::new).expect("spawn the font loader");
+        Self(Arc::new(Shared { inner: Mutex::new(None), loading: Mutex::new(Some(loading)) }))
+    }
+
+    pub fn shape(&mut self, source: &str, style: TextStyle) -> ShapedText {
+        let asked = std::time::Instant::now();
+        let mut guard = self.0.inner.lock().unwrap_or_else(|e| e.into_inner());
+        if guard.is_none() {
+            let loading = self.0.loading.lock().unwrap_or_else(|e| e.into_inner()).take();
+            *guard = Some(loading.and_then(|h| h.join().ok()).unwrap_or_else(Inner::new));
+        }
+        if asked.elapsed().as_millis() >= 4 {
+            eprintln!("text: waited {}us on the shaper", asked.elapsed().as_micros());
+        }
+        let inner = guard.as_mut().expect("loaded above");
+        let key = ShapeKey::new(source, style);
+        if let Some(hit) = inner.shaped.get(&key) {
+            return hit.clone();
+        }
+        let shaped = inner.shape(source, style);
+        if inner.shaped.len() >= SHAPED_LIMIT {
+            inner.shaped.clear();
+        }
+        inner.shaped.insert(key, shaped.clone());
+        shaped
+    }
+
+    /// Shapes each string ahead of its first draw, one lock per string.
+    pub fn warm(&self, jobs: &[(String, TextStyle)]) {
+        let mut text = self.clone();
+        for (source, style) in jobs {
+            text.shape(source, *style);
+        }
+    }
+}
+
+struct Inner {
     fcx: FontContext,
     lcx: LayoutContext<()>,
     rendering: Rendering,
@@ -112,18 +195,24 @@ pub struct Text {
     /// Colour bitmaps by face, glyph and pixel size; `None` where the face
     /// has no bitmap for the glyph.
     bitmaps: HashMap<(u64, u32, u32, u32), Option<(crate::scene::Bitmap, i32, i32)>>,
+    /// The autohinter's glyph classes per face, the costly half of a hinting
+    /// instance, computed once and shared by every size.
+    styles: HashMap<(u64, u32), GlyphStyles>,
+    shaped: HashMap<ShapeKey, ShapedText>,
 }
 
-impl Text {
-    pub fn new() -> Self {
+impl Inner {
+    fn new() -> Self {
         let rendering = fontconfig::rendering();
         eprintln!("text: fontconfig {rendering:?}");
+        crate::phase("fontconfig");
         let mut fcx = FontContext::new();
+        crate::phase("font collection");
         // The package wraps the binary with the lucide font's path, the way
         // nix/package.nix puts it on XDG_DATA_DIRS for Qt.
-        match std::env::var("FS_RS_ICON_FONT").map(std::fs::read) {
+        match std::env::var("FS_RS_ICON_FONT").map(map_font) {
             Ok(Ok(data)) => {
-                let families = fcx.collection.register_fonts(Blob::new(Arc::new(data)), None);
+                let families = fcx.collection.register_fonts(data, None);
                 eprintln!("text: icon font registered ({} families)", families.len());
             }
             Ok(Err(err)) => eprintln!("text: icon font unreadable: {err}"),
@@ -140,14 +229,15 @@ impl Text {
                     if p.is_dir() {
                         stack.push(p);
                     } else if let Some(data) =
-                        p.extension().filter(|e| *e == "ttf" || *e == "otf").and_then(|_| std::fs::read(&p).ok())
+                        p.extension().filter(|e| *e == "ttf" || *e == "otf").and_then(|_| map_font(&p).ok())
                     {
-                        fcx.collection.register_fonts(Blob::new(Arc::new(data)), None);
+                        fcx.collection.register_fonts(data, None);
                         eprintln!("text: registered {}", p.display());
                     }
                 }
             }
         }
+        crate::phase("font files");
         Self {
             fcx,
             lcx: LayoutContext::new(),
@@ -156,10 +246,12 @@ impl Text {
             instances: Vec::new(),
             outlines: HashMap::new(),
             bitmaps: HashMap::new(),
+            styles: HashMap::new(),
+            shaped: HashMap::new(),
         }
     }
 
-    pub fn shape(&mut self, source: &str, style: TextStyle) -> ShapedText {
+    fn shape(&mut self, source: &str, style: TextStyle) -> ShapedText {
         let mut builder = self.lcx.ranged_builder(&mut self.fcx, source, 1.0, true);
         match style.family {
             Family::Generic(g) => {
@@ -240,7 +332,11 @@ impl Text {
         }
         let outlines = font.outline_glyphs();
         let location = location(coords);
-        let hinting = hinting_options(self.rendering).and_then(|options| {
+        let hinting = hinting_options(self.rendering).and_then(|mut options| {
+            if let Engine::Auto(None) = options.engine {
+                let styles = self.styles.entry((blob, index)).or_insert_with(|| GlyphStyles::new(&outlines));
+                options.engine = Engine::Auto(Some(styles.clone()));
+            }
             HintingInstance::new(&outlines, Size::new(size), LocationRef::new(&location), options).ok()
         });
         let family = font

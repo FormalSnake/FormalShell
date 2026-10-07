@@ -271,7 +271,7 @@ cmd_smoke() {
   cmd_sync
   local out status=0 prebuilt
   prebuilt=$(prebuild_env) || { echo "testvm: building the shell on the mac failed" >&2; exit 1; }
-  out=$(vm_run "${FS_IMPL:+FS_IMPL=$FS_IMPL }${prebuilt}$script $*" 2>&1) || status=$?
+  out=$(vm_run "${FS_IMPL:+FS_IMPL=$FS_IMPL }${FS_CPU_QUOTA:+FS_CPU_QUOTA=$FS_CPU_QUOTA }${FS_CPU_QUOTA_PERIOD:+FS_CPU_QUOTA_PERIOD=$FS_CPU_QUOTA_PERIOD }${prebuilt}$script $*" 2>&1) || status=$?
   echo "$out"
   if [ "$status" -ne 0 ]; then
     echo "testvm: smoke run failed (exit $status)" >&2
