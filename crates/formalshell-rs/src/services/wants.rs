@@ -26,9 +26,10 @@ pub enum Source {
     Monitor,
     Iphone,
     Calendar,
+    Display,
 }
 
-pub const COUNT: usize = 8;
+pub const COUNT: usize = 9;
 
 const SOURCES: [Source; COUNT] = [
     Source::Weather,
@@ -39,6 +40,7 @@ const SOURCES: [Source; COUNT] = [
     Source::Monitor,
     Source::Iphone,
     Source::Calendar,
+    Source::Display,
 ];
 
 /// How long a source with no wanter keeps running.
@@ -89,6 +91,7 @@ fn start(source: Source, ctx: Ctx) -> Pin<Box<dyn Future<Output = ()>>> {
         Source::Monitor => Box::pin(info::monitor::run(ctx)),
         Source::Iphone => Box::pin(info::iphone::run(ctx)),
         Source::Calendar => Box::pin(info::calendar::run(ctx)),
+        Source::Display => Box::pin(super::display::run(ctx)),
     }
 }
 

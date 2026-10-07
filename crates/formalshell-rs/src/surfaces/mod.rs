@@ -13,6 +13,9 @@ use crate::store::Topic;
 use crate::wayland::{App, theme_inputs};
 
 pub fn changed(app: &mut App, topic: Topic) {
+    if matches!(topic, Topic::Hyprland | Topic::State | Topic::Display | Topic::Config) {
+        crate::services::display::reconcile(&app.store);
+    }
     match topic {
         Topic::Config => {
             let settings = app.store.config.settings().clone();

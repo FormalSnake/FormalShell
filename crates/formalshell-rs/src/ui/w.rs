@@ -108,7 +108,7 @@ pub fn icon_button(glyph: impl Into<String>) -> El {
 }
 
 pub fn switch(checked: bool) -> El {
-    El::new(Kind::Switch { checked })
+    El::new(Kind::Switch { checked, enabled: true })
 }
 
 pub fn track(value: f64) -> El {
@@ -123,7 +123,7 @@ pub fn slider(value: f64) -> El {
 /// ButtonGroup.qml: a choice among several when `exclusive`, a set of
 /// actions when not.
 pub fn group(options: Vec<Opt>, index: usize, exclusive: bool) -> El {
-    El::new(Kind::Group { options, index, exclusive, cursor_index: index })
+    El::new(Kind::Group { options, index, exclusive, cursor_index: index, wrap: false })
 }
 
 pub fn segmented(options: Vec<String>, index: usize) -> El {
@@ -197,6 +197,10 @@ pub fn shoulders(edge: Edge, span: f64, depth: f64, run: f64) -> El {
 
 pub fn marquee(text: impl Into<String>, max: f64) -> El {
     El::new(Kind::Marquee { text: text.into(), ink: Ink::Fg, max })
+}
+
+pub fn matrix(rows: Vec<String>) -> El {
+    El::new(Kind::Matrix { rows })
 }
 
 /// PanelHero.qml's parts.

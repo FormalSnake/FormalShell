@@ -353,6 +353,7 @@ async fn refresh_outputs(ctx: &Ctx, shared: &Shared) {
             (Vec::new(), OutputsState::Failed)
         }
     };
+    crate::services::display::outputs_changed(ctx, &rows);
     shared.borrow_mut().outputs = rows.clone();
     ctx.publish(store::Diff::Hyprland(Diff::Outputs(rows, state)));
 }

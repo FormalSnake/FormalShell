@@ -21,7 +21,7 @@ use smithay_client_toolkit::shell::WaylandSurface;
 use smithay_client_toolkit::shell::wlr_layer::KeyboardInteractivity;
 use vello_cpu::kurbo::Rect;
 
-use super::{Effect, Panel, View};
+use super::{Edit, Effect, Panel, View};
 use crate::motion::{Animated, Kind as Clock, SPATIAL};
 use crate::runtime::Runtime;
 use crate::scene::{IRect, NodeId, Paint};
@@ -169,6 +169,11 @@ impl Host {
         self.open
     }
 
+    /// A text field in the body holds the keyboard.
+    pub fn editing(&self) -> bool {
+        self.open && self.module.editing()
+    }
+
     /// Gone from the screen: closed and landed, or cut by a handoff.
     pub fn finished(&self, now: Instant) -> bool {
         self.handed || (self.surface.mapped && self.card.finished(now))
@@ -179,6 +184,7 @@ impl Host {
             return;
         }
         self.open = false;
+        self.module.closed();
         self.cursor.active = false;
         self.handoff = None;
         self.card.set_bypass(now, false);
@@ -190,6 +196,7 @@ impl Host {
     /// screen and no longer joined, until the incoming card starts moving.
     pub fn hand_over(&mut self) {
         self.open = false;
+        self.module.closed();
         self.cursor.active = false;
         self.card.set_joined(false);
         self.set_keyboard(KeyboardInteractivity::None);
@@ -516,6 +523,18 @@ impl Host {
         }
         let mut fx = Self::effect(store, runtime);
         let stop = self.cursor.key.clone().filter(|_| self.cursor.active);
+        if self.module.editing() {
+            let edit = match name {
+                Key::Escape => Edit::Cancel,
+                Key::Tab(_) => Edit::Tab,
+                Key::Activate => Edit::Submit,
+                Key::Back => Edit::Back,
+                Key::Text(t) => Edit::Insert(t),
+                Key::Move(..) => return Out::None,
+            };
+            self.module.edit(edit, &mut fx);
+            return if fx.close { Out::Close } else { Out::None };
+        }
         match name {
             Key::Escape => return Out::Close,
             Key::Tab(_) => {
@@ -523,6 +542,7 @@ impl Host {
                 self.cursor.keyed = true;
             }
             Key::Move(dx, dy) => self.move_cursor(dx, dy, &mut fx),
+            Key::Back => {}
             Key::Activate => {
                 if let Some(k) = stop.filter(|_| !self.body.stops.is_empty()) {
                     self.module.activate(&k, &mut fx);
@@ -728,5 +748,6 @@ pub enum Key {
     Tab(i32),
     Move(i32, i32),
     Activate,
+    Back,
     Text(String),
 }

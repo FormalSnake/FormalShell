@@ -162,6 +162,25 @@ fn stub() -> Registry<()> {
                 functions: vec![f("status", &[], Type::String, |_, _| s("{}")), f("gpu", &[], Type::String, |_, _| s("{}"))],
             },
             Target {
+                name: "network",
+                functions: vec![
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                    f("connect", &[("ssid", Type::String), ("psk", Type::String)], Type::String, |_, a| {
+                        s(format!("connect {} {}", a[0].str(), a[1].str()))
+                    }),
+                    f(
+                        "connectEap",
+                        &[("ssid", Type::String), ("identity", Type::String), ("password", Type::String)],
+                        Type::String,
+                        |_, a| s(format!("connectEap {} {} {}", a[0].str(), a[1].str(), a[2].str())),
+                    ),
+                    f("forget", &[("ssid", Type::String)], Type::String, |_, a| s(format!("forget {}", a[0].str()))),
+                    f("wifi", &[("enabled", Type::Bool)], Type::String, |_, a| s(format!("wifi {}", a[0].bool()))),
+                    f("speedtest", &[], Type::String, |_, _| s("ok")),
+                    f("speedstatus", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
+            Target {
                 name: "plugins",
                 functions: vec![
                     f("list", &[], Type::String, |_, _| s("[]")),
@@ -205,6 +224,33 @@ fn stub() -> Registry<()> {
                     f("dismiss", &[("id", Type::String)], Type::String, |_, a| s(format!("dismiss {}", a[0].str()))),
                     f("clear", &[], Type::String, |_, _| s("ok")),
                     f("markRead", &[], Type::String, |_, _| s("ok")),
+                ],
+            },
+            Target {
+                name: "display",
+                functions: vec![
+                    f("scale", &[("output", Type::String), ("scale", Type::Real)], Type::String, |_, a| {
+                        s(format!("scale {} {}", a[0].str(), js_number(a[1].real())))
+                    }),
+                    f("mirror", &[("output", Type::String), ("source", Type::String)], Type::String, |_, a| {
+                        s(format!("mirror {} {}", a[0].str(), a[1].str()))
+                    }),
+                    f("enable", &[("output", Type::String), ("enabled", Type::Bool)], Type::String, |_, a| {
+                        s(format!("enable {} {}", a[0].str(), a[1].bool()))
+                    }),
+                ],
+            },
+            Target {
+                name: "hdr",
+                functions: vec![
+                    f("toggle", &[], Type::String, |_, _| s("ok")),
+                    f("enable", &[], Type::String, |_, _| s("ok")),
+                    f("disable", &[], Type::String, |_, _| s("ok")),
+                    f("setOutput", &[("output", Type::String), ("enabled", Type::Bool)], Type::String, |_, a| {
+                        s(format!("setOutput {} {}", a[0].str(), a[1].bool()))
+                    }),
+                    f("rule", &[("output", Type::String)], Type::String, |_, a| s(format!("rule {}", a[0].str()))),
+                    f("status", &[], Type::String, |_, _| s("{}")),
                 ],
             },
             Target {
@@ -322,11 +368,14 @@ fn signatures_match_qml() {
         super::airplay::target(),
         super::visualizer::target(),
         super::monitor::target(),
+        super::network::target(),
         super::plugins::target(),
         super::caffeinate::target(),
         super::gallery::target(),
         super::calendar::target(),
         super::iphone::target(),
+        super::display::target(),
+        super::display::hdr(),
     ] {
         let defs: Vec<String> = real.functions.iter().map(|f| f.definition()).collect();
         let qml = stub.targets.iter().find(|t| t.name == real.name).expect("a stub target");

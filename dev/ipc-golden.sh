@@ -9,9 +9,10 @@
 # type conversion, error strings, output framing and exit codes. `debug`,
 # `theme` and `wallpaper` carry DebugIpc.qml's, ThemeIpc.qml's and
 # WallpaperIpc.qml's exact signatures, `bar`, `panel`, `media`, `radio`,
-# `airplay`, `visualizer`, `overnight`, `earbuds` and `workspaces` their own
-# IPC files' (WorkspacesIpc.qml's `status` only: peek and close wait for the
-# preview), `calendar` and `iphone` their own; `probe` covers every type qs
+# `airplay`, `visualizer`, `overnight`, `earbuds`, `display`, `hdr` and
+# `workspaces` their own IPC files' (WorkspacesIpc.qml's `status` only: peek
+# and close wait for the preview), `calendar` and `iphone` their own; `probe`
+# covers every type qs
 # converts and the function names that collide with qs's subcommands.
 set -euo pipefail
 
@@ -119,6 +120,16 @@ ShellRoot {
         function status(): string { return "{}" }
     }
     IpcHandler {
+        target: "network"
+        function status(): string { return "{}" }
+        function connect(ssid: string, psk: string): string { return "connect " + ssid + " " + psk }
+        function connectEap(ssid: string, identity: string, password: string): string { return "connectEap " + ssid + " " + identity + " " + password }
+        function forget(ssid: string): string { return "forget " + ssid }
+        function wifi(enabled: bool): string { return "wifi " + enabled }
+        function speedtest(): string { return "ok" }
+        function speedstatus(): string { return "{}" }
+    }
+    IpcHandler {
         target: "monitor"
         function status(): string { return "{}" }
         function gpu(): string { return "{}" }
@@ -156,6 +167,21 @@ ShellRoot {
         function dismiss(id: string): string { return "dismiss " + id }
         function clear(): string { return "ok" }
         function markRead(): string { return "ok" }
+    }
+    IpcHandler {
+        target: "display"
+        function scale(output: string, scale: real): string { return "scale " + output + " " + scale }
+        function mirror(output: string, source: string): string { return "mirror " + output + " " + source }
+        function enable(output: string, enabled: bool): string { return "enable " + output + " " + enabled }
+    }
+    IpcHandler {
+        target: "hdr"
+        function toggle(): string { return "ok" }
+        function enable(): string { return "ok" }
+        function disable(): string { return "ok" }
+        function setOutput(output: string, enabled: bool): string { return "setOutput " + output + " " + enabled }
+        function rule(output: string): string { return "rule " + output }
+        function status(): string { return "{}" }
     }
     IpcHandler {
         target: "probe"
@@ -399,6 +425,19 @@ rec show earbuds set
 rec call workspaces status
 rec call workspaces status x
 rec show workspaces
+rec call network status
+rec call network connect FORMALTEST
+rec call network connect FORMALTEST psk
+rec call network connect 'a b' ''
+rec call network connectEap FORMALTEST-EAP id pw
+rec call network forget FORMALTEST
+rec call network wifi true
+rec call network wifi 0
+rec call network wifi maybe
+rec call network speedtest
+rec call network speedstatus x
+rec show network
+rec show network connectEap
 rec call monitor status
 rec call monitor status x
 rec call monitor gpu
@@ -438,6 +477,23 @@ rec call iphone clear
 rec call iphone markRead
 rec call iphone nope
 rec show iphone
+rec call display scale DP-1 1.5
+rec call display scale DP-1 x
+rec call display scale DP-1
+rec call display mirror DP-1 ''
+rec call display mirror DP-1 eDP-1
+rec call display enable DP-1 false
+rec call display enable DP-1 1
+rec show display
+rec call hdr toggle
+rec call hdr enable
+rec call hdr disable
+rec call hdr setOutput DP-1 true
+rec call hdr setOutput DP-1
+rec call hdr rule DP-1
+rec call hdr status
+rec call hdr status x
+rec show hdr
 
 kill "$qs_pid"
 wait "$qs_pid" 2>/dev/null || true

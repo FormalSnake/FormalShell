@@ -477,6 +477,9 @@ impl App {
         let overflow = self.overflow_open();
         self.bar.set_open(panel.as_deref(), overflow, now);
         devices::earbuds::panel(panel.as_deref() == Some("earbuds"));
+        devices::bluetooth::panel(panel.as_deref() == Some("bluetooth"));
+        devices::audio::panel(panel.as_deref() == Some("audio"));
+        devices::power::panel(panel.as_deref() == Some("dualsense"));
         if let Some(p) = &mut self.overflow {
             for s in &mut p.slots {
                 let open = panel.as_deref().is_some_and(|n| s.view.panel == Some(n));
@@ -1423,7 +1426,10 @@ impl App {
     /// One key on the keyboard: the open panel's, as KeyCatcher.qml binds
     /// them.
     fn key_event(&mut self, event: KeyEvent) {
+        let editing = self.panel.as_ref().is_some_and(|h| h.editing());
         let key = match event.keysym {
+            Keysym::space if editing => Key::Text(" ".into()),
+            Keysym::BackSpace => Key::Back,
             Keysym::Escape => Key::Escape,
             Keysym::Tab => Key::Tab(1),
             Keysym::ISO_Left_Tab => Key::Tab(-1),

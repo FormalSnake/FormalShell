@@ -623,6 +623,7 @@ dependencies = [
  "fs-chrome",
  "fs-devices",
  "fs-info",
+ "fs-js",
  "fs-media",
  "fs-mpris",
  "fs-network",
