@@ -57,6 +57,12 @@ pub fn picture(image: Option<crate::scene::Bitmap>, size: f64) -> El {
     El::new(Kind::Picture { pic: Pic(image), size })
 }
 
+/// Tiles placed freely over `content` in a framed viewport `size` big,
+/// `inset` inside its frame, scrolled to `scroll`.
+pub fn strip(size: (f64, f64), inset: f64, content: (f64, f64), scroll: (f64, f64), tiles: Vec<super::el::Tile>) -> El {
+    El::new(Kind::Strip { size, inset, content, scroll, tiles })
+}
+
 pub fn icon(name: impl Into<String>) -> El {
     El::new(Kind::Icon { name: name.into(), size: Type::Body, ink: Ink::Fg })
 }

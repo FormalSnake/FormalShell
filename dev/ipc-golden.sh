@@ -10,9 +10,8 @@
 # `theme` and `wallpaper` carry DebugIpc.qml's, ThemeIpc.qml's and
 # WallpaperIpc.qml's exact signatures, `bar`, `panel`, `media`, `radio`,
 # `airplay`, `visualizer`, `overnight`, `earbuds` and `workspaces` their own
-# IPC files' (WorkspacesIpc.qml's `status` only: peek and close wait for the
-# preview), `calendar`, `iphone` and `switcher` their own; `probe` covers every type qs
-# converts and the function names that collide with qs's subcommands.
+# IPC files', `calendar`, `iphone` and `switcher` their own; `probe` covers
+# every type qs converts and the function names that collide with qs's subcommands.
 set -euo pipefail
 
 dir=$(mktemp -d)
@@ -116,6 +115,8 @@ ShellRoot {
     }
     IpcHandler {
         target: "workspaces"
+        function peek(n: int): string { return "peek " + n }
+        function close(): string { return "ok" }
         function status(): string { return "{}" }
     }
     IpcHandler {
@@ -404,6 +405,10 @@ rec call earbuds set eq-bass -- -2
 rec call earbuds set '[noise,anc]'
 rec show earbuds
 rec show earbuds set
+rec call workspaces peek 2
+rec call workspaces peek x
+rec call workspaces peek
+rec call workspaces close
 rec call workspaces status
 rec call workspaces status x
 rec show workspaces

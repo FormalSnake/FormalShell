@@ -24,6 +24,7 @@
 pub mod boxes;
 mod draw;
 pub mod el;
+mod strip;
 pub mod w;
 
 use std::collections::HashMap;
@@ -50,6 +51,9 @@ pub enum What {
     Fraction(f64),
     /// A wheel notch: +1 up, -1 down.
     Wheel(i32),
+    /// A scroll over a viewport, in wheel notches along x and y, positive
+    /// moving the view right and down.
+    Scroll(f64, f64),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -79,6 +83,8 @@ pub enum HitWhat {
     Pick(usize),
     /// Hover only (a tooltip carrier, a static row).
     Hover,
+    /// A viewport the wheel scrolls along both axes.
+    Scroll,
 }
 
 /// One keyboard stop, in reading order.
@@ -241,7 +247,7 @@ impl Ui {
             HitWhat::Switch(checked) => What::Toggle(!checked),
             HitWhat::Track => What::Fraction(((x - hit.rect.x as f64) / hit.rect.w.max(1) as f64).clamp(0.0, 1.0)),
             HitWhat::Pick(i) => What::Pick(i),
-            HitWhat::Hover => return None,
+            HitWhat::Hover | HitWhat::Scroll => return None,
         };
         Some(Event { on, what })
     }

@@ -52,7 +52,7 @@ fn icon(cx: &mut Cx, name: &str, size: Type) -> ShapedText {
 }
 
 /// The text cut to `max` with an ellipsis, or whole.
-fn elided(cx: &mut Cx, s: &str, font: &Font, max: f64) -> ShapedText {
+pub(super) fn elided(cx: &mut Cx, s: &str, font: &Font, max: f64) -> ShapedText {
     let whole = shape(cx, s, font);
     if whole.width as f64 <= max + 0.5 || s.is_empty() {
         return whole;
@@ -209,6 +209,7 @@ pub fn measure(cx: &mut Cx, el: &El, avail: f64) -> (f64, f64) {
             (inner, ls.iter().map(|l| l.line_height() as f64).sum())
         }
         Kind::Picture { size, .. } => (*size, *size),
+        Kind::Strip { size, .. } => *size,
         Kind::Icon { name, size, .. } => {
             let t = icon(cx, name, *size);
             (px(cx, *size) as f64, t.line_height() as f64)
@@ -445,6 +446,7 @@ pub fn paint(cx: &mut Cx, el: &El, rect: Rect, path: &str) {
             p.finish();
             cx.done(last);
         }
+        Kind::Strip { inset, scroll, tiles, .. } => super::strip::paint(cx, el, inner, *inset, *scroll, tiles, path),
         Kind::Picture { pic, .. } => {
             let alpha = cx.alpha;
             let r = irect(inner);
@@ -537,7 +539,7 @@ pub fn paint(cx: &mut Cx, el: &El, rect: Rect, path: &str) {
         Kind::Shoulders { edge, span, depth, run } => shoulders(cx, inner, *edge, *span, *depth, *run, path),
     }
     if let Some(on) = &el.on
-        && !matches!(el.kind, Kind::Cell { .. } | Kind::Button { .. } | Kind::Switch { .. } | Kind::Track { .. } | Kind::Group { .. } | Kind::Segmented { .. })
+        && !matches!(el.kind, Kind::Cell { .. } | Kind::Button { .. } | Kind::Switch { .. } | Kind::Track { .. } | Kind::Group { .. } | Kind::Segmented { .. } | Kind::Strip { .. })
     {
         cx.hit(Hit { rect: irect(inner), path: path.into(), on: Some(on.clone()), tip: el.tip.clone(), stop: None, what: HitWhat::Click });
     } else if el.on.is_none() && el.tip.is_some() && !matches!(el.kind, Kind::Cell { .. } | Kind::Button { .. }) {

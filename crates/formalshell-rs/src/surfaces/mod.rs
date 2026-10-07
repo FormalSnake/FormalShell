@@ -15,6 +15,7 @@ use crate::wayland::{App, theme_inputs};
 
 pub fn changed(app: &mut App, topic: Topic) {
     app.switcher_changed(topic);
+    app.preview_changed(topic);
     match topic {
         Topic::Config => {
             let settings = app.store.config.settings().clone();

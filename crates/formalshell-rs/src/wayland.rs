@@ -6,6 +6,7 @@
 
 mod caffeinate;
 pub mod capture;
+mod preview;
 pub mod switcher;
 
 use std::time::Instant;
@@ -47,6 +48,19 @@ use crate::surfaces::card::{Card, Ends, Scrim, Target};
 use crate::surfaces::panel::{self, host::{Host, Key, Out, Place}};
 use crate::surfaces::tooltip;
 use crate::surfaces::tray_menu::{Hit, Menu, Outcome};
+
+/// One axis of a scroll in wheel notches: the steps a wheel reports, or a
+/// continuous axis at 15 units to the notch, the libinput/Qt ratio a
+/// touchpad's swipe is read at.
+fn notches(axis: &smithay_client_toolkit::seat::pointer::AxisScroll) -> f64 {
+    if axis.value120 != 0 {
+        axis.value120 as f64 / 120.0
+    } else if axis.discrete != 0 {
+        axis.discrete as f64
+    } else {
+        axis.absolute / 15.0
+    }
+}
 
 fn edge_anchor(edge: Edge) -> Anchor {
     match edge {
@@ -150,6 +164,7 @@ pub struct App {
     caffeinate: caffeinate::Caffeinate,
     capture: capture::Capture,
     pub switcher: switcher::State,
+    peek: preview::State,
     pub bar: Bar,
     bar_surface: Option<Surface>,
     backdrop: Option<Backdrop>,
@@ -214,6 +229,7 @@ impl App {
             caffeinate: caffeinate::Caffeinate::bind(globals, qh),
             capture: capture::Capture::bind(globals, qh),
             switcher: switcher::State::default(),
+            peek: preview::State::default(),
             bar,
             bar_surface: None,
             backdrop: None,
@@ -712,7 +728,8 @@ impl App {
         }
         let place = self.panel_place(anchor, nested);
         let layer = self.overlay("formalshell:panel", Layer::Overlay, Anchor::all(), (0, 0), -1);
-        layer.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
+        let keyboard = if module.takes_keyboard() { KeyboardInteractivity::Exclusive } else { KeyboardInteractivity::None };
+        layer.set_keyboard_interactivity(keyboard);
         layer.commit();
         let mut surface = Surface::new("panel", layer, &self.shm, self.started);
         surface.wait_map = true;
@@ -1042,6 +1059,7 @@ impl App {
     }
 
     pub fn present(&mut self) {
+        self.preview_present();
         let now = Instant::now();
         if self.panel.as_ref().is_some_and(|p| p.finished(now)) {
             self.panel = None;
@@ -1152,7 +1170,7 @@ impl App {
     /// nothing asks for frames while it waits.
     fn arm_wake(&mut self, now: Instant) {
         let hosts = [&self.panel, &self.outgoing];
-        let at = [self.bar.wake(now), self.tips.wake(), self.switcher_deadline()]
+        let at = [self.bar.wake(now), self.tips.wake(), self.switcher_deadline(), self.preview_deadline()]
             .into_iter()
             .chain(hosts.iter().filter_map(|h| h.as_ref()).flat_map(|h| [h.prime_until, h.wake.filter(|w| *w > now)]))
             .flatten()
@@ -1294,6 +1312,7 @@ impl App {
             Some(ask) => self.tips.show(ask, now),
             None => self.tips.hide(None, now),
         }
+        self.preview_pointer(owner == Some(Owner::Bar), owner == Some(Owner::Panel), at);
     }
 
     fn pointer_events(&mut self, events: &[PointerEvent]) {
@@ -1354,19 +1373,20 @@ impl App {
                     };
                     self.click(o, i, button, (x, y));
                 }
-                PointerEventKind::Axis { vertical, .. } => {
+                PointerEventKind::Axis { vertical, horizontal, .. } => {
+                    if owner == Some(Owner::Panel) {
+                        let (dx, dy) = (notches(&horizontal), notches(&vertical));
+                        if let Some(h) = self.panel.as_mut().filter(|_| dx != 0.0 || dy != 0.0) {
+                            h.scroll(x, y, dx, dy, &self.store, self.runtime.as_ref());
+                        }
+                        self.panel_dirty = true;
+                        continue;
+                    }
                     let v = if vertical.discrete != 0 { vertical.discrete as f64 } else { vertical.absolute };
                     if v == 0.0 {
                         continue;
                     }
                     let up = v < 0.0;
-                    if owner == Some(Owner::Panel) {
-                        if let Some(h) = &mut self.panel {
-                            h.wheel(x, y, up, &self.store, self.runtime.as_ref());
-                        }
-                        self.panel_dirty = true;
-                        continue;
-                    }
                     if let Some(i) = self.bar.hit(x, y).filter(|_| owner == Some(Owner::Bar)) {
                         let action = self.bar.wheel(i, up, &self.store);
                         let anchor = self.bar.slot_anchor(i);
