@@ -91,6 +91,8 @@ pub struct CellState {
     pub hovered: bool,
     /// Drawn with the cursor whatever the keyboard does (the gallery's).
     pub cursor: bool,
+    /// `radiusSm`, a cell one level inside a card's own frame (a day cell).
+    pub small: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -109,6 +111,21 @@ impl Opt {
     pub fn icon(mut self, name: impl Into<String>) -> Self {
         self.icon = name.into();
         self
+    }
+}
+
+/// A decoded picture compared by identity, so a rebuilt tree that holds the
+/// same bitmap is the same tree.
+#[derive(Clone, Debug)]
+pub struct Pic(pub Option<crate::scene::Bitmap>);
+
+impl PartialEq for Pic {
+    fn eq(&self, other: &Self) -> bool {
+        match (&self.0, &other.0) {
+            (Some(a), Some(b)) => a.same_as(b),
+            (None, None) => true,
+            _ => false,
+        }
     }
 }
 
@@ -145,28 +162,10 @@ pub enum Kind {
     /// A shape budding off a line on `edge`, for the gallery.
     Shoulders { edge: fs_chrome::types::Edge, span: f64, depth: f64, run: f64 },
     Marquee { text: String, ink: Ink, max: f64 },
-    /// A decoded picture centred in a `size` square, or the square empty.
-    Picture { image: Picture, size: f64 },
-}
-
-/// A bitmap compared by identity, so an unchanged picture is no change.
-#[derive(Clone)]
-pub struct Picture(pub Option<crate::scene::Bitmap>);
-
-impl PartialEq for Picture {
-    fn eq(&self, other: &Self) -> bool {
-        match (&self.0, &other.0) {
-            (Some(a), Some(b)) => a.same_as(b),
-            (None, None) => true,
-            _ => false,
-        }
-    }
-}
-
-impl std::fmt::Debug for Picture {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Picture({})", self.0.is_some())
-    }
+    /// Words wrapped at the width they get, cut with an ellipsis past `lines`.
+    Para { text: String, font: Font, ink: Ink, lines: usize },
+    /// A bitmap fitted at its own size in a `size` square; blank without one.
+    Picture { pic: Pic, size: f64 },
 }
 
 /// One element: what it is, how wide it sits, and how it is addressed.
@@ -187,6 +186,11 @@ pub struct El {
     pub centred: bool,
     /// A row's children start at its top rather than its middle.
     pub top: bool,
+    /// Text centred in the width it is given.
+    pub mid: bool,
+    /// Text laid out at least as wide as this one shaped in its own font
+    /// (a column of times sized off its widest).
+    pub gauge: Option<String>,
 }
 
 impl El {
@@ -194,10 +198,10 @@ impl El {
         let width = match &kind {
             Kind::Column { .. } | Kind::Separator { vertical: false, .. } | Kind::Track { .. } | Kind::Group { .. } => Size::Fill,
             Kind::Cell { state, .. } if !state.chip => Size::Fill,
-            Kind::Input { .. } => Size::Fill,
+            Kind::Input { .. } | Kind::Para { .. } => Size::Fill,
             _ => Size::Hug,
         };
-        Self { kind, width, pad: [0.0; 4], key: None, stop: false, on: None, tip: None, centred: false, top: false }
+        Self { kind, width, pad: [0.0; 4], key: None, stop: false, on: None, tip: None, centred: false, top: false, mid: false, gauge: None }
     }
 
     pub fn key(mut self, key: impl Into<String>) -> Self {
@@ -261,6 +265,16 @@ impl El {
         self
     }
 
+    pub fn gauge(mut self, widest: impl Into<String>) -> Self {
+        self.gauge = Some(widest.into());
+        self
+    }
+
+    pub fn mid(mut self) -> Self {
+        self.mid = true;
+        self
+    }
+
     pub fn elide(mut self) -> Self {
         if let Kind::Text { elide, .. } = &mut self.kind {
             *elide = true;
@@ -271,21 +285,21 @@ impl El {
 
     pub fn ink(mut self, to: Ink) -> Self {
         match &mut self.kind {
-            Kind::Text { ink, .. } | Kind::Icon { ink, .. } | Kind::Marquee { ink, .. } => *ink = to,
+            Kind::Text { ink, .. } | Kind::Icon { ink, .. } | Kind::Marquee { ink, .. } | Kind::Para { ink, .. } => *ink = to,
             _ => {}
         }
         self
     }
 
     pub fn mono(mut self) -> Self {
-        if let Kind::Text { font, .. } = &mut self.kind {
+        if let Kind::Text { font, .. } | Kind::Para { font, .. } = &mut self.kind {
             font.mono = true;
         }
         self
     }
 
     pub fn weight(mut self, w: Weight) -> Self {
-        if let Kind::Text { font, .. } = &mut self.kind {
+        if let Kind::Text { font, .. } | Kind::Para { font, .. } = &mut self.kind {
             font.weight = w;
         }
         self
@@ -293,7 +307,7 @@ impl El {
 
     pub fn size(mut self, t: Type) -> Self {
         match &mut self.kind {
-            Kind::Text { font, .. } => font.size = t,
+            Kind::Text { font, .. } | Kind::Para { font, .. } => font.size = t,
             Kind::Icon { size, .. } => *size = t,
             _ => {}
         }

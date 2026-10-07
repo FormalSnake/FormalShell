@@ -70,9 +70,13 @@ How a run works:
 - Every run prints `SMOKE_OK <path>` for its own frame and `SMOKE_<NAME>
   <path>` for each named artifact; `dev/vm.sh smoke` scps all of them plus
   the run's stdout JSON into `./artifacts/` on the mac.
-- The VM holds one checkout and `dev/vm.sh sync` rsyncs over it with
+- Each VM holds one checkout and `dev/vm.sh sync` rsyncs over it with
   `--delete`, so every VM command from a worktree goes through
-  `dev/vm-lock.sh just vm-smoke <flags>`, which serialises them on a lockfile.
+  `dev/vm-lock.sh just vm-smoke <flags>`. There are two VM slots (`FS_VM_SLOT`,
+  default 0): the lock takes whichever slot is free, waits when both are busy,
+  boots that slot's VM if it is down and exports `FS_VM_SLOT` to the command.
+  Slot 0 is ssh 2222 and state in `dev/.testvm`, slot 1 is 2223 and
+  `dev/.testvm/slot1`; each VM is 8 GB and 6 cores, so no third slot.
 - matugen's source colour is pinned to its own rank 0 rather than left to
   `--prefer`, which is a bad proxy for what colour a wallpaper is;
   `shell/Theme/ThemeEngine.qml`'s header carries the why. Force the source
@@ -672,7 +676,7 @@ wraps this as `vm-up`/`vm-down`/`vm-build`/`vm-test`/`vm-lint`/`vm-smoke
 *FLAGS`/`vm-greeter` — the mac-side equivalents of
 `build`/`test`/`lint`/`smoke`/`dev/smoke-greeter.sh` above (`vm-greeter`
 syncs, runs `dev/smoke-greeter.sh` inside, then pulls `artifacts/greeter/`
-back with a plain `scp` — greetd's `default_session` is a standing system
+back with `dev/vm.sh pull` — greetd's `default_session` is a standing system
 service already up in the VM, not a fresh nested compositor `vm-smoke`
 spins up itself, so it needs no flag of its own).
 Screenshots and JSON always land on the **mac** filesystem under

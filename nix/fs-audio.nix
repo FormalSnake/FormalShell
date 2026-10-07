@@ -1,34 +1,20 @@
-{ lib, stdenv, rustPlatform, cargo, rustc, clippy, pkg-config, pipewire, testers }:
+{ rustCommon, testers }:
 
 # fs-audio's PipeWire client against a real pipewire + wireplumber in a VM,
 # read back through wpctl and pactl. The crate's clippy and unit tests run
 # in the probe's build, the only place its pipewire feature compiles.
 let
-  probe = stdenv.mkDerivation {
-    name = "fs-audio-probe";
-
-    src = lib.fileset.toSource {
-      root = ../crates;
-      fileset = ../crates;
-    };
-
-    cargoDeps = rustPlatform.importCargoLock { lockFile = ../crates/Cargo.lock; };
-
-    nativeBuildInputs = [ rustPlatform.cargoSetupHook rustPlatform.bindgenHook cargo rustc clippy pkg-config ];
-    buildInputs = [ pipewire ];
-
-    buildPhase = ''
-      runHook preBuild
-      cargo clippy --offline -p fs-audio --features pipewire --all-targets -- -D warnings
-      cargo test --offline -p fs-audio --features pipewire
-      cargo build --offline --release -p fs-audio --features pipewire --example fs-audio-probe
-      runHook postBuild
+  probe = rustCommon.craneLib.mkCargoDerivation (rustCommon.checkArgs // {
+    pname = "fs-audio-probe";
+    buildPhaseCargoCommand = ''
+      cargo clippy --release -p fs-audio --features pipewire --all-targets -- -D warnings
+      cargo test --release -p fs-audio --features pipewire
+      cargo build --release -p fs-audio --features pipewire --example fs-audio-probe
     '';
-
-    installPhase = ''
+    installPhaseCommand = ''
       install -Dm755 target/release/examples/fs-audio-probe $out/bin/fs-audio-probe
     '';
-  };
+  });
 in
 testers.runNixOSTest {
   name = "fs-audio";

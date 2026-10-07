@@ -301,7 +301,7 @@ impl Scan {
         let dirs = appicon::applications_dirs();
         let stamp: Vec<Option<SystemTime>> = dirs.iter().map(|d| std::fs::metadata(d).and_then(|m| m.modified()).ok()).collect();
         if !self.scanned || stamp != self.stamp {
-            self.entries = appicon::scan_entries(&dirs);
+            self.entries = appicon::scan_launchable(&dirs);
             self.stamp = stamp;
             self.scanned = true;
         }

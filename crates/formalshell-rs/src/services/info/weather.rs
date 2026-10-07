@@ -19,6 +19,8 @@ pub struct State {
     pub located: bool,
     pub error: Option<Error>,
     pub weather: Option<Weather>,
+    /// Nominatim's name for the spot (the panel's title), "" until it answers.
+    pub place: String,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -52,6 +54,18 @@ async fn geolocate() -> Option<Fix> {
     location::parse_geolocate(&reply.stdout)
 }
 
+async fn place_name(key: &str) -> String {
+    let reply = proc::capture(
+        &proc::argv(&[
+            "curl", "-sS", "--fail", "--max-time", "8", "-H", "User-Agent: FormalShell (https://github.com/FormalSnake/FormalShell)",
+            &location::reverse_url(key),
+        ]),
+        Duration::from_secs(15),
+    )
+    .await;
+    if reply.code != 0 { String::new() } else { location::parse_place(&reply.stdout) }
+}
+
 /// open-meteo through curl: the status trails the body on its own line, and
 /// a curl that never reached the server is status 0.
 async fn fetch(url: &str) -> Result<Weather, Error> {
@@ -71,6 +85,7 @@ pub async fn run(ctx: Ctx) {
     let rx = changed();
     let kick = kicked(Source::Weather);
     let mut lookup: Option<Fix> = None;
+    let mut places: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     loop {
         let cfg = read();
         let at = match cfg.at {
@@ -91,14 +106,24 @@ pub async fn run(ctx: Ctx) {
             .await;
             continue;
         };
-        let state = match weather::build_url(lat, lon) {
-            None => State { located: true, error: Some(Error::MissingFields), weather: None },
+        let key = location::place_key(lat, lon);
+        let place = places.get(&key).cloned().unwrap_or_default();
+        let mut state = match weather::build_url(lat, lon) {
+            None => State { located: true, error: Some(Error::MissingFields), weather: None, place },
             Some(url) => match fetch(&url).await {
-                Ok(w) => State { located: true, error: None, weather: Some(w) },
-                Err(e) => State { located: true, error: Some(e), weather: None },
+                Ok(w) => State { located: true, error: None, weather: Some(w), place },
+                Err(e) => State { located: true, error: Some(e), weather: None, place },
             },
         };
-        publish(&ctx, state);
+        publish(&ctx, state.clone());
+        if !key.is_empty() && !places.contains_key(&key) {
+            let name = place_name(&key).await;
+            if !name.is_empty() {
+                places.insert(key, name.clone());
+                state.place = name;
+                publish(&ctx, state);
+            }
+        }
         futures_lite::future::or(idle(cfg.interval, &rx, &cfg, read), async {
             let _ = kick.recv().await;
         })
