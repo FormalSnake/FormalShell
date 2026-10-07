@@ -15,9 +15,11 @@ use std::time::Duration;
 
 use async_channel::{Receiver, Sender};
 use fs_bluez::state::AdapterState;
-use futures_lite::FutureExt;
+use futures_lite::{FutureExt, future};
 
+use super::headsets::{self, Headset};
 use crate::runtime::Ctx;
+use crate::services::watch::Watch;
 use crate::store;
 
 const ACTION_TIMEOUT: Duration = Duration::from_secs(20);
@@ -61,6 +63,9 @@ pub struct Bluetooth {
     pub action: Option<(String, ActionKind)>,
     /// The last action that failed: its device's address and why.
     pub failure: Option<(String, &'static str)>,
+    /// The Bluetooth audio devices, connected or not; none until BlueZ (or
+    /// its absence) has answered once.
+    pub headsets: Option<Vec<Headset>>,
 }
 
 thread_local! {
@@ -77,8 +82,9 @@ fn state_word(s: AdapterState) -> &'static str {
     }
 }
 
-fn snapshot(state: &fs_bluez::state::State) -> Bluetooth {
-    let Some(adapter) = state.default_adapter() else { return Bluetooth::default() };
+fn snapshot(state: &fs_bluez::state::State, over: Option<&str>) -> Bluetooth {
+    let headsets = Some(headsets::read(Some(state), over));
+    let Some(adapter) = state.default_adapter() else { return Bluetooth { headsets, ..Bluetooth::default() } };
     let devices: Vec<_> = state.devices_of(&adapter.path).into_iter().map(|d| d.info).collect();
     let connected = devices
         .iter()
@@ -94,11 +100,27 @@ fn snapshot(state: &fs_bluez::state::State) -> Bluetooth {
         devices,
         action: None,
         failure: None,
+        headsets,
     }
 }
 
 fn smoke_override() -> Option<String> {
-    std::env::var("FORMALSHELL_SMOKE_BLUETOOTH").ok()
+    headsets::smoke_text()
+}
+
+/// Signals each change of the file an `@path` override names.
+fn smoke_changes(ctx: &Ctx) -> Option<Receiver<()>> {
+    let mut watch = Watch::new(headsets::smoke_file()?).ok()?;
+    let (tx, rx) = async_channel::unbounded();
+    ctx.spawn(async move {
+        loop {
+            watch.changed().await;
+            if tx.send(()).await.is_err() {
+                return;
+            }
+        }
+    });
+    Some(rx)
 }
 
 fn publish(ctx: &Ctx, bt: Bluetooth, devices: Vec<fs_devices::bluetooth::Device>) {
@@ -107,8 +129,9 @@ fn publish(ctx: &Ctx, bt: Bluetooth, devices: Vec<fs_devices::bluetooth::Device>
 }
 
 fn absent(ctx: &Ctx) {
-    let devices = fs_devices::earbuds::bluetooth_devices(&[], smoke_override().as_deref());
-    publish(ctx, Bluetooth::default(), devices);
+    let over = smoke_override();
+    let devices = fs_devices::earbuds::bluetooth_devices(&[], over.as_deref());
+    publish(ctx, Bluetooth { headsets: Some(headsets::read(None, over.as_deref())), ..Bluetooth::default() }, devices);
 }
 
 /// What the panel asks of the service.
@@ -163,8 +186,8 @@ pub async fn run(ctx: Ctx) {
         }
     };
     ctx.spawn(monitor.run());
-    let over = smoke_override();
     BLUEZ.with_borrow_mut(|b| *b = Some(bluez.clone()));
+    let changes = smoke_changes(&ctx);
     let (done_tx, done_rx) = async_channel::unbounded::<Done>();
     let mut open = PANEL.load(Ordering::Relaxed);
     let mut action: Option<(String, ActionKind)> = None;
@@ -189,13 +212,20 @@ pub async fn run(ctx: Ctx) {
                 let _ = tx.send(Done::Armed).await;
             });
         }
-        let mut view = snapshot(&snap);
+        let over = smoke_override();
+        let mut view = snapshot(&snap, over.as_deref());
         view.action = action.clone();
         view.failure = failure.clone();
         publish(&ctx, view, bluez.earbuds_devices(over.as_deref()));
         let wake = async { events.recv().await.map_or(Wake::Gone, |_| Wake::State) }
             .or(async { ASKS.1.recv().await.map_or(Wake::Gone, Wake::Ask) })
             .or(async { done_rx.recv().await.map_or(Wake::Gone, Wake::Done) })
+            .or(async {
+                match &changes {
+                    Some(rx) => rx.recv().await.map_or(Wake::Gone, |_| Wake::State),
+                    None => future::pending().await,
+                }
+            })
             .await;
         while events.try_recv().is_ok() {}
         match wake {

@@ -9,9 +9,9 @@
 //! The UI decides enable or disable off the store's record; the work runs
 //! here, on the service thread.
 //!
-//! DDC monitors are not dimmed yet: their detection belongs to the
-//! brightness service, which lands with the display panel, so `ddc` stays
-//! `{}` and nothing is restored there.
+//! DDC monitors are detected and read through the brightness service's
+//! ddcutil helpers; `ddc` records each one's percent before it is dimmed,
+//! keyed by connector, and disable puts those back.
 
 use std::cell::RefCell;
 
@@ -20,6 +20,7 @@ use fs_upower::{PowerProfiles, Profile};
 use serde_json::{Map, Value, json};
 
 use crate::runtime::Ctx;
+use crate::services::brightness;
 use crate::services::state::{self, Field};
 
 thread_local! {
@@ -161,7 +162,22 @@ pub fn enable(ctx: &Ctx) {
                 record("aura", json!(true));
             }
         };
-        futures_lite::future::zip(leds, aura).await;
+        // Each monitor lands in the record before it is dimmed, so a restart
+        // mid-walk still knows what to put back.
+        let ddc = async {
+            let mut dimmed = Map::new();
+            for row in brightness::ddc_rows().await {
+                if RECORD.with_borrow(Option::is_none) {
+                    return;
+                }
+                if row.percent > SCREEN_PERCENT as f64 {
+                    dimmed.insert(row.connector, json!(row.percent));
+                    record("ddc", Value::Object(dimmed.clone()));
+                    brightness::ddc_write(&row.bus, brightness::ddc_raw(SCREEN_PERCENT as f64, row.max)).await;
+                }
+            }
+        };
+        futures_lite::future::zip(futures_lite::future::zip(leds, aura), ddc).await;
     });
 }
 
@@ -192,6 +208,18 @@ pub fn disable(ctx: &Ctx, snap: Value) {
         }
         if !restore.is_empty() {
             let _ = run(sh(LED_RESTORE, &restore)).await;
+        }
+        if let Some(Value::Object(ddc)) = snap.get("ddc")
+            && !ddc.is_empty()
+        {
+            let buses = brightness::ddc_detect().await;
+            for (connector, percent) in ddc {
+                let Some(percent) = percent.as_f64() else { continue };
+                let Some((_, bus)) = buses.iter().find(|(c, _)| c == connector) else { continue };
+                if let Some((_, max)) = brightness::ddc_read(bus).await {
+                    brightness::ddc_write(bus, brightness::ddc_raw(percent, max)).await;
+                }
+            }
         }
     });
 }

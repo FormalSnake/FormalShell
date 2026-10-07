@@ -249,6 +249,18 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   re-rank it and desktop entry rescans while it is closed and open, read
   off `menu status`'s `cells`: eight ids, none twice, the launched app
   first.
+- `headset_card.sh` `--headset-card`: the headset connect card, which only
+  the Rust shell has (it needs `FS_IMPL=rust`). `FORMALSHELL_SMOKE_BLUETOOTH`
+  is exported as `@<file>`, a JSON device list the shell reads again on every
+  change (the rig has no controller), so a device connects and disconnects
+  by the leg rewriting that file. A device connected at startup raising no
+  card; a headphone connecting raising one with its BlueZ battery ring, held
+  past four seconds by a real pointer parked on it and dismissed by the pointer leaving (Escape needs on-demand focus, which Hyprland gives on a click);
+  the same device off and on inside a second raising none; AirPods off the
+  staged librepods status file raising left, right and case rings, the
+  pointer leaving dismissing them; and do-not-disturb raising none. Counted
+  off the shell log's `headset card mapped` and `unmapped` lines, with the
+  frames read by eye.
 - `hdr.sh` `--hdr`: HDR on the rig's EDID-less vkms output, so the honest
   unavailable path: `hdr status` unsupported with a reason, `enable`,
   `toggle` and `setOutput` refusing with their error strings and leaving

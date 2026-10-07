@@ -5,9 +5,11 @@
 //! callback or an input event belongs to.
 
 mod caffeinate;
+mod headset;
 mod hotcorners;
 mod launcher;
 pub mod lock;
+mod osd;
 mod polkit;
 mod toasts;
 
@@ -38,7 +40,7 @@ use smithay_client_toolkit::{delegate_dispatch2, delegate_registry, registry_han
 use crate::ipc;
 use crate::runtime::{Msg, Runtime};
 use crate::scene::{IRect, NodeId};
-use crate::services::{barpaint, commands, devices, hyprland, info, media, theme, tray, wallpaper};
+use crate::services::{barpaint, commands, devices, hyprland, info, media, nightlight, theme, tray, wallpaper};
 use crate::store::{Store, Topic};
 use crate::surface::{Backdrop, PixelSurface, Pixels, Surface};
 use crate::surfaces;
@@ -134,6 +136,8 @@ enum Owner {
     Toasts,
     Preview,
     Scrim,
+    Osd,
+    Headset,
     Zone(usize),
     Backdrop,
     Launcher,
@@ -157,6 +161,8 @@ pub struct App {
     pub lock: lock::Lock,
     hot: hotcorners::HotCorners,
     polkit: Option<polkit::Dialog>,
+    osd: osd::Osd,
+    headset: headset::Headset,
     pub bar: Bar,
     bar_surface: Option<Surface>,
     backdrop: Option<Backdrop>,
@@ -234,6 +240,8 @@ impl App {
             lock: lock::Lock::bind(globals, qh),
             hot: Default::default(),
             polkit: None,
+            osd: osd::Osd::default(),
+            headset: headset::Headset::default(),
             bar,
             bar_surface: None,
             backdrop: None,
@@ -403,6 +411,7 @@ impl App {
             .collect();
         commands::configure(modules);
         media::configure(self.store.config.settings());
+        nightlight::configure(self.store.config.settings());
         info::configure(self.store.config.settings());
         self.arm_caffeinate();
         let edge = layout::position(self.store.config.str("bar.position"));
@@ -568,6 +577,7 @@ impl App {
             joins.extend(o.card.joins.iter().map(|j| (j.edge, j.x, j.width, j.reach)));
         }
         joins.extend(self.launcher_joins());
+        joins.extend(self.popup_joins());
         let edge = self.bar.edge();
         if !joins.iter().any(|j| j.0 == edge)
             && let Some((x, width)) = self.debug_join
@@ -1147,6 +1157,8 @@ impl App {
         self.present_launcher(now);
         self.present_tooltip(now);
         self.present_toasts(now);
+        self.osd_present(now);
+        self.headset_present(now);
         if let Some((surface, scene, _)) = &mut self.preview {
             surface.present(scene, false, &qh);
         }
@@ -1204,7 +1216,7 @@ impl App {
     fn arm_wake(&mut self, now: Instant) {
         let hosts = [&self.panel, &self.outgoing];
         let notifications = self.store.notifications.wake().map(|at| crate::services::notifications::instant_at(at, now));
-        let at = [self.bar.wake(now), self.tips.wake(), notifications]
+        let at = [self.bar.wake(now), self.tips.wake(), notifications, self.osd_wake(), self.headset.wake()]
             .into_iter()
             .chain(hosts.iter().filter_map(|h| h.as_ref()).flat_map(|h| [h.prime_until, h.wake.filter(|w| *w > now)]))
             .flatten()
@@ -1253,6 +1265,12 @@ impl App {
         }
         if self.scrim.as_ref().is_some_and(|(_, s)| s.layer.wl_surface() == surface) {
             return Some(Owner::Scrim);
+        }
+        if self.osd_owns(surface) {
+            return Some(Owner::Osd);
+        }
+        if self.headset_owns(surface) {
+            return Some(Owner::Headset);
         }
         if self.backdrop.as_ref().is_some_and(|b| b.layer.wl_surface() == surface) {
             return Some(Owner::Backdrop);
@@ -1360,6 +1378,7 @@ impl App {
                 continue;
             }
             let (x, y) = e.position;
+            self.headset_pointer(owner, &e.kind);
             match e.kind {
                 PointerEventKind::Enter { serial } => {
                     self.cursor = Some((serial, Shape::Default));
@@ -1453,6 +1472,7 @@ impl App {
             Some(Owner::Bar) => interactive(&self.bar.slots, self.bar.hover),
             Some(Owner::Overflow) => self.overflow.as_ref().is_some_and(|p| interactive(&p.slots, p.hover)),
             Some(Owner::Panel) => self.panel.as_ref().is_some_and(|h| h.hand()),
+            Some(Owner::Headset) => true,
             _ => false,
         };
         let shape = if hand { Shape::Pointer } else { Shape::Default };
@@ -1509,7 +1529,7 @@ impl App {
     }
 
     fn key_event_from(&mut self, event: KeyEvent, repeat: bool) {
-        if self.lock_key(&event) || self.polkit_key(&event) || self.launcher_key(&event, repeat) {
+        if self.lock_key(&event) || self.polkit_key(&event) || self.launcher_key(&event, repeat) || self.headset_key(&event) {
             return;
         }
         let editing = self.panel.as_ref().is_some_and(|h| h.editing());
@@ -1620,6 +1640,8 @@ impl CompositorHandler for App {
                 (s.frame_pending, s.mapped, s.callbacks) = (false, true, s.callbacks + 1);
                 scrim.mapped(now);
             }
+            Some(Owner::Osd) => self.osd_frame(now),
+            Some(Owner::Headset) => self.headset_frame(now),
             Some(Owner::Preview) => {
                 let Some((s, _, _)) = &mut self.preview else { return };
                 (s.frame_pending, s.mapped, s.callbacks) = (false, true, s.callbacks + 1);
@@ -1664,6 +1686,11 @@ impl LayerShellHandler for App {
             }
             Some(Owner::Menu) => self.menu = None,
             Some(Owner::Scrim) => self.scrim = None,
+            Some(Owner::Osd) => self.osd.pill = None,
+            Some(Owner::Headset) => {
+                self.headset.card = None;
+                self.sync_join();
+            }
             Some(Owner::Backdrop) => self.backdrop = None,
             Some(Owner::Launcher) => self.launcher_closed(),
             Some(Owner::Zone(_) | Owner::LauncherScrim(_)) | None => {}
@@ -1715,6 +1742,8 @@ impl LayerShellHandler for App {
                 let Some((_, s)) = &mut self.scrim else { return };
                 s.configure(width, height);
             }
+            Some(Owner::Osd) => self.osd_configure(),
+            Some(Owner::Headset) => self.headset_configure(),
             Some(Owner::Zone(i)) => self.zones[i].1.configure(width.max(1), height.max(1)),
             Some(Owner::Backdrop) => {
                 if let Some(b) = &mut self.backdrop {
@@ -1781,9 +1810,13 @@ impl PointerHandler for App {
 }
 
 impl KeyboardHandler for App {
-    fn enter(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: &wl_surface::WlSurface, _: u32, _: &[u32], _: &[Keysym]) {}
+    fn enter(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, surface: &wl_surface::WlSurface, _: u32, _: &[u32], _: &[Keysym]) {
+        self.headset_focus(surface, true);
+    }
 
-    fn leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: &wl_surface::WlSurface, _: u32) {}
+    fn leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, surface: &wl_surface::WlSurface, _: u32) {
+        self.headset_focus(surface, false);
+    }
 
     fn press_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, event: KeyEvent) {
         self.key_event(event);

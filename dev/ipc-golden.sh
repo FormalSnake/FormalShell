@@ -11,9 +11,9 @@
 # WallpaperIpc.qml's exact signatures, `bar`, `panel`, `media`, `radio`,
 # `airplay`, `visualizer`, `overnight`, `earbuds`, `display`, `hdr` and
 # `workspaces` their own IPC files' (WorkspacesIpc.qml's `status` only: peek
-# and close wait for the preview), `calendar`, `iphone`, `notifications` and
-# `reminder` their own; `probe` covers every type qs converts and the
-# function names that collide with qs's subcommands.
+# and close wait for the preview), `calendar`, `iphone`, `notifications`,
+# `reminder`, `osd`, `nightlight` and `lights` their own; `probe` covers every
+# type qs converts and the function names that collide with qs's subcommands.
 set -euo pipefail
 
 dir=$(mktemp -d)
@@ -226,6 +226,32 @@ ShellRoot {
         function set(duration: string, message: string): string { return "set " + duration + " " + message }
         function show(): string { return "ok" }
         function clear(): string { return "ok: cleared 0" }
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "osd"
+        function volume(): string { return "ok" }
+        function brightness(): string { return "ok" }
+        function media(text: string): string { return "media " + text }
+        function close(): string { return "ok" }
+        function state(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "nightlight"
+        function toggle(): string { return "ok" }
+        function enable(): string { return "ok" }
+        function disable(): string { return "ok" }
+        function status(): string { return "{}" }
+    }
+    IpcHandler {
+        target: "lights"
+        function toggle(): string { return "ok" }
+        function effect(id: string): string { return "effect " + id }
+        function color(hex: string): string { return "color " + hex }
+        function source(value: string): string { return "source " + value }
+        function speed(value: string): string { return "speed " + value }
+        function brightness(level: string): string { return "brightness " + level }
+        function refresh(): string { return "ok" }
         function status(): string { return "{}" }
     }
     IpcHandler {
@@ -583,6 +609,33 @@ rec call reminder set 25m
 rec call reminder set 25m ''
 rec call reminder clear
 rec show reminder
+rec call osd volume
+rec call osd volume x
+rec call osd media 'a b'
+rec call osd media
+rec call osd close
+rec call osd state
+rec call osd nope
+rec show osd
+rec call nightlight toggle
+rec call nightlight enable
+rec call nightlight disable
+rec call nightlight status
+rec call nightlight status x
+rec show nightlight
+rec call lights toggle
+rec call lights effect breathe
+rec call lights effect
+rec call lights color '#ff0000'
+rec call lights source custom
+rec call lights speed high
+rec call lights brightness 3
+rec call lights brightness
+rec call lights refresh
+rec call lights status
+rec call lights nope
+rec show lights
+rec show lights brightness
 
 kill "$qs_pid"
 wait "$qs_pid" 2>/dev/null || true

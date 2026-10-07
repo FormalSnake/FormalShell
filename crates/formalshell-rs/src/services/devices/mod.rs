@@ -7,6 +7,7 @@
 pub mod audio;
 pub mod bluetooth;
 pub mod earbuds;
+pub mod headsets;
 pub mod network;
 pub mod power;
 

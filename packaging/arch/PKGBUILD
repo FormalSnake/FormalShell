@@ -197,6 +197,7 @@ package_formalshell() {
     util-linux
     wf-recorder
     wl-clipboard
+    wlsunset
     xdg-utils
   )
   optdepends=(
