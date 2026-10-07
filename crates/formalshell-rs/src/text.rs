@@ -9,9 +9,10 @@ use std::sync::Arc;
 
 use parley::fontique::Blob;
 use parley::{
-    FontContext, FontFamily, FontWeight, GenericFamily, Layout, LayoutContext, PositionedLayoutItem,
+    FontContext, FontFamily, FontFamilyName, FontWeight, GenericFamily, Layout, LayoutContext, PositionedLayoutItem,
     StyleProperty,
 };
+use skrifa::bitmap::{BitmapData, BitmapStrikes};
 use skrifa::instance::{LocationRef, NormalizedCoord, Size};
 use skrifa::outline::{
     DrawSettings, Engine, HintingInstance, HintingOptions, OutlinePen, SmoothMode, Target,
@@ -47,7 +48,15 @@ pub struct PlacedGlyph {
     pub path: Arc<BezPath>,
     pub x: i32,
     pub y: i32,
+    /// A colour bitmap (CBDT, sbix) drawn instead of the outline, already
+    /// at the pixel size, its top-left at `x, y`.
+    pub image: Option<crate::scene::Bitmap>,
 }
+
+/// The colour emoji face the package ships beside the icon fonts, named so
+/// a family that lacks a glyph falls through to it before fontconfig's own
+/// `emoji` alias.
+const EMOJI_FAMILY: &str = "Noto Color Emoji";
 
 /// A shaped single line, glyphs placed relative to the line's top-left with
 /// the baseline already on a whole pixel.
@@ -98,6 +107,9 @@ pub struct Text {
     instance_ids: HashMap<InstanceKey, usize>,
     instances: Vec<Option<HintingInstance>>,
     outlines: HashMap<GlyphKey, Arc<BezPath>>,
+    /// Colour bitmaps by face, glyph and pixel size; `None` where the face
+    /// has no bitmap for the glyph.
+    bitmaps: HashMap<(u64, u32, u32, u32), Option<(crate::scene::Bitmap, i32, i32)>>,
 }
 
 impl Text {
@@ -141,13 +153,31 @@ impl Text {
             instance_ids: HashMap::new(),
             instances: Vec::new(),
             outlines: HashMap::new(),
+            bitmaps: HashMap::new(),
         }
     }
 
     pub fn shape(&mut self, source: &str, style: TextStyle) -> ShapedText {
         let mut builder = self.lcx.ranged_builder(&mut self.fcx, source, 1.0, true);
         match style.family {
-            Family::Generic(g) => builder.push_default(StyleProperty::from(g)),
+            Family::Generic(g) => {
+                builder.push_default(StyleProperty::FontFamily(FontFamily::List(Cow::Owned(vec![
+                    FontFamilyName::Generic(g),
+                    FontFamilyName::Named(Cow::Borrowed(EMOJI_FAMILY)),
+                    FontFamilyName::Generic(GenericFamily::Emoji),
+                ]))));
+                // DejaVu, behind every sans-serif, draws many emoji as
+                // outlines; an emoji run asks the colour face first, the way
+                // a browser honours emoji presentation.
+                for range in emoji_runs(source) {
+                    let stack = FontFamily::List(Cow::Owned(vec![
+                        FontFamilyName::Named(Cow::Borrowed(EMOJI_FAMILY)),
+                        FontFamilyName::Generic(GenericFamily::Emoji),
+                        FontFamilyName::Generic(g),
+                    ]));
+                    builder.push(StyleProperty::FontFamily(stack), range);
+                }
+            }
             Family::Named(name) => builder.push_default(StyleProperty::from(FontFamily::Source(Cow::Borrowed(name)))),
         }
         builder.push_default(StyleProperty::FontSize(style.size));
@@ -185,12 +215,14 @@ impl Text {
             };
             let instance = self.instance(&font_ref, font.data.id(), font.index, size, &coords);
             for glyph in glyph_run.positioned_glyphs() {
+                let x = PAD + glyph.x.round() as i32;
+                let y = PAD + (baseline + glyph.y - line_baseline).round() as i32;
+                if let Some((image, dx, dy)) = self.bitmap(&font_ref, font.data.id(), font.index, glyph.id, size) {
+                    shaped.glyphs.push(PlacedGlyph { path: Arc::new(BezPath::new()), x: x + dx, y: y + dy, image: Some(image) });
+                    continue;
+                }
                 let path = self.outline(&font_ref, instance, glyph.id, size, &coords);
-                shaped.glyphs.push(PlacedGlyph {
-                    path,
-                    x: PAD + glyph.x.round() as i32,
-                    y: PAD + (baseline + glyph.y - line_baseline).round() as i32,
-                });
+                shaped.glyphs.push(PlacedGlyph { path, x, y, image: None });
             }
         }
         shaped
@@ -226,6 +258,47 @@ impl Text {
         id
     }
 
+    /// The glyph's colour bitmap scaled to `size` once, and its top-left
+    /// against the pen position on the baseline. Only a 32-bit strike is
+    /// colour; a mask strike is a monochrome bitmap the outline covers.
+    fn bitmap(&mut self, font: &FontRef, blob: u64, index: u32, glyph: u32, size: f32) -> Option<(crate::scene::Bitmap, i32, i32)> {
+        let key = (blob, index, glyph, size.to_bits());
+        if let Some(hit) = self.bitmaps.get(&key) {
+            return hit.clone();
+        }
+        let strikes = BitmapStrikes::new(font);
+        let found = if strikes.is_empty() { None } else { strikes.glyph_for_size(Size::new(size), GlyphId::new(glyph)) };
+        let placed = found.and_then(|g| {
+            let rgba = match g.data {
+                BitmapData::Png(bytes) => image::load_from_memory_with_format(bytes, image::ImageFormat::Png).ok()?.into_rgba8(),
+                BitmapData::Bgra(bytes) => {
+                    let mut px = bytes.to_vec();
+                    for p in px.chunks_exact_mut(4) {
+                        p.swap(0, 2);
+                        // Premultiplied in the table; from_rgba wants it straight.
+                        let a = u32::from(p[3]);
+                        if a > 0 {
+                            for c in &mut p[..3] {
+                                *c = ((u32::from(*c) * 255 + a / 2) / a).min(255) as u8;
+                            }
+                        }
+                    }
+                    image::RgbaImage::from_raw(g.width, g.height, px)?
+                }
+                BitmapData::Mask(_) => return None,
+            };
+            let scale = size / g.ppem_y.max(1.0);
+            let w = ((rgba.width() as f32 * scale).round() as u32).max(1);
+            let h = ((rgba.height() as f32 * scale).round() as u32).max(1);
+            let scaled = image::imageops::resize(&rgba, w, h, image::imageops::FilterType::Triangle);
+            let dx = (g.inner_bearing_x * scale).round() as i32;
+            let dy = -(g.inner_bearing_y * scale).round() as i32;
+            Some((crate::scene::Bitmap::from_rgba(w as u16, h as u16, scaled.into_raw()), dx, dy))
+        });
+        self.bitmaps.insert(key, placed.clone());
+        placed
+    }
+
     fn outline(&mut self, font: &FontRef, instance: usize, glyph: u32, size: f32, coords: &[i16]) -> Arc<BezPath> {
         let key = GlyphKey { instance, glyph };
         if let Some(path) = self.outlines.get(&key) {
@@ -247,6 +320,29 @@ impl Text {
         self.outlines.insert(key, path.clone());
         path
     }
+}
+
+/// Byte ranges of emoji sequences: pictographs, regional indicators, skin
+/// tones, and anything carrying VS16, with the joiners, keycaps and tags
+/// that bind them.
+fn emoji_runs(source: &str) -> Vec<std::ops::Range<usize>> {
+    let chars: Vec<(usize, char)> = source.char_indices().collect();
+    let pictographic = |c: char| matches!(c as u32, 0x1F000..=0x1FAFF | 0x2600..=0x27BF | 0x2B00..=0x2BFF);
+    let binding = |c: char| matches!(c as u32, 0xFE0F | 0x200D | 0x20E3 | 0xE0020..=0xE007F);
+    let mut runs: Vec<std::ops::Range<usize>> = Vec::new();
+    for (i, &(at, c)) in chars.iter().enumerate() {
+        let next_vs16 = chars.get(i + 1).is_some_and(|&(_, n)| n == '\u{FE0F}' || n == '\u{20E3}');
+        let wide = (c as u32) >= 0x1F000 && pictographic(c);
+        let continues = binding(c) && runs.last().is_some_and(|r| r.end == at);
+        if wide || next_vs16 || continues {
+            let end = at + c.len_utf8();
+            match runs.last_mut() {
+                Some(r) if r.end == at => r.end = end,
+                _ => runs.push(at..end),
+            }
+        }
+    }
+    runs
 }
 
 fn location(coords: &[i16]) -> Vec<NormalizedCoord> {

@@ -138,11 +138,20 @@ impl Renderer {
                     }
                 }
                 Paint::Text { text, color: ink } => {
-                    self.ctx.set_paint(color(*ink));
                     for glyph in &text.glyphs {
                         let p = (node.bounds.x + glyph.x, node.bounds.y + glyph.y);
                         self.ctx.set_transform(at * Affine::translate((p.0 as f64, p.1 as f64)));
-                        self.ctx.fill_path(&glyph.path);
+                        if let Some(image) = &glyph.image {
+                            // A colour glyph keeps its own colours and takes only the ink's alpha.
+                            self.ctx.set_paint(vello_cpu::Image {
+                                image: vello_cpu::ImageSource::Pixmap(image.pixmap.clone()),
+                                sampler: vello_cpu::peniko::ImageSampler::default().with_alpha(ink.a),
+                            });
+                            self.ctx.fill_rect(&Rect::new(0.0, 0.0, image.pixmap.width() as f64, image.pixmap.height() as f64));
+                        } else {
+                            self.ctx.set_paint(color(*ink));
+                            self.ctx.fill_path(&glyph.path);
+                        }
                     }
                 }
                 Paint::Image { image, alpha } => {
