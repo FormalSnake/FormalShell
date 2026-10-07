@@ -1,38 +1,78 @@
-//! ActiveWindow.qml: the held-focus window's app name, elided at half a
-//! narrow popup, then its title as the strip's second free label. With no
-//! desktop entry resolved the name is the app id in the meta ink.
+//! ActiveWindow.qml: the held-focus window's app icon and desktop-entry
+//! name, then its title as the strip's second free label. The name crossfades
+//! when it changes. With no desktop entry resolved the name is the app id in
+//! the meta ink and there is no icon.
 
+use crate::services::appicon;
 use crate::store::Topic;
 use crate::surfaces::bar::cell::{Action, Button, Cell, Env, Limits, Look, Part, View};
+use crate::ui::el::Pic;
 
 #[derive(Default)]
 pub struct ActiveWindow {
-    window: Option<(String, String)>,
+    window: Option<Held>,
+    probed: Option<(u32, appicon::Query)>,
+}
+
+#[derive(Clone, PartialEq)]
+struct Held {
+    app_id: String,
+    title: String,
+    /// The entry's display name and the icon its theme resolved, once the
+    /// probe answered.
+    name: Option<String>,
+    icon: Pic,
+    size: f64,
 }
 
 impl Cell for ActiveWindow {
     fn reads(&self) -> &'static [Topic] {
-        &[Topic::Hyprland]
+        &[Topic::Hyprland, Topic::AppIcon]
     }
 
     fn read(&mut self, env: &Env) -> bool {
         let h = &env.store.hyprland;
         let held = h.held_focused_window_id();
-        let window = h.window(&held).map(|w| (w.app_id.clone(), w.title.clone()));
-        let changed = window != self.window;
-        self.window = window;
+        let Some(w) = h.window(&held) else {
+            let changed = self.window.is_some();
+            self.window = None;
+            return changed;
+        };
+        let size = super::now_playing::slot(env);
+        let query = appicon::Query {
+            id: format!("bar-active:{}", w.id),
+            app_id: w.app_id.clone(),
+            initial_class: w.initial_class.clone(),
+            initial_title: w.initial_title.clone(),
+            pid: w.pid,
+        };
+        let px = size.round() as u32;
+        if self.probed.as_ref().is_none_or(|(s, q)| *s != px || *q != query) {
+            appicon::probe(px, vec![query.clone()]);
+            self.probed = Some((px, query.clone()));
+        }
+        let resolved = env.store.appicon.by_window.get(&query.id);
+        let next = Held {
+            app_id: w.app_id.clone(),
+            title: w.title.clone(),
+            name: resolved.and_then(|i| i.entry.as_ref()).map(|e| if e.name.is_empty() { w.app_id.clone() } else { e.name.clone() }),
+            icon: Pic(resolved.and_then(|i| i.image.clone())),
+            size,
+        };
+        let changed = self.window.as_ref() != Some(&next);
+        self.window = Some(next);
         changed
     }
 
     fn view(&self, look: &Look) -> View {
-        let Some((app_id, title)) = &self.window else { return View::hidden() };
-        View::new(
-            vec![
-                Part::Name { text: app_id.clone(), max: look.narrow / 2.0, dim: true },
-                Part::Free { text: title.clone(), dim: false, lead: look.md, ceiling: f64::INFINITY },
-            ],
-            look.xxs,
-        )
+        let Some(w) = &self.window else { return View::hidden() };
+        let mut parts = Vec::new();
+        if w.icon.0.is_some() {
+            parts.push(Part::AppIcon { image: w.icon.clone(), size: w.size });
+        }
+        parts.push(Part::Name { text: w.name.clone().unwrap_or_else(|| w.app_id.clone()), max: look.narrow / 2.0, dim: w.name.is_none() });
+        parts.push(Part::Free { text: w.title.clone(), dim: w.name.is_some(), lead: look.md, ceiling: f64::INFINITY, cross: false });
+        View::new(parts, look.xxs)
     }
 
     fn limits(&self, look: &Look, _along: f64, rest: f64) -> Option<Limits> {

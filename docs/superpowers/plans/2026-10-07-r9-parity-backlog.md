@@ -5,16 +5,9 @@ Each is fixed, or kept with the owner's say-so, before R9 cuts over. Grouped
 by surface; one line each.
 
 ## Bar
-- Meta labels have no letter spacing (the text style has no tracking field).
-- Monitor cell's icon slot is narrower than the QML one.
-- ActiveWindow lacks the app icon, desktop-entry name and name crossfade.
-- NowPlaying title crossfade between tracks is not ported.
-- Spaces chip label colour transition is not ported; touchpad wheel steps
-  once per event (no magnitude).
-- Indicators is one cell, not the QML rail of cells; nightlight, overnight,
-  clipssh, airplay and reminder indicators need wiring.
-- Weather location has no GeoClue path and no place name.
-- No re-poll when the network comes back.
+- Indicators is one cell, not the QML rail of cells: a rail needs the strip to host
+  several independent hover and click cells inside one slot, which the cell model
+  does not do yet. All seven indicators are wired into the one cell.
 
 ## Panels
 - Tray menu: no click-outside dismiss, no wheel scroll past the height cap,

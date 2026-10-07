@@ -12,7 +12,7 @@ use fs_theme::style::Glow;
 
 use crate::motion::{Animated, EFFECTS, SPATIAL, SPATIAL_FAST};
 use crate::scene::{IRect, NodeId, Scene};
-use crate::surfaces::bar::cell::{Cell, Env, Frame, Ink, Kit, Limits, Measured, Painter, View};
+use crate::surfaces::bar::cell::{Cell, Env, Frame, Ink, Kit, Limits, Measured, Painter, Part, View};
 use crate::surfaces::bar::cells;
 
 pub struct Slot {
@@ -32,6 +32,9 @@ pub struct Slot {
     pub open: bool,
     mark: Animated,
     mark_fade: Animated,
+    /// A text part's outgoing string and the clock that fades it out.
+    ghost: Option<(usize, Part)>,
+    cross: Animated,
     /// When the marquee's current cycle started, while it overflows.
     marquee: Option<Instant>,
     /// Laid out along the strip, in the owner's scene; empty when the
@@ -64,6 +67,8 @@ impl Slot {
             open: false,
             mark: Animated::new(0.0, SPATIAL_FAST),
             mark_fade: Animated::new(0.0, EFFECTS),
+            ghost: None,
+            cross: Animated::new(1.0, EFFECTS),
             marquee: None,
             rect: IRect::default(),
             clip: IRect::default(),
@@ -79,11 +84,19 @@ impl Slot {
             self.dirty = true;
         }
         let vertical = env.edge.is_vertical();
-        self.view = self.cell.view(&kit.look);
+        let old_view = std::mem::replace(&mut self.view, self.cell.view(&kit.look));
+        if animate && kit.look.motion {
+            if let Some(changed) = swapped_text(&old_view, &self.view) {
+                self.ghost = Some(changed);
+                self.cross.jump(0.0);
+                self.cross.set(now, 1.0, kit.look.effects * kit.motion_scale);
+            }
+        }
         let natural = match self.cell.custom() {
             Some(c) if self.view.shown => c.measure(kit, vertical, band),
             _ => {
                 self.measured = kit.measure(&self.view, vertical, self.budget, band);
+                self.cell.laid(&self.measured.extents());
                 if let Some(free) = &self.measured.free {
                     let rest = self.measured.along - free.extent;
                     self.limits = self.cell.limits(&kit.look, along_strip, rest);
@@ -166,14 +179,17 @@ impl Slot {
         (t >= look.marquee_hold).then(|| (t - look.marquee_hold) / 1000.0 * look.marquee_px)
     }
 
-    /// When the marquee next starts to move, while it is holding.
+    /// When the marquee next starts to move, while it is holding, or the
+    /// cell's own timer, whichever comes first.
     pub fn wake(&self, kit: &Kit, visible: bool, now: Instant) -> Option<Instant> {
-        let start = self.marquee.filter(|_| self.overflowing(kit, visible))?;
-        let free = self.measured.free.as_ref()?;
-        let look = &kit.look;
-        let cycle = look.marquee_hold + free.loop_width / look.marquee_px * 1000.0;
-        let t = now.saturating_duration_since(start).as_secs_f64() * 1000.0 % cycle;
-        (t < look.marquee_hold).then(|| now + Duration::from_secs_f64((look.marquee_hold - t) / 1000.0))
+        let marquee = self.marquee.filter(|_| self.overflowing(kit, visible)).and_then(|start| {
+            let free = self.measured.free.as_ref()?;
+            let look = &kit.look;
+            let cycle = look.marquee_hold + free.loop_width / look.marquee_px * 1000.0;
+            let t = now.saturating_duration_since(start).as_secs_f64() * 1000.0 % cycle;
+            (t < look.marquee_hold).then(|| now + Duration::from_secs_f64((look.marquee_hold - t) / 1000.0))
+        });
+        [marquee, self.cell.wake()].into_iter().flatten().min()
     }
 
     pub fn animating(&mut self, kit: &Kit, visible: bool, now: Instant) -> bool {
@@ -183,6 +199,7 @@ impl Slot {
             || self.fade.running(now)
             || self.mark.running(now)
             || self.mark_fade.running(now)
+            || self.ghost.is_some() && self.cross.running(now)
             || self.scroll(kit, visible, now).is_some()
     }
 
@@ -210,6 +227,9 @@ impl Slot {
         let rect = self.rect;
         let fade = self.fade.value(now).clamp(0.0, 1.0) as f32 * alpha * self.view.opacity;
         let scroll = self.scroll(kit, visible, now);
+        if !self.cross.running(now) {
+            self.ghost = None;
+        }
         let own_hover = self.cell.custom().is_some_and(|c| c.own_hover());
         let mut p = Painter::new(scene, &mut self.nodes, Some(self.clip.intersect(&rect)));
         if rect.is_empty() || fade <= 0.0 {
@@ -224,6 +244,7 @@ impl Slot {
             alpha: fade,
             band,
             scroll,
+            ghost: self.ghost.as_ref().map(|(i, part)| (*i, part, self.cross.value(now).clamp(0.0, 1.0) as f32)),
         };
         match self.cell.custom() {
             Some(custom) => {
@@ -235,5 +256,68 @@ impl Slot {
         }
         p.finish();
         self.dirty = false;
+    }
+}
+
+/// The one text part whose string changed between two views of a cell that
+/// crossfades it (an app name, a track title), with the part it replaced.
+fn swapped_text(old: &View, new: &View) -> Option<(usize, Part)> {
+    if old.parts.len() != new.parts.len() {
+        return None;
+    }
+    let mut changed = old.parts.iter().zip(&new.parts).enumerate().filter(|(_, (a, b))| a != b);
+    let (i, (a, b)) = changed.next()?;
+    if changed.next().is_some() {
+        return None;
+    }
+    let fades = match (a, b) {
+        (Part::Name { text: x, .. }, Part::Name { text: y, .. }) => !x.is_empty() && !y.is_empty() && x != y,
+        (Part::Free { text: x, cross: true, .. }, Part::Free { text: y, cross: true, .. }) => !x.is_empty() && !y.is_empty() && x != y,
+        _ => false,
+    };
+    fades.then(|| (i, a.clone()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn name(text: &str) -> Part {
+        Part::Name { text: text.into(), max: 100.0, dim: false }
+    }
+
+    fn title(text: &str, cross: bool) -> Part {
+        Part::Free { text: text.into(), dim: false, lead: 0.0, ceiling: 100.0, cross }
+    }
+
+    fn view(parts: Vec<Part>) -> View {
+        View::new(parts, 0.0)
+    }
+
+    #[test]
+    fn a_renamed_app_crossfades_and_the_old_name_is_kept() {
+        let old = view(vec![name("Foot"), title("a", false)]);
+        let new = view(vec![name("Firefox"), title("a", false)]);
+        assert_eq!(swapped_text(&old, &new), Some((0, name("Foot"))));
+    }
+
+    #[test]
+    fn only_a_title_that_asks_to_crossfade_does() {
+        let (old, new) = (view(vec![title("one", false)]), view(vec![title("two", false)]));
+        assert_eq!(swapped_text(&old, &new), None);
+        let (old, new) = (view(vec![title("one", true)]), view(vec![title("two", true)]));
+        assert_eq!(swapped_text(&old, &new), Some((0, title("one", true))));
+    }
+
+    #[test]
+    fn two_parts_changing_at_once_is_a_cut() {
+        let (old, new) = (view(vec![name("a"), title("x", true)]), view(vec![name("b"), title("y", true)]));
+        assert_eq!(swapped_text(&old, &new), None);
+    }
+
+    #[test]
+    fn a_name_arriving_from_nothing_does_not_fade() {
+        let (old, new) = (view(vec![name("")]), view(vec![name("Foot")]));
+        assert_eq!(swapped_text(&old, &new), None);
     }
 }

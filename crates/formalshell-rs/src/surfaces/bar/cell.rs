@@ -50,6 +50,10 @@ pub enum Action {
     Device(crate::services::devices::Op),
     /// Caffeinate on or off (the indicator's click).
     Caffeinate(bool),
+    /// The overnight indicator's click: end it.
+    OvernightOff,
+    /// The reminder indicator's click: a toast listing what is pending.
+    ReminderSummary,
     MediaNext,
     MediaPrevious,
     /// The notification centre, open or shut.
@@ -88,6 +92,10 @@ pub enum Part {
     /// An icon by name, through `theme.icons`; `dim` takes the meta ink,
     /// `dot` is the bell's pending mark on its corner.
     Icon { name: String, dim: bool, dot: bool },
+    /// An icon centred in a fixed-width slot, MonitorWidget's `huge` one.
+    SlotIcon { name: String, width: f64 },
+    /// Empty room along the strip.
+    Pad(f64),
     /// A glyph in a named family (the distro logo).
     Glyph { text: String, family: &'static str },
     /// CellLabel.qml: mono, body, medium unless `weight` says otherwise.
@@ -103,11 +111,13 @@ pub enum Part {
     /// MarqueeText.qml: free text drawn at the budget the bar hands this
     /// cell, scrolling once it outgrows it. `lead` is its own padding,
     /// `ceiling` the most it ever draws.
-    Free { text: String, dim: bool, lead: f64, ceiling: f64 },
+    Free { text: String, dim: bool, lead: f64, ceiling: f64, cross: bool },
     /// Cover.qml in the icon's slot, `size` square: the `muted` well under a
     /// border, the picture inside it once decoded. Content imagery, so it
     /// keeps its own colours on any cell fill.
     Cover { image: crate::ui::el::Pic, size: f64 },
+    /// A window's app icon, `size` square, bare: the bar's one image icon.
+    AppIcon { image: crate::ui::el::Pic, size: f64 },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -177,8 +187,27 @@ pub trait Cell {
     fn click(&mut self, _button: Button, _at: (f64, f64), _env: &Env) -> Action {
         Action::None
     }
+    /// The tooltip of the part under the pointer, with where that part sits
+    /// along the cell (start, extent): a cell whose icons each have words.
+    fn tip_at(&self) -> Option<(String, f64, f64)> {
+        None
+    }
+    /// The extents the cell's parts measured to along the strip, 0 for one
+    /// that is not drawn, handed over after every measure.
+    fn laid(&mut self, _extents: &[f64]) {}
+    /// The next instant the cell has something to change on its own (a
+    /// countdown's next second), so it is read again then.
+    fn wake(&self) -> Option<Instant> {
+        None
+    }
     fn wheel(&mut self, _up: bool, _env: &Env) -> Action {
         Action::None
+    }
+    /// One axis event in notches (a touchpad's fractions included), the
+    /// vertical and the sideways axis; a cell that wants the magnitude
+    /// overrides this, the rest step once per event.
+    fn wheel_by(&mut self, vertical: f64, _sideways: f64, env: &Env) -> Action {
+        if vertical == 0.0 { Action::None } else { self.wheel(vertical < 0.0, env) }
     }
     /// Whether the window this cell is on is on screen, told on every paint
     /// (a cell running a child process only while it is seen).
@@ -234,11 +263,14 @@ pub struct Look {
     pub cell_height: f64,
     pub cell_width: f64,
     pub xxs: f64,
+    pub huge: f64,
     pub xs: f64,
     pub sm: f64,
     pub md: f64,
     pub body: f32,
     pub caption: f32,
+    /// `letterSpacing.meta`, the tracking of a meta label.
+    pub meta_tracking: f32,
     pub narrow: f64,
     pub panel_padding: f64,
     pub sans: Family,
@@ -300,11 +332,13 @@ impl Look {
             cell_height: s.bar_cell_height,
             cell_width: s.bar_cell_width,
             xxs: s.xxs,
+            huge: s.huge,
             xs: s.xs,
             sm: s.sm,
             md: s.md,
             body: theme.font_size.body as f32,
             caption: theme.font_size.caption as f32,
+            meta_tracking: theme.letter_spacing.meta as f32,
             narrow: s.popup_width_narrow,
             panel_padding: s.panel_padding,
             sans: family(theme.font_family_sans),
@@ -349,11 +383,11 @@ impl Look {
     }
 
     pub fn label(&self, weight: f32) -> TextStyle {
-        TextStyle { family: self.mono, size: self.body, weight }
+        TextStyle { family: self.mono, size: self.body, weight, tracking: 0.0 }
     }
 
     pub fn sans(&self, weight: f32) -> TextStyle {
-        TextStyle { family: self.sans, size: self.body, weight }
+        TextStyle { family: self.sans, size: self.body, weight, tracking: 0.0 }
     }
 }
 
@@ -518,6 +552,7 @@ struct ShapeKey {
     family: String,
     size: u32,
     weight: u32,
+    tracking: u32,
 }
 
 /// Shaping, cached by text and style, with the look it shapes for.
@@ -563,6 +598,15 @@ pub struct Frame<'a> {
     pub band: Option<(Rgba, &'a [Glow<Rgba>])>,
     /// The free label's scroll, in pixels, while its marquee runs.
     pub scroll: Option<f64>,
+    /// A text part's outgoing string while its replacement fades in: the
+    /// part's index, the old part and the new one's opacity.
+    pub ghost: Option<(usize, &'a Part, f32)>,
+}
+
+impl Measured {
+    pub fn extents(&self) -> Vec<f64> {
+        self.boxes.iter().map(|b| b.0).collect()
+    }
 }
 
 impl Kit {
@@ -580,7 +624,7 @@ impl Kit {
             Family::Generic(g) => format!("{g:?}"),
             Family::Named(n) => n.to_owned(),
         };
-        let key = ShapeKey { text: source.to_owned(), family, size: style.size.to_bits(), weight: style.weight.to_bits() };
+        let key = ShapeKey { text: source.to_owned(), family, size: style.size.to_bits(), weight: style.weight.to_bits(), tracking: style.tracking.to_bits() };
         if let Some(s) = self.cache.get(&key) {
             return s.clone();
         }
@@ -594,16 +638,17 @@ impl Kit {
 
     pub fn icon(&mut self, name: &str) -> ShapedText {
         let g = fs_theme::icons::glyph(&self.look.icon_set, name);
-        let style = TextStyle { family: Family::Named(g.family), size: self.look.body, weight: 400.0 };
+        let style = TextStyle { family: Family::Named(g.family), size: self.look.body, weight: 400.0, tracking: 0.0 };
         self.shape(g.text, style)
     }
 
     fn part_shape(&mut self, part: &Part, band: bool) -> ShapedText {
         let look = self.look.clone();
         match part {
-            Part::Icon { name, .. } => self.icon(name),
-            Part::Cover { .. } => self.icon("music"),
-            Part::Glyph { text, family } => self.shape(text, TextStyle { family: Family::Named(family), size: look.body, weight: 400.0 }),
+            Part::Icon { name, .. } | Part::SlotIcon { name, .. } => self.icon(name),
+            Part::Cover { .. } | Part::AppIcon { .. } => self.icon("music"),
+            Part::Pad(_) => self.shape("", look.label(400.0)),
+            Part::Glyph { text, family } => self.shape(text, TextStyle { family: Family::Named(family), size: look.body, weight: 400.0, tracking: 0.0 }),
             Part::Label { text, weight } => {
                 let w = if band { WEIGHTS.semibold } else { weight.unwrap_or(WEIGHTS.medium as f32) as f64 };
                 self.shape(text, look.label(w as f32))
@@ -614,7 +659,7 @@ impl Kit {
             }
             Part::Meta { text } => {
                 let w = if band { WEIGHTS.semibold } else { WEIGHTS.medium };
-                self.shape(text, TextStyle { family: look.sans, size: look.caption, weight: w as f32 })
+                self.shape(text, TextStyle { family: look.sans, size: look.caption, weight: w as f32, tracking: look.meta_tracking })
             }
             Part::Name { text, .. } => self.shape(text, look.sans(WEIGHTS.medium as f32)),
             Part::Free { text, .. } => {
@@ -636,10 +681,11 @@ impl Kit {
             let w = shaped.width as f64;
             let h = shaped.line_height() as f64;
             let b = match part {
-                Part::Icon { .. } | Part::Glyph { .. } => {
-                    if vertical { (icon_h, look.body as f64) } else { (look.body as f64, icon_h) }
+                Part::Icon { .. } | Part::Glyph { .. } | Part::SlotIcon { .. } => {
+                    let along = if let Part::SlotIcon { width, .. } = part { *width } else { look.body as f64 };
+                    if vertical { (icon_h, along) } else { (along, icon_h) }
                 }
-                Part::Cover { size, .. } => {
+                Part::Cover { size, .. } | Part::AppIcon { size, .. } => {
                     let across = icon_h.max(*size);
                     if vertical { (across, *size) } else { (*size, across) }
                 }
@@ -652,6 +698,7 @@ impl Kit {
                         (w, h)
                     }
                 }
+                Part::Pad(room) => (*room, 0.0),
                 Part::Name { max, .. } => {
                     if vertical || w <= 0.0 { (0.0, 0.0) } else { (w.min(*max), h) }
                 }
@@ -726,96 +773,113 @@ impl Kit {
         let vertical = f.edge.is_vertical();
         let r = f.rect;
         let mut at = if vertical { r.y as f64 + look.pad_x } else { r.x as f64 + look.pad_x };
-        for (part, b) in view.parts.iter().zip(&m.boxes) {
+        for (idx, (part, b)) in view.parts.iter().zip(&m.boxes).enumerate() {
             if b.0 <= 0.0 {
                 continue;
             }
-            let shaped = self.part_shape(part, ink.band);
-            let lh = shaped.line_height();
-            let across_mid = if vertical { r.x + r.w / 2 } else { r.y + r.h / 2 };
-            match part {
-                Part::Icon { .. } | Part::Glyph { .. } => {
-                    let dim = matches!(part, Part::Icon { dim: true, .. });
-                    let dot = matches!(part, Part::Icon { dot: true, .. });
-                    let color = ink.of(if dim { ink.dim } else { ink.fg });
-                    let size = look.body as f64;
-                    let (bx, by) = if vertical {
-                        (across_mid as f64 - size / 2.0, at)
-                    } else {
-                        (at, across_mid as f64 - b.1 / 2.0)
-                    };
-                    let x = (bx + (size - shaped.width as f64) / 2.0).round() as i32;
-                    let y = if vertical { by.round() as i32 } else { across_mid - lh / 2 };
-                    p.text(&shaped, (x, y), color, &ink.glow);
-                    if dot {
-                        let d = look.md as i32;
-                        let dot_r = IRect::new((bx + size) as i32 - d, (if vertical { by } else { across_mid as f64 - b.1 / 2.0 }) as i32, d, d);
-                        p.rect(dot_r, ink.of(look.primary), d as f32 / 2.0);
-                    }
-                }
-                Part::Cover { image, size } => {
-                    let n = size.round() as i32;
-                    let (x, y) = if vertical { (across_mid - n / 2, at.round() as i32) } else { (at.round() as i32, across_mid - n / 2) };
-                    let slot = IRect::new(x, y, n, n);
-                    let radius = fs_theme::tokens::cover_radius(look.radius_sm, *size) as f32;
-                    p.framed(slot, ink.of(look.muted_fill), radius, Rgba::TRANSPARENT, 0.0);
-                    if let Some(image) = &image.0 {
-                        let (w, h) = (image.pixmap.width() as i32, image.pixmap.height() as i32);
-                        p.image(image, (x + (n - w) / 2, y + (n - h) / 2), f.alpha);
-                    }
-                    p.framed(slot, Rgba::TRANSPARENT, radius, ink.of(look.border), look.border_width as f32);
-                }
-                Part::Label { .. } | Part::DimLabel { .. } | Part::Meta { .. } => {
-                    let color = ink.of(if matches!(part, Part::Label { .. }) { ink.fg } else { ink.dim });
-                    let (x, y) = if vertical {
-                        ((across_mid - shaped.width / 2), at.round() as i32)
-                    } else {
-                        (at.round() as i32, across_mid - lh / 2)
-                    };
-                    p.text(&shaped, (x, y), color, &ink.glow);
-                }
-                Part::Name { dim, .. } => {
-                    let color = ink.of(if *dim { ink.dim } else { ink.fg });
-                    let x = at.round() as i32;
-                    let y = across_mid - lh / 2;
-                    let clip = IRect::new(x, r.y, b.0.ceil() as i32, r.h);
-                    let (w, h) = shaped.box_size();
-                    let bounds = IRect::new(x - text::PAD, y - text::PAD, w, h);
-                    let clip = Some(p.clip.map_or(clip, |c| c.intersect(&clip)));
-                    p.text_in(&shaped, bounds, Affine::IDENTITY, clip, color, &ink.glow);
-                }
-                Part::Free { dim, lead, .. } => {
-                    let color = ink.of(if *dim { ink.dim } else { ink.fg });
-                    let lead = if vertical { 0.0 } else { *lead };
-                    let extent = b.0;
-                    let view_len = (extent - lead).max(0.0);
-                    let scroll = f.scroll.unwrap_or(0.0);
-                    let loop_w = m.free.as_ref().map_or(0.0, |l| l.loop_width);
-                    let (w, h) = shaped.box_size();
-                    let (vp, transform_base): (IRect, Affine) = if vertical {
-                        let len = view_len.ceil() as i32;
-                        let vp = IRect::new(across_mid - lh / 2, at.round() as i32, lh, len);
-                        let rot = match f.edge {
-                            // Bottom to top on the left, top to bottom on the right.
-                            Edge::Left => Affine::new([0.0, -1.0, 1.0, 0.0, vp.x as f64, vp.bottom() as f64]),
-                            _ => Affine::new([0.0, 1.0, -1.0, 0.0, vp.right() as f64, vp.y as f64]),
+            let passes: Vec<(&Part, f32)> = match f.ghost.filter(|g| g.0 == idx) {
+                Some((_, old, mix)) => vec![(part, mix), (old, 1.0 - mix)],
+                None => vec![(part, 1.0)],
+            };
+            for (pass, (part, mix)) in passes.into_iter().enumerate() {
+                let ink = Ink::resolve(&look, view.tone, f.band, f.alpha * mix);
+                let scroll_now = if pass == 0 { f.scroll } else { None };
+                let shaped = self.part_shape(part, ink.band);
+                let lh = shaped.line_height();
+                let across_mid = if vertical { r.x + r.w / 2 } else { r.y + r.h / 2 };
+                match part {
+                    Part::Icon { .. } | Part::Glyph { .. } | Part::SlotIcon { .. } => {
+                        let dim = matches!(part, Part::Icon { dim: true, .. });
+                        let dot = matches!(part, Part::Icon { dot: true, .. });
+                        let color = ink.of(if dim { ink.dim } else { ink.fg });
+                        let size = if let Part::SlotIcon { width, .. } = part { *width } else { look.body as f64 };
+                        let (bx, by) = if vertical {
+                            (across_mid as f64 - size / 2.0, at)
+                        } else {
+                            (at, across_mid as f64 - b.1 / 2.0)
                         };
-                        (vp, rot)
-                    } else {
-                        let vp = IRect::new((at + lead).round() as i32, across_mid - lh / 2, view_len.ceil() as i32, lh);
-                        (vp, Affine::translate((vp.x as f64, vp.y as f64)))
-                    };
-                    let clip = Some(p.clip.map_or(vp, |c| c.intersect(&vp)));
-                    let copies: &[f64] = if f.scroll.is_some() { &[0.0, 1.0] } else { &[0.0] };
-                    for k in copies {
-                        let shift = -scroll + k * loop_w;
-                        let local = Affine::translate((shift - text::PAD as f64, -text::PAD as f64));
-                        let full = transform_base * local;
-                        let bounds = Scene::cover(vello_cpu::kurbo::Rect::new(0.0, 0.0, w as f64, h as f64), full, 1.0)
-                            .intersect(&vp);
-                        let bounds = if bounds.is_empty() { continue } else { bounds };
-                        let transform = full * Affine::translate((-bounds.x as f64, -bounds.y as f64));
-                        p.text_in(&shaped, bounds, transform, clip, color, &ink.glow);
+                        let x = (bx + (size - shaped.width as f64) / 2.0).round() as i32;
+                        let y = if vertical { by.round() as i32 } else { across_mid - lh / 2 };
+                        p.text(&shaped, (x, y), color, &ink.glow);
+                        if dot {
+                            let d = look.md as i32;
+                            let dot_r = IRect::new((bx + size) as i32 - d, (if vertical { by } else { across_mid as f64 - b.1 / 2.0 }) as i32, d, d);
+                            p.rect(dot_r, ink.of(look.primary), d as f32 / 2.0);
+                        }
+                    }
+                    Part::Pad(_) => {}
+                    Part::AppIcon { image, size } => {
+                        let n = size.round() as i32;
+                        let (x, y) = if vertical { (across_mid - n / 2, at.round() as i32) } else { (at.round() as i32, across_mid - n / 2) };
+                        if let Some(image) = &image.0 {
+                            let (w, h) = (image.pixmap.width() as i32, image.pixmap.height() as i32);
+                            p.image(image, (x + (n - w) / 2, y + (n - h) / 2), f.alpha * mix);
+                        }
+                    }
+                    Part::Cover { image, size } => {
+                        let n = size.round() as i32;
+                        let (x, y) = if vertical { (across_mid - n / 2, at.round() as i32) } else { (at.round() as i32, across_mid - n / 2) };
+                        let slot = IRect::new(x, y, n, n);
+                        let radius = fs_theme::tokens::cover_radius(look.radius_sm, *size) as f32;
+                        p.framed(slot, ink.of(look.muted_fill), radius, Rgba::TRANSPARENT, 0.0);
+                        if let Some(image) = &image.0 {
+                            let (w, h) = (image.pixmap.width() as i32, image.pixmap.height() as i32);
+                            p.image(image, (x + (n - w) / 2, y + (n - h) / 2), f.alpha);
+                        }
+                        p.framed(slot, Rgba::TRANSPARENT, radius, ink.of(look.border), look.border_width as f32);
+                    }
+                    Part::Label { .. } | Part::DimLabel { .. } | Part::Meta { .. } => {
+                        let color = ink.of(if matches!(part, Part::Label { .. }) { ink.fg } else { ink.dim });
+                        let (x, y) = if vertical {
+                            ((across_mid - shaped.width / 2), at.round() as i32)
+                        } else {
+                            (at.round() as i32, across_mid - lh / 2)
+                        };
+                        p.text(&shaped, (x, y), color, &ink.glow);
+                    }
+                    Part::Name { dim, .. } => {
+                        let color = ink.of(if *dim { ink.dim } else { ink.fg });
+                        let x = at.round() as i32;
+                        let y = across_mid - lh / 2;
+                        let clip = IRect::new(x, r.y, b.0.ceil() as i32, r.h);
+                        let (w, h) = shaped.box_size();
+                        let bounds = IRect::new(x - text::PAD, y - text::PAD, w, h);
+                        let clip = Some(p.clip.map_or(clip, |c| c.intersect(&clip)));
+                        p.text_in(&shaped, bounds, Affine::IDENTITY, clip, color, &ink.glow);
+                    }
+                    Part::Free { dim, lead, .. } => {
+                        let color = ink.of(if *dim { ink.dim } else { ink.fg });
+                        let lead = if vertical { 0.0 } else { *lead };
+                        let extent = b.0;
+                        let view_len = (extent - lead).max(0.0);
+                        let scroll = scroll_now.unwrap_or(0.0);
+                        let loop_w = m.free.as_ref().map_or(0.0, |l| l.loop_width);
+                        let (w, h) = shaped.box_size();
+                        let (vp, transform_base): (IRect, Affine) = if vertical {
+                            let len = view_len.ceil() as i32;
+                            let vp = IRect::new(across_mid - lh / 2, at.round() as i32, lh, len);
+                            let rot = match f.edge {
+                                // Bottom to top on the left, top to bottom on the right.
+                                Edge::Left => Affine::new([0.0, -1.0, 1.0, 0.0, vp.x as f64, vp.bottom() as f64]),
+                                _ => Affine::new([0.0, 1.0, -1.0, 0.0, vp.right() as f64, vp.y as f64]),
+                            };
+                            (vp, rot)
+                        } else {
+                            let vp = IRect::new((at + lead).round() as i32, across_mid - lh / 2, view_len.ceil() as i32, lh);
+                            (vp, Affine::translate((vp.x as f64, vp.y as f64)))
+                        };
+                        let clip = Some(p.clip.map_or(vp, |c| c.intersect(&vp)));
+                        let copies: &[f64] = if scroll_now.is_some() { &[0.0, 1.0] } else { &[0.0] };
+                        for k in copies {
+                            let shift = -scroll + k * loop_w;
+                            let local = Affine::translate((shift - text::PAD as f64, -text::PAD as f64));
+                            let full = transform_base * local;
+                            let bounds = Scene::cover(vello_cpu::kurbo::Rect::new(0.0, 0.0, w as f64, h as f64), full, 1.0)
+                                .intersect(&vp);
+                            let bounds = if bounds.is_empty() { continue } else { bounds };
+                            let transform = full * Affine::translate((-bounds.x as f64, -bounds.y as f64));
+                            p.text_in(&shaped, bounds, transform, clip, color, &ink.glow);
+                        }
                     }
                 }
             }

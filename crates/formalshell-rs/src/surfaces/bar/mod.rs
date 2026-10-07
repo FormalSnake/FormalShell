@@ -300,6 +300,19 @@ impl Bar {
         }
     }
 
+    /// Reads the cells whose own timer ran out.
+    pub fn tick(&mut self, store: &Store, now: Instant) {
+        let env = Env { store, edge: self.edge, output: &self.output };
+        let band = self.band().is_some();
+        let animate = self.animate(now);
+        let along = self.length() as f64;
+        for slot in &mut self.slots {
+            if slot.cell.wake().is_some_and(|t| t <= now) {
+                slot.refresh(&mut self.kit, &env, band, animate, along, now);
+            }
+        }
+    }
+
     /// The pointer over the strip, handed to each cell that washes its own
     /// parts in the cell's own coordinates; true when the strip needs a pass.
     pub fn pointer(&mut self, over: Option<usize>, at: (f64, f64), store: &Store, now: Instant) -> bool {
@@ -681,9 +694,9 @@ impl Bar {
         s.cell.click(button, (x - s.rect.x as f64, y - s.rect.y as f64), &env)
     }
 
-    pub fn wheel(&mut self, i: usize, up: bool, store: &Store) -> Action {
+    pub fn wheel(&mut self, i: usize, vertical: f64, sideways: f64, store: &Store) -> Action {
         let env = Env { store, edge: self.edge, output: &self.output };
-        self.slots[i].cell.wheel(up, &env)
+        self.slots[i].cell.wheel_by(vertical, sideways, &env)
     }
 
     /// The anchor a tooltip hangs off (the tooltip surface is the
@@ -692,6 +705,12 @@ impl Bar {
     #[allow(dead_code)]
     pub fn tooltip(&self) -> Option<(String, IRect, Edge)> {
         let s = &self.slots[self.hover?];
+        if let Some((text, start, extent)) = s.cell.tip_at() {
+            let (start, extent) = (start.round() as i32, extent.round() as i32);
+            let r = s.rect;
+            let part = if self.vertical() { IRect::new(r.x, r.y + start, r.w, extent) } else { IRect::new(r.x + start, r.y, extent, r.h) };
+            return Some((text, part, self.edge));
+        }
         (!s.view.tooltip.is_empty()).then(|| (s.view.tooltip.clone(), s.rect, self.edge))
     }
 

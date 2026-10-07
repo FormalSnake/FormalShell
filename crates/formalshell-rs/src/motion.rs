@@ -86,6 +86,16 @@ pub const SPATIAL_FAST_MS: f64 = 350.0;
 pub const SPATIAL_MS: f64 = 500.0;
 pub const PULSE_MS: f64 = 900.0;
 
+/// The breathing pulse (`pulseDuration`, InOutQuad): 1 to 0.4 and back, a
+/// pulse each way.
+pub fn breathe(since: Instant, now: Instant) -> f32 {
+    let t = now.saturating_duration_since(since).as_secs_f64() * 1000.0 / PULSE_MS;
+    let leg = t % 2.0;
+    let x = if leg < 1.0 { leg } else { 2.0 - leg };
+    let eased = if x < 0.5 { 2.0 * x * x } else { 1.0 - (-2.0 * x + 2.0).powi(2) / 2.0 };
+    (1.0 - 0.6 * eased) as f32
+}
+
 /// metamorphosis's `emerge`: `{ duration: "spatial", curve: "spatial" }`.
 pub const EMERGE: (f64, Curve) = (SPATIAL_MS, SPATIAL);
 

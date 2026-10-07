@@ -46,7 +46,7 @@ use smithay_client_toolkit::{delegate_dispatch2, delegate_registry, registry_han
 use crate::ipc;
 use crate::runtime::{Msg, Runtime};
 use crate::scene::{IRect, NodeId};
-use crate::services::{barpaint, commands, devices, hyprland, info, media, nightlight, theme, tray, wallpaper};
+use crate::services::{barpaint, commands, devices, hyprland, info, media, nightlight, overnight, theme, tray, wallpaper};
 use crate::store::{Store, Topic};
 use crate::surface::{Backdrop, PixelSurface, Pixels, Surface};
 use crate::surfaces;
@@ -1125,6 +1125,16 @@ impl App {
                 }
             }
             Action::Caffeinate(on) => self.set_caffeinated(on),
+            Action::OvernightOff => {
+                let record = self.store.state.data.overnight.clone();
+                if let Some(rt) = self.runtime.as_ref().filter(|_| !record.is_null()) {
+                    rt.service(move |ctx| overnight::disable(ctx, record));
+                }
+            }
+            Action::ReminderSummary => {
+                self.store.notifications.show_reminders();
+                surfaces::changed(self, Topic::Notifications);
+            }
             Action::MediaNext => self.store.media.next(),
             Action::MediaPrevious => self.store.media.previous(),
             Action::Center => {
@@ -1274,6 +1284,7 @@ impl App {
         self.wake = Some(at);
         let _ = handle.insert_source(Timer::from_deadline(at), |_, _, app: &mut App| {
             app.wake = None;
+            app.bar.tick(&app.store, Instant::now());
             app.bar_dirty = true;
             app.panel_dirty = true;
             TimeoutAction::Drop
@@ -1400,13 +1411,16 @@ impl App {
             Some(Owner::Overflow) => self.overflow.as_ref().and_then(|p| {
                 let s = p.slots.get(p.hover?)?;
                 let (ox, oy) = self.edge_origin(p.card.depth());
-                let rect = IRect::new(s.rect.x + ox, s.rect.y + oy, s.rect.w, s.rect.h);
-                (!s.view.tooltip.is_empty()).then(|| tooltip::Ask {
-                    owner: format!("overflow:{}", s.name),
-                    text: s.view.tooltip.clone(),
-                    rect,
-                    bar: Some(self.bar.edge()),
-                })
+                let mut rect = IRect::new(s.rect.x + ox, s.rect.y + oy, s.rect.w, s.rect.h);
+                let (text, owner) = match s.cell.tip_at() {
+                    Some((text, start, extent)) => {
+                        let (start, extent) = (start.round() as i32, extent.round() as i32);
+                        rect = if self.bar.edge().is_vertical() { IRect::new(rect.x, rect.y + start, rect.w, extent) } else { IRect::new(rect.x + start, rect.y, extent, rect.h) };
+                        (text, format!("overflow:{}:{start}", s.name))
+                    }
+                    None => (s.view.tooltip.clone(), format!("overflow:{}", s.name)),
+                };
+                (!text.is_empty()).then(|| tooltip::Ask { owner, text, rect, bar: Some(self.bar.edge()) })
             }),
             Some(Owner::Panel) => self.panel.as_ref().and_then(|h| h.tooltip()).map(|(text, rect)| tooltip::Ask {
                 owner: format!("panel:{}:{}", rect.x, rect.y),

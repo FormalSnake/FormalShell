@@ -290,7 +290,7 @@ impl Menu {
         }
         let x_icon = kit.icon("x");
         p.text(&x_icon, (self.close.x + (ch - x_icon.width) / 2, top + (ch - x_icon.line_height()) / 2), a(k.foreground), &[]);
-        let title_style = TextStyle { family: k.sans, size: look.subtitle, weight: WEIGHTS.semibold as f32 };
+        let title_style = TextStyle { family: k.sans, size: look.subtitle, weight: WEIGHTS.semibold as f32, tracking: 0.0 };
         let title_room = (self.close.x - rect.x - pad) as f64 - look.icon_gap;
         let title = Self::elide(kit, &self.title, title_style, title_room);
         p.text(&title, (rect.x + pad, top + (ch - title.line_height()) / 2), a(k.foreground), &[]);

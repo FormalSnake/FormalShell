@@ -166,8 +166,8 @@ impl View {
         let space = &theme.space;
         let big = (font.display_large * 3.0).round();
 
-        let clock = kit.shape(&s.now.format("%H:%M").to_string(), TextStyle { family: kit.look.mono, size: big as f32, weight: WEIGHTS.semibold as f32 });
-        let date = kit.shape(&s.now.format("%A, %B %-d").to_string(), TextStyle { family: kit.look.sans, size: font.caption as f32, weight: WEIGHTS.medium as f32 });
+        let clock = kit.shape(&s.now.format("%H:%M").to_string(), TextStyle { family: kit.look.mono, size: big as f32, weight: WEIGHTS.semibold as f32, tracking: 0.0 });
+        let date = kit.shape(&s.now.format("%A, %B %-d").to_string(), TextStyle { family: kit.look.sans, size: font.caption as f32, weight: WEIGHTS.medium as f32, tracking: 0.0 });
         let error = (!s.error.is_empty()).then_some(s.error);
         let pr = &s.prompt;
         let mut block = Vec::new();

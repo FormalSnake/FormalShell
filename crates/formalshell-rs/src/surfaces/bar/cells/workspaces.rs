@@ -14,7 +14,7 @@ use fs_theme::tokens::WEIGHTS;
 use serde_json::{Value, json};
 use vello_cpu::kurbo::Affine;
 
-use crate::motion::{Animated, EFFECTS, EMPHASIZED, PULSE_MS};
+use crate::motion::{Animated, EFFECTS, EFFECTS_SLOW, EMPHASIZED, PULSE_MS, breathe};
 use crate::scene::IRect;
 use crate::services::appicon::{self, Icon};
 use crate::services::herdr;
@@ -42,16 +42,6 @@ fn badge_ink(state: &str, look: &Look) -> Rgba {
         "done" => look.primary,
         _ => look.foreground,
     }
-}
-
-/// The breathing pulse (`pulseDuration`, InOutQuad): 1 to 0.4 and back, a
-/// pulse each way.
-fn breathe(since: Instant, now: Instant) -> f32 {
-    let t = now.saturating_duration_since(since).as_secs_f64() * 1000.0 / PULSE_MS;
-    let leg = t % 2.0;
-    let x = if leg < 1.0 { leg } else { 2.0 - leg };
-    let eased = if x < 0.5 { 2.0 * x * x } else { 1.0 - (-2.0 * x + 2.0).powi(2) / 2.0 };
-    (1.0 - 0.6 * eased) as f32
 }
 
 /// The focused workspace's fill. Its two edges chase the same chip, the
@@ -116,11 +106,25 @@ struct IconFx {
     arrive: Animated,
 }
 
+/// A chip label's ink on its way to the one its state now asks for
+/// (`Behavior on color { CAnim {} }`).
+struct LabelInk {
+    from: Rgba,
+    to: Rgba,
+    t: Animated,
+}
+
+fn mix(a: Rgba, b: Rgba, t: f32) -> Rgba {
+    Rgba { r: a.r + (b.r - a.r) * t, g: a.g + (b.g - a.g) * t, b: a.b + (b.b - a.b) * t, a: a.a + (b.a - a.a) * t }
+}
+
 pub struct Workspaces {
     output: String,
     slots: Vec<Slot>,
     show_apps: String,
     agents: bool,
+    /// Wheel travel since the last step, in notches.
+    wheel_sum: f64,
     herdr: HashMap<String, String>,
     icons: HashMap<String, Icon>,
     queries: Vec<appicon::Query>,
@@ -139,6 +143,7 @@ pub struct Workspaces {
     hover_icon: Option<(usize, usize)>,
     /// When each chip last turned urgent, for its one pulse.
     urgent: HashMap<i64, Instant>,
+    label_ink: HashMap<i64, LabelInk>,
     was_urgent: HashMap<i64, bool>,
     clock: Instant,
     /// `debug r0Spinner`: a working badge on the first chip whether or not
@@ -153,6 +158,7 @@ impl Default for Workspaces {
             slots: Vec::new(),
             show_apps: SHOW_APPS.into(),
             agents: true,
+            wheel_sum: 0.0,
             herdr: HashMap::new(),
             icons: HashMap::new(),
             queries: Vec::new(),
@@ -169,6 +175,7 @@ impl Default for Workspaces {
             hover_chip: None,
             hover_icon: None,
             urgent: HashMap::new(),
+            label_ink: HashMap::new(),
             was_urgent: HashMap::new(),
             clock: Instant::now(),
             forced_spinner: false,
@@ -219,7 +226,7 @@ fn label_style(look: &Look, band: bool) -> TextStyle {
 }
 
 fn caption_style(look: &Look) -> TextStyle {
-    TextStyle { family: look.mono, size: look.caption, weight: WEIGHTS.medium as f32 }
+    TextStyle { family: look.mono, size: look.caption, weight: WEIGHTS.medium as f32, tracking: 0.0 }
 }
 
 impl Workspaces {
@@ -291,6 +298,19 @@ impl Workspaces {
         })
     }
 
+    /// The chip label's colour this frame, gliding to `target` whenever the
+    /// chip's state changes it.
+    fn label_color(&mut self, idx: i64, target: Rgba, now: Instant, look: &Look, scale: f64) -> Rgba {
+        let fx = self.label_ink.entry(idx).or_insert_with(|| LabelInk { from: target, to: target, t: Animated::new(1.0, EFFECTS_SLOW) });
+        if fx.to != target {
+            fx.from = mix(fx.from, fx.to, fx.t.value(now) as f32);
+            fx.to = target;
+            fx.t.jump(0.0);
+            if look.motion { fx.t.set(now, 1.0, look.effects_slow * scale) } else { fx.t.jump(1.0) }
+        }
+        mix(fx.from, fx.to, fx.t.value(now).clamp(0.0, 1.0) as f32)
+    }
+
     /// An icon's clocks, born at its resting dim and fading in from nothing.
     fn fx_of(&mut self, id: &str, dim: f64, now: Instant, look: &Look, scale: f64) -> &mut IconFx {
         self.fx.entry(id.to_owned()).or_insert_with(|| {
@@ -311,7 +331,7 @@ impl Workspaces {
         let a = alpha * pulse;
         p.rect(badge, look.background.with_alpha(look.background.a * a), size as f32 / 2.0);
         let g = fs_theme::icons::glyph(&look.icon_set, badge_glyph(state));
-        let shaped = kit.shape(g.text, TextStyle { family: Family::Named(g.family), size: look.caption, weight: 400.0 });
+        let shaped = kit.shape(g.text, TextStyle { family: Family::Named(g.family), size: look.caption, weight: 400.0, tracking: 0.0 });
         let (bw, bh) = shaped.box_size();
         let at = (badge.x + (size - bw) / 2, badge.y + (size - bh) / 2);
         let centre = (badge.x as f64 + size as f64 / 2.0, badge.y as f64 + size as f64 / 2.0);
@@ -418,6 +438,22 @@ impl Cell for Workspaces {
             Some(next) => self.go(next),
             None => Action::None,
         }
+    }
+
+    /// A touchpad reports a notch as many small deltas, so they sum to a
+    /// notch before the cell steps.
+    fn wheel_by(&mut self, vertical: f64, sideways: f64, env: &Env) -> Action {
+        let delta = if vertical != 0.0 { vertical } else { sideways };
+        if delta == 0.0 {
+            return Action::None;
+        }
+        self.wheel_sum += delta;
+        if self.wheel_sum.abs() < 1.0 {
+            return Action::None;
+        }
+        let up = self.wheel_sum < 0.0;
+        self.wheel_sum = 0.0;
+        self.wheel(up, env)
     }
 
     fn custom(&mut self) -> Option<&mut dyn Custom> {
@@ -579,6 +615,7 @@ impl Custom for Workspaces {
             } else {
                 ink.dim
             };
+            let color = self.label_color(slot.idx, color, now, &look, kit.motion_scale);
             let (label_at, icon_at, overflow_at) = self.parts(&chip);
 
             let mut opacity = if waiting { breathe(self.clock, now) } else { 1.0 };
@@ -621,7 +658,7 @@ impl Custom for Workspaces {
                     Some(image) => p.image(&image, (r.x, r.y), a),
                     None => {
                         let g = fs_theme::icons::glyph(&look.icon_set, "app-window");
-                        let shaped = kit.shape(g.text, TextStyle { family: Family::Named(g.family), size: look.body, weight: 400.0 });
+                        let shaped = kit.shape(g.text, TextStyle { family: Family::Named(g.family), size: look.body, weight: 400.0, tracking: 0.0 });
                         let (bw, bh) = (shaped.width, shaped.line_height());
                         let at = (r.x + (r.w - bw) / 2, r.y + (r.h - bh) / 2);
                         p.text(&shaped, at, color.with_alpha(color.a * a), &[]);
@@ -665,7 +702,8 @@ impl Custom for Workspaces {
         let waiting = self.slots.iter().any(|s| self.waiting(s));
         let urgent = self.urgent.values().any(|t| now.saturating_duration_since(*t).as_secs_f64() < 2.0);
         let fx = self.fx.values().any(|f| f.dim.running(now) || f.arrive.running(now));
-        self.forced_spinner || badges || waiting || urgent || fx || self.pill.running(now)
+        let ink = self.label_ink.values().any(|l| l.t.running(now));
+        self.forced_spinner || badges || waiting || urgent || fx || ink || self.pill.running(now)
     }
 
     fn spinner(&mut self, on: bool, now: Instant) {

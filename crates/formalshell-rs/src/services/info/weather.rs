@@ -1,14 +1,15 @@
 //! The forecast behind the weather cell (WeatherPanel.qml's fetch) and the
 //! place it is for (LocationService.qml): `location.latitude/longitude`
-//! from settings.json when both are numbers, else a beaconDB lookup off the
-//! visible Wi-Fi access points. No fix is its own state, never a guess.
+//! from settings.json when both are numbers, else GeoClue's fix, else (15 s
+//! without one) a beaconDB lookup off the visible Wi-Fi access points. No fix
+//! is its own state, never a guess.
 
 use std::time::Duration;
 
 use fs_info::location::{self, Fix};
 use fs_info::weather::{self, Error, Weather};
 
-use super::{changed, idle, kicked, settings};
+use super::{changed, geoclue, idle, kicked, settings};
 use crate::runtime::Ctx;
 use crate::services::proc;
 use crate::services::wants::Source;
@@ -85,24 +86,47 @@ pub async fn run(ctx: Ctx) {
     let rx = changed();
     let kick = kicked(Source::Weather);
     let mut lookup: Option<Fix> = None;
+    let mut geo: Option<(f64, f64)> = None;
+    let (fixes, geo_fixes) = async_channel::unbounded();
+    // No point asking GeoClue while settings.json already says where.
+    let geoclue_wanted = read().at.is_none();
+    if geoclue_wanted {
+        ctx.spawn(geoclue::run(fixes));
+    }
+    let mut grace_spent = !geoclue_wanted;
     let mut places: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     loop {
         let cfg = read();
         let at = match cfg.at {
             Some(at) => Some(at),
             None => {
-                if lookup.is_none() {
+                while let Ok(fix) = geo_fixes.try_recv() {
+                    geo = Some(fix);
+                }
+                if geo.is_none() && !grace_spent {
+                    grace_spent = true;
+                    let arrived = futures_lite::future::or(async { geo_fixes.recv().await.ok() }, async {
+                        async_io::Timer::after(Duration::from_secs(15)).await;
+                        None
+                    })
+                    .await;
+                    geo = arrived;
+                }
+                if geo.is_none() && lookup.is_none() {
                     lookup = geolocate().await;
                 }
-                lookup.map(|f| (f.latitude, f.longitude))
+                geo.or(lookup.map(|f| (f.latitude, f.longitude)))
             }
         };
         let Some((lat, lon)) = at else {
             publish(&ctx, State::default());
             // A machine that cannot place itself asks again in 15 s.
-            futures_lite::future::or(idle(Duration::from_secs(15), &rx, &cfg, read), async {
-                let _ = kick.recv().await;
-            })
+            futures_lite::future::or(
+                futures_lite::future::or(idle(Duration::from_secs(15), &rx, &cfg, read), async {
+                    let _ = kick.recv().await;
+                }),
+                next_fix(&geo_fixes, &mut geo),
+            )
             .await;
             continue;
         };
@@ -124,9 +148,21 @@ pub async fn run(ctx: Ctx) {
                 publish(&ctx, state);
             }
         }
-        futures_lite::future::or(idle(cfg.interval, &rx, &cfg, read), async {
-            let _ = kick.recv().await;
-        })
+        futures_lite::future::or(
+            futures_lite::future::or(idle(cfg.interval, &rx, &cfg, read), async {
+                let _ = kick.recv().await;
+            }),
+            next_fix(&geo_fixes, &mut geo),
+        )
         .await;
+    }
+}
+
+/// A later GeoClue fix replaces the one the forecast is for; once GeoClue
+/// has gone quiet for good this never completes.
+async fn next_fix(fixes: &async_channel::Receiver<(f64, f64)>, geo: &mut Option<(f64, f64)>) {
+    match fixes.recv().await {
+        Ok(fix) => *geo = Some(fix),
+        Err(_) => std::future::pending().await,
     }
 }
