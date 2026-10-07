@@ -67,6 +67,7 @@ use mapping::hyprland_toplevel_window_mapping_handle_v1::{self as window_mapping
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Owner {
     Switcher,
+    Preview,
 }
 
 struct Thumb {
@@ -348,7 +349,7 @@ impl Dispatch2<ExtImageCopyCaptureSessionV1, App> for ThumbKey {
             ext_image_copy_capture_session_v1::Event::ShmFormat { format: WEnum::Value(f) } => t.pending.1.push(f),
             ext_image_copy_capture_session_v1::Event::Done => {
                 let formats = std::mem::take(&mut t.pending.1);
-                let pick = [wl_shm::Format::Xrgb8888, wl_shm::Format::Argb8888].into_iter().find(|f| formats.contains(f));
+                let pick = [wl_shm::Format::Argb8888, wl_shm::Format::Xrgb8888].into_iter().find(|f| formats.contains(f));
                 let next = pick.map(|f| (t.pending.0, f));
                 if next != t.constraints {
                     t.buffer = None;

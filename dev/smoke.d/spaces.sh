@@ -59,9 +59,7 @@
 #   scale, not a clamped sliver), and a real wheel notch over the card
 #   scrolls the strip along x, then a notch the other way scrolls it back.
 #
-# Under FS_IMPL=rust the preview waits for the window thumbnails (R8): its
-# reads and assertions are skipped, the cell's own (chips, icons, badges, the
-# wheel) are not. The rust shell also logs every commit with its damage, so a
+# The rust shell also logs every commit with its damage, so a
 # stretch with both badges animating (the working spinner, the blocked pulse)
 # is read off that log: every damage rect has to sit on one of those two
 # icons' badges, which is what "the spinner damages only its own rect" means.
@@ -521,8 +519,6 @@ leg_spaces_assert() {
 
   if [ "$fs_impl" = rust ]; then
     spaces_badge_damage
-    [ -f "$spaces_wheel_png" ] || fail "no spaces screenshot produced at $spaces_wheel_png"
-    return 0
   fi
 
   # The preview, by IPC and by pointer.

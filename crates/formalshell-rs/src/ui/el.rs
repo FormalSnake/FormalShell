@@ -172,6 +172,27 @@ pub struct Flow {
     pub animate: bool,
 }
 
+/// One tile of a `Strip`, placed freely in the strip's content: a picture
+/// once one has landed, a schematic box with its icon and title until then.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Tile {
+    /// Its cursor stop and its identity across draws.
+    pub key: String,
+    /// What a click on it fires.
+    pub on: String,
+    /// Its box in the content, before the scroll.
+    pub rect: (f64, f64, f64, f64),
+    pub picture: Pic,
+    pub icon: Pic,
+    pub title: String,
+    /// The schematic's selected state (the window that has focus).
+    pub selected: bool,
+    /// The icon in the picture's corner, for a tile too small to name itself.
+    pub badge: bool,
+    /// Drawn above tiles that do not raise (a floating window).
+    pub raised: bool,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Kind {
     Column { gap: f64, children: Vec<El> },
@@ -205,6 +226,10 @@ pub enum Kind {
     /// code), centred at the largest whole module that fits.
     Matrix { rows: Vec<String> },
     Flow(Box<Flow>),
+    /// A framed viewport `size` big over `content`, scrolled to `scroll`,
+    /// holding tiles at their own places (a workspace's miniature). The
+    /// wheel over it fires its `on` with `What::Scroll`.
+    Strip { size: (f64, f64), inset: f64, content: (f64, f64), scroll: (f64, f64), tiles: Vec<Tile> },
 }
 
 /// One element: what it is, how wide it sits, and how it is addressed.
@@ -237,6 +262,7 @@ impl El {
         let width = match &kind {
             Kind::Column { .. } | Kind::Separator { vertical: false, .. } | Kind::Track { .. } | Kind::Group { .. } => Size::Fill,
             Kind::Cell { state, .. } if !state.chip => Size::Fill,
+            Kind::Strip { size, .. } => Size::Px(size.0),
             Kind::Input { .. } | Kind::Para { .. } | Kind::Matrix { .. } => Size::Fill,
             _ => Size::Hug,
         };

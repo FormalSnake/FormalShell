@@ -135,6 +135,7 @@ impl Host {
         let mut module = module;
         module.opened();
         let start = module.cursor_start();
+        let keyboard = module.takes_keyboard();
         Self {
             module,
             card,
@@ -155,7 +156,7 @@ impl Host {
             content_h: 0.0,
             viewport: IRect::default(),
             handoff: None,
-            prime_until: Some(Instant::now() + std::time::Duration::from_millis(PRIME_MS)),
+            prime_until: keyboard.then(|| Instant::now() + std::time::Duration::from_millis(PRIME_MS)),
             pressed: None,
             dragging: None,
             wake: None,
@@ -334,10 +335,15 @@ impl Host {
         self.draw(store, theme, kit, now);
     }
 
-    /// Input everywhere while open, nowhere once closing.
+    /// Input everywhere while open (a click outside closes), over the
+    /// card's resting rect alone for a card that takes no keyboard, and
+    /// nowhere once closing.
     pub fn sync_region(&mut self, compositor: &smithay_client_toolkit::compositor::CompositorState) {
-        let size = self.card.scene.size;
-        let want = if self.open { size } else { IRect::default() };
+        let want = match (self.open, self.module.takes_keyboard()) {
+            (false, _) => IRect::default(),
+            (true, true) => self.card.scene.size,
+            (true, false) => self.card.rest_rect(),
+        };
         if self.region == Some(want) {
             return;
         }
@@ -611,7 +617,7 @@ impl Host {
         // A row the pointer reaches takes the cursor, without the ring.
         if let Some((true, h)) = &hit
             && let Some(stop) = &h.stop
-            && self.cursor.key.as_ref() != Some(stop)
+            && (self.cursor.key.as_ref() != Some(stop) || !self.cursor.active)
         {
             self.cursor.key = Some(stop.clone());
             self.cursor.active = true;
@@ -679,8 +685,28 @@ impl Host {
         if fx.close { Out::Close } else { Out::None }
     }
 
-    /// A wheel notch: a track under it steps, anything else scrolls.
-    pub fn wheel(&mut self, x: f64, y: f64, up: bool, store: &Store, runtime: Option<&Runtime>) {
+    /// A scroll of `dx`, `dy` wheel notches: a viewport under the pointer
+    /// takes both axes, a track under it steps on a vertical one, and
+    /// anything else scrolls the body vertically.
+    pub fn scroll(&mut self, x: f64, y: f64, dx: f64, dy: f64, store: &Store, runtime: Option<&Runtime>) {
+        let point = IRect::new(x.floor() as i32, y.floor() as i32, 1, 1);
+        let viewport = self
+            .body
+            .hits
+            .iter()
+            .rev()
+            .filter(|_| self.viewport.intersects(&point))
+            .find(|h| h.what == ui::HitWhat::Scroll && h.rect.intersects(&point))
+            .and_then(|h| h.on.clone());
+        if let Some(on) = viewport {
+            let mut fx = Self::effect(store, runtime);
+            self.module.event(&Event { on, what: What::Scroll(dx, dy) }, &mut fx);
+            return;
+        }
+        if dy == 0.0 {
+            return;
+        }
+        let up = dy < 0.0;
         if let Some((_, h)) = self.hit_at(x, y)
             && h.what == ui::HitWhat::Track
             && let Some(on) = h.on.clone()

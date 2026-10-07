@@ -107,7 +107,14 @@ fn stub() -> Registry<()> {
                     f("status", &[], Type::String, |_, _| s("{}")),
                 ],
             },
-            Target { name: "workspaces", functions: vec![f("status", &[], Type::String, |_, _| s("{}"))] },
+            Target {
+                name: "workspaces",
+                functions: vec![
+                    f("peek", &[("n", Type::Int)], Type::String, |_, a| s(format!("peek {}", a[0].int()))),
+                    f("close", &[], Type::String, |_, _| s("ok")),
+                    f("status", &[], Type::String, |_, _| s("{}")),
+                ],
+            },
             Target {
                 name: "tray",
                 functions: vec![

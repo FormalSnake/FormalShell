@@ -36,6 +36,7 @@ pub mod systemupdate;
 pub mod tailscale;
 pub mod usage;
 pub mod weather;
+pub mod workspace_preview;
 
 use fs_theme::theme::Theme;
 
@@ -89,6 +90,12 @@ pub trait Panel {
     /// The card's width (`panelWidth`): `popupWidthDefault` unless said.
     fn width(&self, v: &View) -> f64 {
         v.theme.space.popup_width_default
+    }
+    /// Whether the card takes the keyboard. One that does not (a preview a
+    /// pointer opened) takes input over its own rect alone, so whatever it
+    /// hangs off keeps the pointer around it.
+    fn takes_keyboard(&self) -> bool {
+        true
     }
     /// The header row; off for a strip rather than a sheet.
     fn header(&self) -> bool {
