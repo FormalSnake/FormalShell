@@ -302,11 +302,14 @@ impl App {
     fn update_backdrop(&mut self) {
         let Some(b) = &mut self.backdrop else { return };
         let Some((w, h)) = b.size() else { return };
-        wallpaper::show(&self.store.state.data.wallpaper, w as u32, h as u32);
-        let background = self.store.theme.theme.colors.get("background");
+        let theme = &self.store.theme.theme;
+        let dither = theme.wallpaper_dither.then(|| self.store.config.f64("wallpaper.ditherColors").unwrap_or(6.0).max(1.0) as usize);
+        wallpaper::show(&self.store.state.data.wallpaper, w as u32, h as u32, dither);
+        let background = theme.colors.get("background");
         let picture = self.store.wallpaper.picture.clone();
         let wanted = &self.store.state.data.wallpaper;
-        b.draw(picture.as_deref().filter(|p| p.path == *wanted), background);
+        let reveal = theme.motion().families.reveal * self.motion_scale;
+        b.draw(picture.filter(|p| p.path == *wanted && p.dither == dither), background, reveal, &self.qh);
     }
 
     pub fn set_handle(&mut self, handle: LoopHandle<'static, App>) {
@@ -1671,7 +1674,11 @@ impl CompositorHandler for App {
             }
             Some(Owner::Switcher) => self.switcher_frame(),
             Some(o @ (Owner::Launcher | Owner::LauncherScrim(_))) => self.launcher_frame(o, now),
-            Some(Owner::Backdrop) => {}
+            Some(Owner::Backdrop) => {
+                if let Some(b) = &mut self.backdrop {
+                    b.step(now, &self.qh);
+                }
+            }
             None => {
                 if !self.polkit_frame(surface) {
                     self.lock_frame(surface);
