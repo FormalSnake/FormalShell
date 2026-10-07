@@ -27,6 +27,9 @@ use crate::store;
 
 const DEFAULT_MENU: &str = include_str!("../../../../shell/Menu/default-menu.jsonc");
 const EMOJI: &str = include_str!("../../../../shell/Menu/emoji.json");
+/// How long after an ask the condition checks start: past the launcher's
+/// entrance, whose springs settle in about a second.
+const CONDS_AFTER: Duration = Duration::from_millis(1000);
 
 /// What fs-menu's self-targeted fragments call the shell by: the QML
 /// shell's `qs ipc -p <path> call`, which [`ipc_command`] turns into this
@@ -61,7 +64,6 @@ pub enum Diff {
     Base(Tree),
     Source(String, Vec<Node>),
     Cond { id: String, when: bool, ok: bool },
-    ClearConds,
     Icons(Vec<(String, Option<Bitmap>)>),
     Binds(Result<Arc<str>, ()>),
     Emoji(Arc<fs_menu::providers::EmojiIndex>),
@@ -88,10 +90,6 @@ impl State {
                     return false;
                 }
                 map.insert(id, ok);
-            }
-            Diff::ClearConds => {
-                self.cond.clear();
-                self.checked.clear();
             }
             Diff::Icons(list) => {
                 for (path, bitmap) in list {
@@ -224,14 +222,20 @@ pub async fn run(ctx: Ctx) {
                 }
             }
             Ask::Conds(list) => {
-                ctx.publish(store::Diff::Menu(Diff::ClearConds));
-                for (id, command, when) in list {
-                    let c = ctx.clone();
-                    ctx.spawn(async move {
-                        let done = proc::capture(&proc::argv(&["sh", "-c", &command]), Duration::from_secs(10)).await;
-                        c.publish(store::Diff::Menu(Diff::Cond { id, when, ok: done.code == 0 }));
-                    });
-                }
+                // The launcher opens on the last results; the shells that
+                // check them again start once its card is up, not while it
+                // is still coming in.
+                let c = ctx.clone();
+                ctx.spawn(async move {
+                    async_io::Timer::after(CONDS_AFTER).await;
+                    for (id, command, when) in list {
+                        let c2 = c.clone();
+                        c.spawn(async move {
+                            let done = proc::capture(&proc::argv(&["sh", "-c", &command]), Duration::from_secs(10)).await;
+                            c2.publish(store::Diff::Menu(Diff::Cond { id, when, ok: done.code == 0 }));
+                        });
+                    }
+                });
             }
             Ask::Binds => {
                 let c = ctx.clone();
