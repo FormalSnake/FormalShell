@@ -688,6 +688,12 @@ sleep $tail_gap
 if shell_pid=\$(cat "$shot_dir/shell.pid" 2>/dev/null) && [ -r "/proc/\$shell_pid/status" ]; then
   rss_kb=\$(awk '/^VmRSS/{print \$2}' "/proc/\$shell_pid/status")
   echo "SMOKE_MEM rss_kb=\$rss_kb" > "$shot_dir/mem.txt"
+  # Every process under the shell right now, for the teardown's check that
+  # none of them outlives it.
+  ps -eo pid=,ppid=,args= | awk -v root="\$shell_pid" '
+    { parent[\$1] = \$2; line[\$1] = \$0 }
+    END { for (p in parent) { q = parent[p]; while (q != "" && q != root && q > 1) q = parent[q]; if (q == root) print line[p] } }' \
+    > "$shot_dir/shell-children.txt"
 fi
 $fixture_cleanup
 "$hyprctl_bin" dispatch "hl.dsp.exit()"
@@ -733,6 +739,19 @@ if systemd-run --user --scope --quiet --collect --unit="$hypr_unit-probe" true >
 fi
 env "${session_env[@]}" ${session_scope[@]+"${session_scope[@]}"} dbus-run-session -- \
   timeout -k 10 "$session_timeout" $hyprland_bin --config "$cfg" > "$hypr_log_path" 2>&1 || true
+# The shell goes with its compositor and takes every child it started with
+# it; read before the scopes below are stopped, which would kill them all
+# regardless.
+orphans=""
+if [ -s "$shot_dir/shell-children.txt" ]; then
+  for _ in $(seq 30); do
+    orphans=$(while read -r pid _ args; do
+      if [ -r "/proc/$pid/cmdline" ] && [ "$(tr '\0' ' ' < "/proc/$pid/cmdline" | sed 's/ $//')" = "$args" ]; then echo "$pid $args"; fi
+    done < "$shot_dir/shell-children.txt")
+    [ -z "$orphans" ] && break
+    sleep 0.2
+  done
+fi
 if [ -n "$shell_unit" ]; then systemctl --user stop "$shell_unit.scope" 2>/dev/null || true; fi
 if [ ${#session_scope[@]} -gt 0 ]; then systemctl --user stop "$hypr_unit.scope" 2>/dev/null || true; fi
 # The config path is this run's own, so anything still carrying it is a
@@ -759,6 +778,10 @@ fail() {
   tail -20 "$shell_log_path" >&2 2>/dev/null || true
   exit 1
 }
+
+if [ -n "$orphans" ]; then
+  fail "the shell left children running after it was gone: $(echo "$orphans" | tr "\n" ";")"
+fi
 
 # Printed ahead of the asserts so a failing leg still reports what the
 # shell weighed at the end of its run.
