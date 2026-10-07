@@ -114,6 +114,7 @@
           # The runtime layer: darwin-runnable headless aarch64-linux test VM
           # (nix/testvm.nix). Driven by dev/vm.sh.
           testvm = self.nixosConfigurations.testvm.config.system.build.vm;
+          testvm-greeter-rs = self.nixosConfigurations.testvm-greeter-rs.config.system.build.vm;
         }))
         (forAllSystems (system: pkgs: rec {
           formalshell-eds = pkgs.callPackage ./nix/eds-package.nix { };
@@ -133,6 +134,9 @@
             inherit (pkgs) uxplay earbuds;
           };
           formalshell-greeter = pkgs.callPackage ./nix/greeter-package.nix { quickshell = qsFor system; };
+          formalshell-greeter-rs = pkgs.writeShellScriptBin "formalshell-greeter-rs" ''
+            exec ${pkgs.lib.getExe formalshell-rs} greeter "$@"
+          '';
           default = formalshell;
         }));
 
@@ -146,6 +150,7 @@
 
       nixosConfigurations = {
         testvm = import ./nix/testvm.nix { inherit self nixpkgs quickshell; };
+        testvm-greeter-rs = import ./nix/testvm.nix { inherit self nixpkgs quickshell; greeterImplementation = "rust"; };
       };
 
       checks = nixpkgs.lib.recursiveUpdate

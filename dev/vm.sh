@@ -26,7 +26,9 @@ testvm_dir="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)"
 # FS_VM_SLOT picks one of the VMs dev/vm-lock.sh hands out. Slot 0 is the
 # original layout (port 2222, disk, log and pid straight in dev/.testvm);
 # slot N has its own VM, disk and pid under dev/.testvm/slotN and ssh on
-# 2222+N. The keypair is shared.
+# 2222+N. The keypair is shared. FS_VM_ATTR boots another testvm variant
+# (testvm-greeter-rs) on `start`; vm-lock.sh hands out slots 0 and 1 only,
+# so a variant goes on a slot of its own (FS_VM_SLOT=2) and is stopped after.
 slot="${FS_VM_SLOT:-0}"
 case "$slot" in
   0) work_dir="$testvm_dir" ;;
@@ -95,7 +97,7 @@ cmd_start() {
 
   git -C "$repo_root" add -A >/dev/null 2>&1 || true  # flakes only see tracked files
   local vm_pkg
-  vm_pkg=$(nix build --no-link --print-out-paths "$repo_root#testvm")
+  vm_pkg=$(nix build --no-link --print-out-paths "$repo_root#${FS_VM_ATTR:-testvm}")
   echo "built $vm_pkg"
 
   # Copy just the pubkey into its own directory before adding to the
