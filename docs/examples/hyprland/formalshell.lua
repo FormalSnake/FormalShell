@@ -141,6 +141,14 @@ hl.layer_rule({
 })
 
 hl.layer_rule({
+  name = "formalshell-radio",
+  match = { namespace = "formalshell:radio" },
+  blur = chrome.blur,
+  ignore_alpha = 0.6,
+  no_anim = true,
+})
+
+hl.layer_rule({
   name = "formalshell-notifications-center",
   match = { namespace = "formalshell:notifications-center" },
   blur = chrome.blur,

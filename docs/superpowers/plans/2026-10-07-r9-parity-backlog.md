@@ -9,8 +9,6 @@ by surface; one line each.
   panel (`wayland/launcher.rs`'s resolved tokens), which the R4b launcher agent holds.
 
 ## Media
-- Radio Atlas: its icon buttons carry no hover tooltips (the launcher's card
-  routes none to the tooltip group either).
 - The animated album art runs in the media panel only; the bar's now-playing
   cover (`media.animatedBarCover`) still draws the static art.
 

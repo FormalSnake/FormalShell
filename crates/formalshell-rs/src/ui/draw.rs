@@ -283,7 +283,7 @@ pub fn measure(cx: &mut Cx, el: &El, avail: f64) -> (f64, f64) {
         Kind::Grid { .. } | Kind::Track { .. } | Kind::Input { .. } | Kind::Sparkline(_) | Kind::Matrix { .. } | Kind::Flow(_) | Kind::Lyrics(_) => avail,
         _ => width_of(el, avail, nw + ps + pe),
     };
-    (w, nh + pt + pb)
+    (w, el.height.unwrap_or(nh) + pt + pb)
 }
 
 fn edge_width(cx: &Cx) -> f64 {

@@ -272,6 +272,8 @@ pub struct El {
     pub badge: Option<&'static str>,
     /// The node's whole opacity, for a parent that fades it itself.
     pub fade: Option<f32>,
+    /// A height set outright, over what the node measures to.
+    pub height: Option<f64>,
 }
 
 impl El {
@@ -283,7 +285,7 @@ impl El {
             Kind::Input { .. } | Kind::Para { .. } | Kind::Matrix { .. } | Kind::Lyrics(_) => Size::Fill,
             _ => Size::Hug,
         };
-        Self { kind, width, pad: [0.0; 4], key: None, stop: false, on: None, tip: None, centred: false, top: false, mid: false, gauge: None, pulse: false, swap: None, badge: None, fade: None }
+        Self { kind, width, pad: [0.0; 4], key: None, stop: false, on: None, tip: None, centred: false, top: false, mid: false, gauge: None, pulse: false, swap: None, badge: None, fade: None, height: None }
     }
 
     pub fn fade(mut self, alpha: f32) -> Self {
@@ -331,6 +333,11 @@ impl El {
 
     pub fn width(mut self, width: Size) -> Self {
         self.width = width;
+        self
+    }
+
+    pub fn height(mut self, height: f64) -> Self {
+        self.height = Some(height);
         self
     }
 
