@@ -249,6 +249,11 @@ impl Deform {
     /// One frame of a frame at `(x, y, w, h)` anchored to `edge`: a size
     /// change reads as travel away from that edge.
     pub fn step_at(&mut self, dt: f64, (x, y, w, h): (f64, f64, f64, f64), amount: f64, edge: DeformEdge) {
+        // A second step on one frame (a card moved after its tick) keeps
+        // the frame's sample, so the next frame still reads the move.
+        if dt < 0.001 && self.sampled.is_some() {
+            return;
+        }
         let Some((px, py, pw, ph)) = self.sampled.filter(|_| (0.001..=0.1).contains(&dt)) else {
             self.sampled = Some((x, y, w, h));
             self.settle(0.0);

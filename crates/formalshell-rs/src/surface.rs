@@ -279,6 +279,17 @@ impl<R: Role> Surface<R> {
         true
     }
 
+    /// Draws the scene's damage without committing it, so a frame can wait
+    /// on another surface's: true once the whole frame is drawn, or when
+    /// there is nothing to draw or nowhere to draw it yet.
+    pub fn prepare(&mut self, scene: &mut Scene) -> bool {
+        let sized = (self.renderer.width() as i32, self.renderer.height() as i32) == (scene.size.w, scene.size.h);
+        if !self.configured || !sized || (!scene.has_damage() && self.raster.is_empty()) {
+            return true;
+        }
+        self.draw(scene)
+    }
+
     /// A sliced frame is part drawn: the owner holds its scene still and
     /// presents again on the next loop turn.
     pub fn rastering(&self) -> bool {
