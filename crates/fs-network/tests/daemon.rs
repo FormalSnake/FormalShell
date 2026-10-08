@@ -207,7 +207,11 @@ fn wifi_round_trip_against_real_networkmanager() {
 
         // wpa_supplicant temp-disables an SSID after an auth failure and the
         // access point drops out of the scan list for about ten seconds.
-        timed("the enterprise connect", Duration::from_secs(90), async {
+        // Sometimes its scan then stays pending for good and it never takes
+        // the access point off its ignore list (CI, 2026-10-08: every
+        // activation for 90s failed with no auth attempt). Cycling the radio
+        // drops the supplicant interface and both with it.
+        timed("the enterprise connect", Duration::from_secs(120), async {
             loop {
                 match nm
                     .connect_eap(EAP_SSID, "formaltest", "formaltest-eap-pw")
@@ -216,8 +220,13 @@ fn wifi_round_trip_against_real_networkmanager() {
                     Ok(()) => return,
                     Err(ConnectError::SsidNotFound | ConnectError::Failed(_)) => {
                         let _ = nm.forget(EAP_SSID).await;
-                        let _ = nm.request_scan().await;
-                        Timer::after(Duration::from_secs(2)).await;
+                        let _ = nm.set_wifi_enabled(false).await;
+                        Timer::after(Duration::from_secs(1)).await;
+                        let _ = nm.set_wifi_enabled(true).await;
+                        until(&nm, "the enterprise SSID after the radio", Duration::from_secs(30), |s| {
+                            s.wifi_enabled && network(s, EAP_SSID).is_some_and(|n| n.visible)
+                        })
+                        .await;
                     }
                     Err(e) => panic!("enterprise connect: {e:?}"),
                 }

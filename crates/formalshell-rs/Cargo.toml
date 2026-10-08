@@ -1,6 +1,6 @@
 [package]
 name = "formalshell-rs"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 publish = false
 
@@ -15,7 +15,7 @@ base64 = "0.22"
 blocking = "=1.6.2"
 calloop = "0.14"
 chrono = "0.4"
-fs-theme = { version = "0.1.0", path = "../fs-theme" }
+fs-theme = { version = "0.2.0", path = "../fs-theme" }
 futures-lite = "2.6"
 fs-chrome = { path = "../fs-chrome" }
 fs-system = { path = "../fs-system" }
@@ -30,7 +30,7 @@ fs-network = { path = "../fs-network" }
 fs-js = { path = "../fs-js" }
 fs-screensaver = { path = "../fs-screensaver" }
 fs-upower = { path = "../fs-upower" }
-fs-info = { version = "0.1.1", path = "../fs-info" }
+fs-info = { version = "0.2.0", path = "../fs-info" }
 fs-notifd = { path = "../fs-notifd" }
 fs-auth = { path = "../fs-auth" }
 zeroize = "1.8"

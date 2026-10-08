@@ -6,7 +6,7 @@
 rustCommon.craneLib.buildPackage (rustCommon.commonArgs // {
   inherit (rustCommon) cargoArtifacts cargoVendorDir;
   pname = "formalshell";
-  version = "0.1.1";
+  version = "0.2.0";
 
   src = lib.fileset.toSource {
     root = ../.;

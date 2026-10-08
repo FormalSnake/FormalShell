@@ -3,16 +3,25 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/FormalSnake/FormalShell/main/install.sh | sh
 #
-# Installs Hyprland and the shell's runtime tools with the distro's package
-# manager, unpacks the latest release tarball under ~/.local (/usr/local with
-# --system), then runs `formalshell install`.
-#
-#   install.sh [--system] [--from <tarball>] [--yes] [--no-deps]
-#
-# --from installs a local tarball instead of downloading one, --yes accepts
-# the sudo prompts `formalshell install` asks, --no-deps skips the package
-# manager.
+# `install.sh --help` prints the flags.
 set -eu
+
+# Not read back from $0: under `curl ... | sh`, $0 is the shell.
+usage() {
+  cat <<'USAGE'
+FormalShell for Arch, Debian, Ubuntu and Fedora, without Nix.
+
+  install.sh [--system] [--from <tarball>] [--yes] [--no-deps]
+
+Installs Hyprland and the shell's runtime tools with the distro's package
+manager, unpacks the latest release tarball under ~/.local (/usr/local with
+--system), then runs `formalshell install`.
+
+--from installs a local tarball instead of downloading one, --yes accepts
+the sudo prompts `formalshell install` asks, --no-deps skips the package
+manager.
+USAGE
+}
 
 repo=FormalSnake/FormalShell
 prefix=$HOME/.local
@@ -25,7 +34,7 @@ while [ $# -gt 0 ]; do
     --from) [ $# -ge 2 ] || { echo "--from needs a tarball" >&2; exit 2; }; from=$2; shift ;;
     --yes|-y) yes=--yes ;;
     --no-deps) deps= ;;
-    -h|--help) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) usage; exit 0 ;;
     *) echo "unknown argument: $1" >&2; exit 2 ;;
   esac
   shift

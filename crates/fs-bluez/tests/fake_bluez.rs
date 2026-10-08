@@ -364,11 +364,15 @@ fn device_commands_and_their_events() {
         let pairing = bluez.pair("11:22:33:44:55:66");
         let watch = async {
             expect(&rx, "pairing flag", |e| matches!(e, Event::DeviceChanged(d) if d.info.pairing)).await;
-            expect(&rx, "paired", |e| matches!(e, Event::DeviceChanged(d) if d.info.paired && d.info.bonded)).await;
+            // Pair()'s reply and the Paired/Bonded signals race, so the flag
+            // clears before or after them; the last event carries all three.
+            expect(&rx, "paired, pairing flag cleared", |e| {
+                matches!(e, Event::DeviceChanged(d) if d.info.paired && d.info.bonded && !d.info.pairing)
+            })
+            .await;
         };
         let (done, ()) = futures_lite::future::zip(pairing, watch).await;
         done.unwrap();
-        expect(&rx, "pairing flag cleared", |e| matches!(e, Event::DeviceChanged(d) if d.info.paired && !d.info.pairing)).await;
 
         bluez.set_trusted("11:22:33:44:55:66", true).await.unwrap();
         expect(&rx, "trusted", |e| matches!(e, Event::DeviceChanged(d) if d.info.trusted)).await;

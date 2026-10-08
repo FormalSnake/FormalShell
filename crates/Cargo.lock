@@ -606,7 +606,7 @@ dependencies = [
 
 [[package]]
 name = "formalshell-rs"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "async-channel",
  "async-executor",
@@ -656,7 +656,7 @@ dependencies = [
 
 [[package]]
 name = "fs-audio"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "async-channel",
  "pipewire",
@@ -665,7 +665,7 @@ dependencies = [
 
 [[package]]
 name = "fs-auth"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "async-channel",
  "async-io",
@@ -678,7 +678,7 @@ dependencies = [
 
 [[package]]
 name = "fs-bluez"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "async-channel",
  "async-executor",
@@ -690,7 +690,7 @@ dependencies = [
 
 [[package]]
 name = "fs-chrome"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "fs-js",
  "regex",
@@ -700,7 +700,7 @@ dependencies = [
 
 [[package]]
 name = "fs-devices"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "fs-info",
  "fs-js",
@@ -712,7 +712,7 @@ dependencies = [
 
 [[package]]
 name = "fs-info"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "fs-js",
@@ -724,7 +724,7 @@ dependencies = [
 
 [[package]]
 name = "fs-js"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "icu_collator",
  "percent-encoding",
@@ -734,7 +734,7 @@ dependencies = [
 
 [[package]]
 name = "fs-media"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "fastrand",
  "fs-js",
@@ -745,7 +745,7 @@ dependencies = [
 
 [[package]]
 name = "fs-menu"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "fs-devices",
@@ -759,7 +759,7 @@ dependencies = [
 
 [[package]]
 name = "fs-mpris"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "async-io",
  "futures-util",
@@ -768,7 +768,7 @@ dependencies = [
 
 [[package]]
 name = "fs-network"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "async-io",
  "futures-lite",
@@ -777,7 +777,7 @@ dependencies = [
 
 [[package]]
 name = "fs-notifd"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "async-channel",
  "async-io",
@@ -787,11 +787,11 @@ dependencies = [
 
 [[package]]
 name = "fs-screensaver"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "fs-system"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "fs-js",
@@ -802,7 +802,7 @@ dependencies = [
 
 [[package]]
 name = "fs-theme"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "chrono",
  "regex",
@@ -811,7 +811,7 @@ dependencies = [
 
 [[package]]
 name = "fs-tray"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "async-io",
  "futures-util",
@@ -821,7 +821,7 @@ dependencies = [
 
 [[package]]
 name = "fs-upower"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "async-io",
  "futures-lite",
