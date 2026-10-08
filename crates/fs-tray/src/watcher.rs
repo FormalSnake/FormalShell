@@ -122,6 +122,22 @@ impl Watcher {
     async fn status_notifier_host_unregistered(emitter: &SignalEmitter<'_>) -> zbus::Result<()>;
 }
 
+/// Registers the tray's own host with the watcher it owns. Going over the bus instead
+/// sends a method call back to this connection's own object server, which now and then
+/// never answers.
+pub(crate) async fn register_own_host(conn: &Connection, state: &SharedWatcher, host: &str) {
+    {
+        let mut st = state.lock().unwrap();
+        if st.hosts.iter().any(|h| h == host) {
+            return;
+        }
+        st.hosts.push(host.to_owned());
+    }
+    if let Ok(emitter) = SignalEmitter::new(conn, WATCHER_PATH) {
+        let _ = Watcher::status_notifier_host_registered(&emitter).await;
+    }
+}
+
 /// A service left the bus: drop what it registered and tell the other hosts.
 pub(crate) async fn service_gone(conn: &Connection, state: &SharedWatcher, name: &str) {
     let (items, host) = {
