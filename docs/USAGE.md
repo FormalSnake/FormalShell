@@ -60,7 +60,7 @@ Anything the shell needs to remember for itself (wallpaper, mode, frecency,
 pending reminders) goes to `$XDG_STATE_HOME/formalshell/state.json` instead.
 That file belongs to the shell; leave it alone.
 
-**IPC.** The shell answers on `$XDG_RUNTIME_DIR/formalshell/ipc.sock`, and
+**IPC.** The shell answers on `$XDG_RUNTIME_DIR/formalshell/ipc-$WAYLAND_DISPLAY.sock`, and
 `formalshell-ipc` is its client, on PATH with the package:
 
 ```sh

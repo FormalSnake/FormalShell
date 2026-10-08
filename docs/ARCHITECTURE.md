@@ -159,7 +159,7 @@ while their card is open.
 
 ## IPC
 
-`src/ipc/mod.rs`. The socket is `$XDG_RUNTIME_DIR/formalshell/ipc.sock`,
+`src/ipc/mod.rs`. The socket is `$XDG_RUNTIME_DIR/formalshell/ipc-$WAYLAND_DISPLAY.sock` (a client with no `WAYLAND_DISPLAY` takes the newest one),
 served as a source on the UI loop, so `menu toggle` is answered where the
 store and the surfaces live and never waits behind service work. Reads and
 writes are non-blocking; a reply the socket will not take whole is finished
