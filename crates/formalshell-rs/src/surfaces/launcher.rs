@@ -107,6 +107,9 @@ pub struct Model {
     want: String,
     pub from_keys: bool,
     travels: bool,
+    /// The last scroll came off a wheel notch: it glides there without
+    /// overshooting either end.
+    wheeled: bool,
     confirm: String,
     pub scroll: f64,
     layout: Layout,
@@ -253,6 +256,7 @@ impl Default for Model {
             want: String::new(),
             from_keys: true,
             travels: false,
+            wheeled: false,
             confirm: String::new(),
             scroll: 0.0,
             layout: Layout::default(),
@@ -817,6 +821,7 @@ impl Model {
     fn place(&mut self, index: usize, travels: bool) {
         let valid = index < self.rows.len();
         self.travels = travels;
+        self.wheeled = false;
         self.cursor = if valid { index } else { 0 };
         self.cursor_id = if valid { self.rows[index].id.clone() } else { String::new() };
     }
@@ -964,17 +969,26 @@ impl Model {
         1usize.max((h / 32.0).floor() as usize)
     }
 
-    /// A wheel notch: the view scrolls a row (a grid row of cells) and the
-    /// cursor stays where it is.
-    pub fn wheel(&mut self, notches: i32) {
-        let step = if matches!(self.view, View::Rows | View::Monitor) { 32.0 } else { self.layout.cell_h.max(1.0) };
-        let max = (self.layout.content_h - self.body_h).max(0.0);
-        let next = (self.scroll + notches as f64 * step).clamp(0.0, max);
+    /// The pixels one wheel notch scrolls: a row, or a grid row of cells.
+    pub fn wheel_step(&self) -> f64 {
+        if matches!(self.view, View::Rows | View::Monitor) { 32.0 } else { self.layout.cell_h.max(1.0) }
+    }
+
+    /// The view scrolled by `dy` pixels, clamped to its ends, with the
+    /// cursor left where it is: a wheel's notches glide there, a
+    /// touchpad's travel lands at once.
+    pub fn scroll_by(&mut self, dy: f64, glide: bool) {
+        let next = (self.scroll + dy).clamp(0.0, self.max_scroll());
         if next != self.scroll {
             self.scroll = next;
-            self.travels = true;
+            self.travels = false;
+            self.wheeled = glide;
             self.dirty = true;
         }
+    }
+
+    fn max_scroll(&self) -> f64 {
+        (self.layout.content_h - self.body_h).max(0.0)
     }
 
     /// The pointer named a row.
@@ -1025,6 +1039,8 @@ impl Model {
             "isOpen": self.open,
             "level": self.level,
             "scrollTop": self.scroll.round() as i64,
+            "scrollMax": self.max_scroll().round() as i64,
+            "wheelStep": self.wheel_step().round() as i64,
             "placeholder": self.placeholder(store),
             "sections": self.section_names(),
             "view": self.view.name(),
@@ -1607,7 +1623,13 @@ impl Shown {
         self.modal.place(Rect::new(x, y, x + w_, y + h_), now);
         let target = m.scroll;
         if (self.scroll.target() - target).abs() > 0.5 {
-            if m.travels { self.scroll.set(now, target, Clock::SpatialFast.ms(theme) * self.scale) } else { self.scroll.jump(target) }
+            if m.wheeled {
+                self.scroll.set_on(now, target, Clock::EffectsFast.ms(theme) * self.scale, Clock::EffectsFast.curve());
+            } else if m.travels {
+                self.scroll.set_on(now, target, Clock::SpatialFast.ms(theme) * self.scale, Clock::SpatialFast.curve());
+            } else {
+                self.scroll.jump(target);
+            }
         }
         self.draw(m, store, theme, kit, now, body_h);
     }
