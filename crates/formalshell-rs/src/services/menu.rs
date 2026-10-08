@@ -140,7 +140,7 @@ pub fn ipc_command(action: &str) -> String {
     }
 }
 
-fn ipc_client() -> String {
+pub fn ipc_client() -> String {
     std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|d| d.join("formalshell-ipc")))

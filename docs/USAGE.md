@@ -2368,7 +2368,9 @@ network) falls back to the static art, and the setting off means no network
 call happens at all. A hit downloads an MP4 to
 `~/.cache/formalshell/applemusic-art/`, a miss is cached too so a track without
 animated art is not re-fetched every play, and a 30-day prune runs at startup.
-A paused track keeps its animated cover on the frame it stopped at.
+A paused track keeps its animated cover on the frame it stopped at. The bar's
+now-playing cover animates too, off the same decode as the panel's, unless
+`media.animatedBarCover` is `false`.
 
 **Synced lyrics** are on by default (`media.lyrics`) and start looking a second
 after the active source's title or artist changes, panel open or closed. Four

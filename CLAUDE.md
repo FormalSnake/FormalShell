@@ -288,11 +288,14 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   by the leg rewriting that file. A device connected at startup raising no
   card; a headphone connecting raising one with its BlueZ battery ring, held
   past four seconds by a real pointer parked on it and dismissed by the
-  pointer leaving (Escape needs on-demand focus, which Hyprland gives on a
-  click);
+  pointer leaving;
   the same device off and on inside a second raising none; AirPods off the
   staged librepods status file raising left, right and case rings, the
-  pointer leaving dismissing them; and do-not-disturb raising none. Counted
+  pointer leaving dismissing them; a real Escape typed into a focused foot
+  dismissing a card the pointer holds up, through the non-consuming bind
+  the card adds while up (one Escape bind in `hyprctl binds` then none,
+  foot focused throughout and reading every key, the Escape included); and
+  do-not-disturb raising none. Counted
   off the shell log's `headset card mapped` and `unmapped` lines, with the
   frames read by eye.
 - `hdr.sh` `--hdr`: HDR on the rig's EDID-less vkms output, so the honest
@@ -486,12 +489,16 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   `picture` rect against both frames rendered by ffmpeg to PNG.
 - `monitor.sh` `--monitor`: the monitor bar cell, its panel and the
   launcher's monitor view, against this machine's own `/proc` and `/sys`.
-- `motion_art.sh` `--motion-art`: the media panel's animated Apple Music
-  cover with no network, its mp4 already in the lookup's cache and flipping
-  red and blue every half second over a flat green static art: frames taken
-  while playing carry both colours (an ffmpeg child decoding), two frames
-  after a pause carry the same one, and no decoder survives the panel
-  closing.
+- `motion_art.sh` `--motion-art`: the animated Apple Music cover in the
+  bar's now-playing cell and the media panel with no network, its mp4
+  already in the lookup's cache and flipping red and blue every half second
+  over a flat green static art: crops of the bar cell taken while playing
+  carry both colours off one ffmpeg child, the panel's frames too with that
+  one child shared, two frames after a pause carry the same one in both
+  slots with the bar not committing, the bar alone keeps its decoder once
+  the panel closes, and `media.animatedBarCover: false` written under the
+  running shell leaves no decoder, the static art in the bar and the bar not
+  committing, even with the panel animating over it.
 - `nix_run.sh` `--nix-run`: a menu.jsonc row carrying `@ipc:nix.run:hello`
   run through `menu activate`, read off `hyprctl clients` and `pgrep`: a
   `formalshell-console.run` window running `nix run nixpkgs#hello; read`,

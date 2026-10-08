@@ -12,6 +12,7 @@ mod airplay;
 mod bluetooth;
 mod bar;
 mod caffeinate;
+mod headset;
 mod calendar;
 mod capture;
 mod clipboard;
@@ -94,6 +95,7 @@ fn registry() ->&'static Registry<App> {
             network::target(),
             plugins::target(),
             caffeinate::target(),
+            headset::target(),
             gallery::target(),
             lock::target(),
             menu::target(),

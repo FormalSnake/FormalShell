@@ -3,14 +3,16 @@
 //! undocumented chain fs-media's `applemusic` parses (iTunes artist search,
 //! that artist's albums, a scraped web-player token, amp-api's editorial
 //! video, the HLS playlists, one progressive mp4) and the mp4 kept under
-//! `$XDG_CACHE_HOME/formalshell/applemusic-art`. While the media panel shows
-//! the cover, an ffmpeg child decodes that mp4 to raw frames at ~8 fps,
-//! cropped to the slot; each frame is rounded on the pool
-//! and published to the store. A paused track stops the child where it is
-//! and keeps its last frame; the panel closing kills it.
+//! `$XDG_CACHE_HOME/formalshell/applemusic-art`. While a slot shows the
+//! cover (the media panel's, and each bar's now-playing cell behind
+//! `media.animatedBarCover`), one ffmpeg child decodes that mp4 to raw
+//! frames at ~8 fps, cropped to the largest slot; each frame is scaled to
+//! every slot and rounded on the pool, and published to the store. A paused
+//! track stops the child where it is and keeps its last frame; the last
+//! slot going kills it.
 
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::collections::{BTreeMap, HashMap};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
@@ -31,7 +33,7 @@ const DEBOUNCE: Duration = Duration::from_millis(1500);
 const MAX_AGE_DAYS: f64 = 30.0;
 const CURL: [&str; 10] = ["-sS", "--fail", "-L", "--max-redirs", "5", "--connect-timeout", "5", "--max-time", "20", "--compressed"];
 
-/// What the panel's cover slot asks for while it is on screen.
+/// What a cover slot asks for while it is on screen.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Want {
     pub artist: String,
@@ -47,19 +49,64 @@ impl Want {
     }
 }
 
-static WANT: OnceLock<async_channel::Sender<Option<Want>>> = OnceLock::new();
-static LAST: Mutex<Option<Option<Want>>> = Mutex::new(None);
+/// One decode for every slot showing the same album: the slots by size,
+/// largest first, and whether any of them is playing.
+#[derive(Clone, Debug, PartialEq)]
+struct Job {
+    artist: String,
+    album: String,
+    slots: Vec<(u32, f64)>,
+    playing: bool,
+}
 
-/// The panel's slot, or none once it is gone. Repeats are dropped here, so
-/// the panel may say it on every draw.
-pub fn want(w: Option<Want>) {
-    let Ok(mut last) = LAST.lock() else { return };
-    if last.as_ref() == Some(&w) {
+impl Job {
+    fn key(&self) -> String {
+        am::cache_key(&self.artist, &self.album)
+    }
+}
+
+/// The media panel's slot id; a bar cell takes one of its own off `slot()`.
+pub const PANEL: u64 = 0;
+
+pub fn slot() -> u64 {
+    static NEXT: AtomicU64 = AtomicU64::new(PANEL + 1);
+    NEXT.fetch_add(1, Ordering::Relaxed)
+}
+
+static WANT: OnceLock<async_channel::Sender<Option<Job>>> = OnceLock::new();
+static WANTS: Mutex<(BTreeMap<u64, Want>, Option<Job>)> = Mutex::new((BTreeMap::new(), None));
+
+/// The slots folded into one decode: the album of the lowest id (the
+/// panel, when it is up), every slot showing that album.
+fn job(wants: &BTreeMap<u64, Want>) -> Option<Job> {
+    let first = wants.values().next()?;
+    let key = first.key();
+    let same: Vec<&Want> = wants.values().filter(|w| w.key() == key).collect();
+    let mut slots: Vec<(u32, f64)> = same.iter().map(|w| (w.size, w.radius)).collect();
+    slots.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.total_cmp(&b.1)));
+    slots.dedup_by_key(|s| s.0);
+    Some(Job { artist: first.artist.clone(), album: first.album.clone(), slots, playing: same.iter().any(|w| w.playing) })
+}
+
+/// Slot `id`'s want, or none once it is off screen. Repeats are dropped
+/// here, so a slot may say it on every draw.
+pub fn want(id: u64, w: Option<Want>) {
+    let Ok(mut guard) = WANTS.lock() else { return };
+    let (wants, last) = &mut *guard;
+    if wants.get(&id) == w.as_ref() {
         return;
     }
-    *last = Some(w.clone());
+    match w {
+        Some(w) => wants.insert(id, w),
+        None => wants.remove(&id),
+    };
+    let next = job(wants);
+    if *last == next {
+        return;
+    }
+    *last = next.clone();
     if let Some(tx) = WANT.get() {
-        let _ = tx.try_send(w);
+        let _ = tx.try_send(next);
     }
 }
 
@@ -72,7 +119,7 @@ fn cache_dir() -> String {
 /// it after the frame in flight (a pause) and the one that ends its reader.
 struct Decode {
     key: String,
-    size: u32,
+    slots: Vec<(u32, f64)>,
     pid: Arc<AtomicI32>,
     hold: Arc<AtomicBool>,
     stop: Arc<AtomicBool>,
@@ -121,7 +168,7 @@ pub async fn run(ctx: Ctx) {
             continue;
         };
         let key = w.key();
-        if let Some(d) = decode.as_ref().filter(|d| d.key == key && d.size == w.size) {
+        if let Some(d) = decode.as_ref().filter(|d| d.key == key && d.slots == w.slots) {
             d.set_playing(w.playing);
             continue;
         }
@@ -157,12 +204,12 @@ pub async fn run(ctx: Ctx) {
         // A paused track still shows its first frame, then holds it.
         let d = Decode {
             key: key.clone(),
-            size: w.size,
+            slots: w.slots.clone(),
             pid: Arc::new(AtomicI32::new(0)),
             hold: Arc::new(AtomicBool::new(!w.playing)),
             stop: Arc::new(AtomicBool::new(false)),
         };
-        ctx.spawn(frames(ctx.clone(), key, path, (w.size, w.radius), d.pid.clone(), d.hold.clone(), d.stop.clone()));
+        ctx.spawn(frames(ctx.clone(), key, path, w.slots.clone(), d.pid.clone(), d.hold.clone(), d.stop.clone()));
         decode = Some(d);
     }
 }
@@ -177,7 +224,8 @@ fn ffmpeg_args(path: &str, size: u32) -> Vec<String> {
         .collect()
 }
 
-async fn frames(ctx: Ctx, key: String, path: String, (size, radius): (u32, f64), pid: Arc<AtomicI32>, hold: Arc<AtomicBool>, stop: Arc<AtomicBool>) {
+async fn frames(ctx: Ctx, key: String, path: String, slots: Vec<(u32, f64)>, pid: Arc<AtomicI32>, hold: Arc<AtomicBool>, stop: Arc<AtomicBool>) {
+    let Some(&(size, _)) = slots.first() else { return };
     let child = crate::services::proc::command("ffmpeg")
         .args(ffmpeg_args(&path, size))
         .stdin(async_process::Stdio::null())
@@ -198,17 +246,17 @@ async fn frames(ctx: Ctx, key: String, path: String, (size, radius): (u32, f64),
     }
     let Some(mut out) = child.stdout.take() else { return };
     let mut buf = vec![0u8; (size * size * 4) as usize];
-    let key_size = size;
     while out.read_exact(&mut buf).await.is_ok() {
         if stop.load(Ordering::Relaxed) {
             break;
         }
         let raw = buf.clone();
-        let bitmap = ctx.pool().run(move || frame(raw, key_size, radius)).await.flatten();
+        let slots = slots.clone();
+        let bitmaps = ctx.pool().run(move || frames_for(raw, size, &slots)).await.flatten();
         if stop.load(Ordering::Relaxed) {
             break;
         }
-        if let Some(b) = bitmap {
+        if let Some(b) = bitmaps {
             ctx.publish(store::Diff::Media(media::Diff::Motion(Some((key.clone(), b)))));
         }
         if hold.load(Ordering::Relaxed) {
@@ -220,12 +268,19 @@ async fn frames(ctx: Ctx, key: String, path: String, (size, radius): (u32, f64),
     let _ = child.status().await;
 }
 
-/// One raw frame as the cover draws it: corners cut to the slot's radius.
-fn frame(raw: Vec<u8>, size: u32, radius: f64) -> Option<Bitmap> {
-    let mut img = image::RgbaImage::from_raw(size, size, raw)?;
-    super::cover::round_corners(&mut img, radius);
-    let side = u16::try_from(size).ok()?;
-    Some(Bitmap::from_rgba(side, side, img.into_raw()))
+/// One raw frame, decoded at the largest slot's `size`, as each slot draws
+/// it: scaled to the slot and its corners cut to the slot's radius.
+fn frames_for(raw: Vec<u8>, size: u32, slots: &[(u32, f64)]) -> Option<Vec<Bitmap>> {
+    let img = image::RgbaImage::from_raw(size, size, raw)?;
+    slots
+        .iter()
+        .map(|&(side, radius)| {
+            let mut img = if side == size { img.clone() } else { image::imageops::resize(&img, side, side, image::imageops::FilterType::Triangle) };
+            super::cover::round_corners(&mut img, radius);
+            let px = u16::try_from(side).ok()?;
+            Some(Bitmap::from_rgba(px, px, img.into_raw()))
+        })
+        .collect()
 }
 
 async fn curl(args: &[&str]) -> (i32, String) {
@@ -245,7 +300,7 @@ async fn curl(args: &[&str]) -> (i32, String) {
 
 /// The chain for one album: its mp4 on disk, `Ok(None)` for an album with
 /// no motion art (cached as such), `Err` for a failure worth retrying.
-async fn lookup(w: &Want, dir: &str, key: &str, token: &mut String) -> Result<Option<String>, &'static str> {
+async fn lookup(w: &Job, dir: &str, key: &str, token: &mut String) -> Result<Option<String>, &'static str> {
     let Some(url) = am::artist_search_url(&w.artist) else { return Ok(None) };
     let (code, out) = curl(&[&url]).await;
     let Some(artist) = am::parse_artist_search_result(code, &out, &w.artist).map_err(|_| "itunes artist search failed")? else { return Ok(None) };
@@ -333,11 +388,33 @@ mod tests {
     }
 
     #[test]
-    fn a_raw_frame_becomes_a_rounded_square() {
-        let b = frame(vec![255; 16 * 16 * 4], 16, 4.0).unwrap();
-        let px = b.pixmap.data_as_u8_slice();
+    fn a_raw_frame_becomes_a_rounded_square_per_slot() {
+        let b = frames_for(vec![255; 16 * 16 * 4], 16, &[(16, 4.0), (8, 4.0)]).unwrap();
+        let px = b[0].pixmap.data_as_u8_slice();
         assert_eq!(px[3], 0, "the corner is cut");
         assert_eq!(px[((8 * 16) + 8) * 4 + 3], 255);
-        assert!(frame(vec![0; 10], 16, 0.0).is_none(), "a short read is no frame");
+        assert_eq!((b[1].pixmap.width(), b[1].pixmap.height()), (8, 8), "the smaller slot is scaled");
+        assert_eq!(b[1].pixmap.data_as_u8_slice()[3], 0);
+        assert!(frames_for(vec![0; 10], 16, &[(16, 0.0)]).is_none(), "a short read is no frame");
+    }
+
+    fn w(album: &str, size: u32, playing: bool) -> Want {
+        Want { artist: "a".into(), album: album.into(), size, radius: 2.0, playing }
+    }
+
+    #[test]
+    fn one_decode_serves_every_slot_on_the_album() {
+        let mut wants = BTreeMap::new();
+        assert_eq!(job(&wants), None);
+        wants.insert(5, w("x", 17, false));
+        wants.insert(6, w("x", 17, false));
+        let bar = job(&wants).unwrap();
+        assert_eq!((bar.slots.len(), bar.playing), (1, false), "two bars of one size share a slot");
+        wants.insert(PANEL, w("x", 96, true));
+        let both = job(&wants).unwrap();
+        assert_eq!(both.slots.iter().map(|s| s.0).collect::<Vec<_>>(), vec![96, 17], "decoded at the panel's size");
+        assert!(both.playing);
+        wants.insert(PANEL, w("y", 96, true));
+        assert_eq!(job(&wants).unwrap().slots.len(), 1, "the panel's album wins");
     }
 }

@@ -90,12 +90,6 @@ impl Popup {
         Rect::new(frame.x as f64 + pad, frame.y as f64 + pad, (frame.x + frame.w) as f64 - pad, (frame.y + frame.h) as f64 - pad)
     }
 
-    pub fn set_keyboard(&mut self, k: smithay_client_toolkit::shell::wlr_layer::KeyboardInteractivity) {
-        use smithay_client_toolkit::shell::WaylandSurface;
-        self.surface.layer.set_keyboard_interactivity(k);
-        self.surface.layer.commit();
-    }
-
     /// Lays `root` on the card's content rect.
     pub fn draw(&mut self, root: &El, theme: &Theme, kit: &mut Kit, now: Instant) -> Drawn {
         let inner = self.inner(theme);
