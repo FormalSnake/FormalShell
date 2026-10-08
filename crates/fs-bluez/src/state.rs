@@ -2,7 +2,7 @@
 //! plain property maps. `Bluez` feeds it `GetManagedObjects`,
 //! `InterfacesAdded/Removed` and `PropertiesChanged`, and gets events back.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use fs_devices::bluetooth::{self, DeviceState};
 use zbus::zvariant::{OwnedValue, Value};
@@ -199,8 +199,31 @@ fn apply_battery(d: &mut Device, props: &Props, invalidated: &[String]) {
     }
 }
 
-fn changed(before: Device, e: &Entry) -> Vec<Event> {
+/// A device anything shows while no Bluetooth panel or scan is open: one the
+/// user has a bond with or a link to. Strangers a discovery turns up wait for
+/// the panel.
+pub fn known(d: &bluetooth::Device) -> bool {
+    d.paired || d.bonded || d.trusted || d.connected
+}
+
+/// Whether an event can move what a surface shows: any adapter change, and a
+/// device change for a known device, one already on show (`shown`, by
+/// address), or any device while a panel is `open`.
+pub fn matters(e: &Event, open: bool, shown: &[String]) -> bool {
+    match e {
+        Event::DeviceAdded(d) | Event::DeviceChanged(d) => open || known(&d.info) || shown.contains(&d.info.address),
+        Event::DeviceRemoved { address, .. } => open || shown.contains(address),
+        Event::AdapterAdded(_) | Event::AdapterChanged(_) | Event::AdapterRemoved { .. } => true,
+    }
+}
+
+/// The `Device1` properties a device's event carries: an RSSI move alone is
+/// none of them.
+const SHOWN: [&str; 9] = ["Address", "Name", "Alias", "Icon", "Paired", "Bonded", "Trusted", "Connected", "Adapter"];
+
+fn changed(mut before: Device, e: &Entry) -> Vec<Event> {
     let after = e.view();
+    before.rssi = after.rssi;
     if before == after { vec![] } else { vec![Event::DeviceChanged(after)] }
 }
 
@@ -224,6 +247,11 @@ impl State {
 
     pub fn devices_of(&self, adapter: &str) -> Vec<Device> {
         self.devices.values().filter(|e| e.device.adapter == adapter).map(Entry::view).collect()
+    }
+
+    /// The object paths of every [`known`] device.
+    pub fn known_paths(&self) -> BTreeSet<String> {
+        self.devices.iter().filter(|(_, e)| known(&e.device.info)).map(|(p, _)| p.clone()).collect()
     }
 
     /// Case-insensitive, like `bluetooth::find_by_address`, scoped to one adapter.
@@ -309,6 +337,12 @@ impl State {
             }
             DEVICE_IFACE => {
                 let Some(e) = self.devices.get_mut(path) else { return vec![] };
+                // A discovery's stream of RSSI and advertising data changes
+                // nothing anyone reads off a device: kept, and no event.
+                if !props.keys().chain(invalidated).any(|k| SHOWN.contains(&k.as_str())) {
+                    apply_device(&mut e.device, props, invalidated);
+                    return vec![];
+                }
                 let before = e.view();
                 apply_device(&mut e.device, props, invalidated);
                 changed(before, e)
@@ -436,6 +470,46 @@ mod tests {
     }
 
     #[test]
+    fn a_burst_of_rssi_changes_raises_no_event() {
+        let mut s = seeded();
+        let mut events = 0;
+        for i in 0..700 {
+            let rssi = props(vec![("RSSI", Value::I16(-40 - (i % 30) as i16)), ("TxPower", Value::I16(4))]);
+            events += s.properties_changed(DEV, DEVICE_IFACE, &rssi, &[]).len();
+        }
+        events += s.properties_changed(DEV, DEVICE_IFACE, &Props::new(), &["RSSI".to_string()]).len();
+        assert_eq!(events, 0);
+        assert_eq!(s.device(DEV).unwrap().rssi, None);
+        let connected = props(vec![("Connected", true.into()), ("RSSI", Value::I16(-50))]);
+        assert_eq!(s.properties_changed(DEV, DEVICE_IFACE, &connected, &[]).len(), 1);
+    }
+
+    /// A discovery the shell did not start, with the panel shut: 700 RSSI
+    /// updates and the strangers it turns up reach no surface.
+    #[test]
+    fn a_discovery_with_the_panel_shut_reaches_no_surface() {
+        let mut s = seeded();
+        let stranger = "/org/bluez/hci0/dev_11_22_33_44_55_66";
+        let mut events = s.interface_added(
+            stranger,
+            DEVICE_IFACE,
+            &props(vec![
+                ("Address", "11:22:33:44:55:66".into()),
+                ("Paired", false.into()),
+                ("Adapter", Value::ObjectPath(ObjectPath::try_from(HCI0).unwrap())),
+            ]),
+        );
+        for i in 0..700 {
+            let path = if i % 2 == 0 { DEV } else { stranger };
+            events.extend(s.properties_changed(path, DEVICE_IFACE, &props(vec![("RSSI", Value::I16(-40 - (i % 30) as i16))]), &[]));
+        }
+        events.extend(s.interfaces_removed(stranger, &[DEVICE_IFACE.to_string()]));
+        let shown = vec!["AA:BB:CC:DD:EE:FF".to_string()];
+        assert_eq!(events.iter().filter(|e| matters(e, false, &shown)).count(), 0);
+        assert_eq!(events.iter().filter(|e| matters(e, true, &shown)).count(), 2);
+    }
+
+    #[test]
     fn empty_state_is_the_no_adapter_state() {
         let s = State::default();
         assert!(s.default_adapter().is_none());
@@ -496,7 +570,7 @@ mod tests {
         assert_eq!(s.device(DEV).unwrap().rssi, Some(-61));
         let ev = s.properties_changed(DEV, DEVICE_IFACE, &Props::new(), &["RSSI".to_string()]);
         assert_eq!(s.device(DEV).unwrap().rssi, None);
-        assert_eq!(ev.len(), 1);
+        assert!(ev.is_empty());
     }
 
     #[test]

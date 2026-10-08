@@ -1,10 +1,12 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::fmt;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::task::Poll;
 
 use async_channel::{Receiver, Sender};
 use fs_devices::bluetooth;
-use futures_lite::{Stream, StreamExt};
+use futures_lite::{StreamExt, future};
 use zbus::fdo::{DBusProxy, ObjectManagerProxy};
 use zbus::message::Type as MessageType;
 use zbus::zvariant::{ObjectPath, OwnedObjectPath};
@@ -12,7 +14,7 @@ use zbus::{Connection, MatchRule, Message, MessageStream};
 
 use crate::agent::{AGENT_PATH, Agent, AgentRequest, Capability};
 use crate::proxies::{Adapter1Proxy, AgentManager1Proxy, Device1Proxy};
-use crate::state::{Activity, Device, Event, Props, State};
+use crate::state::{ADAPTER_IFACE, Activity, BATTERY_IFACE, DEVICE_IFACE, Device, Event, Props, State};
 
 const BLUEZ: &str = "org.bluez";
 
@@ -78,6 +80,7 @@ pub struct Bluez {
     conn: Connection,
     state: Shared,
     events: Sender<Event>,
+    watch: Sender<Watch>,
 }
 
 /// The signal pump. Spawn `run` on the service executor and keep it alive for
@@ -88,6 +91,7 @@ pub struct Monitor {
     events: Sender<Event>,
     signals: MessageStream,
     owner: zbus::fdo::NameOwnerChangedStream,
+    watch: Receiver<Watch>,
 }
 
 async fn enumerate(conn: &Connection) -> Result<State> {
@@ -116,8 +120,19 @@ impl Bluez {
         let state: Shared = Arc::new(Mutex::new(State::default()));
         let (events, rx) = async_channel::unbounded();
         publish(&state, &events, |s| s.resync(fresh));
-        let bluez = Bluez { conn: conn.clone(), state: state.clone(), events: events.clone() };
-        Ok((bluez, rx, Monitor { conn: conn.clone(), state, events, signals, owner }))
+        let (watch_tx, watch) = async_channel::unbounded();
+        let bluez = Bluez { conn: conn.clone(), state: state.clone(), events: events.clone(), watch: watch_tx };
+        Ok((bluez, rx, Monitor { conn: conn.clone(), state, events, signals, owner, watch }))
+    }
+
+    /// Every BlueZ signal (`true`), for a panel or scan view that shows
+    /// strangers and RSSI, or only those about the adapter and the
+    /// [`known`](crate::state::known) devices (`false`, the default). A
+    /// discovery someone else runs sends hundreds of RSSI updates a minute,
+    /// and narrowed, the bus never delivers them. Widening resyncs, since
+    /// strangers changed unseen meanwhile.
+    pub fn watch_all(&self, on: bool) {
+        let _ = self.watch.try_send(Watch::All(on));
     }
 
     /// A copy of the current state; cheap enough to take per frame.
@@ -141,9 +156,17 @@ impl Bluez {
         lock(&self.state).default_adapter().map(|a| a.path.clone()).ok_or(Error::NoAdapter)
     }
 
-    fn resolve(&self, address: &str) -> Result<Device> {
+    /// The device a command acts on, its changes subscribed before the
+    /// command goes out: under the narrow subscription a stranger being
+    /// paired would otherwise answer into nothing.
+    async fn resolve(&self, address: &str) -> Result<Device> {
         let adapter = self.default_adapter()?;
-        lock(&self.state).find_device(&adapter, address).ok_or_else(|| Error::UnknownDevice(address.to_string()))
+        let d = lock(&self.state).find_device(&adapter, address).ok_or_else(|| Error::UnknownDevice(address.to_string()))?;
+        let (ack, acked) = async_channel::bounded(1);
+        if self.watch.try_send(Watch::Path(d.info.dbus_path.clone(), ack)).is_ok() {
+            let _ = acked.recv().await;
+        }
+        Ok(d)
     }
 
     async fn adapter(&self, path: &str) -> Result<Adapter1Proxy<'static>> {
@@ -184,7 +207,7 @@ impl Bluez {
     }
 
     pub async fn connect_device(&self, address: &str) -> Result<()> {
-        let d = self.resolve(address)?;
+        let d = self.resolve(address).await?;
         let path = d.info.dbus_path.clone();
         let proxy = self.device_proxy(&path).await?;
         self.activity(&path, Activity::Connecting, true);
@@ -194,7 +217,7 @@ impl Bluez {
     }
 
     pub async fn disconnect_device(&self, address: &str) -> Result<()> {
-        let d = self.resolve(address)?;
+        let d = self.resolve(address).await?;
         let path = d.info.dbus_path.clone();
         let proxy = self.device_proxy(&path).await?;
         self.activity(&path, Activity::Disconnecting, true);
@@ -206,7 +229,7 @@ impl Bluez {
     /// Leaves trusting and connecting to the caller, which decides when
     /// pairing counts as done.
     pub async fn pair(&self, address: &str) -> Result<()> {
-        let d = self.resolve(address)?;
+        let d = self.resolve(address).await?;
         let path = d.info.dbus_path.clone();
         let proxy = self.device_proxy(&path).await?;
         self.activity(&path, Activity::Pairing, true);
@@ -216,18 +239,18 @@ impl Bluez {
     }
 
     pub async fn cancel_pairing(&self, address: &str) -> Result<()> {
-        let d = self.resolve(address)?;
+        let d = self.resolve(address).await?;
         Ok(self.device_proxy(&d.info.dbus_path).await?.cancel_pairing().await?)
     }
 
     pub async fn set_trusted(&self, address: &str, trusted: bool) -> Result<()> {
-        let d = self.resolve(address)?;
+        let d = self.resolve(address).await?;
         Ok(self.device_proxy(&d.info.dbus_path).await?.set_trusted(trusted).await?)
     }
 
     /// `Adapter1.RemoveDevice`: unpairs and forgets.
     pub async fn remove(&self, address: &str) -> Result<()> {
-        let d = self.resolve(address)?;
+        let d = self.resolve(address).await?;
         let path = ObjectPath::try_from(d.info.dbus_path.as_str()).map_err(zbus::Error::from)?;
         Ok(self.adapter(&d.adapter).await?.remove_device(&path).await?)
     }
@@ -262,6 +285,8 @@ impl Bluez {
 enum Item {
     Signal(Message),
     Owner(bool),
+    Watch(Watch),
+    Gone,
 }
 
 fn handle_signal(state: &Shared, events: &Sender<Event>, msg: &Message) {
@@ -289,26 +314,130 @@ fn handle_signal(state: &Shared, events: &Sender<Event>, msg: &Message) {
     }
 }
 
-impl Monitor {
-    pub async fn run(self) {
-        let Monitor { conn, state, events, signals, owner } = self;
-        let signals = signals.filter_map(|m| m.ok()).map(Item::Signal);
-        let owner = owner.filter_map(|s| s.args().ok().map(|a| Item::Owner(a.new_owner.is_some())));
-        let mut items = Box::pin(merge(signals, owner));
-        while let Some(item) = items.next().await {
-            match item {
-                Item::Signal(msg) => handle_signal(&state, &events, &msg),
-                Item::Owner(false) => publish(&state, &events, State::clear),
-                Item::Owner(true) => {
-                    if let Ok(fresh) = enumerate(&conn).await {
-                        publish(&state, &events, |s| s.resync(fresh));
-                    }
-                }
+/// The streams for one subscription: everything from BlueZ, or the object
+/// manager's adds and removes, adapter and battery changes, and `Device1`
+/// changes on the known paths alone.
+async fn subscribe(conn: &Connection, wide: bool, known: &BTreeSet<String>) -> zbus::Result<Vec<Pin<Box<MessageStream>>>> {
+    let base = || MatchRule::builder().msg_type(MessageType::Signal).sender(BLUEZ);
+    let changed = || base()?.interface("org.freedesktop.DBus.Properties")?.member("PropertiesChanged");
+    let mut rules = Vec::new();
+    if wide {
+        rules.push(base()?.build());
+    } else {
+        rules.push(base()?.interface("org.freedesktop.DBus.ObjectManager")?.build());
+        rules.push(changed()?.arg(0, ADAPTER_IFACE)?.build());
+        rules.push(changed()?.arg(0, BATTERY_IFACE)?.build());
+        for path in known {
+            rules.push(changed()?.path(path.as_str())?.arg(0, DEVICE_IFACE)?.build());
+        }
+    }
+    let mut out = Vec::with_capacity(rules.len());
+    for rule in rules {
+        out.push(Box::pin(MessageStream::for_match_rule(rule, conn, None).await?));
+    }
+    Ok(out)
+}
+
+/// Swaps in a new subscription once it is in place. What the old one
+/// still holds is applied before it goes: a signal can land in both, and
+/// applying one twice changes nothing the second time.
+async fn resubscribe(
+    conn: &Connection,
+    state: &Shared,
+    events: &Sender<Event>,
+    streams: &mut Vec<Pin<Box<MessageStream>>>,
+    wide: bool,
+    paths: &BTreeSet<String>,
+) {
+    let Ok(next) = subscribe(conn, wide, paths).await else { return };
+    for mut s in std::mem::replace(streams, next) {
+        while let Some(Some(msg)) = future::poll_once(s.next()).await {
+            if let Ok(msg) = msg {
+                handle_signal(state, events, &msg);
             }
         }
     }
 }
 
-fn merge<S: Stream<Item = Item>>(a: S, b: impl Stream<Item = Item>) -> impl Stream<Item = Item> {
-    a.or(b)
+/// What the client asks of the monitor's subscription.
+enum Watch {
+    All(bool),
+    /// Follow one device's changes; acked once its rule is in place.
+    Path(String, Sender<()>),
+}
+
+impl Monitor {
+    pub async fn run(self) {
+        let Monitor { conn, state, events, signals, owner, watch } = self;
+        let mut wide = false;
+        // Paths a command asked to follow, kept for the monitor's life.
+        let mut followed = BTreeSet::new();
+        let mut paths = lock(&state).known_paths();
+        // `connect` subscribed to everything so nothing fell before its
+        // enumerate; the narrow set replaces it once it is in place.
+        let mut streams = vec![Box::pin(signals)];
+        resubscribe(&conn, &state, &events, &mut streams, false, &paths).await;
+        let mut owner = Box::pin(owner);
+        let mut watch = Box::pin(watch);
+        loop {
+            let item = future::poll_fn(|cx| {
+                if let Poll::Ready(o) = owner.as_mut().poll_next(cx) {
+                    return Poll::Ready(o.map_or(Item::Gone, |s| Item::Owner(s.args().is_ok_and(|a| a.new_owner.is_some()))));
+                }
+                if let Poll::Ready(w) = watch.as_mut().poll_next(cx) {
+                    return Poll::Ready(w.map_or(Item::Gone, Item::Watch));
+                }
+                for s in &mut streams {
+                    loop {
+                        match s.as_mut().poll_next(cx) {
+                            Poll::Ready(Some(Ok(msg))) => return Poll::Ready(Item::Signal(msg)),
+                            Poll::Ready(Some(Err(_))) => continue,
+                            Poll::Ready(None) => return Poll::Ready(Item::Gone),
+                            Poll::Pending => break,
+                        }
+                    }
+                }
+                Poll::Pending
+            })
+            .await;
+            let resync = match item {
+                Item::Gone => return,
+                Item::Signal(msg) => {
+                    handle_signal(&state, &events, &msg);
+                    false
+                }
+                Item::Owner(false) => {
+                    publish(&state, &events, State::clear);
+                    false
+                }
+                Item::Owner(true) => true,
+                Item::Watch(Watch::All(on)) if on == wide => false,
+                Item::Watch(Watch::All(on)) => {
+                    wide = on;
+                    resubscribe(&conn, &state, &events, &mut streams, wide, &paths).await;
+                    wide
+                }
+                Item::Watch(Watch::Path(path, ack)) => {
+                    followed.insert(path);
+                    if !wide {
+                        paths.extend(followed.iter().cloned());
+                        resubscribe(&conn, &state, &events, &mut streams, false, &paths).await;
+                    }
+                    let _ = ack.try_send(());
+                    false
+                }
+            };
+            if resync && let Ok(fresh) = enumerate(&conn).await {
+                publish(&state, &events, |s| s.resync(fresh));
+            }
+            if !wide {
+                let mut now = lock(&state).known_paths();
+                now.extend(followed.iter().cloned());
+                if now != paths {
+                    paths = now;
+                    resubscribe(&conn, &state, &events, &mut streams, false, &paths).await;
+                }
+            }
+        }
+    }
 }

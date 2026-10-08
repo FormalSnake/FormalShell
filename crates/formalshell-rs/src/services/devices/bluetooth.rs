@@ -82,10 +82,16 @@ fn state_word(s: AdapterState) -> &'static str {
     }
 }
 
-fn snapshot(state: &fs_bluez::state::State, over: Option<&str>) -> Bluetooth {
+use fs_bluez::state::{known, matters};
+
+/// Signals that land within one frame of each other make one view.
+const COALESCE: Duration = Duration::from_millis(16);
+
+fn snapshot(state: &fs_bluez::state::State, over: Option<&str>, open: bool) -> Bluetooth {
     let headsets = Some(headsets::read(Some(state), over));
     let Some(adapter) = state.default_adapter() else { return Bluetooth { headsets, ..Bluetooth::default() } };
-    let devices: Vec<_> = state.devices_of(&adapter.path).into_iter().map(|d| d.info).collect();
+    let devices: Vec<_> =
+        state.devices_of(&adapter.path).into_iter().map(|d| d.info).filter(|d| open || known(d)).collect();
     let connected = devices
         .iter()
         .filter(|d| d.connected)
@@ -123,15 +129,11 @@ fn smoke_changes(ctx: &Ctx) -> Option<Receiver<()>> {
     Some(rx)
 }
 
-fn publish(ctx: &Ctx, bt: Bluetooth, devices: Vec<fs_devices::bluetooth::Device>) {
-    ctx.publish(store::Diff::Devices(super::Diff::Bluetooth(bt)));
-    super::earbuds::bluetooth(devices);
-}
-
 fn absent(ctx: &Ctx) {
     let over = smoke_override();
     let devices = fs_devices::earbuds::bluetooth_devices(&[], over.as_deref());
-    publish(ctx, Bluetooth { headsets: Some(headsets::read(None, over.as_deref())), ..Bluetooth::default() }, devices);
+    ctx.publish(store::Diff::Devices(super::Diff::Bluetooth(Bluetooth { headsets: Some(headsets::read(None, over.as_deref())), ..Bluetooth::default() })));
+    super::earbuds::bluetooth(devices);
 }
 
 /// What the panel asks of the service.
@@ -165,7 +167,8 @@ enum Done {
 }
 
 enum Wake {
-    State,
+    State(fs_bluez::state::Event),
+    Smoke,
     Ask(Ask),
     Done(Done),
     Gone,
@@ -190,47 +193,78 @@ pub async fn run(ctx: Ctx) {
     let changes = smoke_changes(&ctx);
     let (done_tx, done_rx) = async_channel::unbounded::<Done>();
     let mut open = PANEL.load(Ordering::Relaxed);
+    bluez.watch_all(open);
     let mut action: Option<(String, ActionKind)> = None;
     let mut failure: Option<(String, &'static str)> = None;
     let mut arming = false;
+    let mut refresh = true;
+    let mut last: Option<Bluetooth> = None;
+    let mut last_shown: Vec<String> = Vec::new();
+    let mut last_buds: Option<Vec<fs_devices::bluetooth::Device>> = None;
     loop {
-        let snap = bluez.state();
-        if let Some(a) = snap.default_adapter()
-            && open
-            && a.powered
-            && !a.discovering
-            && !arming
-        {
-            arming = true;
-            let (b, path, tx) = (bluez.clone(), a.path.clone(), done_tx.clone());
-            ctx.spawn(async move {
-                // BlueZ refuses StartDiscovery while the adapter powers up.
-                if let Err(err) = b.start_discovery(&path).await {
-                    eprintln!("bluetooth: discovery: {err}");
-                    async_io::Timer::after(Duration::from_secs(1)).await;
-                }
-                let _ = tx.send(Done::Armed).await;
-            });
+        // A signal no surface reads costs its own apply in fs-bluez and the
+        // wake here, never a copy of the state.
+        if refresh {
+            let snap = bluez.state();
+            if let Some(a) = snap.default_adapter()
+                && open
+                && a.powered
+                && !a.discovering
+                && !arming
+            {
+                arming = true;
+                let (b, path, tx) = (bluez.clone(), a.path.clone(), done_tx.clone());
+                ctx.spawn(async move {
+                    // BlueZ refuses StartDiscovery while the adapter powers up.
+                    if let Err(err) = b.start_discovery(&path).await {
+                        eprintln!("bluetooth: discovery: {err}");
+                        async_io::Timer::after(Duration::from_secs(1)).await;
+                    }
+                    let _ = tx.send(Done::Armed).await;
+                });
+            }
+            let over = smoke_override();
+            let mut view = snapshot(&snap, over.as_deref(), open);
+            view.action = action.clone();
+            view.failure = failure.clone();
+            // Only what a surface would show differently reaches the UI.
+            if last.as_ref() != Some(&view) {
+                let shown: Vec<String> = view.devices.iter().map(|d| d.address.clone()).collect();
+                ctx.publish(store::Diff::Devices(super::Diff::Bluetooth(view.clone())));
+                last = Some(view);
+                last_shown = shown;
+            }
+            let buds = bluez.earbuds_devices(over.as_deref());
+            if last_buds.as_ref() != Some(&buds) {
+                super::earbuds::bluetooth(buds.clone());
+                last_buds = Some(buds);
+            }
         }
-        let over = smoke_override();
-        let mut view = snapshot(&snap, over.as_deref());
-        view.action = action.clone();
-        view.failure = failure.clone();
-        publish(&ctx, view, bluez.earbuds_devices(over.as_deref()));
-        let wake = async { events.recv().await.map_or(Wake::Gone, |_| Wake::State) }
+        refresh = true;
+        let wake = async { events.recv().await.map_or(Wake::Gone, Wake::State) }
             .or(async { ASKS.1.recv().await.map_or(Wake::Gone, Wake::Ask) })
             .or(async { done_rx.recv().await.map_or(Wake::Gone, Wake::Done) })
             .or(async {
                 match &changes {
-                    Some(rx) => rx.recv().await.map_or(Wake::Gone, |_| Wake::State),
+                    Some(rx) => rx.recv().await.map_or(Wake::Gone, |_| Wake::Smoke),
                     None => future::pending().await,
                 }
             })
             .await;
-        while events.try_recv().is_ok() {}
         match wake {
             Wake::Gone => return,
-            Wake::State => {}
+            Wake::Smoke => {}
+            Wake::State(first) => {
+                refresh = matters(&first, open, &last_shown);
+                while let Ok(e) = events.try_recv() {
+                    refresh |= matters(&e, open, &last_shown);
+                }
+                if refresh {
+                    // A burst lands as one view, a frame's worth later.
+                    async_io::Timer::after(COALESCE).await;
+                    while events.try_recv().is_ok() {}
+                }
+            }
             Wake::Done(Done::Armed) => arming = false,
             Wake::Done(Done::Action(result)) => {
                 if let (Some((address, _)), Some(text)) = (action.take(), result) {
@@ -239,6 +273,7 @@ pub async fn run(ctx: Ctx) {
             }
             Wake::Ask(Ask::Open(on)) => {
                 open = on;
+                bluez.watch_all(on);
                 if !on && bluez.state().default_adapter().is_some_and(|a| a.discovering) {
                     on_adapter(&bluez, &ctx, |b, path| async move {
                         let _ = b.stop_discovery(&path).await;
