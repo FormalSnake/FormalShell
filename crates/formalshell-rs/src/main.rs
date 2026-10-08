@@ -1,3 +1,4 @@
+mod cmdline;
 mod fontconfig;
 mod greeter;
 mod install;
@@ -37,12 +38,19 @@ pub fn phase(name: &str) {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    if args.get(1).is_some_and(|a| a == "greeter") {
-        greeter::main(&args[2..]);
-        return;
-    }
-    if let Some(cmd) = args.get(1).filter(|a| matches!(a.as_str(), "install" | "update" | "uninstall")) {
-        std::process::exit(install::main(cmd, &args[2..]));
+    match cmdline::parse(&args) {
+        cmdline::Command::Shell => {}
+        cmdline::Command::Greeter(rest) => {
+            greeter::main(rest);
+            return;
+        }
+        cmdline::Command::Install(cmd, rest) => std::process::exit(install::main(cmd, rest)),
+        cmdline::Command::Ipc(rest) => std::process::exit(ipc::client::run(rest)),
+        cmdline::Command::Theme(rest) => std::process::exit(ipc::client::run(&cmdline::theme_call(rest))),
+        cmdline::Command::Usage => {
+            eprint!("{}", cmdline::USAGE);
+            std::process::exit(2);
+        }
     }
     tune_malloc();
     // Every `t=` in the log counts from here; this line puts that zero on the

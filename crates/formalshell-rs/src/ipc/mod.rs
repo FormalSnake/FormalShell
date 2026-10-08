@@ -16,8 +16,8 @@ mod calendar;
 mod capture;
 mod clipboard;
 mod console;
-#[cfg(test)]
-mod cli;
+pub mod cli;
+pub mod client;
 mod debug;
 mod display;
 mod earbuds;
