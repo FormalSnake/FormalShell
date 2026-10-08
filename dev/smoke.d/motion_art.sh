@@ -5,18 +5,26 @@
 # whose motion art is already in the cache the lookup would have filled
 # (`$XDG_CACHE_HOME/formalshell/applemusic-art/<key>.mp4`), so the decode is
 # the only thing under test. That mp4 alternates flat red and flat blue every
-# half second; the track's own static art is flat green, so which picture the
-# cover slot is drawing is read off three colour counts.
+# half second; the track's own static art is flat green, so which picture a
+# cover slot is drawing is read off three colour counts. The bar's cover is
+# read off a crop around the now-playing cell, placed by `bar room`.
 #
+#   bar      with the panel shut, crops of the bar's cover carry red in some
+#            and blue in others, one ffmpeg child decodes, and the bar commits
+#            while it moves.
 #   playing  frames taken while the media panel is open carry red in some and
-#            blue in others: the cover is moving, not the static art, and an
-#            ffmpeg child is decoding it.
+#            blue in others, still off one decoder shared by both slots.
 #   paused   after `media playPause`, two frames apart carry the same counts
-#            and one of red or blue: the held frame, not the static art.
-#   closed   with the panel shut no decoder is left running.
+#            and one of red or blue, in the panel and in the bar crop alike:
+#            the held frame, not the static art. The bar does not commit.
+#   closed   with the panel shut the bar alone keeps its decoder.
+#   off      `media.animatedBarCover: false` written into settings.json under
+#            the running shell, playing again: no decoder, the bar crop back
+#            on the green static art and the bar not committing; then the
+#            panel open again on its own decoder, the bar still quiet.
 leg_motion_art_flag="--motion-art"
 leg_motion_art_order=36
-leg_motion_art_needs="mpv ffmpeg convert"
+leg_motion_art_needs="mpv ffmpeg convert jq"
 
 motion_art_artist="FormalShell Motion Artist"
 motion_art_album="Motion Album"
@@ -25,11 +33,11 @@ motion_art_dir="$iso_home/.cache/formalshell/applemusic-art"
 motion_art_track_path="$shot_dir/motion-art-track.flac"
 motion_art_cover_path="$shot_dir/motion-art-cover.png"
 motion_art_frames=8
-motion_art_pgrep_open_path="$shot_dir/motion-art-pgrep-open.txt"
-motion_art_pgrep_closed_path="$shot_dir/motion-art-pgrep-closed.txt"
+motion_art_results="$shot_dir/motion-art-results.txt"
+motion_art_room="$shot_dir/motion-art-room.json"
 
 leg_motion_art_timing() {
-  leg_timing 26 60
+  leg_timing 56 95
 }
 
 leg_motion_art_fixture() {
@@ -47,6 +55,7 @@ leg_motion_art_fixture() {
 
 leg_motion_art_drive() {
   local play="$shot_dir/motion-art-play.sh" drive="$shot_dir/motion-art-drive.sh"
+  local settings_path="$iso_home/.config/formalshell/settings.json"
   write_script "$play" <<EOF
 #!/usr/bin/env bash
 sleep 2
@@ -55,30 +64,62 @@ EOF
   write_script "$drive" <<EOF
 #!/usr/bin/env bash
 call() { $ipc call "\$@"; }
-sleep 5
+note() { echo "\$1 \$2" >> "$motion_art_results"; }
+decoders() { note "decoders_\$1" "\$(pgrep -fc 'applemusic-art')"; }
+# commits <name> <seconds>: the bar's commits over that window.
+commits() {
+  local c0 c1
+  c0=\$(grep -c '^commit surface=bar ' "$shell_log_path")
+  sleep "\$2"
+  c1=\$(grep -c '^commit surface=bar ' "$shell_log_path")
+  note "commits_\$1" "\$((c1 - c0))"
+}
+burst() {
+  for i in \$(seq 1 $motion_art_frames); do
+    "$grim_bin" "$shot_dir/motion-art-\$1-\$i.png" > /dev/null 2>&1
+    sleep 0.15
+  done
+}
+: > "$motion_art_results"
+sleep 6
+call bar room > "$motion_art_room" 2>&1
+burst bar
+decoders bar
+commits bar 3
 call panel open media > /dev/null 2>&1
 sleep 4
-for i in \$(seq 1 $motion_art_frames); do
-  "$grim_bin" "$shot_dir/motion-art-play-\$i.png" > /dev/null 2>&1
-  sleep 0.15
-done
-pgrep -fc 'applemusic-art' > "$motion_art_pgrep_open_path"
+burst play
+decoders open
 call media playPause > /dev/null 2>&1
 sleep 1.5
 "$grim_bin" "$shot_dir/motion-art-paused-1.png" > /dev/null 2>&1
 sleep 0.8
 "$grim_bin" "$shot_dir/motion-art-paused-2.png" > /dev/null 2>&1
+commits paused 2
 call panel close > /dev/null 2>&1
 sleep 1.5
-pgrep -fc 'applemusic-art' > "$motion_art_pgrep_closed_path"
+decoders closed
+call media playPause > /dev/null 2>&1
+"$jq_bin" '.media.animatedBarCover = false' "$settings_path" > "$settings_path.tmp"
+cat "$settings_path.tmp" > "$settings_path"
+rm -f "$settings_path.tmp"
+sleep 2.5
+decoders off
+"$grim_bin" "$shot_dir/motion-art-off.png" > /dev/null 2>&1
+commits off 3
+call panel open media > /dev/null 2>&1
+sleep 4
+decoders off_panel
+commits off_panel 3
+call panel close > /dev/null 2>&1
 EOF
   hypr_exec_once "bash $play"
   hypr_exec_once "bash $drive"
 }
 
-# Pixels within 20% of one flat colour, over the whole frame. White ones
-# (every label on screen) count toward each, so only differences between
-# the three counts mean anything.
+# Pixels within 20% of one flat colour. White ones (every label on screen)
+# count toward each, so only differences between the three counts mean
+# anything.
 motion_art_count() {
   $convert_bin "$1" -alpha off -fuzz 20% -fill white -opaque "$2" -fill black +opaque white \
     -format '%[fx:round(mean*w*h)]' info: 2>/dev/null
@@ -88,8 +129,42 @@ motion_art_counts() {
   echo "$(motion_art_count "$1" '#FF0000') $(motion_art_count "$1" '#0000FF') $(motion_art_count "$1" '#00C000')"
 }
 
+# The bar's now-playing cell off `bar room`, widened past the strip's own
+# inset so the cover is inside it wherever the strip starts.
+motion_art_bar_crop() {
+  local cell x w h
+  cell=$("$jq_bin" -r '[.[0].cells[] | select(.name == "nowPlaying")][0] | "\(.x) \(.width) \(.height)"' "$motion_art_room" 2>/dev/null)
+  read -r x w h <<< "$cell"
+  [ -n "$x" ] && [ "$x" != null ] || return 1
+  $convert_bin "$1" -crop "$((w + 64))x$((h + 64))+$x+0" +repage "$2"
+}
+
+motion_art_result() {
+  awk -v n="$1" '$1 == n { print $2 }' "$motion_art_results"
+}
+
 leg_motion_art_assert() {
   local i f r b g reds=0 blues=0 trail=""
+  [ -s "$motion_art_results" ] || fail "no motion-art checkpoints were written"
+  cat "$motion_art_results"
+
+  for i in $(seq 1 $motion_art_frames); do
+    f="$shot_dir/motion-art-bar-$i.png"
+    [ -f "$f" ] || fail "no screenshot produced at $f"
+    motion_art_bar_crop "$f" "$shot_dir/motion-art-bar-crop-$i.png" || fail "bar room reported no nowPlaying cell ($(cat "$motion_art_room"))"
+    read -r r b g <<< "$(motion_art_counts "$shot_dir/motion-art-bar-crop-$i.png")"
+    trail+=" $r/$b/$g"
+    [ $((r - b)) -gt 100 ] && reds=$((reds + 1))
+    [ $((b - r)) -gt 100 ] && blues=$((blues + 1))
+  done
+  echo "SMOKE_MOTION_ART_BAR_CROP $shot_dir/motion-art-bar-crop-1.png"
+  echo "SMOKE_MOTION_ART_BAR red/blue/green$trail"
+  [ "$reds" -gt 0 ] && [ "$blues" -gt 0 ] \
+    || fail "the bar's cover did not move between red and blue while playing (red/blue/green$trail)"
+  [ "$(motion_art_result decoders_bar)" = 1 ] || fail "the bar's cover wants one decoder, pgrep counted $(motion_art_result decoders_bar)"
+  [ "$(motion_art_result commits_bar)" -ge 6 ] || fail "the bar committed $(motion_art_result commits_bar) times in 3s of an animated cover"
+
+  reds=0 blues=0 trail=""
   for i in $(seq 1 $motion_art_frames); do
     f="$shot_dir/motion-art-play-$i.png"
     [ -f "$f" ] || fail "no screenshot produced at $f"
@@ -102,9 +177,9 @@ leg_motion_art_assert() {
   echo "SMOKE_MOTION_ART_PLAYING red/blue/green$trail"
   [ "$reds" -gt 0 ] && [ "$blues" -gt 0 ] \
     || fail "the cover did not move between red and blue frames while playing (red/blue/green$trail)"
-  [ "$(cat "$motion_art_pgrep_open_path" 2>/dev/null)" -ge 1 ] || fail "no decoder running while the panel showed the cover"
+  [ "$(motion_art_result decoders_open)" = 1 ] || fail "the panel and the bar share one decoder, pgrep counted $(motion_art_result decoders_open)"
 
-  local p1 p2
+  local p1 p2 c1 c2
   p1=$(motion_art_counts "$shot_dir/motion-art-paused-1.png")
   p2=$(motion_art_counts "$shot_dir/motion-art-paused-2.png")
   echo "SMOKE_MOTION_ART_PAUSED $p1 | $p2"
@@ -112,9 +187,25 @@ leg_motion_art_assert() {
   [ "$p1" = "$p2" ] || fail "the cover kept moving after the track paused ($p1 then $p2)"
   read -r r b g <<< "$p2"
   [ $((r - g)) -gt 4000 ] || [ $((b - g)) -gt 4000 ] || fail "the paused cover fell back to the static art ($p2)"
+  motion_art_bar_crop "$shot_dir/motion-art-paused-1.png" "$shot_dir/motion-art-paused-bar-1.png"
+  motion_art_bar_crop "$shot_dir/motion-art-paused-2.png" "$shot_dir/motion-art-paused-bar-2.png"
+  c1=$(motion_art_counts "$shot_dir/motion-art-paused-bar-1.png")
+  c2=$(motion_art_counts "$shot_dir/motion-art-paused-bar-2.png")
+  echo "SMOKE_MOTION_ART_PAUSED_BAR $c1 | $c2"
+  [ "$c1" = "$c2" ] || fail "the bar's cover kept moving after the track paused ($c1 then $c2)"
+  read -r r b g <<< "$c2"
+  [ $((r - g)) -gt 100 ] || [ $((b - g)) -gt 100 ] || fail "the bar's paused cover fell back to the static art ($c2)"
+  [ "$(motion_art_result commits_paused)" -le 2 ] || fail "the bar committed $(motion_art_result commits_paused) times in 2s over a paused cover"
 
-  local left
-  left=$(cat "$motion_art_pgrep_closed_path" 2>/dev/null)
-  echo "SMOKE_MOTION_ART_CLOSED decoders=$left"
-  [ "${left:-1}" -eq 0 ] || fail "a decoder was still running with the panel shut ($left)"
+  [ "$(motion_art_result decoders_closed)" = 1 ] || fail "with the panel shut the bar keeps one decoder, pgrep counted $(motion_art_result decoders_closed)"
+
+  echo "SMOKE_MOTION_ART_OFF decoders=$(motion_art_result decoders_off) commits=$(motion_art_result commits_off) panel_decoders=$(motion_art_result decoders_off_panel) panel_commits=$(motion_art_result commits_off_panel)"
+  [ "$(motion_art_result decoders_off)" = 0 ] || fail "a decoder was still running with animatedBarCover off and the panel shut ($(motion_art_result decoders_off))"
+  motion_art_bar_crop "$shot_dir/motion-art-off.png" "$shot_dir/motion-art-off-bar.png"
+  read -r r b g <<< "$(motion_art_counts "$shot_dir/motion-art-off-bar.png")"
+  echo "SMOKE_MOTION_ART_OFF_BAR $shot_dir/motion-art-off-bar.png $r/$b/$g"
+  [ $((g - r)) -gt 100 ] && [ $((g - b)) -gt 100 ] || fail "the bar's cover is not the static art with animatedBarCover off ($r/$b/$g)"
+  [ "$(motion_art_result commits_off)" -le 2 ] || fail "the bar committed $(motion_art_result commits_off) times in 3s with animatedBarCover off"
+  [ "$(motion_art_result decoders_off_panel)" = 1 ] || fail "the panel's own cover wants one decoder, pgrep counted $(motion_art_result decoders_off_panel)"
+  [ "$(motion_art_result commits_off_panel)" -le 2 ] || fail "the bar committed $(motion_art_result commits_off_panel) times in 3s under the panel's animated cover with animatedBarCover off"
 }

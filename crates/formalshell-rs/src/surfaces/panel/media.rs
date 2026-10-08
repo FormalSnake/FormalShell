@@ -56,7 +56,7 @@ impl Default for Media {
 
 impl Drop for Media {
     fn drop(&mut self) {
-        motion_art::want(None);
+        motion_art::want(motion_art::PANEL, None);
         visualizer::set_panel(false);
         audio::routing_wanted(0, false);
     }
@@ -248,7 +248,7 @@ impl Panel for Media {
 
     fn closed(&mut self) {
         self.open = false;
-        motion_art::want(None);
+        motion_art::want(motion_art::PANEL, None);
         visualizer::set_panel(false);
         audio::routing_wanted(0, false);
     }
@@ -275,7 +275,7 @@ impl Panel for Media {
             visualizer::set_panel(enabled);
         }
         let Some(a) = m.active() else {
-            motion_art::want(None);
+            motion_art::want(motion_art::PANEL, None);
             self.sections.borrow_mut().clear();
             let radio = w::icon_text_button("radio", "Radio").variant(crate::ui::Variant::Outline).stop("transport").on("radio");
             return w::column(s.section_gap, vec![w::row(0.0, vec![w::section_label(s, "No player", None, true), w::spacer(), radio]).fill()]);
@@ -309,10 +309,10 @@ impl Panel for Media {
                 && !a.artist.is_empty()
                 && !a.album.is_empty();
             motion = animated.then(|| motion_art::Want { artist: a.artist.clone(), album: a.album.clone(), size: px, radius, playing: a.playing });
-            let frame = motion.as_ref().and_then(|w| m.motion.as_ref().filter(|(k, _)| *k == w.key()).map(|(_, b)| b.clone()));
+            let frame = motion.as_ref().and_then(|w| m.motion(&w.key(), px));
             info.push(w::cover(frame.or_else(|| m.cover(&a.art_url, px, radius)), slot));
         }
-        motion_art::want(motion);
+        motion_art::want(motion_art::PANEL, motion);
         let mut words = vec![w::label(if a.title.is_empty() { "Unknown title".to_owned() } else { a.title.clone() }).size(Type::Title).elide()];
         if !a.artist.is_empty() {
             words.push(w::text(a.artist.clone()).elide());

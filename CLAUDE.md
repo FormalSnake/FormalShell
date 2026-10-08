@@ -486,12 +486,16 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   `picture` rect against both frames rendered by ffmpeg to PNG.
 - `monitor.sh` `--monitor`: the monitor bar cell, its panel and the
   launcher's monitor view, against this machine's own `/proc` and `/sys`.
-- `motion_art.sh` `--motion-art`: the media panel's animated Apple Music
-  cover with no network, its mp4 already in the lookup's cache and flipping
-  red and blue every half second over a flat green static art: frames taken
-  while playing carry both colours (an ffmpeg child decoding), two frames
-  after a pause carry the same one, and no decoder survives the panel
-  closing.
+- `motion_art.sh` `--motion-art`: the animated Apple Music cover in the
+  bar's now-playing cell and the media panel with no network, its mp4
+  already in the lookup's cache and flipping red and blue every half second
+  over a flat green static art: crops of the bar cell taken while playing
+  carry both colours off one ffmpeg child, the panel's frames too with that
+  one child shared, two frames after a pause carry the same one in both
+  slots with the bar not committing, the bar alone keeps its decoder once
+  the panel closes, and `media.animatedBarCover: false` written under the
+  running shell leaves no decoder, the static art in the bar and the bar not
+  committing, even with the panel animating over it.
 - `nix_run.sh` `--nix-run`: a menu.jsonc row carrying `@ipc:nix.run:hello`
   run through `menu activate`, read off `hyprctl clients` and `pgrep`: a
   `formalshell-console.run` window running `nix run nixpkgs#hello; read`,
