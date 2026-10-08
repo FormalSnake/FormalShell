@@ -8,7 +8,7 @@
 # At full speed the card is on the line for about as long as one screencopy
 # takes, so the open runs at a tenth of its speed (`debug motionScale`, the
 # same instrument --join uses) and is photographed frame by frame, back to
-# back, with the wall clock stamped after each capture. Four claims, plus the
+# back, with the wall clock stamped after each capture. Five claims, plus the
 # number the whole change was made against:
 #
 #   out of the line   an early frame carries the card's own fill directly
@@ -24,7 +24,10 @@
 #                     top border of its own and a row of desktop-through-scrim
 #                     between the line and it, and the bar's band dimmed like
 #                     the rest of the output.
-#   the settle        the first captured frame byte-equal to the rest frame,
+#   the scrim         read off a `debug dump` at rest: every scrim pixel's own
+#                     alpha at or under the launcher namespace's
+#                     `ignore_alpha`, so the compositor never blurs behind it.
+#   the settle       the first captured frame byte-equal to the rest frame,
 #                     stamped against the summon that started it and divided
 #                     by the motion scale. Printed before anything is
 #                     asserted: it is the figure the owner's "don't make the
@@ -59,6 +62,7 @@ menu_emerge_summon_path="$shot_dir/menu-emerge-summon.txt"
 menu_emerge_close_path="$shot_dir/menu-emerge-close.txt"
 menu_emerge_status_path="$shot_dir/menu-emerge-status.json"
 menu_emerge_dump_path="$shot_dir/menu-emerge-dump.json"
+menu_emerge_rest_dump_path="$shot_dir/menu-emerge-rest-dump.json"
 menu_emerge_t0_path="$shot_dir/menu-emerge-t0.txt"
 menu_emerge_stamp_path="$shot_dir/menu-emerge-stamps.txt"
 
@@ -137,6 +141,7 @@ done
 sleep 5
 "$grim_bin" "$menu_emerge_rest_path" > /dev/null 2>&1
 call menu status > "$menu_emerge_status_path" 2>&1
+call debug dump > "$menu_emerge_rest_dump_path" 2>&1
 call menu close > "$menu_emerge_close_path" 2>&1
 call debug motionScale 100 > /dev/null 2>&1
 EOF
@@ -234,6 +239,27 @@ leg_menu_emerge_assert() {
     fail "the launcher did not settle back at the root level, got: $(cat "$menu_emerge_status_path" 2>/dev/null)"
   fi
   cat "$menu_emerge_status_path"; echo
+
+  # --- The scrim under the blur mark ------------------------------------
+  #
+  # Hyprland's `ignore_alpha` reads a buffer's own alpha, never the
+  # wp_alpha_modifier multiplier over it, and this rig runs with blur off, so
+  # no frame here can show a scrim being blurred. The numbers can: every scrim
+  # pixel of the launcher's namespace at or under the mark the shipped Lua
+  # gives that namespace, and at rest each one faded fully in, the bar's band
+  # included.
+  local mark scrims
+  mark=$(awk '/namespace = "formalshell:menu"/ { on = 1 } on && /ignore_alpha/ { gsub(/[^0-9.]/, "", $3); print $3; exit }' \
+    docs/examples/hyprland/formalshell.lua)
+  [ -n "$mark" ] || fail "no ignore_alpha for formalshell:menu in docs/examples/hyprland/formalshell.lua"
+  scrims=$("$jq_bin" -c '[.modals[] | select(.namespace == "formalshell:menu") | .scrims[]]' "$menu_emerge_rest_dump_path" 2>/dev/null)
+  [ -n "$scrims" ] && [ "$scrims" != "[]" ] || fail \
+    "no formalshell:menu scrim in the dump taken at rest: $(head -c 400 "$menu_emerge_rest_dump_path" 2>/dev/null)"
+  "$jq_bin" -e --argjson mark "$mark" 'all(.[]; .alpha > 0 and .alpha <= $mark)' <<< "$scrims" > /dev/null || fail \
+    "a scrim pixel is over the namespace's ignore_alpha $mark, so Hyprland blurs the whole output behind it: $scrims"
+  "$jq_bin" -e 'all(.[]; .fade > 0.999)' <<< "$scrims" > /dev/null || fail \
+    "a scrim is not faded fully in at rest, the bar's band included: $scrims"
+  echo "SMOKE_MENU_EMERGE_SCRIM ok under ignore_alpha $mark: $scrims"
 
   # --- Where the card rests ---------------------------------------------
   #

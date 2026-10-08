@@ -63,6 +63,15 @@ fn dump(app: &mut App, _: &[Value]) -> Value {
         None => serde_json::Value::Null,
     };
     let line: Vec<serde_json::Value> = app.bar.line_rects().iter().map(rect).collect();
+    let modals: Vec<serde_json::Value> = app
+        .modals()
+        .iter()
+        .map(|m| {
+            let scrims: Vec<serde_json::Value> =
+                m.scrims().map(|(name, alpha, fade)| json!({"name": name, "alpha": alpha, "fade": fade})).collect();
+            json!({"namespace": m.namespace, "open": m.open, "scrims": scrims})
+        })
+        .collect();
     let phone = &app.store.info.iphone;
     let dump = json!({
         "compositor": "hyprland",
@@ -88,6 +97,7 @@ fn dump(app: &mut App, _: &[Value]) -> Value {
         },
         "bar": [{"screen": screen, "edge": edge.as_str(), "line": line, "paint": app.bar.paint_state(&app.store)}],
         "join": join,
+        "modals": modals,
         "frame": app.bar.frame_state(),
         "theme": {
             "radius": number(theme.radius),

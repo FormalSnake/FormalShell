@@ -37,8 +37,9 @@ pub struct Modal {
     pub surface: Surface,
     band: Option<PixelSurface>,
     dim: PixelSurface,
-    /// The `scrim` role's fill alpha over its plain black.
-    tone: f64,
+    /// The layer namespace all three surfaces share, which the
+    /// compositor's blur rule matches on.
+    pub namespace: &'static str,
     pub open: bool,
     region: Option<IRect>,
     /// The owner's content, when it draws on a layer of its own rather
@@ -54,6 +55,7 @@ impl Modal {
         surface: Surface,
         band: Option<PixelSurface>,
         dim: PixelSurface,
+        namespace: &'static str,
         output: (f64, f64),
         line_at: f64,
         ends: Ends,
@@ -65,8 +67,7 @@ impl Modal {
         let mut card = Card::build(theme, "card", Edge::Top, (output.0 as i32, output.1 as i32), line_at, rest, scale, cast, true);
         card.ends = ends;
         card.deform_amount = deform_amount;
-        let tone = f64::from(theme.box_style("scrim", None).fill.a);
-        Self { card, surface, band, dim, tone, open: true, region: None, layer: None }
+        Self { card, surface, band, dim, namespace, open: true, region: None, layer: None }
     }
 
     /// Moves the card's resting rect; an idle card lands there at once.
@@ -128,9 +129,9 @@ impl Modal {
         let attach = self.card.attach(now);
         let moving = self.card.animating(now);
         if let Some(b) = &mut self.band {
-            b.present(self.tone * pose * (1.0 - attach), moving, qh);
+            b.present(pose * (1.0 - attach), moving, qh);
         }
-        self.dim.present(self.tone * pose, moving, qh);
+        self.dim.present(pose, moving, qh);
     }
 
     pub fn part(&self, surface: &WlSurface) -> Option<Part> {
@@ -182,6 +183,11 @@ impl Modal {
             }
             Part::Dim => self.dim.configure(width, height),
         }
+    }
+
+    /// The scrim's surfaces as (name, pixel alpha, fade), for `debug dump`.
+    pub fn scrims(&self) -> impl Iterator<Item = (&'static str, f64, f64)> + '_ {
+        self.band.iter().chain(std::iter::once(&self.dim)).map(|s| (s.name, s.alpha, s.fade()))
     }
 
     pub fn on_card(&self, x: f64, y: f64) -> bool {

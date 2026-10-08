@@ -29,7 +29,7 @@ const NAMESPACE: &str = "formalshell:plugin-overlay";
 const DEFORM_AMOUNT: f64 = 0.15;
 
 pub struct Window {
-    modal: Modal,
+    pub(super) modal: Modal,
     ui: Ui,
     key: &'static str,
     id: String,

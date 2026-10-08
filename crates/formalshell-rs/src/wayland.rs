@@ -480,7 +480,7 @@ impl App {
                 let zone = if e == edge { t } else { ft };
                 let size = if e.is_vertical() { (1, 0) } else { (0, 1) };
                 let ls = self.overlay("formalshell:frame-zone", Layer::Overlay, edge_anchor(e), size, zone);
-                let ps = PixelSurface::new("frame-zone", ls, &self.pixels, &self.qh, self.started);
+                let ps = PixelSurface::new("frame-zone", ls, 0.0, &self.pixels, &self.qh, self.started);
                 self.zones.push((e, ps));
             }
         }
@@ -649,6 +649,16 @@ impl App {
                 s.set_open(open, &self.bar.kit, now);
             }
         }
+    }
+
+    /// Every modal card on screen: the launcher, the radio atlas, the
+    /// polkit dialog and a plugin's overlay.
+    pub fn modals(&self) -> Vec<&crate::surfaces::modal::Modal> {
+        let launch = self.launch.as_ref().map(|w| &w.shown.modal);
+        let atlas = self.atlas.win.as_ref().map(|w| &w.shown.modal);
+        let polkit = self.polkit.as_ref().map(|d| &d.modal);
+        let overlay = self.plugin_overlay.as_ref().map(|w| &w.modal);
+        [launch, atlas, polkit, overlay].into_iter().flatten().collect()
     }
 
     pub fn debug_join(&self) -> Option<(i32, i32)> {
@@ -1173,7 +1183,7 @@ impl App {
         }
         let scrim = Scrim::new(&self.store.theme.theme, self.motion_scale);
         let layer = self.overlay("formalshell:scrim", Layer::Top, Anchor::all(), (0, 0), -1);
-        let surface = PixelSurface::new("scrim", layer, &self.pixels, &self.qh, self.started);
+        let surface = PixelSurface::new("scrim", layer, scrim.tone(), &self.pixels, &self.qh, self.started);
         self.scrim = Some((scrim, surface));
     }
 
@@ -1358,7 +1368,7 @@ impl App {
             z.present(0.0, false, &qh);
         }
         if let Some((scrim, surface)) = &mut self.scrim {
-            surface.present(scrim.alpha(now), scrim.animating(now), &qh);
+            surface.present(scrim.fade(now), scrim.animating(now), &qh);
         }
         self.present_picker(now);
         self.present_polkit(now);

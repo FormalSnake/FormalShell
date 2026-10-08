@@ -465,12 +465,19 @@ impl<R: Role> Surface<R> {
 /// stretched over its whole size by `wp_viewporter` and faded by
 /// `wp_alpha_modifier_v1`, so the compositor does all of the drawing and a
 /// step of a fade is one multiplier and one commit.
+///
+/// The pixel carries the surface's own alpha and the multiplier only the
+/// fade: Hyprland's `ignore_alpha` reads the buffer's alpha, never the
+/// modifier's, so an opaque pixel faded to 0.5 is still blurred behind, on
+/// every frame and over the whole output for a scrim.
 pub struct PixelSurface {
     pub name: &'static str,
     pub layer: LayerSurface,
     viewport: WpViewport,
     fade: WpAlphaModifierSurfaceV1,
     buffer: WlBuffer,
+    /// The pixel's own alpha, what the compositor's `ignore_alpha` reads.
+    pub alpha: f64,
     size: Option<(i32, i32)>,
     /// A size the next commit has to carry.
     resized: bool,
@@ -483,18 +490,21 @@ pub struct PixelSurface {
 }
 
 impl PixelSurface {
-    pub fn new(name: &'static str, layer: LayerSurface, pixels: &Pixels, qh: &QueueHandle<App>, started: Instant) -> Self {
+    pub fn new(name: &'static str, layer: LayerSurface, alpha: f64, pixels: &Pixels, qh: &QueueHandle<App>, started: Instant) -> Self {
         let surface = layer.wl_surface();
         let viewport = pixels.viewporter.get_viewport(surface, qh, Ignore);
         let fade = pixels.alpha.get_surface(surface, qh, Ignore);
-        // Opaque black: the scrim's own alpha is all in the multiplier.
-        let buffer = pixels.single_pixel.create_u32_rgba_buffer(0, 0, 0, u32::MAX, qh, Ignore);
+        let alpha = alpha.clamp(0.0, 1.0);
+        // Premultiplied black is zero in every channel but the alpha.
+        let a = (alpha * f64::from(u32::MAX)).round() as u32;
+        let buffer = pixels.single_pixel.create_u32_rgba_buffer(0, 0, 0, a, qh, Ignore);
         Self {
             name,
             layer,
             viewport,
             fade,
             buffer,
+            alpha,
             size: None,
             resized: false,
             multiplier: None,
@@ -513,14 +523,14 @@ impl PixelSurface {
         }
     }
 
-    /// `alpha` is the surface's opacity, 0 to 1.
-    pub fn present(&mut self, alpha: f64, animating: bool, qh: &QueueHandle<App>) {
+    /// `fade` multiplies the pixel's own alpha, 0 to 1.
+    pub fn present(&mut self, fade: f64, animating: bool, qh: &QueueHandle<App>) {
         let Some((width, height)) = self.size else { return };
         if self.frame_pending {
             return;
         }
         let request = animating || !self.mapped;
-        let multiplier = (alpha.clamp(0.0, 1.0) * u32::MAX as f64).round() as u32;
+        let multiplier = (fade.clamp(0.0, 1.0) * u32::MAX as f64).round() as u32;
         let surface = self.layer.wl_surface();
         if self.multiplier == Some(multiplier) && !self.resized {
             if request && self.commits > 0 {
@@ -554,7 +564,7 @@ impl PixelSurface {
             self.commits,
             self.started.elapsed().as_millis(),
             t0.elapsed().as_micros(),
-            alpha,
+            self.alpha * fade,
             self.callbacks,
             request as u8,
         ));
@@ -562,6 +572,11 @@ impl PixelSurface {
 
     pub fn report(&self) -> String {
         format!("{}: commits={} frame_callbacks={}", self.name, self.commits, self.callbacks)
+    }
+
+    /// The multiplier last committed, 0 to 1.
+    pub fn fade(&self) -> f64 {
+        self.multiplier.map_or(0.0, |m| f64::from(m) / f64::from(u32::MAX))
     }
 }
 

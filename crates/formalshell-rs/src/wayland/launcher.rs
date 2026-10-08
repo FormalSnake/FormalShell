@@ -67,9 +67,12 @@ impl App {
         let framed = self.bar.framed();
         let ft = if framed { self.bar.frame_thickness() } else { 0.0 };
         let ends = Ends { along: output.0, inset_start: ft, inset_end: ft, radius: if framed { theme.frame_radius } else { 0.0 } };
+        // The scrim's alpha rides in its pixel, under the modal namespaces'
+        // `ignore_alpha`, so it only darkens and the card alone is blurred.
+        let tone = f64::from(theme.box_style("scrim", None).fill.a);
         let band = (inset > 0.0).then(|| {
             let ls = self.overlay(namespace, layer, Anchor::TOP | Anchor::LEFT | Anchor::RIGHT, (0, inset as u32), -1);
-            PixelSurface::new(names[1], ls, &self.pixels, &self.qh, self.started)
+            PixelSurface::new(names[1], ls, tone, &self.pixels, &self.qh, self.started)
         });
         let ls = self.layer_shell.create_layer_surface(&self.qh, self.compositor.create_surface(&self.qh), layer, Some(namespace), None);
         ls.set_anchor(Anchor::all());
@@ -81,13 +84,13 @@ impl App {
             ls.set_input_region(Some(region.wl_region()));
         }
         ls.commit();
-        let dim = PixelSurface::new(names[2], ls, &self.pixels, &self.qh, self.started);
+        let dim = PixelSurface::new(names[2], ls, tone, &self.pixels, &self.qh, self.started);
         let card = self.overlay(namespace, layer, Anchor::all(), (0, 0), -1);
         card.set_keyboard_interactivity(KeyboardInteractivity::Exclusive);
         card.commit();
         let mut surface = Surface::new(names[0], card, &self.shm, self.started);
         surface.wait_map = true;
-        Modal::new(theme, surface, band, dim, output, inset, ends, self.motion_scale, self.cast, deform_amount)
+        Modal::new(theme, surface, band, dim, namespace, output, inset, ends, self.motion_scale, self.cast, deform_amount)
     }
 
     /// The launcher's window gone, its card's pool, buffers and canvas kept

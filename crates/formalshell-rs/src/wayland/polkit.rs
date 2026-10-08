@@ -27,7 +27,7 @@ const NAMESPACE: &str = "formalshell:polkit";
 const DEFORM_AMOUNT: f64 = 0.15;
 
 pub struct Dialog {
-    modal: Modal,
+    pub(super) modal: Modal,
     ui: Ui,
     avatar_nodes: Vec<NodeId>,
     /// The identity's picture, when it is this session's own account.

@@ -633,10 +633,15 @@ impl Scrim {
         !self.open && !self.pose.running(now)
     }
 
-    /// The `scrim` role's opacity on this frame.
-    pub fn alpha(&self, now: Instant) -> f64 {
+    /// The `scrim` role's fill alpha, which its pixel carries.
+    pub fn tone(&self) -> f64 {
+        self.alpha
+    }
+
+    /// How far in the scrim is on this frame, over its own alpha.
+    pub fn fade(&self, now: Instant) -> f64 {
         // The spatial pose overshoots both ends; an opacity may not.
-        self.alpha * self.pose.value(now).clamp(0.0, 1.0)
+        self.pose.value(now).clamp(0.0, 1.0)
     }
 }
 
