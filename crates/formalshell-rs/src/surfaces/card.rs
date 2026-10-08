@@ -355,6 +355,9 @@ impl Card {
     }
 
     fn tick_popover(&mut self, now: Instant) {
+        // A popover never hangs off its line. `attach` starts at 1 for the
+        // joined habit, and the scrim's band over the bar fades by 1 - attach.
+        self.attach.jump(0.0);
         let pose = if self.bypass { if self.open { 1.0 } else { 0.0 } } else { self.progress.value(now) };
         let alpha = pose.clamp(0.0, 1.0) as f32 * self.frame_alpha;
         let shown = self.shown(now) && alpha > 0.0;

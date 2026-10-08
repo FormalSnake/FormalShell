@@ -8,7 +8,7 @@
 # At full speed the card is on the line for about as long as one screencopy
 # takes, so the open runs at a tenth of its speed (`debug motionScale`, the
 # same instrument --join uses) and is photographed frame by frame, back to
-# back, with the wall clock stamped after each capture. Five claims, plus the
+# back, with the wall clock stamped after each capture. Six claims, plus the
 # number the whole change was made against:
 #
 #   out of the line   an early frame carries the card's own fill directly
@@ -27,6 +27,9 @@
 #   the scrim         read off a `debug dump` at rest: every scrim pixel's own
 #                     alpha at or under the launcher namespace's
 #                     `ignore_alpha`, so the compositor never blurs behind it.
+#   the dim           the rest frame's bar band and desktop each at 1 - alpha
+#                     of their closed level: dimmed, not untouched, not black.
+#                     Read on every theme, `--pantheon` included.
 #   the settle       the first captured frame byte-equal to the rest frame,
 #                     stamped against the summon that started it and divided
 #                     by the motion scale. Printed before anything is
@@ -260,6 +263,29 @@ leg_menu_emerge_assert() {
   "$jq_bin" -e 'all(.[]; .fade > 0.999)' <<< "$scrims" > /dev/null || fail \
     "a scrim is not faded fully in at rest, the bar's band included: $scrims"
   echo "SMOKE_MENU_EMERGE_SCRIM ok under ignore_alpha $mark: $scrims"
+
+  # --- The dim at rest --------------------------------------------------
+  #
+  # Black at the scrim's alpha over anything leaves it at 1 - alpha of what
+  # it was, so the bar's band and the desktop each read that fraction of
+  # their closed level in the rest frame: not untouched (a band that never
+  # faded in, which a theme whose card never hangs off the line once left
+  # the bar at) and not black.
+  local tone want b_closed b_rest d_closed d_rest pair who box c r
+  tone=$("$jq_bin" -r 'map(.alpha) | max' <<< "$scrims")
+  want=$(awk -v a="$tone" 'BEGIN { print 1 - a }')
+  b_closed=$(menu_emerge_level "$menu_emerge_closed_path" "$menu_emerge_bar_box")
+  b_rest=$(menu_emerge_level "$menu_emerge_rest_path" "$menu_emerge_bar_box")
+  d_closed=$(menu_emerge_level "$menu_emerge_closed_path" "$menu_emerge_desk_box")
+  d_rest=$(menu_emerge_level "$menu_emerge_rest_path" "$menu_emerge_desk_box")
+  for pair in "bar $menu_emerge_bar_box $b_closed $b_rest" "desktop $menu_emerge_desk_box $d_closed $d_rest"; do
+    read -r who box c r <<< "$pair"
+    awk -v c="$c" 'BEGIN { exit !(c > 0.03) }' || fail \
+      "the $who at $box reads $c with the launcher closed, too dark to tell a dim from black"
+    awk -v c="$c" -v r="$r" -v w="$want" 'BEGIN { q = r / c; exit !(q > w - 0.12 && q < w + 0.12) }' || fail \
+      "the $who at $box reads $r at rest against $c closed, not $want of it: the scrim over it is missing or wrong"
+  done
+  echo "SMOKE_MENU_EMERGE_DIM ok bar $b_rest of $b_closed, desktop $d_rest of $d_closed, want $want"
 
   # --- Where the card rests ---------------------------------------------
   #
