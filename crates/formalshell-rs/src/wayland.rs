@@ -420,6 +420,10 @@ impl App {
 
     /// While a focused fullscreen window covers the bar's output the bar,
     /// its frame zones and its cards leave the layers (`fullscreen.hideChrome`).
+    pub(crate) fn sync_herdr(&self) {
+        crate::services::herdr::shown(!self.bar.hidden && !self.saver.active && !self.lock.locked);
+    }
+
     fn chrome_hidden(&self) -> bool {
         let hide = self.store.config.bool("fullscreen.hideChrome").unwrap_or(true);
         hide && self.store.hyprland.compositor.fullscreen_outputs.contains(&self.bar.output)
@@ -431,6 +435,7 @@ impl App {
     fn place_chrome(&mut self) {
         let hidden = self.chrome_hidden();
         self.bar.hidden = hidden;
+        self.sync_herdr();
         if hidden {
             if self.bar_surface.take().is_some() {
                 self.log("bar unmapped under fullscreen");

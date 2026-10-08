@@ -467,7 +467,7 @@ fn poll_command_remote_never_waits_on_stdin_or_bashrc() {
 fn poll_command_reports_hostname_and_workspaces() {
     let local = &poll_command(&remote("", ""))[2];
     assert!(local.contains("echo \"hostname $(uname -n)\""));
-    assert!(local.contains("herdr workspace list 2>/dev/null;"));
+    assert!(local.contains("w=$(herdr workspace list 2>/dev/null)"));
     let remote_cmd = poll_command(&remote("mac", "work"));
     assert!(remote_cmd[remote_cmd.len() - 1].contains("workspace list"));
 }

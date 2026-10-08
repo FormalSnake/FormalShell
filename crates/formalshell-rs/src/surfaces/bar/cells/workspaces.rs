@@ -381,9 +381,12 @@ impl Cell for Workspaces {
                 pid: w.pid,
             })
             .collect();
-        if agents {
-            herdr::windows(c.windows.iter().map(|w| herdr::Window { id: w.id.clone(), pid: w.pid, title: w.title.clone() }).collect());
-        }
+        let polled = if agents {
+            c.windows.iter().map(|w| herdr::Window { id: w.id.clone(), pid: w.pid, title: w.title.clone() }).collect()
+        } else {
+            Vec::new()
+        };
+        herdr::windows(polled);
 
         let vertical = env.edge.is_vertical();
         let changed = slots != self.slots

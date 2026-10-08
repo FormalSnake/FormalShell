@@ -55,6 +55,16 @@ impl State {
 }
 
 static WINDOWS: OnceLock<async_channel::Sender<Vec<Window>>> = OnceLock::new();
+static SHOWN: OnceLock<async_channel::Sender<bool>> = OnceLock::new();
+
+/// Whether a Spaces chip is on screen at all: false under a fullscreen
+/// window, the screensaver or the lock. Nothing polls while no badge can be
+/// seen.
+pub fn shown(on: bool) {
+    if let Some(tx) = SHOWN.get() {
+        let _ = tx.try_send(on);
+    }
+}
 
 /// The windows the Spaces cell shows; called whenever they change.
 pub fn windows(list: Vec<Window>) {
@@ -67,6 +77,7 @@ enum Event {
     Windows(Vec<Window>),
     Walk,
     Line(String, String),
+    Shown(bool),
 }
 
 struct Poller {
@@ -83,6 +94,7 @@ struct Service {
     labels_by_key: HashMap<String, Vec<String>>,
     state: State,
     pollers: HashMap<String, Poller>,
+    hidden: bool,
 }
 
 impl Service {
@@ -109,7 +121,8 @@ impl Service {
     /// One poller per client key the walk found; a key no window resolves to
     /// any more loses its poller and its state.
     fn reconcile(&mut self, ctx: &Ctx, tx: &async_channel::Sender<Event>, clients: &BTreeMap<String, Client>) {
-        let gone: Vec<String> = self.pollers.keys().filter(|k| !clients.contains_key(*k)).cloned().collect();
+        let held: std::collections::BTreeSet<&String> = self.pollers.keys().chain(self.state.by_key.keys()).collect();
+        let gone: Vec<String> = held.into_iter().filter(|k| !clients.contains_key(*k)).cloned().collect();
         for key in gone {
             self.pollers.remove(&key);
             self.state.by_key.remove(&key);
@@ -118,7 +131,7 @@ impl Service {
             self.titles_by_key.remove(&key);
         }
         for (key, client) in clients {
-            if self.pollers.contains_key(key) {
+            if self.hidden || self.pollers.contains_key(key) {
                 continue;
             }
             let (stop, stopped) = async_channel::bounded::<()>(1);
@@ -222,6 +235,16 @@ pub async fn run(ctx: Ctx) {
             }
         }
     });
+    let (stx, srx) = async_channel::unbounded();
+    let _ = SHOWN.set(stx);
+    let forward = tx.clone();
+    ctx.spawn(async move {
+        while let Ok(on) = srx.recv().await {
+            if forward.send(Event::Shown(on)).await.is_err() {
+                return;
+            }
+        }
+    });
 
     let mut service = Service::default();
     let mut walk_at: Option<Instant> = None;
@@ -245,7 +268,9 @@ pub async fn run(ctx: Ctx) {
                 }
                 service.windows = list;
                 service.recompute(&ctx);
-                walk_at = Some(Instant::now() + DEBOUNCE);
+                if !service.hidden {
+                    walk_at = Some(Instant::now() + DEBOUNCE);
+                }
             }
             Event::Walk => {
                 walk_at = None;
@@ -258,6 +283,17 @@ pub async fn run(ctx: Ctx) {
                 service.publish(&ctx);
             }
             Event::Line(key, line) => service.line(&ctx, &key, &line),
+            // Hidden, the pollers stop and the badges keep their last state;
+            // shown again, a walk starts them and their first round refreshes.
+            Event::Shown(on) if on == !service.hidden => {}
+            Event::Shown(on) => {
+                service.hidden = !on;
+                if on {
+                    walk_at = Some(Instant::now());
+                } else {
+                    service.pollers.clear();
+                }
+            }
         }
     }
 }

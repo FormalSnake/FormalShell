@@ -236,6 +236,7 @@ impl App {
             self.watch_lock_idle();
         }
         self.lock.locked = true;
+        self.sync_herdr();
         self.lock.dirty = true;
         "ok".into()
     }
@@ -409,6 +410,7 @@ impl App {
         }
         self.hot_corner_action_ended("lock");
         self.lock.locked = false;
+        self.sync_herdr();
         self.lock.secure = false;
         self.lock.password = field();
         self.lock.error.clear();
@@ -723,6 +725,7 @@ impl SessionLockHandler for App {
         self.lock.session = None;
         self.lock.outs.clear();
         self.lock.locked = false;
+        self.sync_herdr();
         self.lock.secure = false;
     }
 

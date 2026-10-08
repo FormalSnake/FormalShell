@@ -363,9 +363,13 @@ fn herdr_args(session: &str) -> String {
 /// as the `null` that clears a key's state.
 fn loop_body(herdr: &str, session: &str) -> String {
     let args = herdr_args(session);
+    // Each round goes out as one write, so the shell wakes once per round
+    // rather than once per line herdr prints.
     format!(
-        "echo \"hostname $(uname -n)\"; while :; do {herdr}{args} agent list 2>/dev/null || echo null; \
-         {herdr}{args} workspace list 2>/dev/null; sleep {POLL_INTERVAL_SECONDS}; done"
+        "echo \"hostname $(uname -n)\"; while :; do a=$({herdr}{args} agent list 2>/dev/null || echo null); \
+         w=$({herdr}{args} workspace list 2>/dev/null); \
+         if [ -n \"$w\" ]; then printf '%s\\n%s\\n' \"$a\" \"$w\"; else printf '%s\\n' \"$a\"; fi; \
+         sleep {POLL_INTERVAL_SECONDS}; done"
     )
 }
 

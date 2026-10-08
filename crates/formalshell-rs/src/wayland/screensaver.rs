@@ -251,6 +251,7 @@ impl App {
             return;
         }
         self.saver.active = active;
+        self.sync_herdr();
         self.saver_cancel_hold();
         let now = Instant::now();
         let reveal = self.saver_reveal_ms();
