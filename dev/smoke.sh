@@ -360,11 +360,11 @@ if [ -z "$wayland_display" ]; then
   fi
 fi
 
-# The nested Hyprland imports its own environment into the systemd user
+# A nested Hyprland would import its own environment into the systemd user
 # manager it shares with the host session (PATH, XDG_DATA_DIRS and the
-# instance signature among them), which left e1504g's live session pointing
-# its next service starts at the rig's temp dirs (2026-10-06). Every name it
-# imports is put back as it was, or unset if it was not there.
+# instance signature among them); HYPRLAND_NO_SD_VARS in session_env stops
+# that. Every name it would import is still put back as it was at exit, or
+# unset if it was not there, for anything else in the run that sets one.
 host_env_names="DISPLAY WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE XDG_CURRENT_DESKTOP QT_QPA_PLATFORMTHEME PATH XDG_DATA_DIRS"
 host_env_before=$(systemctl --user show-environment 2>/dev/null || true)
 restore_host_env() {
@@ -718,7 +718,13 @@ $fixture_cleanup
 EOF
 hypr_exec_once "bash $shot_script" >> "$cfg"
 
+# HYPRLAND_NO_SD_VARS stops the nested Hyprland running `systemctl --user
+# import-environment` into the user manager it shares with the host
+# session. The restore below only runs at exit, and a home-manager
+# activation during a run restarted e1504g's live formalshell.service onto
+# the nested display, which took it down with the session (2026-10-09).
 session_env=(
+  "HYPRLAND_NO_SD_VARS=1"
   "HOME=$iso_home"
   "XDG_CONFIG_HOME=$iso_home/.config"
   "XDG_STATE_HOME=$iso_home/.local/state"
