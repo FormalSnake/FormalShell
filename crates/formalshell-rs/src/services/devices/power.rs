@@ -122,7 +122,8 @@ pub async fn run(ctx: Ctx) {
         display: Some(snap.display),
         on_battery: snap.on_battery,
     };
-    publish(seen.power());
+    let mut shown = seen.power();
+    publish(shown.clone());
     let Ok(changes) = changes else { return };
     let mut changes = std::pin::pin!(changes);
     while let Some(change) = changes.next().await {
@@ -136,7 +137,12 @@ pub async fn run(ctx: Ctx) {
             Change::Display(d) => seen.display = Some(d),
             Change::OnBattery(on) => seen.on_battery = on,
         }
-        publish(seen.power());
+        // A signal for a property the view leaves out reaches no one.
+        let power = seen.power();
+        if power != shown {
+            shown = power;
+            publish(shown.clone());
+        }
     }
 }
 

@@ -1,8 +1,10 @@
+use std::collections::HashMap;
+
 use futures_lite::{Stream, StreamExt, stream};
 use zbus::fdo::PropertiesProxy;
 use zbus::message::Type;
 use zbus::names::InterfaceName;
-use zbus::zvariant::OwnedObjectPath;
+use zbus::zvariant::{OwnedObjectPath, OwnedValue};
 use zbus::{Connection, MatchRule, MessageStream, proxy};
 
 use crate::device::Device;
@@ -68,7 +70,7 @@ impl UPower {
         let mut out = Vec::new();
         for path in self.root.enumerate_devices().await? {
             // A device can vanish between the enumerate and the read.
-            if let Ok(device) = read_device(&self.conn, path).await {
+            if let Ok(device) = read_device(&self.conn, &mut Props::new(), path).await {
                 out.push(device);
             }
         }
@@ -76,7 +78,7 @@ impl UPower {
     }
 
     pub async fn display_device(&self) -> zbus::Result<Device> {
-        read_device(&self.conn, self.root.get_display_device().await?).await
+        read_device(&self.conn, &mut Props::new(), self.root.get_display_device().await?).await
     }
 
     pub async fn on_battery(&self) -> zbus::Result<bool> {
@@ -94,7 +96,8 @@ impl UPower {
     /// Device added and removed, `OnBattery`, and every property change of any
     /// device, until the connection closes. The match rule is installed
     /// before this resolves, so nothing between the call and the first poll
-    /// is lost.
+    /// is lost. A device's properties are read whole once; after that each
+    /// `PropertiesChanged` is applied from its own payload, with no call back.
     pub async fn changes(&self) -> zbus::Result<impl Stream<Item = Change> + use<>> {
         let rule = MatchRule::builder()
             .msg_type(Type::Signal)
@@ -102,37 +105,53 @@ impl UPower {
             .build();
         let messages = MessageStream::for_match_rule(rule, &self.conn, None).await?;
         let conn = self.conn.clone();
-        Ok(stream::unfold((conn, messages), |(conn, mut messages)| async move {
+        Ok(stream::unfold((conn, messages, Props::new()), |(conn, mut messages, mut known)| async move {
             loop {
                 let message = messages.next().await?.ok()?;
-                if let Some(change) = classify(&conn, &message).await {
-                    return Some((change, (conn, messages)));
+                if let Some(change) = classify(&conn, &mut known, &message).await {
+                    return Some((change, (conn, messages, known)));
                 }
             }
         }))
     }
 }
 
-async fn classify(conn: &Connection, message: &zbus::Message) -> Option<Change> {
+/// Every device's properties as last read or changed, by path.
+type Props = HashMap<String, HashMap<String, OwnedValue>>;
+
+async fn classify(conn: &Connection, known: &mut Props, message: &zbus::Message) -> Option<Change> {
     let header = message.header();
     let member = header.member()?.as_str();
     let path = header.path()?.clone();
     match (header.interface()?.as_str(), member) {
         ("org.freedesktop.UPower", "DeviceAdded") => {
             let added: OwnedObjectPath = message.body().deserialize().ok()?;
-            read_device(conn, added).await.ok().map(Change::DeviceAdded)
+            read_device(conn, known, added).await.ok().map(Change::DeviceAdded)
         }
-        ("org.freedesktop.UPower", "DeviceRemoved") => message
-            .body()
-            .deserialize()
-            .ok()
-            .map(Change::DeviceRemoved),
+        ("org.freedesktop.UPower", "DeviceRemoved") => {
+            let removed: OwnedObjectPath = message.body().deserialize().ok()?;
+            known.remove(removed.as_str());
+            Some(Change::DeviceRemoved(removed))
+        }
         ("org.freedesktop.DBus.Properties", "PropertiesChanged") => {
+            let (_, changed, invalidated): (String, HashMap<String, OwnedValue>, Vec<String>) =
+                message.body().deserialize().ok()?;
             if path.as_str() == ROOT_PATH {
-                let proxy = RootProxy::new(conn).await.ok()?;
-                return proxy.on_battery().await.ok().map(Change::OnBattery);
+                return match crate::device::get::<bool>(&changed, "OnBattery") {
+                    Some(on) => Some(Change::OnBattery(on)),
+                    None if invalidated.iter().any(|k| k == "OnBattery") => {
+                        RootProxy::new(conn).await.ok()?.on_battery().await.ok().map(Change::OnBattery)
+                    }
+                    None => None,
+                };
             }
-            let device = read_device(conn, path.clone().into()).await.ok()?;
+            let device = match known.get_mut(path.as_str()) {
+                Some(props) if invalidated.is_empty() => {
+                    props.extend(changed);
+                    Device::from_properties(path.clone().into(), props)
+                }
+                _ => read_device(conn, known, path.clone().into()).await.ok()?,
+            };
             Some(if path.as_str() == DISPLAY_DEVICE_PATH {
                 Change::Display(device)
             } else {
@@ -143,7 +162,7 @@ async fn classify(conn: &Connection, message: &zbus::Message) -> Option<Change> 
     }
 }
 
-async fn read_device(conn: &Connection, path: OwnedObjectPath) -> zbus::Result<Device> {
+async fn read_device(conn: &Connection, known: &mut Props, path: OwnedObjectPath) -> zbus::Result<Device> {
     let props = PropertiesProxy::builder(conn)
         .destination(SERVICE)?
         .path(path.clone())?
@@ -152,5 +171,8 @@ async fn read_device(conn: &Connection, path: OwnedObjectPath) -> zbus::Result<D
     let all = props
         .get_all(InterfaceName::from_static_str_unchecked(DEVICE_INTERFACE))
         .await?;
-    Ok(Device::from_properties(path, &all))
+    let device = Device::from_properties(path.clone(), &all);
+    known.insert(path.to_string(), all);
+    Ok(device)
 }
+
