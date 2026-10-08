@@ -3,9 +3,9 @@ on: { push: { branches: [main] }, pull_request: {} }
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: DeterminateSystems/nix-installer-action@v16
-      - uses: DeterminateSystems/magic-nix-cache-action@v9
       - run: nix flake check -L
       - run: nix build -L .#formalshell .#formalshell-greeter

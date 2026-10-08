@@ -8,8 +8,8 @@ use std::os::unix::net::UnixStream;
 use super::{cli, wire};
 
 /// Quickshell's `qs ipc` options, which the hyprland binds still pass. A
-/// shell here is one per session on one socket, so which instance to pick
-/// is never a question: the flags are read off and dropped.
+/// shell here is one per Wayland display, picked off `WAYLAND_DISPLAY`
+/// (`wire::client_socket_path`), so the flags are read off and dropped.
 ///
 /// Flags taking a value: `-p/--path`, `-c/--config`, `-i/--id`, `--pid`.
 pub fn strip_instance_flags(argv: &[String]) -> Vec<String> {
@@ -35,7 +35,7 @@ pub fn run(argv: &[String]) -> i32 {
             return err.exit;
         }
     };
-    let path = wire::socket_path();
+    let path = wire::client_socket_path();
     let Ok(mut stream) = UnixStream::connect(&path) else {
         println!("No running instances for \"{}\"", path.display());
         return 255;

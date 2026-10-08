@@ -25,7 +25,7 @@ use crate::{
     types::{Item, ItemField, MenuItem, apply_properties, diff},
     watcher::{
         SharedWatcher, WATCHER_IFACE, WATCHER_NAME, WATCHER_PATH, Watcher, WatcherState, qualify,
-        service_gone,
+        register_own_host, service_gone,
     },
 };
 
@@ -469,15 +469,19 @@ impl TrayEvents {
 
     async fn connect_to_watcher(&mut self) {
         let conn = self.shared.conn.clone();
-        let _ = call::<()>(
-            &conn,
-            WATCHER_NAME,
-            WATCHER_PATH,
-            WATCHER_IFACE,
-            "RegisterStatusNotifierHost",
-            &(self.host_name.as_str(),),
-        )
-        .await;
+        if self.owns_watcher {
+            register_own_host(&conn, &self.watcher, &self.host_name).await;
+        } else {
+            let _ = call::<()>(
+                &conn,
+                WATCHER_NAME,
+                WATCHER_PATH,
+                WATCHER_IFACE,
+                "RegisterStatusNotifierHost",
+                &(self.host_name.as_str(),),
+            )
+            .await;
+        }
 
         let keys: Vec<String> = if self.owns_watcher {
             self.watcher.lock().unwrap().items.clone()
