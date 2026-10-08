@@ -27,7 +27,7 @@ let
   cargoArtifacts = craneLib.buildDepsOnly (commonArgs // {
     inherit src cargoVendorDir;
     pname = "formalshell-deps";
-    version = "0.1.1";
+    version = "0.2.0";
     # Cargo resolves features per selected package set, and a dependency built
     # under a different feature set is compiled again. formalshell-rs pulls in
     # nearly every other crate, so its set is the one the artifacts match.
@@ -40,7 +40,7 @@ let
   # Shared by every check derivation that builds from crates/ alone.
   checkArgs = commonArgs // {
     inherit src cargoVendorDir cargoArtifacts;
-    version = "0.1.1";
+    version = "0.2.0";
     doInstallCargoArtifacts = false;
     nativeBuildInputs = commonArgs.nativeBuildInputs ++ [ clippy ];
   };
