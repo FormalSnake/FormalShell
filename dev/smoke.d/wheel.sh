@@ -1,7 +1,8 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, iso_home, the *_bin paths and fail()
 # --wheel (M47 D3): the mouse wheel scrolls a launcher view, and the cursor
-# stays where it is. The wallpaper grid is the surface that reported the
+# stays where it is. One notch moves it exactly one step, and a scroll far
+# past the end stops on it. The wallpaper grid is the surface that reported the
 # bug, so it is the one driven here, over a directory of 40 fixtures, which
 # is enough rows to overflow the card whatever the output height does to the
 # cap.
@@ -35,6 +36,7 @@ wheel_menu_before_path="$shot_dir/wheel-menu-before.json"
 wheel_menu_after_path="$shot_dir/wheel-menu-after.json"
 wheel_picker_before_path="$shot_dir/wheel-picker-before.json"
 wheel_picker_after_path="$shot_dir/wheel-picker-after.json"
+wheel_menu_end_path="$shot_dir/wheel-menu-end.json"
 wheel_dispatch_path="$shot_dir/wheel-dispatch.txt"
 wheel_bar_png="$shot_dir/wheel-bar.png"
 wheel_volume_before_path="$shot_dir/wheel-volume-before.txt"
@@ -99,11 +101,14 @@ sleep 2
 "$grim_bin" "$wheel_before_png" > /dev/null 2>&1
 $ipc call menu status > "$wheel_menu_before_path" 2>&1
 $ipc call picker status > "$wheel_picker_before_path" 2>&1
-"$wlrctl_bin" pointer scroll 10 0 >> "$wheel_dispatch_path" 2>&1
+"$wlrctl_bin" pointer scroll 15 0 >> "$wheel_dispatch_path" 2>&1
 sleep 3
 "$grim_bin" "$wheel_after_png" > /dev/null 2>&1
 $ipc call menu status > "$wheel_menu_after_path" 2>&1
 $ipc call picker status > "$wheel_picker_after_path" 2>&1
+"$wlrctl_bin" pointer scroll 100000 0 >> "$wheel_dispatch_path" 2>&1
+sleep 2
+$ipc call menu status > "$wheel_menu_end_path" 2>&1
 $ipc call menu close > /dev/null 2>&1
 sleep 1
 "$wpctl_bin" get-volume @DEFAULT_AUDIO_SINK@ 2>&1 | grep '^Volume:' > "$wheel_volume_before_path"
@@ -148,9 +153,21 @@ leg_wheel_assert() {
   if [ "$before_scroll" != "0" ]; then
     fail "the grid was already scrolled to $before_scroll before the wheel moved"
   fi
-  if [ "$after_scroll" -le 0 ]; then
-    fail "the wheel did not scroll the grid: scrollTop stayed at $after_scroll"
+  # Hyprland reads wlrctl's smooth-only scroll as a wheel's, 15 units to the
+  # 120-unit notch, so 15 is exactly one notch: one row of cells, no more.
+  local step
+  step=$(wheel_field "$wheel_menu_after_path" wheelStep)
+  if [ -z "$step" ] || [ "$after_scroll" != "$step" ]; then
+    fail "one wheel notch moved scrollTop to $after_scroll, not one step of ${step:-nothing}"
   fi
+  # A scroll far past the end stops on it.
+  local end_scroll end_max
+  end_scroll=$(wheel_field "$wheel_menu_end_path" scrollTop)
+  end_max=$(wheel_field "$wheel_menu_end_path" scrollMax)
+  if [ -z "$end_max" ] || [ "$end_max" -le 0 ] || [ "$end_scroll" != "$end_max" ]; then
+    fail "a scroll far past the end left scrollTop at $end_scroll against a scrollMax of $end_max"
+  fi
+  echo "SMOKE_WHEEL_END scrollTop $end_scroll = scrollMax $end_max"
   if [ -z "$before_cursor" ] || [ "$before_cursor" != "$after_cursor" ]; then
     fail "the wheel moved the cursor from $before_cursor to $after_cursor"
   fi
