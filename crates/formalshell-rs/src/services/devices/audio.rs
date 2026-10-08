@@ -54,9 +54,10 @@ pub struct Lists {
     pub source: Option<Row>,
 }
 
-/// What the media panel routes by, read only while it is open or a stream
-/// is the picked source: the sinks a stream can move to and every playback
-/// stream with what it is linked into.
+/// What the media panel routes by: the sinks a stream can move to, always
+/// kept (`media outputs` answers with the panel shut), and every playback
+/// stream with what it is linked into, read only while the panel is open or
+/// a stream is the picked source.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Routing {
     /// Node name and label of each sink.
@@ -79,7 +80,7 @@ pub struct StreamInfo {
     pub target: String,
 }
 
-fn routing(graph: &Graph) -> Routing {
+fn routing(graph: &Graph, streams: bool) -> Routing {
     let key = |n: &Node, k: &str| n.props.get(k).cloned();
     Routing {
         sinks: graph
@@ -94,7 +95,7 @@ fn routing(graph: &Graph) -> Routing {
         streams: graph
             .nodes
             .values()
-            .filter(|n| n.is_stream() && n.is_sink() && n.ready)
+            .filter(|n| streams && n.is_stream() && n.is_sink() && n.ready)
             .map(|n| StreamInfo {
                 id: n.id,
                 keys: [key(n, "application.name"), key(n, "application.process.binary"), key(n, "application.id"), Some(n.name.clone())],
@@ -231,7 +232,7 @@ pub async fn run(ctx: Ctx) {
             while let Ok(more) = events.try_recv() {
                 c.graph.apply(more);
             }
-            Some((snapshot(&c.graph), ROUTING.iter().any(|r| r.load(Ordering::Relaxed)).then(|| routing(&c.graph)).unwrap_or_default()))
+            Some((snapshot(&c.graph), routing(&c.graph, ROUTING.iter().any(|r| r.load(Ordering::Relaxed)))))
         });
         if let Some((audio, routed)) = audio {
             publish(&ctx, audio);
@@ -263,4 +264,29 @@ pub fn toggle_mute(_: &Ctx) {
 
 pub fn toggle_source_mute(_: &Ctx) {
     with_node(true, |h, node, a| h.send(Command::SetMuted { node, muted: !a.muted }));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    fn node(id: u32, class: &str, name: &str) -> Node {
+        let props: BTreeMap<String, String> =
+            [("media.class", class), ("node.name", name)].into_iter().map(|(k, v)| (k.to_owned(), v.to_owned())).collect();
+        Node::from_props(id, props)
+    }
+
+    #[test]
+    fn every_sink_is_listed_with_no_panel_open() {
+        let mut graph = Graph::default();
+        for n in [node(1, "Audio/Sink", "alsa_out"), node(2, "Audio/Sink", "smoke_alt"), node(3, "Stream/Output/Audio", "mpv")] {
+            graph.apply(fs_audio::Event::Node(n));
+        }
+        let shut = routing(&graph, false);
+        let mut names: Vec<_> = shut.sinks.iter().map(|(n, _)| n.as_str()).collect();
+        names.sort();
+        assert_eq!(names, ["alsa_out", "smoke_alt"]);
+        assert!(shut.streams.is_empty());
+    }
 }
