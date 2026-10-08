@@ -85,23 +85,22 @@ menu_emerge_frame_gap=0.09
 # figure is reported in real milliseconds through.
 menu_emerge_scale=1000
 
-# The card's own geometry (DESIGN.md §1 Space):
-# `popupWidthMenu` 560 centred on a 1920 output, top at 30% of 1080. Neither
-# term moves with the bar's edge or the frame.
-menu_emerge_card_x=680
-menu_emerge_card_y=324
+# The card's own geometry (DESIGN.md §1 Space): `popupWidthMenu` 560
+# centred on the output, top at 30% of its height, both rounded as the
+# launcher rounds them. Neither term moves with the bar's edge or the frame.
+# x and y are cut in the assert, off the output's own size.
 menu_emerge_card_w=560
 # Read off the dump in the assert; the top bar's own last row is what it comes
 # to on a default run.
 menu_emerge_line_row=39
 
-# A pixel of the line's own band clear of the join: the card spans columns
-# 680-1240 and its fillets reach a `radiusXl` past either end, so the output's
+# A pixel of the line's own band clear of the join: the card is centred and
+# its fillets reach a `radiusXl` past either end, so the output's
 # own corner is nowhere near it and carries nothing that ticks. Four rows, so
 # the probe stays inside a frame ring's band as well as a bar's.
 menu_emerge_bar_box="8x4+2+2"
-# And a desktop one, well below the card, for the other half of the same claim.
-menu_emerge_desk_box="8x8+2+1040"
+# And a desktop one, well below the card, for the other half of the same
+# claim: 40 rows off the output's bottom, cut in the assert.
 
 leg_menu_emerge_validate() {
   local other
@@ -185,6 +184,9 @@ menu_emerge_same() {
 
 leg_menu_emerge_assert() {
   local f i path
+  menu_emerge_card_x=$(((out_w - menu_emerge_card_w + 1) / 2))
+  menu_emerge_card_y=$(((out_h * 3 + 5) / 10))
+  menu_emerge_desk_box="8x8+2+$((out_h - 40))"
   for f in "$menu_emerge_summon_path" "$menu_emerge_close_path"; do
     if ! grep -q '^ok$' "$f" 2>/dev/null; then
       fail "a menu route did not answer ok at $f, got: $(cat "$f" 2>/dev/null)"
@@ -209,7 +211,7 @@ leg_menu_emerge_assert() {
   # The first frame that is byte-equal to the rest frame below the search row.
   # The field itself is left out of the comparison: its text cursor blinks, so
   # a crop carrying it is never equal to anything twice.
-  local t0 settle_ns settle_ms stamp n d trace="" rest_box="1920x640+0+400"
+  local t0 settle_ns settle_ms stamp n d trace="" rest_box="${out_w}x$((out_h - 440))+0+400"
   t0=$(cat "$menu_emerge_t0_path" 2>/dev/null)
   [ -n "$t0" ] || fail "no summon stamp at $menu_emerge_t0_path"
   settle_ns=""
@@ -267,7 +269,7 @@ leg_menu_emerge_assert() {
   # own, and only the three numbers the tokens fix are spelled out above.
   local column_x=$((menu_emerge_card_x + menu_emerge_card_w / 2 - 2))
   local rest_bottom=0 row
-  for ((row = menu_emerge_card_y + 40; row < 1080; row += 4)); do
+  for ((row = menu_emerge_card_y + 40; row < out_h; row += 4)); do
     if menu_emerge_covered "$menu_emerge_rest_path" "5x4+${column_x}+${row}"; then
       rest_bottom=$row
     elif [ "$rest_bottom" -gt 0 ]; then

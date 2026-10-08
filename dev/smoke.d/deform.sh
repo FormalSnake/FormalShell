@@ -20,6 +20,11 @@
 #           tenths), which is why that sample sits three clocks out rather
 #           than at the end of the travel.
 #
+# The resting box is read off the settled frame of the same open, two
+# seconds past the burst, never off the first open: the network list is
+# live, and a scan that adds a row between the two opens rests the card a
+# row taller (e1504g, 11 networks then 12, 32px).
+#
 # The band starts one row under the bar's own line: a joined card opens a gap
 # in that line and the cell that owns the panel draws a mark of its own, and
 # both are differences that are not the card. Everything from there down is,
@@ -120,7 +125,7 @@ deform_box() {
   local frame="$1" name="$2" body bare_body box
   body="$shot_dir/deform-body-$name.png"
   bare_body="$shot_dir/deform-body-bare.png"
-  $convert_bin "$frame" -crop "1920x$((1080 - deform_band_top))+0+${deform_band_top}" +repage "$body" > /dev/null 2>&1
+  $convert_bin "$frame" -crop "${out_w}x$((out_h - deform_band_top))+0+${deform_band_top}" +repage "$body" > /dev/null 2>&1
   [ -s "$body" ] || fail "could not crop the band out of $frame"
   box=$($convert_bin "$bare_body" "$body" -compose difference -composite \
     -threshold 8% -format "%@" info: 2>/dev/null)
@@ -158,12 +163,12 @@ leg_deform_assert() {
 
   # The reference the samples are read against, cropped by hand first since
   # every deform_box call below subtracts it.
-  $convert_bin "$deform_bare_path" -crop "1920x$((1080 - deform_band_top))+0+${deform_band_top}" \
+  $convert_bin "$deform_bare_path" -crop "${out_w}x$((out_h - deform_band_top))+0+${deform_band_top}" \
     +repage "$shot_dir/deform-body-bare.png" > /dev/null 2>&1
   [ -s "$shot_dir/deform-body-bare.png" ] || fail "could not crop the band out of $deform_bare_path"
 
   local rest_box rest_h
-  rest_box=$(deform_box "$deform_rest_path" "rest")
+  rest_box=$(deform_box "$deform_settled_path" "settled")
   rest_h=$(deform_height "$rest_box")
   if [ "${rest_h:-0}" -lt 200 ]; then
     fail "no resting card found under the bar: the diff against the closed output is '$rest_box'"

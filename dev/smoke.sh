@@ -617,9 +617,25 @@ sleep 2
 EOF
 fi
 
+# The output the session really got. The monitor rule above is a request: a
+# nested Hyprland's output follows the size its parent gives the window, so
+# a leg cropping frames reads these rather than 1920x1080. Sampled a few
+# seconds in, once the parent has configured the window, and again at
+# teardown: a parent that resized the window mid-run leaves frames of two
+# sizes, which no crop can read.
+output_json_path="$shot_dir/output.json"
+output_end_json_path="$shot_dir/output-end.json"
+output_script="$shot_dir/output.sh"
+write_script "$output_script" <<EOF
+#!/usr/bin/env bash
+sleep 3
+"$hyprctl_bin" monitors -j > "$output_json_path" 2>&1
+EOF
+
 {
   hypr_base_config
   hypr_exec_once "bash $shell_start_script"
+  hypr_exec_once "bash $output_script"
   if $fixture_window_mode; then
     hypr_exec_once "bash $fixture_script"
   fi
@@ -696,6 +712,7 @@ if shell_pid=\$(cat "$shot_dir/shell.pid" 2>/dev/null) && [ -r "/proc/\$shell_pi
     END { for (p in parent) { q = parent[p]; while (q != "" && q != root && q > 1) q = parent[q]; if (q == root) print line[p] } }' \
     > "$shot_dir/shell-children.txt"
 fi
+"$hyprctl_bin" monitors -j > "$output_end_json_path" 2>&1
 $fixture_cleanup
 "$hyprctl_bin" dispatch "hl.dsp.exit()"
 EOF
@@ -788,6 +805,20 @@ fi
 # shell weighed at the end of its run.
 if [ -f "$shot_dir/mem.txt" ]; then
   cat "$shot_dir/mem.txt"
+fi
+
+# out_w and out_h are the output's size in the pixels grim captures,
+# out_scale its scale; every crop and probe a leg takes is cut from them.
+need_jq
+if ! read -r out_w out_h out_scale < <("$jq_bin" -r '.[0] | "\(.width) \(.height) \(.scale)"' "$output_json_path" 2>/dev/null) \
+  || ! [[ "$out_w" =~ ^[0-9]+$ && "$out_h" =~ ^[0-9]+$ ]]; then
+  fail "could not read the session's output size: $(cat "$output_json_path" 2>/dev/null)"
+fi
+export out_w out_h out_scale
+echo "SMOKE_OUTPUT ${out_w}x${out_h} scale=$out_scale"
+output_end=$("$jq_bin" -r '.[0] | "\(.width) \(.height) \(.scale)"' "$output_end_json_path" 2>/dev/null || true)
+if [ -n "$output_end" ] && [ "$output_end" != "$out_w $out_h $out_scale" ]; then
+  fail "the output changed size mid-run: $out_w $out_h $out_scale at start, $output_end at teardown"
 fi
 
 for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do

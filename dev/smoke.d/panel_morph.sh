@@ -57,14 +57,13 @@ panel_morph_track_path="$shot_dir/panel-morph-track.flac"
 panel_morph_pid_path="$shot_dir/panel-morph-mpv.pid"
 
 # The band the cards are read in: an IPC open with no cell rests one
-# screenPadding (12) off the 1920 output's trailing edge, and the widest card
+# screenPadding (12) off the output's trailing edge, and the widest card
 # here is the media panel's `popupWidthWide` (480), so the band starts a
 # little ahead of its leading side and runs to the output's end. One row
-# under the bar's own 40.
-panel_morph_band_x=1408
+# under the bar's own 40. Its x and height are cut in the assert, off the
+# output's own size.
 panel_morph_band_y=41
 panel_morph_band_w=512
-panel_morph_band_h=1039
 # A row a card covers. The narrowest here is the network panel's
 # `popupWidthDefault` (380), which is 189 of the band's 255, and the attached
 # silhouette's fillets make it wider still; nothing else paints two thirds of
@@ -306,6 +305,8 @@ panel_morph_claim() {
 
 leg_panel_morph_assert() {
   local path rest_full rest_off rest_end rest_quiet rest_playing
+  panel_morph_band_x=$((out_w - panel_morph_band_w))
+  panel_morph_band_h=$((out_h - panel_morph_band_y))
 
   for path in "$panel_morph_bare_path" "$panel_morph_rest_full_path" \
     "$panel_morph_rest_off_path" "$panel_morph_rest_end_path" \

@@ -98,8 +98,9 @@ panel_emerge_body_top=60
 
 # The bar's own band, over the stretch of it the card hangs under and clear of
 # the right region's cells, whose panel mark and icons move on their own
-# clocks. Nothing may ever paint here: the whole claim of the clip.
-panel_emerge_bar_box="180x36+1540+2"
+# clocks, 380 in from the output's trailing edge. Nothing may ever paint here:
+# the whole claim of the clip. Cut in the assert, off the output's width.
+panel_emerge_bar_inset=380
 
 leg_panel_emerge_validate() {
   local other
@@ -194,11 +195,11 @@ leg_panel_emerge_assert() {
   # The card's own rect, off the two frames that differ by exactly one card.
   # Cropped below the bar first: the cell that owns an open panel draws a mark
   # of its own, which is a difference and is not the card.
-  local body_h=$((1080 - panel_emerge_body_top)) bare_body rest_body rect
+  local body_h=$((out_h - panel_emerge_body_top)) bare_body rest_body rect
   bare_body="$shot_dir/panel-emerge-body-bare.png"
   rest_body="$shot_dir/panel-emerge-body-rest.png"
-  $convert_bin "$panel_emerge_bare_path" -crop "1920x${body_h}+0+${panel_emerge_body_top}" +repage "$bare_body" > /dev/null 2>&1
-  $convert_bin "$panel_emerge_rest_path" -crop "1920x${body_h}+0+${panel_emerge_body_top}" +repage "$rest_body" > /dev/null 2>&1
+  $convert_bin "$panel_emerge_bare_path" -crop "${out_w}x${body_h}+0+${panel_emerge_body_top}" +repage "$bare_body" > /dev/null 2>&1
+  $convert_bin "$panel_emerge_rest_path" -crop "${out_w}x${body_h}+0+${panel_emerge_body_top}" +repage "$rest_body" > /dev/null 2>&1
   rect=$($convert_bin "$bare_body" "$rest_body" -compose difference -composite \
     -threshold 8% -format "%@" info: 2>/dev/null)
   local card_w card_h card_x card_y
@@ -237,7 +238,7 @@ leg_panel_emerge_assert() {
   # Nothing may ever paint in the bar's band: the card is cut at the bar's
   # inner line, so every frame of the travel has to leave it exactly as the
   # closed output does.
-  local bare_bar frame_bar name
+  local bare_bar frame_bar name panel_emerge_bar_box="180x36+$((out_w - panel_emerge_bar_inset))+2"
   bare_bar=$(panel_emerge_crop "$panel_emerge_bare_path" "$panel_emerge_bar_box" "bar-bare")
   for i in "${!panel_emerge_mid_paths[@]}"; do
     frame_bar=$(panel_emerge_crop "${panel_emerge_mid_paths[$i]}" "$panel_emerge_bar_box" "bar-mid-$((i + 1))")
