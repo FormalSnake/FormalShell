@@ -354,7 +354,7 @@ impl Scan {
         let resolve = |name: &str| -> String {
             icon_of
                 .entry(name.to_owned())
-                .or_insert_with(|| icons::lookup(name, "").map(|p| p.to_string_lossy().into_owned()).unwrap_or_default())
+                .or_insert_with(|| icons::lookup(name, "", ICON_EXTENT).map(|p| p.to_string_lossy().into_owned()).unwrap_or_default())
                 .clone()
         };
         let cell = std::cell::RefCell::new(resolve);
@@ -365,7 +365,7 @@ impl Scan {
             if path.is_empty() || !self.decoded.insert(path.clone()) {
                 continue;
             }
-            let bitmap = icons::load(std::path::Path::new(path)).and_then(|raw| raw.bitmap(ICON_EXTENT));
+            let bitmap = icons::load_at(std::path::Path::new(path), ICON_EXTENT);
             fresh.push((path.clone(), bitmap));
         }
         let exec = self.entries.iter().map(|e| (e.id.clone(), e.command.clone())).collect();

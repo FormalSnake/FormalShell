@@ -33,6 +33,10 @@ const MAX_MS: i64 = 30000;
 /// How far a hovered toast's deadline is pushed each time it comes due.
 const HOVER_HOLD_MS: i64 = 1000;
 
+/// The size a themed icon is picked for, near the card's heading type it is
+/// drawn at.
+const ICON_PICK: u32 = 32;
+
 pub fn now_ms() -> i64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64)
 }
@@ -641,7 +645,7 @@ fn resolve_icon(image: &str, app_icon: &str, desktop_entry: &str, app_name: &str
             desktop_entry: desktop_entry.into(),
             app_name: app_name.into(),
         },
-        |name| if icons::lookup(name, "").is_some() { format!("image://icon/{name}") } else { String::new() },
+        |name| if icons::lookup(name, "", ICON_PICK).is_some() { format!("image://icon/{name}") } else { String::new() },
         sender_icon,
     );
     if source.starts_with("image://notification/") {
@@ -649,7 +653,7 @@ fn resolve_icon(image: &str, app_icon: &str, desktop_entry: &str, app_name: &str
         return icons::from_rgba(d.width as i32, d.height as i32, &d.rgba);
     }
     if let Some(name) = source.strip_prefix("image://icon/") {
-        return icons::named(name, "");
+        return icons::named(name, "", ICON_PICK);
     }
     let path = source.strip_prefix("file://")?;
     icons::load(std::path::Path::new(path))

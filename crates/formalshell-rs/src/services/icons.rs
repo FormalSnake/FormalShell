@@ -1,9 +1,11 @@
 //! Pictures other processes hand the shell: an icon by freedesktop name, a
 //! raw pixmap or a PNG, decoded to straight-alpha RGBA on the pool and
 //! scaled to a surface's own size (a few hundred pixels). Names resolve
-//! through the configured icon theme's inheritance chain by the spec's size
-//! distance, then through any other installed theme, then loose pixmaps.
+//! for the pixel size they are drawn at, through the configured icon
+//! theme's inheritance chain, then any other installed theme, then loose
+//! pixmaps.
 
+use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -14,8 +16,9 @@ use image::RgbaImage;
 
 use crate::scene::Bitmap;
 
-/// The longest side a decoded picture keeps.
-const MAX: u32 = 64;
+/// The longest side a picture decoded without a target size keeps, so the
+/// one resize to its drawn size starts from enough pixels.
+const KEEP: u32 = 256;
 
 #[derive(Clone)]
 pub struct Raw {
@@ -36,19 +39,26 @@ impl fmt::Debug for Raw {
     }
 }
 
+/// `img` with its longest side at `longest`, resampled once.
+fn fit(img: RgbaImage, longest: u32) -> RgbaImage {
+    let (w, h) = img.dimensions();
+    let side = w.max(h);
+    if side == longest || side == 0 {
+        return img;
+    }
+    let s = longest as f64 / side as f64;
+    let (nw, nh) = (((w as f64 * s).round() as u32).clamp(1, longest), ((h as f64 * s).round() as u32).clamp(1, longest));
+    let filter = if side > longest { FilterType::Lanczos3 } else { FilterType::CatmullRom };
+    imageops::resize(&img, nw, nh, filter)
+}
+
 impl Raw {
     fn from_image(img: RgbaImage) -> Option<Self> {
         let (w, h) = img.dimensions();
         if w == 0 || h == 0 {
             return None;
         }
-        let img = if w.max(h) > MAX {
-            let s = MAX as f64 / w.max(h) as f64;
-            let (nw, nh) = (((w as f64 * s).round() as u32).max(1), ((h as f64 * s).round() as u32).max(1));
-            imageops::resize(&img, nw, nh, FilterType::Lanczos3)
-        } else {
-            img
-        };
+        let img = if w.max(h) > KEEP { fit(img, KEEP) } else { img };
         let (width, height) = img.dimensions();
         Some(Self { width, height, rgba: Arc::new(img.into_raw()) })
     }
@@ -57,11 +67,10 @@ impl Raw {
     pub fn bitmap(&self, size: u32) -> Option<Bitmap> {
         let size = size.max(1);
         let src = RgbaImage::from_raw(self.width, self.height, self.rgba.as_ref().clone())?;
-        let s = size as f64 / self.width.max(self.height) as f64;
-        let (w, h) = (((self.width as f64 * s).round() as u32).clamp(1, size), ((self.height as f64 * s).round() as u32).clamp(1, size));
-        let fitted = if (w, h) == (self.width, self.height) { src } else { imageops::resize(&src, w, h, FilterType::Triangle) };
+        let fitted = fit(src, size);
+        let (w, h) = fitted.dimensions();
         let mut canvas = RgbaImage::new(size, size);
-        imageops::replace(&mut canvas, &fitted, ((size - w) / 2) as i64, ((size - h) / 2) as i64);
+        imageops::replace(&mut canvas, &fitted, ((size - w.min(size)) / 2) as i64, ((size - h.min(size)) / 2) as i64);
         Some(Bitmap::from_rgba(size as u16, size as u16, canvas.into_raw()))
     }
 }
@@ -75,10 +84,11 @@ pub fn from_bytes(bytes: &[u8]) -> Option<Raw> {
     Raw::from_image(image::load_from_memory(bytes).ok()?.to_rgba8())
 }
 
-fn from_svg(data: &[u8]) -> Option<Raw> {
+/// An SVG rasterised with its longest side at `longest`, straight alpha.
+fn from_svg(data: &[u8], longest: u32) -> Option<RgbaImage> {
     let tree = resvg::usvg::Tree::from_data(data, &resvg::usvg::Options::default()).ok()?;
     let size = tree.size();
-    let scale = MAX as f32 / size.width().max(size.height());
+    let scale = longest as f32 / size.width().max(size.height());
     let (w, h) = ((size.width() * scale).round().max(1.0) as u32, (size.height() * scale).round().max(1.0) as u32);
     let mut pixmap = resvg::tiny_skia::Pixmap::new(w, h)?;
     resvg::render(&tree, resvg::tiny_skia::Transform::from_scale(scale, scale), &mut pixmap.as_mut());
@@ -91,15 +101,25 @@ fn from_svg(data: &[u8]) -> Option<Raw> {
             }
         }
     }
-    Some(Raw { width: w, height: h, rgba: Arc::new(rgba) })
+    RgbaImage::from_raw(w, h, rgba)
 }
 
-fn decode(path: &Path) -> Option<Raw> {
+fn is_svg(path: &Path) -> bool {
+    path.extension().is_some_and(|e| e == "svg")
+}
+
+/// The file's pixels: an SVG rendered at `longest` (or [`KEEP`]), a raster
+/// resampled once to `longest` when one is given.
+fn decode(path: &Path, longest: Option<u32>) -> Option<RgbaImage> {
     let data = std::fs::read(path).ok()?;
-    match path.extension().and_then(|e| e.to_str()) {
-        Some("svg") => from_svg(&data),
-        _ => from_bytes(&data),
+    if is_svg(path) {
+        return from_svg(&data, longest.unwrap_or(KEEP));
     }
+    let img = image::load_from_memory(&data).ok()?.to_rgba8();
+    Some(match longest {
+        Some(n) => fit(img, n),
+        None => img,
+    })
 }
 
 pub fn data_dirs() -> Vec<PathBuf> {
@@ -122,17 +142,43 @@ pub fn data_dirs() -> Vec<PathBuf> {
     dirs
 }
 
-/// How well a size directory suits `MAX`: scalable first, then the nearest
-/// size above it, then the nearest below.
-fn rank(dir: &str) -> u32 {
-    if dir == "scalable" {
-        return 0;
+/// One file a name resolved to, and what its directory says about it.
+struct Candidate {
+    path: PathBuf,
+    /// The directory matches the size at scale 1 (the spec's
+    /// DirectoryMatchesSize).
+    exact: bool,
+    /// The spec's DirectorySizeDistance, or the gap to a size parsed off a
+    /// directory name.
+    distance: u32,
+    /// The pixel size the directory claims.
+    nominal: u32,
+}
+
+/// Lower is better. A raster is judged by its own pixels rather than its
+/// directory (elementary-colloid ships 64px files in `apps@2x/64`, and
+/// 48px ones in `apps@3x/16`, which claims 24 to 69), and one that would be
+/// upscaled loses to anything that would not; then the spec's exact match,
+/// the nearest size, the larger of two equally near, a raster drawn for
+/// the size over an SVG that renders at it.
+fn score(c: &Candidate, size: u32) -> (bool, bool, u32, Reverse<u32>, bool) {
+    if is_svg(&c.path) {
+        return (false, !c.exact, c.distance, Reverse(size), true);
     }
-    match dir.split('x').next().and_then(|n| n.parse::<u32>().ok()) {
-        Some(n) if n >= MAX => n - MAX + 1,
-        Some(n) => 10_000 + (MAX - n),
-        None => 100_000,
-    }
+    let pixels = image::image_dimensions(&c.path).map(|(w, h)| w.max(h)).unwrap_or(c.nominal);
+    (pixels < size, !c.exact, pixels.abs_diff(size), Reverse(pixels), false)
+}
+
+/// The best candidate, and whether drawing it at `size` upscales it.
+fn best(candidates: Vec<Candidate>, size: u32) -> Option<(bool, PathBuf)> {
+    candidates.into_iter().map(|c| (score(&c, size), c.path)).min_by(|a, b| a.0.cmp(&b.0)).map(|(s, p)| (s.0, p))
+}
+
+/// A size directory's name, `64x64`, `64`, `64x64@2` or `48@2x`, as the
+/// pixel size it holds.
+fn dir_size(dir: &str) -> Option<u32> {
+    let (n, scale) = dir.split_once('@').map_or((dir, 1), |(n, s)| (n, s.trim_end_matches('x').parse().unwrap_or(1)));
+    n.split('x').next()?.parse::<u32>().ok().map(|n| n * scale)
 }
 
 fn subdirs(dir: &Path) -> Vec<(String, PathBuf)> {
@@ -143,52 +189,62 @@ fn subdirs(dir: &Path) -> Vec<(String, PathBuf)> {
         .collect()
 }
 
-fn file_in(dir: &Path, name: &str) -> Option<PathBuf> {
-    ["svg", "png"].iter().map(|ext| dir.join(format!("{name}.{ext}"))).find(|p| p.is_file())
+fn files_in(dir: &Path, name: &str) -> Vec<PathBuf> {
+    ["svg", "png"].map(|ext| dir.join(format!("{name}.{ext}"))).into_iter().filter(|p| p.is_file()).collect()
 }
 
-/// The best file for `name` inside one theme directory, in either layout:
-/// `<size>/<context>/` or `<context>/<size>/`.
-fn in_theme(theme: &Path, name: &str) -> Option<PathBuf> {
-    let mut best: Option<(u32, PathBuf)> = None;
-    let mut consider = |score: u32, path: PathBuf| {
-        if best.as_ref().is_none_or(|(s, _)| score < *s) {
-            best = Some((score, path));
-        }
+fn loose(path: PathBuf) -> Candidate {
+    Candidate { path, exact: false, distance: u32::MAX, nominal: 0 }
+}
+
+/// Every file for `name` inside one theme directory with no index read, in
+/// either layout: `<size>/<context>/` or `<context>/<size>/`.
+fn in_theme(theme: &Path, name: &str, size: u32) -> Vec<Candidate> {
+    let sized = |dir: &str, path: PathBuf| match (dir, dir_size(dir)) {
+        ("scalable", _) => Candidate { path, exact: true, distance: 0, nominal: size },
+        (_, Some(n)) => Candidate { path, exact: n == size, distance: n.abs_diff(size), nominal: n },
+        _ => loose(path),
     };
-    if let Some(p) = file_in(theme, name) {
-        consider(50_000, p);
-    }
+    let mut found: Vec<Candidate> = files_in(theme, name).into_iter().map(loose).collect();
     for (first, first_path) in subdirs(theme) {
-        if let Some(p) = file_in(&first_path, name) {
-            consider(rank(&first), p);
-        }
+        found.extend(files_in(&first_path, name).into_iter().map(|p| sized(&first, p)));
         for (second, second_path) in subdirs(&first_path) {
-            if let Some(p) = file_in(&second_path, name) {
-                consider(rank(&first).min(rank(&second)), p);
-            }
+            let dir = if first == "scalable" || dir_size(&first).is_some() { &first } else { &second };
+            found.extend(files_in(&second_path, name).into_iter().map(|p| sized(dir, p)));
         }
     }
-    best.map(|(_, p)| p)
+    found
 }
 
-/// An icon name (or an absolute path, or a `file://` URL) as a file: the
-/// app's own theme path first, then the theme chain, then every other
-/// installed theme, then the loose pixmaps.
-pub fn lookup(name: &str, theme_path: &str) -> Option<PathBuf> {
+/// An icon name (or an absolute path, or a `file://` URL) as the file that
+/// draws best at `size` pixels: the app's own theme path first, then the
+/// theme chain, then every other installed theme, then the loose pixmaps.
+pub fn lookup(name: &str, theme_path: &str, size: u32) -> Option<PathBuf> {
     if name.is_empty() {
         return None;
     }
     if let Some(path) = name.strip_prefix("file://").or_else(|| Path::new(name).is_absolute().then_some(name)) {
         return Path::new(path).is_file().then(|| PathBuf::from(path));
     }
+    static FOUND: OnceLock<Mutex<HashMap<(String, String, u32), PathBuf>>> = OnceLock::new();
+    let found = FOUND.get_or_init(Default::default);
+    let key = (name.to_owned(), theme_path.to_owned(), size);
+    if let Some(hit) = found.lock().unwrap().get(&key) {
+        return Some(hit.clone());
+    }
+    let path = search(name, theme_path, size)?;
+    found.lock().unwrap().insert(key, path.clone());
+    Some(path)
+}
+
+fn search(name: &str, theme_path: &str, size: u32) -> Option<PathBuf> {
     if !theme_path.is_empty() {
-        if let Some(p) = in_theme(Path::new(theme_path), name) {
+        if let Some((_, p)) = best(in_theme(Path::new(theme_path), name, size), size) {
             return Some(p);
         }
     }
     static THEMES: OnceLock<Mutex<Themes>> = OnceLock::new();
-    let chained = THEMES.get_or_init(Default::default).lock().unwrap().find(name, MAX);
+    let chained = THEMES.get_or_init(|| Mutex::new(Themes::new(icon_bases(), configured_theme()))).lock().unwrap().find(name, size);
     if chained.is_some() {
         return chained;
     }
@@ -199,23 +255,40 @@ pub fn lookup(name: &str, theme_path: &str) -> Option<PathBuf> {
         found.sort();
         themes.extend(found);
     }
-    themes.iter().find_map(|t| in_theme(t, name)).or_else(|| dirs.iter().find_map(|d| file_in(&d.join("pixmaps"), name)))
+    let pixmaps = || best(dirs.iter().flat_map(|d| files_in(&d.join("pixmaps"), name)).map(loose).collect(), size).map(|(_, p)| p);
+    themes.iter().find_map(|t| best(in_theme(t, name, size), size).map(|(_, p)| p)).or_else(pixmaps)
 }
 
-/// A file decoded once per process.
+/// A file decoded once per process, at up to [`KEEP`] pixels, for a
+/// consumer that only learns its drawn size later.
 pub fn load(path: &Path) -> Option<Raw> {
     static CACHE: OnceLock<Mutex<HashMap<PathBuf, Option<Raw>>>> = OnceLock::new();
     let cache = CACHE.get_or_init(Default::default);
     if let Some(hit) = cache.lock().unwrap().get(path) {
         return hit.clone();
     }
-    let raw = decode(path);
+    let raw = decode(path, None).and_then(Raw::from_image);
     cache.lock().unwrap().insert(path.to_owned(), raw.clone());
     raw
 }
 
-pub fn named(name: &str, theme_path: &str) -> Option<Raw> {
-    load(&lookup(name, theme_path)?)
+/// A file drawn in a `size` square: an SVG rendered at that size, a raster
+/// resampled to it once. Decoded once per (file, size).
+pub fn load_at(path: &Path, size: u32) -> Option<Bitmap> {
+    static CACHE: OnceLock<Mutex<HashMap<(PathBuf, u32), Option<Bitmap>>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(Default::default);
+    let key = (path.to_owned(), size);
+    if let Some(hit) = cache.lock().unwrap().get(&key) {
+        return hit.clone();
+    }
+    let bitmap = decode(path, Some(size.max(1))).and_then(|img| Raw { width: img.width(), height: img.height(), rgba: Arc::new(img.into_raw()) }.bitmap(size));
+    cache.lock().unwrap().insert(key, bitmap.clone());
+    bitmap
+}
+
+/// `name` looked up for `size` pixels, decoded for a later [`Raw::bitmap`].
+pub fn named(name: &str, theme_path: &str, size: u32) -> Option<Raw> {
+    load(&lookup(name, theme_path, size)?)
 }
 
 fn home() -> PathBuf {
@@ -256,6 +329,16 @@ impl Dir {
             }
         }
     }
+
+    /// The spec's DirectoryMatchesSize at scale 1.
+    fn matches(&self, size: u32) -> bool {
+        self.scale == 1
+            && match self.kind {
+                Kind::Fixed => self.size == size,
+                Kind::Scalable => (self.min..=self.max).contains(&size),
+                Kind::Threshold => self.size.abs_diff(size) <= self.threshold,
+            }
+    }
 }
 
 struct Theme {
@@ -265,8 +348,9 @@ struct Theme {
     roots: Vec<PathBuf>,
 }
 
-#[derive(Default)]
 struct Themes {
+    bases: Vec<PathBuf>,
+    configured: String,
     loaded: HashMap<String, Option<Theme>>,
     chain: Option<Vec<String>>,
 }
@@ -289,8 +373,8 @@ fn configured_theme() -> String {
         .unwrap_or_else(|| "hicolor".into())
 }
 
-fn load_theme(name: &str) -> Option<Theme> {
-    let roots: Vec<PathBuf> = icon_bases().into_iter().map(|b| b.join(name)).filter(|r| r.is_dir()).collect();
+fn load_theme(name: &str, bases: &[PathBuf]) -> Option<Theme> {
+    let roots: Vec<PathBuf> = bases.iter().map(|b| b.join(name)).filter(|r| r.is_dir()).collect();
     let index = roots.iter().find_map(|r| std::fs::read_to_string(r.join("index.theme")).ok())?;
     let mut sections: Vec<(String, HashMap<String, String>)> = Vec::new();
     for line in index.lines() {
@@ -331,8 +415,13 @@ fn load_theme(name: &str) -> Option<Theme> {
 }
 
 impl Themes {
+    fn new(bases: Vec<PathBuf>, configured: String) -> Self {
+        Self { bases, configured, loaded: HashMap::new(), chain: None }
+    }
+
     fn theme(&mut self, name: &str) -> Option<&Theme> {
-        self.loaded.entry(name.to_owned()).or_insert_with(|| load_theme(name)).as_ref()
+        let bases = &self.bases;
+        self.loaded.entry(name.to_owned()).or_insert_with(|| load_theme(name, bases)).as_ref()
     }
 
     /// The configured theme, what it inherits depth first, then hicolor.
@@ -341,7 +430,7 @@ impl Themes {
             return c.clone();
         }
         let mut order: Vec<String> = Vec::new();
-        let mut stack = vec![configured_theme()];
+        let mut stack = vec![self.configured.clone()];
         while let Some(name) = stack.pop() {
             if order.contains(&name) {
                 continue;
@@ -358,29 +447,30 @@ impl Themes {
         order
     }
 
+    /// The first theme in the chain carrying `name`, its best file for
+    /// `size`; a theme whose best would be upscaled yields to a later one
+    /// that has the pixels, and is the answer only when none does.
     fn find(&mut self, name: &str, size: u32) -> Option<PathBuf> {
+        let mut fallback = None;
         for theme in self.order() {
             let Some(t) = self.theme(&theme) else { continue };
-            let mut best: Option<(u32, PathBuf)> = None;
+            let mut found = Vec::new();
             for dir in &t.dirs {
                 for root in &t.roots {
-                    for ext in ["png", "svg"] {
-                        let path = root.join(&dir.path).join(format!("{name}.{ext}"));
-                        if !path.is_file() {
-                            continue;
-                        }
-                        let d = dir.distance(size);
-                        if best.as_ref().is_none_or(|(b, _)| d < *b) {
-                            best = Some((d, path));
-                        }
+                    for path in files_in(&root.join(&dir.path), name) {
+                        found.push(Candidate { path, exact: dir.matches(size), distance: dir.distance(size), nominal: dir.size * dir.scale });
                     }
                 }
             }
-            if let Some((_, path)) = best {
-                return Some(path);
+            match best(found, size) {
+                Some((false, path)) => return Some(path),
+                Some((true, path)) => {
+                    fallback.get_or_insert(path);
+                }
+                None => {}
             }
         }
-        None
+        fallback
     }
 }
 
@@ -388,12 +478,122 @@ impl Themes {
 mod tests {
     use super::*;
 
+    fn png(path: &Path, side: u32) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        RgbaImage::from_pixel(side, side, image::Rgba([255, 0, 0, 255])).save(path).unwrap();
+    }
+
+    fn svg(path: &Path) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, br##"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="#f00"/></svg>"##).unwrap();
+    }
+
+    /// elementary-colloid's shape: per-size app directories, every one
+    /// Scalable, the `@3x/16` one claiming 24 to 69 pixels.
+    fn fixture(base: &Path) {
+        let theme = base.join("fx");
+        std::fs::create_dir_all(&theme).unwrap();
+        std::fs::write(
+            theme.join("index.theme"),
+            "[Icon Theme]\nName=fx\nInherits=hicolor\nDirectories=apps/16,apps@3x/16,apps/48,apps/64,apps/128,apps/scalable\n\n\
+             [apps/16]\nSize=16\nMinSize=8\nMaxSize=23\nType=Scalable\n\n\
+             [apps@3x/16]\nSize=16\nScale=3\nMinSize=8\nMaxSize=23\nType=Scalable\n\n\
+             [apps/48]\nSize=48\nMinSize=8\nMaxSize=63\nType=Scalable\n\n\
+             [apps/64]\nSize=64\nMinSize=8\nMaxSize=127\nType=Scalable\n\n\
+             [apps/128]\nSize=128\nMinSize=8\nMaxSize=512\nType=Scalable\n\n\
+             [apps/scalable]\nSize=64\nMinSize=8\nMaxSize=512\nType=Scalable\n",
+        )
+        .unwrap();
+        for (dir, side) in [("apps/16", 16), ("apps@3x/16", 48), ("apps/48", 48), ("apps/64", 64), ("apps/128", 128)] {
+            png(&theme.join(dir).join("app.png"), side);
+        }
+        png(&theme.join("apps/16/tiny.png"), 16);
+        svg(&theme.join("apps/scalable/vector.svg"));
+        png(&theme.join("apps/48/vector.png"), 48);
+        let hicolor = base.join("hicolor");
+        std::fs::create_dir_all(&hicolor).unwrap();
+        std::fs::write(hicolor.join("index.theme"), "[Icon Theme]\nName=hicolor\nDirectories=256x256/apps\n\n[256x256/apps]\nSize=256\nType=Threshold\n").unwrap();
+        png(&hicolor.join("256x256/apps/tiny.png"), 256);
+        png(&hicolor.join("256x256/apps/only.png"), 256);
+    }
+
+    fn found(themes: &mut Themes, name: &str, size: u32) -> String {
+        let path = themes.find(name, size).unwrap();
+        let base = themes.bases[0].clone();
+        path.strip_prefix(base).unwrap().to_string_lossy().into_owned()
+    }
+
     #[test]
-    fn sizes_rank_scalable_then_nearest_above() {
-        assert!(rank("scalable") < rank("64x64"));
-        assert!(rank("64x64") < rank("128x128"));
-        assert!(rank("128x128") < rank("48x48"));
-        assert!(rank("48x48") < rank("16x16"));
+    fn a_theme_picks_the_file_for_the_drawn_size() {
+        let dir = tempfile::tempdir().unwrap();
+        fixture(dir.path());
+        let mut themes = Themes::new(vec![dir.path().to_owned()], "fx".into());
+        assert_eq!(found(&mut themes, "app", 64), "fx/apps/64/app.png");
+        assert_eq!(found(&mut themes, "app", 16), "fx/apps/16/app.png");
+        assert_eq!(found(&mut themes, "app", 48), "fx/apps/48/app.png");
+        assert_eq!(found(&mut themes, "app", 100), "fx/apps/128/app.png");
+        assert_eq!(found(&mut themes, "app", 300), "fx/apps/128/app.png");
+        assert_eq!(found(&mut themes, "vector", 64), "fx/apps/scalable/vector.svg");
+        assert_eq!(found(&mut themes, "vector", 48), "fx/apps/48/vector.png");
+        assert_eq!(found(&mut themes, "only", 64), "hicolor/256x256/apps/only.png");
+    }
+
+    #[test]
+    fn a_small_raster_yields_to_an_inherited_larger_one() {
+        let dir = tempfile::tempdir().unwrap();
+        fixture(dir.path());
+        let mut themes = Themes::new(vec![dir.path().to_owned()], "fx".into());
+        assert_eq!(found(&mut themes, "tiny", 64), "hicolor/256x256/apps/tiny.png");
+        assert_eq!(found(&mut themes, "tiny", 16), "fx/apps/16/tiny.png");
+    }
+
+    #[test]
+    fn an_unindexed_theme_and_loose_pixmaps_rank_by_pixels() {
+        let dir = tempfile::tempdir().unwrap();
+        let t = dir.path().join("t");
+        png(&t.join("32x32/apps/a.png"), 32);
+        png(&t.join("apps/128/a.png"), 128);
+        png(&t.join("256x256@2/apps/a.png"), 512);
+        svg(&t.join("scalable/apps/b.svg"));
+        png(&t.join("64x64/apps/b.png"), 64);
+        let pick = |name: &str, size: u32| best(in_theme(&t, name, size), size).unwrap().1.strip_prefix(&t).unwrap().to_string_lossy().into_owned();
+        assert_eq!(pick("a", 64), "apps/128/a.png");
+        assert_eq!(pick("a", 32), "32x32/apps/a.png");
+        assert_eq!(pick("a", 300), "256x256@2/apps/a.png");
+        assert_eq!(pick("b", 64), "64x64/apps/b.png");
+        assert_eq!(pick("b", 96), "scalable/apps/b.svg");
+        let pixmaps = dir.path().join("pixmaps");
+        png(&pixmaps.join("small/p.png"), 24);
+        png(&pixmaps.join("large/p.png"), 96);
+        let loose_pick = best(vec![loose(pixmaps.join("small/p.png")), loose(pixmaps.join("large/p.png"))], 64).unwrap();
+        assert_eq!(loose_pick, (false, pixmaps.join("large/p.png")));
+        assert_eq!(dir_size("48@2x"), Some(96));
+    }
+
+    #[test]
+    fn an_absolute_path_is_its_own_answer() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("icon.png");
+        png(&p, 24);
+        let s = p.to_string_lossy().into_owned();
+        assert_eq!(lookup(&s, "", 64), Some(p.clone()));
+        assert_eq!(lookup(&format!("file://{s}"), "", 64), Some(p.clone()));
+        assert_eq!(lookup(&dir.path().join("missing.png").to_string_lossy(), "", 64), None);
+    }
+
+    #[test]
+    fn load_at_draws_at_the_asked_size() {
+        let dir = tempfile::tempdir().unwrap();
+        for (name, side) in [("small.png", 16), ("large.png", 512)] {
+            png(&dir.path().join(name), side);
+            let b = load_at(&dir.path().join(name), 64).unwrap();
+            assert_eq!((b.pixmap.width(), b.pixmap.height()), (64, 64));
+        }
+        let v = dir.path().join("v.svg");
+        svg(&v);
+        let b = load_at(&v, 48).unwrap();
+        assert_eq!((b.pixmap.width(), b.pixmap.height()), (48, 48));
+        assert_eq!(b.pixmap.data_as_u8_slice()[24 * 48 * 4..][..4], [255, 0, 0, 255]);
     }
 
     #[test]
@@ -405,6 +605,9 @@ mod tests {
         let thr = Dir { path: "32x32".into(), size: 32, scale: 1, min: 32, max: 32, threshold: 2, kind: Kind::Threshold };
         assert_eq!(thr.distance(33), 0);
         assert_eq!(thr.distance(40), 6);
+        let at3 = Dir { path: "apps@3x/16".into(), size: 16, scale: 3, min: 8, max: 23, threshold: 2, kind: Kind::Scalable };
+        assert_eq!(at3.distance(64), 0);
+        assert!(!at3.matches(64));
     }
 
     #[test]
@@ -417,8 +620,8 @@ mod tests {
     #[test]
     fn svg_renders_at_the_longest_side() {
         let svg = br##"<svg xmlns="http://www.w3.org/2000/svg" width="16" height="8"><rect width="16" height="8" fill="#f00"/></svg>"##;
-        let raw = from_svg(svg).unwrap();
-        assert_eq!((raw.width, raw.height), (MAX, MAX / 2));
-        assert_eq!(&raw.rgba[..4], &[255, 0, 0, 255]);
+        let img = from_svg(svg, 64).unwrap();
+        assert_eq!(img.dimensions(), (64, 32));
+        assert_eq!(&img.as_raw()[..4], &[255, 0, 0, 255]);
     }
 }

@@ -5,7 +5,7 @@
 # with the key absent.
 #
 # The session's XDG_DATA_DIRS is the isolated HOME alone, so the installed-app
-# list is exactly the six entries staged below and every count here is a real
+# list is exactly the seven entries staged below and every count here is a real
 # number rather than whatever the VM happens to ship. One of them carries a
 # solid green icon nothing else in the palette comes near, which is how the
 # frame is read: at 64px the cell's icon covers thousands of pixels of that
@@ -36,6 +36,13 @@
 # leaves the launcher open; and Backspace held on an empty field for longer
 # than the key repeat delay climbs one level, never every level and then
 # out of the launcher.
+#
+# The icon a cell draws is the file sized for it: one entry's icon exists as
+# a 48px file in a Scale=3 Scalable directory that claims 24 to 69 pixels
+# (elementary-colloid's `apps@3x/16`, which the spec's size distance puts at
+# 0 for a 64px cell) and as a 128px file, each its own colour. The cell has
+# to carry the 128px file's colour and none of the 48px one's, cropped out
+# to `app-grid-crisp.png` for reading.
 leg_app_grid_flag="--app-grid"
 leg_app_grid_order=26
 leg_app_grid_needs="convert wtype jq"
@@ -74,6 +81,10 @@ app_grid_hold_path="$shot_dir/app-grid-status-hold.json"
 # green count is one cell's worth and not five.
 app_grid_mark="#2F9E44"
 app_grid_other="#2A6FAE"
+# The sized entry's 128px file and its 48px one.
+app_grid_large="#7048E8"
+app_grid_small="#E8590C"
+app_grid_crisp_png="$shot_dir/app-grid-crisp.png"
 
 # Everything above the card's own top row (the launcher's top fraction, 0.3 of a
 # 1080 output, the same number --menu-emerge states). Nothing the launcher
@@ -102,13 +113,24 @@ leg_app_grid_fixture() {
     $convert_bin -size "${size}x${size}" "xc:$app_grid_other" \
       "$app_grid_icon_dir/${size}x${size}/apps/formalshell-app-grid-plain.png"
   done
+  mkdir -p "$app_grid_icon_dir/16x16@3/apps"
+  $convert_bin -size 48x48 "xc:$app_grid_small" "$app_grid_icon_dir/16x16@3/apps/formalshell-app-grid-sized.png"
+  $convert_bin -size 128x128 "xc:$app_grid_large" "$app_grid_icon_dir/128x128/apps/formalshell-app-grid-sized.png"
   # QIconLoader enumerates no directories at all without an index.theme, so a
   # bare PNG in the right place still resolves to no icon.
   cat > "$app_grid_icon_dir/index.theme" <<'EOF'
 [Icon Theme]
 Name=Hicolor
 Comment=Fallback icon theme
-Directories=48x48/apps,128x128/apps
+Directories=16x16@3/apps,48x48/apps,128x128/apps
+
+[16x16@3/apps]
+Size=16
+Scale=3
+MinSize=8
+MaxSize=23
+Context=Applications
+Type=Scalable
 
 [48x48/apps]
 Size=48
@@ -121,10 +143,10 @@ Context=Applications
 Type=Threshold
 EOF
 
-  # Six entries: the launch probe under a name nothing else here matches, four
+  # Seven entries: the launch probe under a name nothing else here matches, four
   # ordinary ones so the grid wraps past its own column count, and one long
   # name with no icon at all, which is both the elision case and the honest
-  # no-icon cell.
+  # no-icon cell, and the sized one last.
   app_grid_entry "formalshell-probe.desktop" "Grid Launch Probe" \
     "formalshell-app-grid-mark" "touch $app_grid_marker"
   app_grid_entry "formalshell-files.desktop" "Files Fixture" \
@@ -137,6 +159,8 @@ EOF
     "formalshell-app-grid-plain" "true"
   app_grid_entry "formalshell-long.desktop" "A Very Long Fixture Application Name" \
     "" "true"
+  app_grid_entry "formalshell-sized.desktop" "Sized Fixture" \
+    "formalshell-app-grid-sized" "true"
 }
 
 leg_app_grid_timing() {
@@ -225,10 +249,20 @@ EOF
 # everything off that colour goes black first, so a palette that is already
 # near-white somewhere else cannot be counted as a match by the second.
 app_grid_mark_pixels() {
-  $convert_bin "$1" -crop "${2:-100%x100%+0+0}" +repage \
-    -fuzz 12% -fill black +opaque "$app_grid_mark" \
-    -fuzz 12% -fill white -opaque "$app_grid_mark" \
+  app_grid_colour_pixels "$1" "$app_grid_mark" "${2:-}"
+}
+
+app_grid_colour_pixels() {
+  $convert_bin "$1" -crop "${3:-100%x100%+0+0}" +repage \
+    -fuzz 12% -fill black +opaque "$2" \
+    -fuzz 12% -fill white -opaque "$2" \
     -colorspace Gray -format '%[fx:int(mean*w*h+0.5)]' info: 2>/dev/null
+}
+
+# The box the sized entry's 128px colour covers, as a crop geometry.
+app_grid_large_box() {
+  $convert_bin "$1" -fuzz 12% -fill black +opaque "$app_grid_large" \
+    -fuzz 12% -fill white -opaque "$app_grid_large" -format '%@' info: 2>/dev/null
 }
 
 app_grid_field() {
@@ -270,8 +304,8 @@ leg_app_grid_assert() {
   if [ -z "$columns" ] || [ "$columns" -le 1 ]; then
     fail "the app grid rendered ${columns:-0} column(s), so it is still a row list"
   fi
-  if [ -z "$rows" ] || [ "$rows" -lt 6 ]; then
-    fail "the apps route listed ${rows:-0} entries, fewer than the six staged: $(cat "$app_grid_open_path")"
+  if [ -z "$rows" ] || [ "$rows" -lt 7 ]; then
+    fail "the apps route listed ${rows:-0} entries, fewer than the seven staged: $(cat "$app_grid_open_path")"
   fi
   # A grid draws no group headings, so it must not report any either.
   if ! grep -q '"sections":\[\]' "$app_grid_open_path"; then
@@ -290,6 +324,20 @@ leg_app_grid_assert() {
   fi
   echo "SMOKE_APP_GRID_ICON ${marked}px of the probe entry's own colour"
 
+  # The sized entry's cell wears the 128px file, resampled down, and not the
+  # 48px one a size distance of 0 would have picked and blown up.
+  local large small box
+  large=$(app_grid_colour_pixels "$app_grid_png" "$app_grid_large")
+  small=$(app_grid_colour_pixels "$app_grid_png" "$app_grid_small")
+  if [ -z "$large" ] || [ "$large" -lt 2500 ] || [ -z "$small" ] || [ "$small" -gt 0 ]; then
+    fail "the sized entry drew ${large:-0}px of its 128px file and ${small:-0}px of its 48px one"
+  fi
+  box=$(app_grid_large_box "$app_grid_png")
+  local bw bh bx by
+  IFS='x+' read -r bw bh bx by <<< "$box"
+  $convert_bin "$app_grid_png" -crop "$((bw + 48))x$((bh + 64))+$((bx - 24))+$((by - 24))" +repage "$app_grid_crisp_png" 2>/dev/null
+  echo "SMOKE_APP_GRID_CRISP $app_grid_crisp_png (${large}px of the 128px file over $box, none of the 48px one)"
+
   # The arrows: one cell right, then a whole row of cells down.
   cat "$app_grid_right_path"; echo
   cursor=$(app_grid_field "$app_grid_right_path" cursor)
@@ -302,7 +350,7 @@ leg_app_grid_assert() {
     fail "Down moved the grid cursor to ${cursor:-none}, not one row of $columns cells on from 1"
   fi
 
-  # Six cells over two rows already fit the card, so there is nothing for
+  # Seven cells over two rows already fit the card, so there is nothing for
   # either arrow to scroll and the view has to stay where it was. A reveal
   # queued for a footer row that a query rebuilt inside the same tick used
   # to write the card's own offset into the grid here instead.

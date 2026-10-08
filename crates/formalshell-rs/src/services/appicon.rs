@@ -125,7 +125,6 @@ struct Inner {
     scanned: bool,
     procs: HashMap<String, Vec<ProcInfo>>,
     asked: HashSet<i64>,
-    fitted: HashMap<(PathBuf, u32), Option<Bitmap>>,
 }
 
 impl Inner {
@@ -178,9 +177,9 @@ impl Inner {
             terminal: extras.terminal,
             actions: extras.actions,
         };
-        let Some(path) = icons::lookup(&entry.icon, "") else { return Icon { entry: Some(info), ..Icon::default() } };
+        let Some(path) = icons::lookup(&entry.icon, "", size) else { return Icon { entry: Some(info), ..Icon::default() } };
         let source = path.to_string_lossy().into_owned();
-        let image = self.fitted.entry((path, size)).or_insert_with_key(|(p, s)| icons::load(p)?.bitmap(*s)).clone();
+        let image = icons::load_at(&path, size);
         Icon { source, image, entry: Some(info) }
     }
 }

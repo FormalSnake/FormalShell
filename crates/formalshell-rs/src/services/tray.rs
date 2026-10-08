@@ -79,9 +79,13 @@ impl State {
 
 static TRAY: OnceLock<fs_tray::Tray> = OnceLock::new();
 
+/// The size an item's picture is picked for, near the bar's body type it is
+/// drawn at.
+const PICK: u32 = 22;
+
 fn icon_of(item: &WireItem) -> Option<Raw> {
     let named = match item.icon_source() {
-        IconSource::Named { name, theme_path } => icons::named(name, theme_path),
+        IconSource::Named { name, theme_path } => icons::named(name, theme_path, PICK),
         IconSource::Pixmaps => None,
     };
     named.or_else(|| {
@@ -90,7 +94,7 @@ fn icon_of(item: &WireItem) -> Option<Raw> {
         } else {
             &item.icon_pixmap
         };
-        let pm = closest_pixmap(pixmaps, 22, 22)?;
+        let pm = closest_pixmap(pixmaps, PICK as i32, PICK as i32)?;
         icons::from_rgba(pm.width, pm.height, &pm.rgba)
     })
 }
@@ -115,7 +119,7 @@ fn menu_icon(node: &MenuItem) -> Option<Raw> {
     if !node.icon_png.is_empty() {
         return icons::from_bytes(&node.icon_png);
     }
-    (!node.icon_name.is_empty()).then(|| icons::named(&node.icon_name, "")).flatten()
+    (!node.icon_name.is_empty()).then(|| icons::named(&node.icon_name, "", PICK)).flatten()
 }
 
 fn node_of(node: &MenuItem) -> MenuNode {
