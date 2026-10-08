@@ -162,6 +162,13 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   Then settings.json rewritten to the title cell alone, the title
   stopping at its own ceiling with the marquee running. Rides
   `--bar-position <edge>`, which pins the edge in this leg's own `bar` key.
+- `bluez_rssi.sh` `--bluez-rssi`: rides `--idle`; the shell's system bus
+  a private one where `dev/bluez-stub.py` plays a BlueZ scanning on a
+  discovery the shell did not start, ~700 RSSI-only signals a minute over
+  a paired device and strangers. Through the idle window nothing past the
+  clock commits, the stub is never called and the shell spends under 5
+  ticks; `bluetooth status` lists the paired device alone, and the
+  strangers too once the panel is open.
 - `caffeinate.sh` `--caffeinate`: `caffeinate.onStartup` starting the
   session caffeinated with its `formalshell:caffeinate` layer surface
   mapped, the real ext-idle-notify monitor staying non-idle three screensaver

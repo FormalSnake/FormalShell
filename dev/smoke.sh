@@ -54,6 +54,7 @@ legs=()
 active_legs=()
 settings_extra=""
 fixture_cleanup=""
+shell_env=""
 screenshot_delay=8
 session_timeout=40
 tail_gap=1
@@ -580,7 +581,7 @@ if [ -n "${FS_CPU_QUOTA:-}" ]; then
   echo "shell cpu quota: $FS_CPU_QUOTA per ${FS_CPU_QUOTA_PERIOD:-100ms}"
 fi
 # FS_TRACE: the shell logs every commit, which the budget legs read.
-shell_prefix="env FS_TRACE=1${shell_prefix:+ $shell_prefix}"
+shell_prefix="env FS_TRACE=1${shell_env:+ $shell_env}${shell_prefix:+ $shell_prefix}"
 if [ -n "$shell_launcher" ]; then
   "$shell_launcher" "$shell_start_script"
 else
