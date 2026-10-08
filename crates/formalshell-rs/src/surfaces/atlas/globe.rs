@@ -518,7 +518,7 @@ impl Globe {
                 self.drag.last = (px, py);
                 self.drag.velocity = (0.0, 0.0);
                 self.drag.velocity_at = None;
-                self.drag.sample = (px, py);
+                self.drag.sample = (lx, ly);
                 self.drag.sample_at = Some(now);
             }
             self.sample(lx, ly, now);
@@ -889,5 +889,47 @@ mod tests {
         let now = Instant::now();
         g.press(210.0, 170.0);
         assert_eq!(g.release(212.0, 171.0, now), Out::Station(s));
+    }
+
+    fn dragged() -> (Globe, Instant) {
+        (Globe { rect: (0.0, 0.0, 400.0, 300.0), centre_latitude: 0.0, centre_longitude: 0.0, ..Globe::default() }, Instant::now())
+    }
+
+    #[test]
+    fn a_drag_turns_the_globe_by_the_pointer_travel() {
+        let (mut g, t0) = dragged();
+        let per_px = g.longitude_sensitivity();
+        g.press(100.0, 150.0);
+        for i in 1..=10u32 {
+            g.motion(100.0 + 10.0 * f64::from(i), 150.0, t0 + std::time::Duration::from_millis(u64::from(i) * 16));
+        }
+        let want = -100.0 * per_px;
+        assert!((g.centre_longitude - want).abs() < 1e-6, "{} vs {want}", g.centre_longitude);
+    }
+
+    #[test]
+    fn a_pointer_that_stopped_before_release_does_not_coast() {
+        let (mut g, t0) = dragged();
+        let ms = std::time::Duration::from_millis;
+        g.press(100.0, 150.0);
+        g.motion(112.0, 150.0, t0);
+        g.motion(113.0, 150.0, t0 + ms(16));
+        g.release(113.0, 150.0, t0 + ms(17));
+        let before = g.centre_longitude;
+        assert!(!g.animating(), "a 60 px/s tail started a coast");
+        g.tick(t0 + ms(40));
+        assert_eq!(g.centre_longitude, before);
+    }
+
+    #[test]
+    fn a_held_pointer_does_not_coast() {
+        let (mut g, t0) = dragged();
+        let ms = std::time::Duration::from_millis;
+        g.press(100.0, 150.0);
+        for i in 1..=5u64 {
+            g.motion(100.0 + 40.0 * i as f64, 150.0, t0 + ms(i * 16));
+        }
+        g.release(300.0, 150.0, t0 + ms(400));
+        assert!(!g.animating());
     }
 }

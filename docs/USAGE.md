@@ -804,14 +804,14 @@ alias for both).
 `theme.surfaceOpacity` (0 to 1, default 0.85) is the alpha of the bar cells,
 the panels and the launcher card. The shell blurs nothing itself: that alpha
 is what lets a compositor blur read through. The example Hyprland config
-turns the blur on and points it at the `formalshell:bar`, `formalshell:panel`
-and `formalshell:menu` layer namespaces. Under a compositor with blur off the
+turns the blur on and points it at the `formalshell:bar`, `formalshell:panel`,
+`formalshell:menu` and `formalshell:radio` layer namespaces. Under a compositor with blur off the
 same alpha reads as a tint. Toasts and the lock screen stay opaque either
 way; the OSD pill is drawn at the same alpha as the line it buds off.
 
 The launcher and the polkit request cover the whole output and sit over a
-0.5 black scrim, so their layer rules (`formalshell:menu` and
-`formalshell:polkit`) leave anything at or below 0.6 unblurred: the scrim
+0.5 black scrim, so their layer rules (`formalshell:menu`,
+`formalshell:radio` and `formalshell:polkit`) leave anything at or below 0.6 unblurred: the scrim
 darkens the desktop and the card over it keeps its blur. A `surfaceOpacity`
 under 0.6 puts the card under that mark too and it loses its blur there;
 lower those namespaces' `ignore_alpha` to match if you want it back.

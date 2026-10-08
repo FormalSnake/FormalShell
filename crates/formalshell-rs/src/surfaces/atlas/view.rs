@@ -308,7 +308,7 @@ impl Shown {
         let tabs_y = body_top + p;
         let names = ["World", "cliamp", "Favorites", "Recent"];
         let tabs = w::group(names.iter().map(|n| Opt::new(*n)).collect(), a.mode.tab().unwrap_or(usize::MAX), true).fill().on("tab");
-        let (_, tabs_h) = ui::measure(&tabs, sidebar_w, theme, kit);
+        let tabs_h = ctl;
         wake |= self.side.draw(&tabs, Rect::new(side_x, tabs_y, side_x + sidebar_w, tabs_y + tabs_h), Some(clip), alpha, theme, kit, scene, now).animating;
 
         // The station list, or the output picker in its place.
@@ -478,6 +478,7 @@ fn player_el(a: &Atlas, r: &radio::State, s: &fs_theme::tokens::Space) -> El {
         usize::MAX,
         false,
     )
+    .height(s.control_height)
     .on("transport");
     let tip = if r.output.is_empty() { "Choose audio output".to_owned() } else { format!("Audio output: {}", r.output_label(&r.output)) };
     let controls = w::row(

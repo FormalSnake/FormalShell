@@ -22,6 +22,7 @@ use crate::surfaces::atlas::globe::{self, Out};
 use crate::surfaces::atlas::view::Shown;
 use crate::surfaces::atlas::{Atlas, Key};
 use crate::surfaces::modal::Part;
+use crate::surfaces::tooltip;
 use crate::ui::What;
 
 const NAMESPACE: &str = "formalshell:radio";
@@ -88,6 +89,7 @@ impl App {
             return;
         }
         self.atlas.model.closed();
+        self.tips.hide(None, Instant::now());
         if let Some(w) = &mut self.atlas.win {
             w.shown.modal.close(Instant::now());
         }
@@ -241,6 +243,9 @@ impl App {
                     m.globe.leave();
                     shape = Some(Shape::Default);
                 }
+                if on_globe {
+                    self.tips.hide(None, now);
+                }
                 if w.sliding
                     && let Some(h) = w.shown.hit(x, y).filter(|h| h.on.as_deref() == Some("volume")).or_else(|| w.shown.hit(x, y))
                 {
@@ -251,6 +256,15 @@ impl App {
                 }
                 let hit = w.shown.hit(x, y);
                 w.shown.set_hover(hit.as_ref().map(|h| h.path.clone()));
+                if !on_globe {
+                    let ask = hit.as_ref().and_then(|h| {
+                        h.tip.clone().map(|text| tooltip::Ask { owner: format!("radio:{}:{}", h.rect.x, h.rect.y), text, rect: h.rect, bar: None })
+                    });
+                    match ask {
+                        Some(ask) => self.tips.show(ask, now),
+                        None => self.tips.hide(None, now),
+                    }
+                }
                 if let Some(i) = hit.and_then(|h| h.on).and_then(|on| on.strip_prefix("row:").and_then(|i| i.parse::<usize>().ok())) {
                     if m.selected_index != Some(i) || m.keyboard_selection {
                         m.set_selection(&r, Some(i), false);
@@ -258,6 +272,7 @@ impl App {
                 }
             }
             PointerEventKind::Leave { .. } => {
+                self.tips.hide(None, now);
                 m.globe.leave();
                 w.shown.set_hover(None);
             }

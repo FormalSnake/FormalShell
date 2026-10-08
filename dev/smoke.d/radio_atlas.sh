@@ -9,7 +9,11 @@
 # that one. After `radio stop`, a real pointer
 # click on the globe's centre (where the playing station now sits) picks the
 # station off the globe and plays it again, read back off `radio status`.
-# Escape closes the atlas, read back off `panel state`.
+# Escape closes the atlas, read back off `panel state`. Before that, the
+# pointer parks on the header's close button, and the formalshell:tooltip
+# layer has to be absent before and present after, the way --tooltip reads a
+# panel header. The example Hyprland config has to carry a layer rule for
+# formalshell:radio (this rig runs with blur off, so a frame cannot show it).
 #
 # The globe's centre is worked out from the panel's own layout and the
 # spacing tokens (panelPadding 12, controlHeight 32, lg 8, a 16px caption
@@ -29,6 +33,10 @@ radio_atlas_stopped_path="$shot_dir/radio-atlas-stopped.json"
 radio_atlas_picked_path="$shot_dir/radio-atlas-picked.json"
 radio_atlas_closed_path="$shot_dir/radio-atlas-closed.txt"
 radio_atlas_globe_path="$shot_dir/radio-atlas-globe.txt"
+radio_atlas_tip_before_path="$shot_dir/radio-atlas-tip-before.json"
+radio_atlas_tip_after_path="$shot_dir/radio-atlas-tip-after.json"
+radio_atlas_tip_png="$shot_dir/radio-atlas-tooltip.png"
+radio_atlas_loop_pid_path="$shot_dir/radio-atlas-loop.pid"
 radio_atlas_name="FormalShell Atlas Radio"
 radio_atlas_port=18098
 
@@ -53,10 +61,14 @@ leg_radio_atlas_drive() {
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 # ffmpeg's listener takes one client and exits; the station is played twice.
-( while true; do
+# The loop closes every inherited fd above stderr first (the caller's flock
+# fd among them) and its pid is recorded so cleanup can stop the respawning.
+( for fd in /proc/\$BASHPID/fd/*; do n=\${fd##*/}; [ "\$n" -gt 2 ] && eval "exec \$n>&-"; done 2>/dev/null
+  while true; do
   "$ffmpeg_bin" -nostdin -loglevel error -re -i "$radio_atlas_track_path" -c copy -f mp3 \
     -listen 1 "http://127.0.0.1:$radio_atlas_port/station.mp3"
 done ) &
+echo \$! > "$radio_atlas_loop_pid_path"
 sleep 5
 $ipc call panel open radio > "$radio_atlas_open_path" 2>&1
 sleep 4
@@ -100,17 +112,34 @@ while [ "\$SECONDS" -lt 12 ]; do
 done
 sleep 1
 "$grim_bin" "$radio_atlas_picked_png" > /dev/null 2>&1
+"$hyprctl_bin" -j layers > "$radio_atlas_tip_before_path" 2>&1
+"$wlrctl_bin" pointer move -4000 -4000
+sleep 0.5
+"$wlrctl_bin" pointer move \$(( ox + cw - 16 )) \$(( oy + 16 ))
+sleep 2
+"$hyprctl_bin" -j layers > "$radio_atlas_tip_after_path" 2>&1
+"$grim_bin" -c "$radio_atlas_tip_png" > /dev/null 2>&1
 "$wtype_bin" -k Escape
 sleep 2
 $ipc call panel state > "$radio_atlas_closed_path" 2>&1
 $ipc call radio stop > /dev/null 2>&1
 EOF
+  add_cleanup "kill \$(cat '$radio_atlas_loop_pid_path' 2>/dev/null) 2>/dev/null || true"
   add_cleanup "pkill -f 'listen 1 http://127.0.0.1:$radio_atlas_port' 2>/dev/null || true"
   add_cleanup "pkill -f 'radio-atlas-drive.sh' 2>/dev/null || true"
   hypr_exec_once "bash $script"
 }
 
 leg_radio_atlas_assert() {
+  grep -q 'formalshell:radio' "$radio_atlas_tip_before_path" \
+    || fail "no formalshell:radio layer in the layer dump with the atlas open"
+  grep -q 'formalshell:tooltip' "$radio_atlas_tip_before_path" \
+    && fail "a tooltip layer was mapped before the pointer parked on a button"
+  grep -q 'formalshell:tooltip' "$radio_atlas_tip_after_path" \
+    || fail "no tooltip layer after the pointer parked on the close button"
+  grep -q 'namespace = "formalshell:radio"' "docs/examples/hyprland/formalshell.lua" \
+    || fail "the example Hyprland config has no layer rule for formalshell:radio"
+  echo "SMOKE_RADIO_ATLAS_TOOLTIP $radio_atlas_tip_png"
   grep -q "^ok$" "$radio_atlas_open_path" 2>/dev/null \
     || fail "panel open radio did not answer ok, got: $(cat "$radio_atlas_open_path" 2>/dev/null)"
   grep -q "^radio$" "$radio_atlas_state_path" 2>/dev/null \

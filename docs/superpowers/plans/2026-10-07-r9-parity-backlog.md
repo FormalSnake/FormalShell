@@ -8,10 +8,6 @@ by surface; one line each.
 - Calendar: the life-progress prompt needs the launcher's input answer routed back to the
   panel (`wayland/launcher.rs`'s resolved tokens), which the R4b launcher agent holds.
 
-## Media
-- Radio Atlas: its icon buttons carry no hover tooltips (the launcher's card
-  routes none to the tooltip group either).
-
 ## Rig
 - `--screensaver-gif` README media are older than the current QML look.
 - The real 33 ms bar-gap budget during a launcher open is measured on
