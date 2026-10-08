@@ -70,6 +70,18 @@ pub fn toggle_special() -> String {
     format!("hl.dsp.workspace.toggle_special({})", string(PARK_NAME))
 }
 
+/// A plain Escape bind running `argv`, kept in a Lua global so a later eval
+/// removes that one bind (`hl.unbind("Escape")` would take the user's own
+/// Escape binds with it). `non_consuming` passes the key on to whatever has
+/// focus, so the bind sees it without taking it from the app.
+pub fn bind_escape(global: &str, argv: &[String]) -> String {
+    format!("{} {global} = hl.bind(\"Escape\", {}, {{ non_consuming = true }})", unbind(global), spawn(argv))
+}
+
+pub fn unbind(global: &str) -> String {
+    format!("if {global} then {global}:remove() {global} = nil end")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -90,6 +102,10 @@ mod tests {
             "hl.dsp.window.move({ window = \"address:0xab\", workspace = \"special:formalshell-console\", follow = false })"
         );
         assert_eq!(toggle_special(), "hl.dsp.workspace.toggle_special(\"formalshell-console\")");
+        assert_eq!(
+            bind_escape("fs_esc", &["ipc".into(), "x".into()]),
+            r#"if fs_esc then fs_esc:remove() fs_esc = nil end fs_esc = hl.bind("Escape", hl.dsp.exec_cmd("'ipc' 'x'"), { non_consuming = true })"#
+        );
         assert_eq!(value("-3"), "-3");
         assert_eq!(value("+"), "\"+\"");
         assert_eq!(string(r#"a"b\c"#), r#""a\"b\\c""#);

@@ -13,21 +13,26 @@
 #  2. A headphone going from disconnected to connected raises one carrying
 #     its icon, its name, "Connected" and one ring from BlueZ's battery.
 #  3. A real pointer parked on the card holds it past its four seconds, and
-#     the pointer leaving then dismisses it. Escape is not driven: the card
-#     asks for on-demand keyboard focus (exclusive would pin the pointer to
-#     it), which Hyprland gives on a click, and a click opens the panel.
+#     the pointer leaving then dismisses it.
 #  4. The same device disconnecting and reconnecting a second later raises
 #     none.
 #  5. A pair of AirPods (the librepods status file staged first) raises a
 #     card with one ring each for left, right and case off the earbuds
 #     backend, and the pointer leaving the card dismisses it.
-#  6. With do-not-disturb on in state.json a connect raises none.
+#  6. Escape, typed by wtype (a real virtual keyboard) into a foot window
+#     that has the focus and never loses it, dismisses a card held up by the
+#     pointer parked on it, through the
+#     non-consuming bind the card adds while it is up: one Escape bind in
+#     `hyprctl binds` with the card up and none after, the active window
+#     the same foot throughout, and the letters typed around the Escape
+#     reaching foot with the Escape between them.
+#  7. With do-not-disturb on in state.json a connect raises none.
 #
 # The pointer is wlrctl, a real virtual-pointer client, for the reason
 # tooltip.sh documents: only one sends the surface a pointer enter.
 leg_headset_card_flag="--headset-card"
 leg_headset_card_order=177
-leg_headset_card_needs="wlrctl jq"
+leg_headset_card_needs="wlrctl jq wtype foot"
 
 headset_dir="$shot_dir/headset-card"
 headset_list="$headset_dir/bluetooth.json"
@@ -36,6 +41,9 @@ headset_bluez_png="$shot_dir/headset-card-bluez.png"
 headset_held_png="$shot_dir/headset-card-held.png"
 headset_airpods_png="$shot_dir/headset-card-airpods.png"
 headset_dnd_png="$shot_dir/headset-card-dnd.png"
+headset_escape_png="$shot_dir/headset-card-escape.png"
+headset_typed="$headset_dir/typed.txt"
+headset_escape_marks="$headset_dir/escape.txt"
 
 headset_buds_address="AC:12:2F:11:22:33"
 headset_cans_address="11:22:33:44:55:66"
@@ -94,6 +102,7 @@ leave() {
   "$wlrctl_bin" pointer move 400 600 > /dev/null 2>&1
 }
 : > "$headset_log_marks"
+: > "$headset_escape_marks"
 sleep 6
 mark startup
 list true true false
@@ -126,6 +135,31 @@ sleep 2.5
 mark left
 list true true false
 sleep 4
+escapes() { "$hyprctl_bin" binds -j | "$jq_bin" '[.[] | select(.key == "Escape" and .modmask == 0)] | length'; }
+active() { "$hyprctl_bin" activewindow -j | "$jq_bin" -r '.class'; }
+"$hyprctl_bin" dispatch "hl.dsp.exec_cmd([==[$foot_bin --app-id=headset-typing sh -c 'stty raw -echo; exec dd bs=1 status=none of=$headset_typed']==])" > /dev/null
+sleep 2
+echo "before active=\$(active) escapes=\$(escapes)" >> "$headset_escape_marks"
+# Typed before the card: each wtype run uploads a keymap whose first key
+# sits on keycode 9, which a bind table reads as Escape.
+"$wtype_bin" ab
+list true false false
+sleep 4
+list true true false
+sleep 1.5
+# The pointer parked on the card holds it, so only Escape can take it down.
+park $headset_park_x $headset_park_y
+sleep 1
+echo "up active=\$(active) escapes=\$(escapes)" >> "$headset_escape_marks"
+"$grim_bin" -g "$headset_region" "$headset_escape_png" > /dev/null 2>&1
+"$wtype_bin" -k Escape
+for i in \$(seq 1 30); do [ "\$(unmapped)" -ge 3 ] && break; sleep 0.2; done
+sleep 0.5
+echo "after active=\$(active) escapes=\$(escapes)" >> "$headset_escape_marks"
+mark escaped
+leave
+"$wtype_bin" cd
+sleep 0.5
 if [ -f "$fs_state" ]; then
   "$jq_bin" '.dnd = true' "$fs_state" > "$fs_state.tmp" && mv "$fs_state.tmp" "$fs_state"
 else
@@ -156,16 +190,31 @@ headset_expect() {
   fi
 }
 
+headset_escape_expect() {
+  local before up after typed
+  cat "$headset_escape_marks"
+  before=$(awk '$1 == "before"' "$headset_escape_marks")
+  up=$(awk '$1 == "up"' "$headset_escape_marks")
+  after=$(awk '$1 == "after"' "$headset_escape_marks")
+  [ "$before" = "before active=headset-typing escapes=0" ] || fail "headset escape: expected the typing foot focused and no Escape bind before the card, got '$before'"
+  [ "$up" = "up active=headset-typing escapes=1" ] || fail "headset escape: expected one Escape bind with the card up and focus left on foot, got '$up'"
+  [ "$after" = "after active=headset-typing escapes=0" ] || fail "headset escape: expected the Escape bind gone and focus still on foot, got '$after'"
+  typed=$(cat -v "$headset_typed" 2>/dev/null)
+  echo "SMOKE_HEADSET_TYPED $typed"
+  [ "$typed" = "ab^[cd" ] || fail "headset escape: foot read '$typed', not every key typed around the card ('ab^[cd')"
+}
+
 leg_headset_card_assert() {
   local png
   [ -s "$headset_log_marks" ] || fail "no headset card checkpoints were written"
   cat "$headset_log_marks"
-  for png in "$headset_bluez_png" "$headset_held_png" "$headset_airpods_png" "$headset_dnd_png"; do
+  for png in "$headset_bluez_png" "$headset_held_png" "$headset_airpods_png" "$headset_escape_png" "$headset_dnd_png"; do
     [ -s "$png" ] || fail "no screenshot at $png"
   done
   echo "SMOKE_HEADSET_BLUEZ $headset_bluez_png"
   echo "SMOKE_HEADSET_HELD $headset_held_png"
   echo "SMOKE_HEADSET_AIRPODS $headset_airpods_png"
+  echo "SMOKE_HEADSET_ESCAPE $headset_escape_png"
   echo "SMOKE_HEADSET_DND $headset_dnd_png"
 
   headset_expect startup 0 0
@@ -178,6 +227,9 @@ leg_headset_card_assert() {
   headset_expect airpods 2 1
   # The pointer leaving is what dismissed the pair.
   headset_expect left 2 2
-  headset_expect dnd 2 2
-  echo "SMOKE_HEADSET_CARD ok startup 0, connect 1, held, leave, reconnect none, airpods 1, leave, dnd none"
+  # Escape into the focused foot: the card goes, foot keeps the focus and the key.
+  headset_expect escaped 3 3
+  headset_escape_expect
+  headset_expect dnd 3 3
+  echo "SMOKE_HEADSET_CARD ok startup 0, connect 1, held, leave, reconnect none, airpods 1, leave, escape, dnd none"
 }

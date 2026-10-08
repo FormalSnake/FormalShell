@@ -5,30 +5,37 @@
 //! per part that reports a level. It never fires for a device already
 //! connected when the shell started or one that reconnects inside
 //! `RECONNECT`, holds `HOLD` while the pointer is off it, dismisses on the
-//! pointer leaving it or on Escape (the card takes the keyboard only while
-//! the pointer is on it), opens the earbuds or Bluetooth panel on
+//! pointer leaving it or on Escape, opens the earbuds or Bluetooth panel on
 //! a click, and stays down under fullscreen and do-not-disturb.
 //!
+//! The card never takes the keyboard: it is unasked for, and focus would
+//! take typing from the window under it. Escape is a non-consuming
+//! Hyprland bind, added while the card is up and removed with it, so the
+//! focused app still gets the key.
+//!
 //! While the card is up it holds the earbuds service, which is what makes a
-//! backend report its parts; the hold ends with the card.
+//! backend report its parts; the hold ends with the card, and so does the
+//! bind.
 
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
 use fs_chrome::types::Edge;
 use smithay_client_toolkit::reexports::client::protocol::wl_surface;
-use smithay_client_toolkit::seat::keyboard::{KeyEvent, Keysym};
 use smithay_client_toolkit::seat::pointer::PointerEventKind;
 use smithay_client_toolkit::shell::WaylandSurface;
-use smithay_client_toolkit::shell::wlr_layer::{KeyboardInteractivity, Layer};
+use smithay_client_toolkit::shell::wlr_layer::Layer;
 
 use super::{App, Owner};
 use crate::services::devices::earbuds;
+use crate::services::hyprland;
 use crate::surfaces::headset;
 use crate::surfaces::popup::Popup;
 
 const HOLD: Duration = Duration::from_secs(4);
 const RECONNECT: Duration = Duration::from_secs(3);
+/// The Lua global holding the Escape bind.
+const ESCAPE: &str = "formalshell_headset_escape";
 
 struct Known {
     connected: bool,
@@ -42,9 +49,14 @@ pub(super) struct Shown {
     hold_until: Option<Instant>,
     entered: bool,
     pressed: bool,
-    /// The earbuds service is held on this card's account.
+    /// The earbuds service and the Escape bind are held on this card's
+    /// account.
     held: bool,
-    focused: bool,
+}
+
+/// What the Escape bind runs.
+fn dismiss_argv() -> Vec<String> {
+    [crate::services::menu::ipc_client(), "call".into(), "headset".into(), "dismiss".into()].into()
 }
 
 #[derive(Default)]
@@ -68,9 +80,17 @@ impl Headset {
 }
 
 impl Shown {
+    fn hold(&mut self) {
+        if !std::mem::replace(&mut self.held, true) {
+            earbuds::acquire();
+            hyprland::escape_bind(ESCAPE, Some(&dismiss_argv()));
+        }
+    }
+
     fn release(&mut self) {
         if std::mem::take(&mut self.held) {
             earbuds::release();
+            hyprland::escape_bind(ESCAPE, None);
         }
     }
 }
@@ -130,10 +150,7 @@ impl App {
             if !c.popup.is_open() {
                 c.popup.set_open(now, true);
             }
-            if !c.held {
-                c.held = true;
-                earbuds::acquire();
-            }
+            c.hold();
             return;
         }
         let theme = &self.store.theme.theme;
@@ -146,23 +163,22 @@ impl App {
         let surface = self.popout_surface(&card, Layer::Top);
         let mut popup = Popup::new(surface, card);
         popup.set_open(now, true);
-        earbuds::acquire();
-        self.headset.card = Some(Shown {
+        let mut shown = Shown {
             popup,
             address: address.to_owned(),
             hold_until: Some(now + HOLD),
             entered: false,
             pressed: false,
-            held: true,
-            focused: false,
-        });
+            held: false,
+        };
+        shown.hold();
+        self.headset.card = Some(shown);
         self.log("headset card mapped");
     }
 
     fn headset_dismiss(&mut self, now: Instant) {
         if let Some(c) = &mut self.headset.card {
             c.hold_until = None;
-            c.popup.set_keyboard(KeyboardInteractivity::None);
             c.release();
             if c.popup.is_open() {
                 c.popup.set_open(now, false);
@@ -195,8 +211,6 @@ impl App {
             PointerEventKind::Enter { .. } => {
                 c.entered = true;
                 c.hold_until = None;
-                // Exclusive would pin the pointer to the card, so Escape rides on-demand focus.
-                c.popup.set_keyboard(KeyboardInteractivity::OnDemand);
             }
             PointerEventKind::Leave { .. } => {
                 c.pressed = false;
@@ -217,22 +231,11 @@ impl App {
         }
     }
 
-    pub(super) fn headset_focus(&mut self, surface: &wl_surface::WlSurface, on: bool) {
-        let mine = self.owner(surface) == Some(Owner::Headset);
-        if let Some(c) = self.headset.card.as_mut().filter(|_| mine) {
-            c.focused = on;
-        }
-    }
-
-    /// Escape on the card's own keyboard focus; true when the key was its.
-    pub(super) fn headset_key(&mut self, event: &KeyEvent) -> bool {
-        if !self.headset.card.as_ref().is_some_and(|c| c.focused) {
-            return false;
-        }
-        if event.keysym == Keysym::Escape {
-            self.headset_dismiss(Instant::now());
-        }
-        true
+    /// `headset dismiss`, what the Escape bind runs: true when a card was up.
+    pub fn headset_escape(&mut self) -> bool {
+        let open = self.headset.card.as_ref().is_some_and(|c| c.popup.is_open());
+        self.headset_dismiss(Instant::now());
+        open
     }
 
     pub(super) fn headset_present(&mut self, now: Instant) {

@@ -132,6 +132,8 @@ impl State {
 /// thread against the backend's own latest model.
 pub enum Command {
     Dispatch(String),
+    /// A config call (a bind) rather than a dispatcher.
+    Eval(String),
     FloatWindow(String),
     PlaceFloatingWindow { id: String, x: f64, y: f64, width: f64, height: f64 },
     ParkWindow(String),
@@ -175,6 +177,15 @@ pub fn close_window(id: &str) {
 
 pub fn spawn(argv: &[String]) {
     send(Command::Dispatch(lua::spawn(argv)));
+}
+
+/// While `argv` is some, a plain Escape runs it without being taken from
+/// the focused app; none removes the bind. `global` names it in Lua.
+pub fn escape_bind(global: &str, argv: Option<&[String]>) {
+    send(Command::Eval(match argv {
+        Some(argv) => lua::bind_escape(global, argv),
+        None => lua::unbind(global),
+    }));
 }
 
 pub fn power_off_monitors() {
@@ -401,6 +412,7 @@ async fn commands(
     while let Ok(command) = rx.recv().await {
         match command {
             Command::Dispatch(lua) => dispatch(&lua).await,
+            Command::Eval(lua) => eval(&ctx, &lua).await,
             Command::FloatWindow(id) => {
                 let floating = shared.borrow().snapshot.windows.iter().any(|w| w.id == id && w.is_floating);
                 if !floating {

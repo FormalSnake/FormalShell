@@ -1787,7 +1787,7 @@ impl App {
     }
 
     fn key_event_from(&mut self, event: KeyEvent, repeat: bool) {
-        if self.lock_key(&event) || self.polkit_key(&event) || self.overlay_key(&event) || self.picker_key_event(&event) || self.atlas_key(&event) || self.launcher_key(&event, repeat) || self.headset_key(&event) || self.switcher_key(event.keysym) {
+        if self.lock_key(&event) || self.polkit_key(&event) || self.overlay_key(&event) || self.picker_key_event(&event) || self.atlas_key(&event) || self.launcher_key(&event, repeat) || self.switcher_key(event.keysym) {
             return;
         }
         let editing = self.panel.as_ref().is_some_and(|h| h.editing());
@@ -2114,13 +2114,9 @@ impl PointerHandler for App {
 }
 
 impl KeyboardHandler for App {
-    fn enter(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, surface: &wl_surface::WlSurface, _: u32, _: &[u32], _: &[Keysym]) {
-        self.headset_focus(surface, true);
-    }
+    fn enter(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: &wl_surface::WlSurface, _: u32, _: &[u32], _: &[Keysym]) {}
 
-    fn leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, surface: &wl_surface::WlSurface, _: u32) {
-        self.headset_focus(surface, false);
-    }
+    fn leave(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: &wl_surface::WlSurface, _: u32) {}
 
     fn press_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, event: KeyEvent) {
         if self.saver.active && !self.lock.locked {

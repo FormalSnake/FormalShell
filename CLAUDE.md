@@ -288,11 +288,14 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   by the leg rewriting that file. A device connected at startup raising no
   card; a headphone connecting raising one with its BlueZ battery ring, held
   past four seconds by a real pointer parked on it and dismissed by the
-  pointer leaving (Escape needs on-demand focus, which Hyprland gives on a
-  click);
+  pointer leaving;
   the same device off and on inside a second raising none; AirPods off the
   staged librepods status file raising left, right and case rings, the
-  pointer leaving dismissing them; and do-not-disturb raising none. Counted
+  pointer leaving dismissing them; a real Escape typed into a focused foot
+  dismissing a card the pointer holds up, through the non-consuming bind
+  the card adds while up (one Escape bind in `hyprctl binds` then none,
+  foot focused throughout and reading every key, the Escape included); and
+  do-not-disturb raising none. Counted
   off the shell log's `headset card mapped` and `unmapped` lines, with the
   frames read by eye.
 - `hdr.sh` `--hdr`: HDR on the rig's EDID-less vkms output, so the honest

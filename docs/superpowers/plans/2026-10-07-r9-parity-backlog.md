@@ -12,10 +12,6 @@ by surface; one line each.
 - Radio Atlas: its icon buttons carry no hover tooltips (the launcher's card
   routes none to the tooltip group either).
 
-## Headset card
-- Escape only after a click gives it focus; no click-away dismissal (owner
-  to decide).
-
 ## Rig
 - `--screensaver-gif` README media are older than the current QML look.
 - The real 33 ms bar-gap budget during a launcher open is measured on
