@@ -807,10 +807,7 @@ impl App {
         let moving = w.shown.content_animating(now) || self.launcher.rows_moving(now);
         let t1 = Instant::now();
         // A frame still being drawn in slices keeps the scene it started on.
-        let rastering = match &w.shown.modal.layer {
-            Some(l) => l.surface.rastering(),
-            None => w.shown.modal.surface.rastering(),
-        };
+        let rastering = w.shown.modal.surface.rastering() || w.shown.modal.layer.as_ref().is_some_and(|l| l.surface.rastering());
         let wants = self.launcher.dirty || moving || !w.shown.modal.surface.mapped;
         // A layout held back by a sliced frame runs once it is out, even
         // when whatever moved has stopped by then.

@@ -70,13 +70,13 @@ impl Modal {
         Self { card, surface, band, dim, namespace, open: true, region: None, layer: None }
     }
 
-    /// Moves the card's resting rect; an idle card lands there at once.
+    /// Moves the card's resting rect, drawn on this frame: content laid
+    /// out in the new rect never shows over the card's last one. A second
+    /// tick on one frame leaves the deform to the next (`Deform::step_at`).
     pub fn place(&mut self, rest: Rect, now: Instant) {
         if rest != self.card.rest() {
             self.card.set_rect(rest, rest);
-            if !self.card.animating(now) || !self.surface.mapped {
-                self.card.tick(now);
-            }
+            self.card.tick(now);
         }
     }
 
@@ -118,12 +118,22 @@ impl Modal {
     /// asks for frames only while the card itself moves, never for the
     /// owner's content.
     pub fn present(&mut self, animating: bool, now: Instant, qh: &QueueHandle<App>) {
-        let layered = self.layer.as_mut().is_some_and(|l| l.present(&self.card, !self.card.animating(now), qh));
-        let before = self.surface.commits();
-        self.surface.present(&mut self.card.scene, animating, qh);
-        // A subsurface's state lands with its parent's next commit.
-        if layered && self.surface.commits() == before {
-            self.surface.layer.commit();
+        // The card and its layer show one layout. Both draw their half of
+        // it first, across loop turns if they must, and only then commit:
+        // the layer just ahead of the card, whose commit carries it. A
+        // compositor that shows a subsurface's commit at once (or a bare
+        // card commit) would otherwise put one layout's content over
+        // another's card.
+        let layer_ready = self.layer.as_mut().is_none_or(|l| l.surface.prepare(&mut l.scene));
+        let card_ready = self.surface.frame_pending || self.surface.prepare(&mut self.card.scene);
+        let card_due = self.card.scene.has_damage() || self.surface.rastering() || self.surface.drawn_ahead();
+        if layer_ready && card_ready && !(card_due && self.surface.frame_pending) {
+            let layered = self.layer.as_mut().is_some_and(|l| l.present(&self.card, !self.card.animating(now), qh));
+            let before = self.surface.commits();
+            self.surface.present(&mut self.card.scene, animating, qh);
+            if layered && self.surface.commits() == before {
+                self.surface.layer.commit();
+            }
         }
         let pose = self.card.pose(now);
         let attach = self.card.attach(now);
