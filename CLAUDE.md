@@ -623,12 +623,18 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   held drag over `dev/vpointer.py` that stops before its release leaving
   the globe's longitude where the release left it, and one let go while
   moving coasting less than 2.5 times its own travel. Escape closes it.
-  The globe wears the packaged Blue Marble (`nix/blue-marble.nix`,
-  `FS_EARTH_IMAGE`): `radio status` reports `imagery` true and a square
+  The globe wears the packaged Blue Marble (`nix/blue-marble.nix`, a
+  512px tile pyramid 2700 to 21600 wide under `FS_EARTH_TILES`):
+  `radio status` reports `imagery` true and a square
   of the disc carries saturation and colours the flat globe never had,
   the whole disc's mean luminance clears 0.18 (the untoned picture read
   0.127), and every globe build and card commit is summarised as
-  `SMOKE_RADIO_ATLAS_FRAME`.
+  `SMOKE_RADIO_ATLAS_FRAME`. Then a real wheel to scale 24 over the
+  station on the Tibetan plateau: the 21600 level with no tile missing,
+  VmRSS falling 16 MB or more once Escape closes it, and with the tiles
+  link gone the same pose on the single 4096 `FS_EARTH_IMAGE` carrying
+  under half the tiles' high-frequency detail; a drag on each gives the
+  `SMOKE_RADIO_ATLAS_ZOOM_FRAME` timings.
 - `radio_atlas_cold.sh` `--radio-atlas-cold`: Radio Atlas opened with no
   world cache, a frame a second in and another once `radio status`
   reports stations (fetched over the real network and cached) or the

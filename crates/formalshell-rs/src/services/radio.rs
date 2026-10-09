@@ -163,7 +163,9 @@ pub enum Reply {
     /// The picked list, or why picking failed.
     Random(Result<Vec<Station>, String>),
     Countries(std::sync::Arc<crate::surfaces::atlas::globe::Countries>),
-    Earth(Result<std::sync::Arc<crate::surfaces::atlas::globe::Earth>, String>),
+    Earth(Result<std::sync::Arc<crate::surfaces::atlas::earth::Earth>, String>),
+    /// Finer satellite tiles landed for the open atlas.
+    Tiles,
 }
 
 pub enum Cmd {

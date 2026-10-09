@@ -2,8 +2,8 @@
 # shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
 # --radio-atlas opens Radio Atlas with `panel open radio` over a world cache
 # the fixture writes: one station, served on loopback the way --radio serves
-# its favourite, placed in the South Atlantic so no real station Radio Browser
-# adds behind it sits under the same pixel. Enter on a real key plays the
+# its favourite, placed on the western Tibetan plateau, mountains and lakes
+# with no real station Radio Browser adds within a click of it. Enter on a real key plays the
 # list's first station, which turns the globe from its starting pose to
 # centre it: the globe's own box has to differ between the open frame and
 # that one. After `radio stop`, a real pointer
@@ -19,13 +19,25 @@
 # panel header. The example Hyprland config has to carry a layer rule for
 # formalshell:radio (this rig runs with blur off, so a frame cannot show it).
 #
-# The globe wears NASA's Blue Marble (FS_EARTH_IMAGE, nix/blue-marble.nix):
+# The globe wears NASA's Blue Marble (nix/blue-marble.nix):
 # `radio status` has to report atlas.globe.imagery true before the open
 # frame is taken, and a square inside the disc has to carry colour the flat
 # globe never had (mean HSL saturation 0.05 and some 450 colours over the
 # same square in the flat globe's frame), and the whole disc's mean
 # luminance has to clear 0.18: the picture as NASA masters it read 0.127,
-# and the tone `load_earth` lays over it once lifts that to about 0.26.
+# and the tone `earth::load` lays over each tile lifts that to about 0.26.
+# The picture is a tile pyramid (FS_EARTH_TILES, nix/earth-tiles.py), and
+# the leg points FS_EARTH_TILES at a link of its own to the package's tiles.
+# After the rest, the station plays again to bring the globe back over it,
+# and a real wheel over the globe zooms it to its limit: `radio status` has
+# to report scale 24 drawn at the 21600 level with no tile missing. VmRSS is
+# read with it open there and again after Escape, which has to give back at
+# least 16 MB. Then the link goes and the atlas opens again at the same pose
+# on the single 4096 picture FS_EARTH_IMAGE names, reported as level 4096.
+# A square of the disc off the station, the same in both frames, has to
+# carry at least twice the high-frequency detail on the tiles (the mean
+# absolute difference from a 1.5px gaussian blur of its luminance).
+#
 # Every globe build the shell traces while the leg runs (`atlas globe
 # build_us=`, the sampler's share in sample_us) and every commit of the
 # card (render_us) is summarised as SMOKE_RADIO_ATLAS_FRAME, with
@@ -59,6 +71,12 @@ radio_atlas_drag_released_path="$shot_dir/radio-atlas-drag-released.json"
 radio_atlas_drag_settled_path="$shot_dir/radio-atlas-drag-settled.json"
 radio_atlas_fling_released_path="$shot_dir/radio-atlas-fling-released.json"
 radio_atlas_fling_settled_path="$shot_dir/radio-atlas-fling-settled.json"
+radio_atlas_tiles_link="$shot_dir/radio-atlas-tiles"
+radio_atlas_zoom_tiles_png="$shot_dir/radio-atlas-zoom-tiles.png"
+radio_atlas_zoom_single_png="$shot_dir/radio-atlas-zoom-single.png"
+radio_atlas_zoom_tiles_path="$shot_dir/radio-atlas-zoom-tiles.json"
+radio_atlas_zoom_single_path="$shot_dir/radio-atlas-zoom-single.json"
+radio_atlas_rss_path="$shot_dir/radio-atlas-rss.txt"
 radio_atlas_vpointer="$PWD/dev/vpointer.py"
 # Twelve 15px steps a frame apart, about 940 px/s.
 radio_atlas_steps=$(for _ in $(seq 12); do printf 'move 15 0 wait 16 '; done)
@@ -66,7 +84,7 @@ radio_atlas_name="FormalShell Atlas Radio"
 radio_atlas_port=18098
 
 leg_radio_atlas_timing() {
-  leg_timing 40 70
+  leg_timing 110 140
 }
 
 leg_radio_atlas_fixture() {
@@ -75,8 +93,14 @@ leg_radio_atlas_fixture() {
   local now_ms
   now_ms=$(($(date +%s) * 1000))
   cat > "$cache_dir/world.json" <<EOF
-{"fetchedAt":$now_ms,"stations":[{"uuid":"smoke-atlas-1","name":"$radio_atlas_name","url":"http://127.0.0.1:$radio_atlas_port/station.mp3","homepage":"","favicon":"","country":"France","countryCode":"FR","state":"","language":"","tags":"","codec":"MP3","bitrate":128,"votes":0,"clicks":0,"latitude":-30.5,"longitude":-21.25}]}
+{"fetchedAt":$now_ms,"stations":[{"uuid":"smoke-atlas-1","name":"$radio_atlas_name","url":"http://127.0.0.1:$radio_atlas_port/station.mp3","homepage":"","favicon":"","country":"France","countryCode":"FR","state":"","language":"","tags":"","codec":"MP3","bitrate":128,"votes":0,"clicks":0,"latitude":31.5,"longitude":84.5}]}
 EOF
+  local tiles
+  tiles=$(grep -aoE '/nix/store/[a-z0-9]{32}-blue-marble-[^/]+/share/formalshell/tiles' "$PWD/result/bin/formalshell-rs" | head -1)
+  [ -n "$tiles" ] || fail "--radio-atlas: the shell's wrapper names no blue-marble tiles"
+  ln -sfn "$tiles" "$radio_atlas_tiles_link"
+  ln -sfn "$tiles" "$radio_atlas_tiles_link.saved"
+  shell_env="${shell_env:+$shell_env }FS_EARTH_TILES=$radio_atlas_tiles_link"
   "$ffmpeg_bin" -nostdin -loglevel error -f lavfi -i "sine=frequency=440:sample_rate=44100" -t 60 \
     -c:a libmp3lame -b:a 128k -y "$radio_atlas_track_path"
 }
@@ -168,6 +192,60 @@ sleep 2
 "$wtype_bin" -k Escape
 sleep 2
 $ipc call panel state > "$radio_atlas_closed_path" 2>&1
+$ipc call radio stop > /dev/null 2>&1
+# Max zoom over the station, on the tiles and then on the single picture.
+pid=\$(cat "$shot_dir/shell.pid")
+rss() { awk '/^VmRSS/{print \$2}' "/proc/\$pid/status"; }
+echo "closed_before \$(rss)" > "$radio_atlas_rss_path"
+$ipc call panel open radio > /dev/null 2>&1
+sleep 3
+"$wtype_bin" -k Return
+sleep 5
+"$wlrctl_bin" pointer move -4000 -4000
+sleep 0.3
+"$wlrctl_bin" pointer move \$gx \$gy
+sleep 0.5
+for _ in \$(seq 22); do "$wlrctl_bin" pointer scroll -15 0; sleep 0.05; done
+SECONDS=0
+while [ "\$SECONDS" -lt 20 ]; do
+  sleep 1
+  $ipc call radio status > "$radio_atlas_zoom_tiles_path" 2>&1
+  "$jq_bin" -e '.atlas.globe.scale >= 23.9 and .atlas.globe.earth.level == 21600 and .atlas.globe.earth.missing == 0' "$radio_atlas_zoom_tiles_path" > /dev/null 2>&1 && break
+done
+sleep 1
+"$grim_bin" "$radio_atlas_zoom_tiles_png" > /dev/null 2>&1
+echo "open_zoomed \$(rss)" >> "$radio_atlas_rss_path"
+"$wtype_bin" -k Escape
+sleep 3
+echo "closed_after \$(rss)" >> "$radio_atlas_rss_path"
+rm -f "$radio_atlas_tiles_link"
+$ipc call panel open radio > /dev/null 2>&1
+SECONDS=0
+while [ "\$SECONDS" -lt 10 ]; do
+  sleep 1
+  $ipc call radio status > "$radio_atlas_zoom_single_path" 2>&1
+  "$jq_bin" -e '.atlas.globe.earth.level == 4096' "$radio_atlas_zoom_single_path" > /dev/null 2>&1 && break
+done
+sleep 1
+"$grim_bin" "$radio_atlas_zoom_single_png" > /dev/null 2>&1
+# A drag at max zoom on each picture, for the frame times: the single one
+# here, the tiles once they are back.
+"$python3_bin" "$radio_atlas_vpointer" down $radio_atlas_steps up
+sleep 2
+"$wtype_bin" -k Escape
+sleep 2
+ln -sfn "\$(readlink "$radio_atlas_tiles_link.saved")" "$radio_atlas_tiles_link"
+$ipc call panel open radio > /dev/null 2>&1
+SECONDS=0
+while [ "\$SECONDS" -lt 15 ]; do
+  sleep 1
+  $ipc call radio status > "$shot_dir/radio-atlas-zoom-again.json" 2>&1
+  "$jq_bin" -e '.atlas.globe.earth.level == 21600 and .atlas.globe.earth.missing == 0' "$shot_dir/radio-atlas-zoom-again.json" > /dev/null 2>&1 && break
+done
+"$python3_bin" "$radio_atlas_vpointer" down $radio_atlas_steps up
+sleep 3
+"$wtype_bin" -k Escape
+sleep 1
 $ipc call radio stop > /dev/null 2>&1
 EOF
   add_cleanup "kill \$(cat '$radio_atlas_loop_pid_path' 2>/dev/null) 2>/dev/null || true"
@@ -266,6 +344,49 @@ leg_radio_atlas_assert() {
     BEGIN { drag = d(a, b); coast = d(c, e); printf "drag turned %.2f deg, the moving release coasted %.2f deg after it\n", drag, coast
       exit !(coast > 0 && coast < drag * 2.5) }' \
     || fail "a release while moving coasted out of proportion to the drag (or not at all)"
+  "$jq_bin" -c '.atlas.globe | {scale, earth}' "$radio_atlas_zoom_tiles_path" 2>/dev/null
+  "$jq_bin" -e '.atlas.globe.scale >= 23.9 and .atlas.globe.earth.level == 21600 and .atlas.globe.earth.missing == 0' "$radio_atlas_zoom_tiles_path" > /dev/null 2>&1 \
+    || fail "max zoom did not settle on the 21600 tiles: $(cat "$radio_atlas_zoom_tiles_path" 2>/dev/null)"
+  "$jq_bin" -c '.atlas.globe | {scale, earth}' "$radio_atlas_zoom_single_path" 2>/dev/null
+  "$jq_bin" -e '.atlas.globe.imagery == true and .atlas.globe.earth.level == 4096' "$radio_atlas_zoom_single_path" > /dev/null 2>&1 \
+    || fail "without the tiles the atlas did not fall back to the 4096 picture: $(cat "$radio_atlas_zoom_single_path" 2>/dev/null)"
+  local open_kb after_kb
+  open_kb=$(awk '$1 == "open_zoomed" { print $2 }' "$radio_atlas_rss_path" 2>/dev/null)
+  after_kb=$(awk '$1 == "closed_after" { print $2 }' "$radio_atlas_rss_path" 2>/dev/null)
+  echo "VmRSS: $(tr '\n' ' ' < "$radio_atlas_rss_path" 2>/dev/null)(kB)"
+  awk -v o="${open_kb:-0}" -v a="${after_kb:-0}" 'BEGIN { exit !(o > 0 && a > 0 && o - a >= 16384) }' \
+    || fail "closing the zoomed atlas gave back $(( ${open_kb:-0} - ${after_kb:-0} )) kB, under 16 MB"
+  local zx zy energy_tiles energy_single
+  zx=$(( (gl + gr) / 2 - 250 ))
+  zy=$(( (gt + gb) / 2 - 230 ))
+  energy() {
+    $convert_bin "$1" -crop "200x200+$zx+$zy" +repage -colorspace gray "$2" > /dev/null 2>&1
+    $convert_bin "$2" \( +clone -blur 0x1.5 \) -compose difference -composite -format '%[fx:mean]' info: 2>/dev/null
+  }
+  energy_tiles=$(energy "$radio_atlas_zoom_tiles_png" "$shot_dir/radio-atlas-zoom-tiles-crop.png")
+  energy_single=$(energy "$radio_atlas_zoom_single_png" "$shot_dir/radio-atlas-zoom-single-crop.png")
+  echo "max zoom detail: tiles ${energy_tiles:-none}, single 4096 picture ${energy_single:-none}"
+  awk -v t="${energy_tiles:-0}" -v s="${energy_single:-0}" 'BEGIN { exit !(t > 0 && s > 0 && t >= 2 * s) }' \
+    || fail "the tiles at max zoom carry under twice the 4096 picture's detail (${energy_tiles:-none} vs ${energy_single:-none})"
+  awk '
+    function us(line, key) { if (!match(line, key "=[0-9]+")) return -1; return substr(line, RSTART + length(key) + 1, RLENGTH - length(key) - 1) + 0 }
+    function sort(a, n,   i, j, t) { for (i = 2; i <= n; i++) { t = a[i]; for (j = i - 1; j > 0 && a[j] > t; j--) a[j + 1] = a[j]; a[j + 1] = t } }
+    function q(a, n, p) { return n ? a[int((n - 1) * p) + 1] : -1 }
+    # Commits count toward the level the build before them drew at.
+    /^atlas globe build_us=.*imagery=true/ { cur = us($0, "level") }
+    /^atlas globe build_us=.*imagery=true/ && cur == 21600 { tb[++nt] = us($0, "build_us"); ts[nt] = us($0, "sample_us"); if (/coarse=true/) tm++ }
+    /^atlas globe build_us=.*imagery=true/ && cur == 4096 { sb[++ns] = us($0, "build_us"); ss[ns] = us($0, "sample_us"); if (/coarse=true/) sm++ }
+    /^commit surface=radio / && cur == 21600 { tr[++ntr] = us($0, "render_us") }
+    /^commit surface=radio / && cur == 4096 { sr[++nsr] = us($0, "render_us") }
+    END {
+      sort(tb, nt); sort(ts, nt); sort(tr, ntr); sort(sb, ns); sort(ss, ns); sort(sr, nsr)
+      printf "max zoom tiles builds=%d (moving %d) build_us p50=%d p95=%d sample_us p50=%d p95=%d; commits=%d render_us p50=%d p95=%d\n", nt, tm, q(tb, nt, 0.5), q(tb, nt, 0.95), q(ts, nt, 0.5), q(ts, nt, 0.95), ntr, q(tr, ntr, 0.5), q(tr, ntr, 0.95)
+      printf "max zoom single builds=%d (moving %d) build_us p50=%d p95=%d sample_us p50=%d p95=%d; commits=%d render_us p50=%d p95=%d\n", ns, sm, q(sb, ns, 0.5), q(sb, ns, 0.95), q(ss, ns, 0.5), q(ss, ns, 0.95), nsr, q(sr, nsr, 0.5), q(sr, nsr, 0.95)
+    }' "$shell_log_path" | sed 's/^/SMOKE_RADIO_ATLAS_ZOOM_FRAME /'
+  echo "SMOKE_RADIO_ATLAS_ZOOM_TILES $shot_dir/radio-atlas-zoom-tiles-crop.png"
+  echo "SMOKE_RADIO_ATLAS_ZOOM_SINGLE $shot_dir/radio-atlas-zoom-single-crop.png"
+  echo "SMOKE_RADIO_ATLAS_ZOOM_TILES_FRAME $radio_atlas_zoom_tiles_png"
+  echo "SMOKE_RADIO_ATLAS_ZOOM_SINGLE_FRAME $radio_atlas_zoom_single_png"
   echo "SMOKE_RADIO_ATLAS_OPEN $radio_atlas_open_png"
   echo "SMOKE_RADIO_ATLAS_TURNED $radio_atlas_turned_png"
   echo "SMOKE_RADIO_ATLAS_PICKED $radio_atlas_picked_png"

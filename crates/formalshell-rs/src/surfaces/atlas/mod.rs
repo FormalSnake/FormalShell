@@ -5,6 +5,7 @@
 //! Browser request belong to the radio service; this is the atlas's own
 //! state (mode, lists, selection, search) and how it draws.
 
+pub mod earth;
 pub mod globe;
 pub mod view;
 
@@ -174,6 +175,14 @@ impl Atlas {
                 "latitude": self.globe.centre_latitude,
                 "coasting": self.globe.kinetic,
                 "imagery": self.globe.earth.is_some(),
+                "scale": self.globe.scale,
+                "earth": {
+                    "level": self.globe.earth_stats.level,
+                    "tiles": self.globe.earth_stats.tiles,
+                    "missing": self.globe.earth_stats.missing,
+                    "cached": self.globe.earth_stats.cached,
+                    "cachedKb": self.globe.earth_stats.cached_bytes / 1024,
+                },
             },
         })
     }
@@ -571,6 +580,7 @@ impl Atlas {
                     Err(e) => eprintln!("radio atlas: no satellite picture, drawing the flat globe: {e}"),
                 }
             }
+            Reply::Tiles => {}
             Reply::Random(answer) => {
                 if self.mode != Mode::Random {
                     return;
