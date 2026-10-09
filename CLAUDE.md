@@ -851,6 +851,11 @@ behaviour on hosts where a real owner exists.
   org.freedesktop.Notifications`'s owner PID on the **host** bus is unchanged
   before and after every run (`|| true`-tolerant of a legitimate "no owner"
   answer, e.g. on the mac VM rig, which has no desktop bus owner at all).
+  A nested run on a real host also gets a private, empty system bus
+  (`DBUS_SYSTEM_BUS_ADDRESS`), so the shell never reaches the host's
+  NetworkManager, BlueZ, UPower, logind or polkit (a nested run took g815's
+  Wi-Fi down, 2026-10-09); legs that need those declare `leg_<n>_vm_only`
+  and are refused there.
 - **Design language**: every UI surface follows `docs/DESIGN.md`: shadcn/ui
   chrome (`card` fill, 1px `border`, `radiusMd` controls and `radiusXl`
   cards, one `ring` for focus, `accent` hover, `primary` for the wallpaper
