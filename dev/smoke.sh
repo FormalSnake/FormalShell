@@ -360,13 +360,35 @@ if [ -z "$wayland_display" ]; then
   fi
 fi
 
-# A nested Hyprland would import its own environment into the systemd user
+# A nested Hyprland imports its own environment into the systemd user
 # manager it shares with the host session (PATH, XDG_DATA_DIRS and the
-# instance signature among them); HYPRLAND_NO_SD_VARS in session_env stops
-# that. Every name it would import is still put back as it was at exit, or
-# unset if it was not there, for anything else in the run that sets one.
+# instance signature among them), and for the whole run anything that
+# restarts formalshell.service lands the live shell on the nested display.
+# HYPRLAND_NO_SD_VARS in session_env gates two of Hyprland's three call
+# sites; 0.56's CExecutor runs `systemctl --user import-environment` on its
+# start event with no such check (src/config/supplementary/executor/
+# Executor.cpp). So the session's PATH starts with a systemctl that drops
+# every environment write and runs the real one for anything else, logging
+# what it dropped. Every name Hyprland imports is still put back as it was
+# at exit, or unset if it was not there, as the backstop.
 host_env_names="DISPLAY WAYLAND_DISPLAY HYPRLAND_INSTANCE_SIGNATURE XDG_CURRENT_DESKTOP QT_QPA_PLATFORMTHEME PATH XDG_DATA_DIRS"
 host_env_before=$(systemctl --user show-environment 2>/dev/null || true)
+host_wayland_before=$(printf '%s\n' "$host_env_before" | sed -n 's/^WAYLAND_DISPLAY=//p')
+host_env_mid_path="$shot_dir/host-env-mid.txt"
+sd_shim_dir="$shot_dir/sd-shim"
+sd_shim_log="$shot_dir/sd-shim.log"
+mkdir -p "$sd_shim_dir"
+write_script "$sd_shim_dir/systemctl" <<EOF
+#!/usr/bin/env bash
+for arg in "\$@"; do
+  case "\$arg" in
+    import-environment|set-environment|unset-environment)
+      echo "dropped: systemctl \$*" >> "$sd_shim_log"
+      exit 0 ;;
+  esac
+done
+exec $(printf '%q' "$(command -v systemctl)") "\$@"
+EOF
 restore_host_env() {
   local name line
   for name in $host_env_names; do
@@ -699,6 +721,9 @@ write_script "$shot_script" <<EOF
 sleep $screenshot_delay
 "$grim_bin" "$shot_path" > "$shot_dir/grim.log" 2>&1
 sleep $tail_gap
+# The host user manager's environment while the session is still up, for
+# the check after it that nothing in the run wrote to it.
+systemctl --user show-environment > "$host_env_mid_path" 2>/dev/null
 # Memory sample of the shell at the end of the run, once every leg has
 # driven what it drives: RSS, the number a memory regression shows up in
 # first.
@@ -718,13 +743,14 @@ $fixture_cleanup
 EOF
 hypr_exec_once "bash $shot_script" >> "$cfg"
 
-# HYPRLAND_NO_SD_VARS stops the nested Hyprland running `systemctl --user
-# import-environment` into the user manager it shares with the host
-# session. The restore below only runs at exit, and a home-manager
-# activation during a run restarted e1504g's live formalshell.service onto
-# the nested display, which took it down with the session (2026-10-09).
+# HYPRLAND_NO_SD_VARS and the systemctl shim keep the nested Hyprland off
+# the user manager it shares with the host session (see host_env_names).
+# The restore only runs at exit, and a home-manager activation during a
+# run restarted e1504g's live formalshell.service onto the nested display,
+# which took it down with the session (2026-10-09).
 session_env=(
   "HYPRLAND_NO_SD_VARS=1"
+  "PATH=$sd_shim_dir:$PATH"
   "HOME=$iso_home"
   "XDG_CONFIG_HOME=$iso_home/.config"
   "XDG_STATE_HOME=$iso_home/.local/state"
@@ -791,6 +817,16 @@ if [ "$host_notifications_owner_before" != "$host_notifications_owner_after" ]; 
   echo "SMOKE_FAIL: host org.freedesktop.Notifications owner PID changed ($host_notifications_owner_before -> $host_notifications_owner_after), the session's NotificationServer touched the host bus" >&2
   exit 1
 fi
+
+# Read before the EXIT trap's restore could hide it: the value the live
+# shell would have been restarted onto mid-run. A session that never got
+# to its shot fails below on its own logs.
+host_wayland_mid=$(sed -n 's/^WAYLAND_DISPLAY=//p' "$host_env_mid_path" 2>/dev/null || true)
+if [ -s "$host_env_mid_path" ] && [ "$host_wayland_mid" != "$host_wayland_before" ]; then
+  echo "SMOKE_FAIL: host systemd user WAYLAND_DISPLAY changed mid-run ($host_wayland_before -> $host_wayland_mid), something in the session wrote the host user environment" >&2
+  exit 1
+fi
+[ -s "$sd_shim_log" ] && sed 's/^/host env write /' "$sd_shim_log"
 
 # Both logs, not just the compositor's: a session that came up fine with a
 # shell that died at startup looks identical from the outside.
