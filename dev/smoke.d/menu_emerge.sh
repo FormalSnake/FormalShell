@@ -157,6 +157,12 @@ menu_emerge_level() {
   $convert_bin "$1" -crop "$2" +repage -format "%[fx:mean]" info: 2>/dev/null
 }
 
+# How far a frame differs from the closed one over a patch, 0 to 1.
+menu_emerge_moved() {
+  $convert_bin "$menu_emerge_closed_path" "$1" -compose difference -composite -crop "$2" +repage \
+    -format "%[fx:mean]" info: 2>/dev/null
+}
+
 menu_emerge_covered() {
   awk -v v="$(menu_emerge_level "$1" "$2")" 'BEGIN { exit !(v > 0.06) }'
 }
@@ -289,6 +295,38 @@ leg_menu_emerge_assert() {
   done
   echo "SMOKE_MENU_EMERGE_DIM ok bar $b_rest of $b_closed, desktop $d_rest of $d_closed, want $want"
 
+  # --- Content on the card ----------------------------------------------
+  #
+  # Every frame of the open, how far the header's placeholder has come in
+  # against how far the card's own fill has, each as a share of its change
+  # at rest: the content may never lead the card under it. The fill is read
+  # in the header's own left padding, beside the text, where nothing is
+  # drawn on the card.
+  local card cx cy ch fill_box text_box fill_rest text_rest ladder="" lead=""
+  card=$("$jq_bin" -r '[.modals[] | select(.namespace == "formalshell:menu") | .card] | first | "\(.x) \(.y) \(.width) \(.height)"' \
+    "$menu_emerge_rest_dump_path" 2>/dev/null)
+  read -r cx cy _ ch <<< "$card"
+  [ -n "$ch" ] && [ "$ch" != null ] || fail "no launcher card rect in the dump at rest: $card"
+  fill_box="6x4+$((cx + 6))+$((cy + 24))"
+  text_box="160x16+$((cx + 24))+$((cy + 20))"
+  fill_rest=$(menu_emerge_moved "$menu_emerge_rest_path" "$fill_box")
+  text_rest=$(menu_emerge_moved "$menu_emerge_rest_path" "$text_box")
+  awk -v f="$fill_rest" -v t="$text_rest" 'BEGIN { exit !(f > 0.005 && t > 0.005) }' || fail \
+    "the card fill ($fill_rest at $fill_box) or the header text ($text_rest at $text_box) does not differ from the closed frame at rest: the probes read nothing"
+  for i in $(seq 1 $menu_emerge_frames); do
+    path="$shot_dir/menu-emerge-$i.png"
+    local f t
+    f=$(menu_emerge_moved "$path" "$fill_box")
+    t=$(menu_emerge_moved "$path" "$text_box")
+    local pair
+    pair=$(awk -v f="$f" -v t="$t" -v fr="$fill_rest" -v tr="$text_rest" 'BEGIN { printf "%.2f/%.2f", t / tr, f / fr }')
+    ladder="$ladder $i:$pair"
+    awk -v f="$f" -v t="$t" -v fr="$fill_rest" -v tr="$text_rest" 'BEGIN { exit !(t / tr > f / fr + 0.2) }' && lead="$lead $i"
+  done
+  echo "SMOKE_MENU_EMERGE_CONTENT text/fill$ladder"
+  [ -z "$lead" ] || fail "the header's text came in ahead of the card fill under it in frames$lead"
+  echo "SMOKE_MENU_EMERGE_CONTENT ok the fill is never behind the text"
+
   # --- Where the card rests ---------------------------------------------
   #
   # Its bottom is measured rather than stated: the row count is the rig's
@@ -319,6 +357,16 @@ leg_menu_emerge_assert() {
   if [ "$inset" -le 0 ]; then
     for f in BUD LIT_BAR PLAIN; do
       echo "SMOKE_MENU_EMERGE_$f skipped (layout): this output's top edge carries no bar and no frame ring, so there is no line to bud off"
+    done
+    return 0
+  fi
+  # A popover theme's card drops in under the line rather than budding off
+  # it, so the line has no bud, no lit band and no let-go to read; the dim
+  # above already read the band at rest.
+  if "$jq_bin" -e '[.modals[] | select(.namespace == "formalshell:menu") | .popover] | any' \
+    "$menu_emerge_rest_dump_path" > /dev/null 2>&1; then
+    for f in BUD LIT_BAR PLAIN; do
+      echo "SMOKE_MENU_EMERGE_$f skipped (popover): this theme's card drops in as a popover and never buds off the line"
     done
     return 0
   fi

@@ -69,7 +69,7 @@ fn dump(app: &mut App, _: &[Value]) -> Value {
         .map(|m| {
             let scrims: Vec<serde_json::Value> =
                 m.scrims().map(|(name, alpha, fade)| json!({"name": name, "alpha": alpha, "fade": fade})).collect();
-            json!({"namespace": m.namespace, "open": m.open, "scrims": scrims})
+            json!({"namespace": m.namespace, "open": m.open, "scrims": scrims, "card": rect(&m.card.live_rect()), "popover": m.card.popover()})
         })
         .collect();
     let phone = &app.store.info.iphone;

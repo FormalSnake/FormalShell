@@ -18,7 +18,7 @@ use super::lock::{LockMsg, field};
 use crate::scene::{Bitmap, IRect, NodeId};
 use crate::services::polkit::{self, Cmd, Event};
 use crate::surfaces::bar::cell::Painter;
-use crate::surfaces::modal::{Layer as ContentLayer, Modal, Part};
+use crate::surfaces::modal::{Modal, Part};
 use crate::ui::{self, El, Size, Ui, Variant, w};
 
 const NAMESPACE: &str = "formalshell:polkit";
@@ -42,8 +42,6 @@ pub struct Dialog {
     error: bool,
     text: Zeroizing<String>,
     dirty: bool,
-    /// The cut the content was last laid out under, on its layer.
-    crop: Option<IRect>,
 }
 
 impl Dialog {
@@ -94,7 +92,6 @@ impl App {
                     error: false,
                     text: field(),
                     dirty: true,
-                    crop: None,
                 });
                 if own && let (Some(rt), Some(tx)) = (&self.runtime, self.lock.tx.clone()) {
                     let home = std::env::var("HOME").unwrap_or_default();
@@ -190,10 +187,9 @@ impl App {
         }
         let qh = self.qh.clone();
         let Some(d) = &mut self.polkit else { return };
-        // The card's own motion moves the content layer; only its cut while
-        // it crosses the line needs a new layout.
-        let cut = Some(ContentLayer::crop(&d.modal.card, !d.modal.animating(now))) != d.crop;
-        if (d.dirty || cut || !d.modal.surface.mapped) && d.modal.surface.configured {
+        // The card's own motion moves and cuts the content layer, which
+        // needs no new layout for it.
+        if (d.dirty || !d.modal.surface.mapped) && d.modal.surface.configured {
             d.dirty = false;
             d.modal.sync_region(&self.compositor);
             Self::lay_polkit(d, &self.store.theme.theme, &mut self.bar.kit, now);
@@ -253,12 +249,11 @@ impl App {
         let y0 = ((h as f64 - card_h) / 2.0).round();
         d.modal.place(Rect::new(x0, y0, x0 + card_w, y0 + card_h), now);
         // Laid out in the content layer's own pixels, which the card's
-        // travel and fade move; cut only while it crosses the line.
+        // travel, cut and fade move.
         let rest = d.modal.card.content_rest();
-        let frame = crate::scene::IRect::new(0, 0, rest.w, rest.h);
+        let frame = IRect::new(0, 0, rest.w, rest.h);
         let alpha = 1.0;
-        let clip = ContentLayer::crop(&d.modal.card, !d.modal.animating(now));
-        d.crop = Some(clip);
+        let clip = frame;
         let Some(layer) = &mut d.modal.layer else { return };
         layer.fit(frame.w, frame.h);
         let top = layer.top;

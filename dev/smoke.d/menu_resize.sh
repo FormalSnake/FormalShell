@@ -19,9 +19,13 @@
 #   over a card that is not there yet, is a second run beside it.
 # The two settled frames have to read as one run along every probe too,
 # and on the two cards' own widths, so a probe that reads nothing is no pass.
+#
+# Off the shell's own numbers as well: each settled card centred on the
+# output within a pixel (`debug dump`'s card rect against the frame's own
+# width).
 leg_menu_resize_flag="--menu-resize"
 leg_menu_resize_order=127
-leg_menu_resize_needs="convert wtype"
+leg_menu_resize_needs="convert wtype jq"
 
 menu_resize_frames=24
 menu_resize_gap=0.04
@@ -66,15 +70,18 @@ call debug motionScale 500 > /dev/null 2>&1
 call menu summon monitor > "$shot_dir/menu-resize-summon1.txt" 2>&1
 sleep 8
 "$grim_bin" "$shot_dir/menu-resize-monitor.png" > /dev/null 2>&1
+call debug dump > "$shot_dir/menu-resize-dump-monitor.json" 2>&1
 "$wtype_bin" -k Escape
 burst back
 sleep 6
 call menu status > "$shot_dir/menu-resize-root-status.json" 2>&1
 "$grim_bin" "$shot_dir/menu-resize-root.png" > /dev/null 2>&1
+call debug dump > "$shot_dir/menu-resize-dump-root.json" 2>&1
 call menu summon monitor > "$shot_dir/menu-resize-summon2.txt" 2>&1
 burst forth
 sleep 6
 "$grim_bin" "$shot_dir/menu-resize-monitor2.png" > /dev/null 2>&1
+call debug dump > "$shot_dir/menu-resize-dump-monitor2.json" 2>&1
 call debug motionScale 100 > /dev/null 2>&1
 call menu close > /dev/null 2>&1
 EOF
@@ -182,6 +189,20 @@ leg_menu_resize_assert() {
       fi
     done
   done
+  # Centred, off the shell's own card rect.
+  local out_w card
+  for f in monitor root monitor2; do
+    out_w=$($convert_bin "$shot_dir/menu-resize-$f.png" -format '%w' info: 2>/dev/null)
+    card=$("$jq_bin" -r '[.modals[] | select(.namespace == "formalshell:menu") | .card] | first | "\(.x) \(.width)"' \
+      "$shot_dir/menu-resize-dump-$f.json" 2>/dev/null)
+    local cx=${card% *} cw=${card#* }
+    [ -n "$out_w" ] && [ -n "$cx" ] && [ "$cx" != null ] || fail "$f: no card rect in the dump or no frame width ($card, $out_w)"
+    local off=$(( 2 * cx + cw - out_w ))
+    [ "$off" -ge -2 ] && [ "$off" -le 2 ] || fail \
+      "$f: the card rests at x $cx, ${cw} wide, on a ${out_w} wide output: $((off / 2))px off centre"
+    echo "SMOKE_MENU_RESIZE_CENTRED $f x $cx width $cw output $out_w"
+  done
+
   echo "frames caught between the two widths: $between"
   [ "$between" -ge 1 ] || fail "no frame caught the card between its two widths, so no frame of the resize was read"
   [ -z "$bad" ] || fail "frames with content outside the card or a moved scrim:$bad"
