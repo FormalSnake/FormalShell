@@ -140,6 +140,10 @@ pub struct Surface<R: Role = LayerSurface> {
     opacity: u16,
     /// The opacity changed: everything drawn goes to the compositor again.
     refade: bool,
+    /// The buffer the compositor last got, and the one it got before a
+    /// resize dropped the rest: what [`Surface::recommit`] attaches again.
+    front: Option<usize>,
+    retired: Option<Buffer>,
 }
 
 /// Rows per band of a sliced frame.
@@ -214,6 +218,7 @@ impl<R: Role> Surface<R> {
         self.buffers = kept.buffers;
         self.renderer = kept.renderer;
         self.pool_clean = kept.pool_clean;
+        self.front = None;
     }
 
     pub fn new(name: &'static str, layer: R, shm: &Shm, started: Instant) -> Self {
@@ -244,6 +249,8 @@ impl<R: Role> Surface<R> {
             slices: 0,
             opacity: 256,
             refade: false,
+            front: None,
+            retired: None,
         }
     }
 
@@ -261,6 +268,23 @@ impl<R: Role> Surface<R> {
                 b.stale.push(drawn);
             }
         }
+    }
+
+    /// Commits state set beside the buffer (a subsurface's place, its
+    /// viewport) with the buffer the compositor already shows attached
+    /// again. Hyprland 0.56 takes a surface's size off its viewport only on
+    /// a commit carrying a buffer (`SSurfaceState::updateFrom` copies `size`
+    /// under the buffer bit), so a viewport changed on a bare commit draws
+    /// the new crop squeezed into the old size.
+    pub fn recommit(&mut self) {
+        let buffer = self.front.map(|at| &self.buffers[at].buffer).or(self.retired.as_ref());
+        if let Some(b) = buffer {
+            // Hyprland copies an shm buffer on commit and releases it at
+            // once, so it may be back already: in use again either way.
+            let _ = b.activate();
+            self.layer.role_surface().attach(Some(b.wl_buffer()), 0, 0);
+        }
+        self.layer.role_commit();
     }
 
     /// Sizes the canvas ahead of the compositor's first configure, so the
@@ -338,6 +362,9 @@ impl<R: Role> Surface<R> {
         if (self.renderer.width() as i32, self.renderer.height() as i32) != (width, height) {
             self.renderer.resize(width as u16, height as u16);
             self.pool_clean &= self.buffers.is_empty();
+            if let Some(at) = self.front.take() {
+                self.retired = Some(self.buffers.swap_remove(at).buffer);
+            }
             self.buffers.clear();
             self.drawn = None;
             self.raster.clear();
@@ -486,6 +513,8 @@ impl<R: Role> Surface<R> {
         }
         target.buffer.attach_to(surface).expect("attach released buffer");
         self.layer.role_commit();
+        self.front = Some(at);
+        self.retired = None;
 
         self.commits += 1;
         if !crate::tracing() {

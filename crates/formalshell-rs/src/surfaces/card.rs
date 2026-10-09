@@ -646,6 +646,10 @@ impl Card {
     pub fn radius(&self) -> f64 {
         self.look.radius
     }
+
+    pub fn border_width(&self) -> f64 {
+        self.look.border_width
+    }
 }
 
 /// A full-output black scrim on the pose a modal drawer rides,

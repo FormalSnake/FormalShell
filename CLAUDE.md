@@ -478,13 +478,16 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   speed, then re-levelled onto the clipboard's split route, its left edge read
   off one header row per frame: the root and the rest frames on the
   `popupWidthMenu` and `popupWidthMenuSplit` edges, a frame between them.
-- `menu_resize.sh` `--menu-resize`: the monitor view, a real Escape back
-  to the root and `menu summon monitor` again at a fifth speed, a burst of
-  frames through each resize: the scrim's patches holding on every frame,
-  and along three rows and two columns the pixels past the scrim one run
-  at most, so no content shows outside the card or over a card not drawn
-  yet. Worth running under `FS_CPU_QUOTA` too, where the card draws in
-  slices across loop turns.
+- `menu_resize.sh` `--menu-resize`: the root, the monitor view reached by
+  typing `sysmon` and a real Return (so the card's look grows past the size
+  it was first drawn at), a real Escape back to the root and `menu summon
+  monitor` again at a fifth speed, a burst of frames through each resize:
+  the scrim's patches holding on every frame, along three rows and two
+  columns the pixels past the scrim one run at most, so no content shows
+  outside the card or over a card not drawn yet, and on every settled frame
+  and the last ones of each burst card fill under every row and column of
+  the content's box (`debug dump`'s `content` rect). Worth running under
+  `FS_CPU_QUOTA` too, where the card draws in slices across loop turns.
 - `menu_rows.sh` `--menu-rows`: the toggle hub filtered at a tenth speed, a
   frame of the rows' band that matches neither settled list: rows that kept
   their place slide, new ones fade in, gone ones fade out.
