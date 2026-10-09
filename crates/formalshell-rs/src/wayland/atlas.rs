@@ -228,7 +228,8 @@ impl App {
         match e.kind {
             PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } => {
                 if m.globe.grabbing() || on_globe {
-                    if m.globe.motion(x, y, now) == Out::Interaction {
+                    let time = if let PointerEventKind::Motion { time } = e.kind { Some(time) } else { None };
+                    if m.globe.motion(x, y, time) == Out::Interaction {
                         m.keyboard_selection = false;
                     }
                     m.keyboard_selection = false;
@@ -296,14 +297,14 @@ impl App {
                     }
                 }
             }
-            PointerEventKind::Release { button, .. } => {
+            PointerEventKind::Release { button, time, .. } => {
                 if button != 0x110 {
                     return true;
                 }
                 w.sliding = false;
                 let pressed = w.pressed.take();
                 if pressed.as_deref() == Some("globe") {
-                    match m.globe.release(x, y, now) {
+                    match m.globe.release(x, y, time, now) {
                         Out::Station(s) => m.activate_map_station(&r, &s),
                         Out::Country(code, name) => m.browse_country(&r, &code, &name),
                         _ => {}

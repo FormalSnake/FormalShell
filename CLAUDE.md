@@ -600,8 +600,14 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   radio` over a world cache holding one loopback-served station, Enter on a
   real key playing it and turning the globe to centre it (the globe's box
   differing from the open frame), and after `radio stop` a real click on
-  the globe's centre picking it again, read off `radio status`; Escape
-  closes it.
+  the globe's centre picking it again, read off `radio status`; then a
+  held drag over `dev/vpointer.py` that stops before its release leaving
+  the globe's longitude where the release left it, and one let go while
+  moving coasting less than 2.5 times its own travel. Escape closes it.
+- `radio_atlas_cold.sh` `--radio-atlas-cold`: Radio Atlas opened with no
+  world cache, a frame a second in and another once `radio status`
+  reports stations (fetched over the real network and cached) or the
+  honest unavailable error, neither frame a flat card.
 - `reminder.sh` `--reminder`: a real countdown firing inside the run and
   bypassing DND into the popup tier.
 - `retro.sh` `--retro`: pins `theme.preset` to `retro` in the settings

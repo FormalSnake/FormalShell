@@ -25,7 +25,9 @@ pub fn target() -> Target<App> {
 }
 
 fn status(app: &mut App, _: &[Value]) -> Value {
-    text(app.store.media.radio.status().to_string())
+    let mut status = app.store.media.radio.status();
+    status["atlas"] = app.atlas.model.status(&app.store.media.radio);
+    text(status.to_string())
 }
 
 fn play(app: &mut App, args: &[Value]) -> Value {
