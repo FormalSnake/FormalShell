@@ -1685,9 +1685,18 @@ impl App {
                 continue;
             }
             let mut owner = self.owner(&e.surface);
+            if let Some(Owner::Head(_, heads::Part::Catcher)) = owner {
+                if matches!(e.kind, PointerEventKind::Press { .. }) {
+                    self.dismiss();
+                }
+                continue;
+            }
             if let Some(Owner::Head(i, heads::Part::Bar)) = owner
-                && matches!(e.kind, PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } | PointerEventKind::Press { .. })
-                && self.promote(i)
+                && match e.kind {
+                    PointerEventKind::Press { .. } => self.press_spare(i),
+                    PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } => self.promote(i),
+                    _ => false,
+                }
             {
                 owner = self.owner(&e.surface);
             }
