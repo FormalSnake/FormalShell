@@ -3,8 +3,9 @@
 //! backlight and DDC monitors, and which card drives which connector.
 //!
 //! The EDIDs are read once per set of connector names, off the hyprland
-//! service's own output refresh. The backlight is listed once at start and
-//! re-read from every set's own reply. DDC detection is seconds-slow, so it
+//! service's own output refresh. The backlight is listed at start and on
+//! every open; a set is never read back, the row holding the value asked for
+//! while one writer per device catches the device up. DDC detection is seconds-slow, so it
 //! runs only when the panel opens, as does the 5s re-read of the outputs the
 //! compositor never announces (a disabled one), for as long as it is open.
 //!
@@ -54,7 +55,8 @@ pub enum Diff {
     Cards(Vec<gpu::Card>),
     Backlight(Option<Brightness>),
     Ddc(Vec<Brightness>),
-    DdcPercent(String, i64),
+    /// A device's percent as last asked for, the backlight or a DDC row.
+    Percent(String, i64),
 }
 
 impl State {
@@ -69,7 +71,7 @@ impl State {
             Diff::Cards(v) => set(&mut self.cards, v),
             Diff::Backlight(v) => set(&mut self.backlight, v),
             Diff::Ddc(v) => set(&mut self.ddc, v),
-            Diff::DdcPercent(id, pct) => match self.ddc.iter_mut().find(|d| d.id == id) {
+            Diff::Percent(id, pct) => match self.backlight.iter_mut().chain(self.ddc.iter_mut()).find(|d| d.id == id) {
                 Some(d) if d.percent != pct => {
                     d.percent = pct;
                     true
@@ -100,10 +102,28 @@ thread_local! {
     static EDID_NAMES: RefCell<String> = const { RefCell::new(String::new()) };
     static BACKLIGHT: RefCell<String> = const { RefCell::new(String::new()) };
     static BUSES: RefCell<HashMap<String, String>> = RefCell::new(HashMap::new());
+    static PENDING: RefCell<HashMap<String, Pending>> = RefCell::new(HashMap::new());
+}
+
+/// A device's write queue: the percent last asked for, and its row's max.
+/// One writer drains it at a time, so a burst of steps reaches the device in
+/// order and only its newest value is written once the writer is free.
+/// ddcutil run twice on one bus contends on that bus's flock and the loser
+/// gives up, so parallel writes landed in any order or not at all, and the
+/// monitor stepped back and forth.
+struct Pending {
+    want: i64,
+    max: i64,
+}
+
+/// The percent a device was last asked for while its write is still out,
+/// which a read racing that write must not overwrite.
+fn pending(id: &str) -> Option<i64> {
+    PENDING.with_borrow(|p| p.get(id).map(|q| q.want))
 }
 
 pub fn start(ctx: &Ctx) {
-    ctx.spawn(backlight(ctx.clone(), vec!["-c".into(), "backlight".into(), "-l".into()]));
+    ctx.spawn(backlight(ctx.clone()));
 }
 
 /// The hyprland service's every output read: a new set of connector names
@@ -187,11 +207,10 @@ async fn output(argv: &[String]) -> Option<(i32, String)> {
     Some((out.status.code().unwrap_or(-1), String::from_utf8_lossy(&out.stdout).into_owned()))
 }
 
-/// `brightnessctl -m` with `args`; its first CSV row (`name,class,current,
-/// percent%,max`) is the backlight now.
-async fn backlight(ctx: Ctx, args: Vec<String>) {
-    let mut argv = vec!["brightnessctl".to_string(), "-m".to_string()];
-    argv.extend(args);
+/// `brightnessctl -m -c backlight -l`; its first CSV row (`name,class,
+/// current,percent%,max`) is the backlight now.
+async fn backlight(ctx: Ctx) {
+    let argv: Vec<String> = ["brightnessctl", "-m", "-c", "backlight", "-l"].map(String::from).into();
     let text = output(&argv).await.map(|(_, t)| t).unwrap_or_default();
     let line = text.lines().next().unwrap_or("").trim();
     let fields: Vec<&str> = line.split(',').collect();
@@ -200,7 +219,7 @@ async fn backlight(ctx: Ctx, args: Vec<String>) {
         Some(Brightness {
             id: "backlight".into(),
             label: "INTERNAL".into(),
-            percent: fields[3].trim_end_matches('%').parse().unwrap_or(0),
+            percent: pending("backlight").unwrap_or_else(|| fields[3].trim_end_matches('%').parse().unwrap_or(0)),
             max: 100,
         })
     } else if line.is_empty() {
@@ -256,41 +275,73 @@ async fn detect(ctx: Ctx) {
     for (connector, bus) in found {
         let argv: Vec<String> = ["ddcutil", "--bus", &bus, "--skip-ddc-checks", "getvcp", "10", "--brief"].map(String::from).into();
         if let Some((current, max)) = output(&argv).await.and_then(|(_, t)| parse_vcp(&t)) {
-            let percent = if max > 0 { (current as f64 * 100.0 / max as f64).round() as i64 } else { 0 };
+            let read = if max > 0 { (current as f64 * 100.0 / max as f64).round() as i64 } else { 0 };
+            let percent = pending(&connector).unwrap_or(read);
             rows.push(Brightness { id: connector.clone(), label: connector, percent, max });
             publish(&ctx, Diff::Ddc(rows.clone()));
         }
     }
 }
 
-/// Sets a device's brightness percent. `max` is the DDC row's own.
+
+/// Sets a device's brightness percent. `max` is the DDC row's own. The row
+/// takes the value at once and the device follows through its queue.
 pub fn set_percent(ctx: &Ctx, id: &str, percent: f64, max: i64) {
-    let pct = percent.round().clamp(0.0, 100.0) as i64;
+    let mut pct = percent.round().clamp(0.0, 100.0) as i64;
     if id == "backlight" {
-        let device = BACKLIGHT.with_borrow(Clone::clone);
-        if device.is_empty() {
+        if BACKLIGHT.with_borrow(String::is_empty) {
             return;
         }
-        ctx.spawn(backlight(ctx.clone(), vec!["-d".into(), device, "set".into(), format!("{pct}%")]));
-        return;
+    } else {
+        if !BUSES.with_borrow(|b| b.contains_key(id)) {
+            return;
+        }
+        // Some panels take VCP 10 at 0 as off rather than dim.
+        pct = pct.max(1);
     }
-    let Some(bus) = BUSES.with_borrow(|b| b.get(id).cloned()) else { return };
-    // Some panels take VCP 10 at 0 as off rather than dim.
-    let target = pct.max(1);
-    let raw = (target as f64 * max as f64 / 100.0).round() as i64;
-    let argv: Vec<String> =
-        ["ddcutil", "--bus", &bus, "--skip-ddc-checks", "--noverify", "setvcp", "10", &raw.to_string()].map(String::from).into();
-    ctx.spawn(async move {
-        let _ = output(&argv).await;
-    });
-    // --noverify reads nothing back, so the row takes the value it asked for.
-    publish(ctx, Diff::DdcPercent(id.to_owned(), target));
+    publish(ctx, Diff::Percent(id.to_owned(), pct));
+    let idle = PENDING.with_borrow_mut(|p| p.insert(id.to_owned(), Pending { want: pct, max }).is_none());
+    if idle {
+        ctx.spawn(drain(id.to_owned()));
+    }
+}
+
+/// Writes `id`'s queued percent until the last one written is the one
+/// still asked for.
+async fn drain(id: String) {
+    let mut written = None;
+    loop {
+        let next = PENDING.with_borrow_mut(|p| {
+            let q = p.get(&id)?;
+            if written == Some(q.want) {
+                p.remove(&id);
+                return None;
+            }
+            Some((q.want, q.max))
+        });
+        let Some((pct, max)) = next else { return };
+        write(&id, pct, max).await;
+        written = Some(pct);
+    }
+}
+
+async fn write(id: &str, pct: i64, max: i64) {
+    let argv: Vec<String> = if id == "backlight" {
+        let device = BACKLIGHT.with_borrow(Clone::clone);
+        ["brightnessctl", "-q", "-d", &device, "set", &format!("{pct}%")].map(String::from).into()
+    } else {
+        let Some(bus) = BUSES.with_borrow(|b| b.get(id).cloned()) else { return };
+        let raw = (pct as f64 * max as f64 / 100.0).round() as i64;
+        // --noverify: setvcp reads nothing back, so a write is one round trip.
+        ["ddcutil", "--bus", &bus, "--skip-ddc-checks", "--noverify", "setvcp", "10", &raw.to_string()].map(String::from).into()
+    };
+    let _ = output(&argv).await;
 }
 
 /// While the panel is open: the outputs read now and every 5s, the
 /// backlight, the DDC monitors and the cards once.
 pub async fn run(ctx: Ctx) {
-    ctx.spawn(backlight(ctx.clone(), vec!["-c".into(), "backlight".into(), "-l".into()]));
+    ctx.spawn(backlight(ctx.clone()));
     ctx.spawn(detect(ctx.clone()));
     if let Some(cards) = ctx.pool().run(read_cards).await {
         publish(&ctx, Diff::Cards(cards));

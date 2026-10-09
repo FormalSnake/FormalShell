@@ -169,6 +169,13 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   clock commits, the stub is never called and the shell spends under 5
   ticks; `bluetooth status` lists the paired device alone, and the
   strangers too once the panel is open.
+- `brightness.sh` `--brightness`: three bursts of eight steps 40ms apart
+  against PATH-shimmed `ddcutil` (a bus flock held 100 to 300ms per call,
+  overlaps logged) and `brightnessctl` (reads answering after 20 to 150ms),
+  the shell started as its wrapped binary so the shims beat the wrapper's
+  own PATH: the keybind path's `osd state` brightness never stepping back
+  and landing on 70, the display panel's HDMI-A-1 row written one setvcp at
+  a time rising to 70, and its backlight row falling to 30.
 - `caffeinate.sh` `--caffeinate`: `caffeinate.onStartup` starting the
   session caffeinated with its `formalshell:caffeinate` layer surface
   mapped, the real ext-idle-notify monitor staying non-idle three screensaver
