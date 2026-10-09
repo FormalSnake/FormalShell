@@ -1,10 +1,10 @@
-//! The screensaver's ttfx child: a PATH
-//! probe at startup, then one run at a time, its stdout split into frames
-//! here so the UI thread only ever receives parsed rows. A new run or a stop
-//! drops the one before it, child included, so no stale frame or exit from
-//! it can arrive.
+//! The screensaver's ttfx children: a PATH probe at startup, then a run per
+//! output, each one's stdout split into frames here so the UI thread only
+//! ever receives parsed rows. Stopping a run drops it, child included, so no
+//! stale frame or exit from it can arrive.
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 
 use fs_screensaver::ttfx::{self, Frame, FrameParser};
 use futures_lite::{AsyncReadExt, FutureExt};
@@ -26,9 +26,9 @@ pub struct End {
 #[derive(Default)]
 pub struct State {
     pub ttfx: Avail,
-    /// The newest frame: its run, its index in that run, its rows.
-    pub frame: Option<(u64, usize, Frame)>,
-    pub ended: Option<End>,
+    /// The newest frame of each run: its index in that run, its rows.
+    pub frames: HashMap<u64, (usize, Frame)>,
+    pub ended: Vec<End>,
     /// The banner file read, its text: `screensaver.asciiPath`, or the
     /// bundled one when that is unset or unreadable.
     pub banner: Option<(String, String)>,
@@ -52,11 +52,11 @@ impl State {
                 changed
             }
             Diff::Frame(run, index, frame) => {
-                self.frame = Some((run, index, frame));
+                self.frames.insert(run, (index, frame));
                 true
             }
             Diff::Ended(end) => {
-                self.ended = Some(end);
+                self.ended.push(end);
                 true
             }
         }
@@ -108,19 +108,24 @@ pub fn load_banner(ctx: &Ctx, configured: String) {
 }
 
 thread_local! {
-    /// Dropping the sender ends the run holding its receiver.
-    static CURRENT: RefCell<Option<async_channel::Sender<()>>> = const { RefCell::new(None) };
+    /// The runs going, by run; dropping a sender ends the run holding its
+    /// receiver.
+    static RUNS: RefCell<HashMap<u64, async_channel::Sender<()>>> = RefCell::new(HashMap::new());
 }
 
 pub fn stop(_: &Ctx) {
-    CURRENT.with(|c| c.borrow_mut().take());
+    RUNS.with(|c| c.borrow_mut().clear());
+}
+
+pub fn stop_run(_: &Ctx, run: u64) {
+    RUNS.with(|c| c.borrow_mut().remove(&run));
 }
 
 /// `pinned`: only that frame is sent, and the run races there unpaced,
 /// stopping at [`ttfx::PIN_FRAME_CAP`].
 pub fn start(ctx: &Ctx, run: u64, opts: ttfx::Opts, pinned: Option<usize>) {
     let (tx, rx) = async_channel::bounded::<()>(1);
-    CURRENT.with(|c| *c.borrow_mut() = Some(tx));
+    RUNS.with(|c| c.borrow_mut().insert(run, tx));
     let task_ctx = ctx.clone();
     ctx.spawn(async move {
         let cancelled = async {
@@ -128,6 +133,7 @@ pub fn start(ctx: &Ctx, run: u64, opts: ttfx::Opts, pinned: Option<usize>) {
             None
         };
         if let Some(end) = stream(&task_ctx, run, opts, pinned).or(cancelled).await {
+            RUNS.with(|c| c.borrow_mut().remove(&run));
             publish(&task_ctx, Diff::Ended(end));
         }
     });

@@ -1622,7 +1622,7 @@ impl App {
 
     fn pointer_events(&mut self, events: &[PointerEvent]) {
         for e in events {
-            if self.saver_owns(&e.surface) {
+            if let Some(i) = self.saver_index(&e.surface) {
                 let input = match e.kind {
                     PointerEventKind::Enter { serial } => match self.pointer.clone() {
                         Some(p) => screensaver::SaverInput::Enter(p, serial, e.position),
@@ -1632,7 +1632,7 @@ impl App {
                     PointerEventKind::Press { .. } => screensaver::SaverInput::Press,
                     _ => continue,
                 };
-                self.saver_pointer(input);
+                self.saver_input(Some(i), input);
                 continue;
             }
             let mut owner = self.owner(&e.surface);
@@ -1975,7 +1975,7 @@ impl CompositorHandler for App {
             Some(Owner::Launcher(part)) => self.launcher_frame(part, now),
             Some(Owner::Picker(i)) => self.picker_frame(i),
             Some(Owner::Head(i, part)) => self.head_frame(i, part, now),
-            None if self.saver_owns(surface) => self.saver_frame_callback(),
+            None if self.saver_index(surface).is_some() => self.saver_frame_callback(surface),
             None => {
                 if !self.polkit_frame(surface) && !self.overlay_frame(surface) {
                     self.lock_frame(surface);
@@ -2023,7 +2023,7 @@ impl LayerShellHandler for App {
             Some(Owner::Switcher) => self.switcher_close(),
             Some(Owner::Atlas(_)) => self.atlas_closed(),
             Some(Owner::Picker(i)) => self.picker_closed(i),
-            None if self.saver_owns(layer.wl_surface()) => self.saver_closed(),
+            None if self.saver_index(layer.wl_surface()).is_some() => self.saver_closed(layer.wl_surface()),
             Some(Owner::Zone(_) | Owner::Launcher(_)) | None => {}
         }
     }
@@ -2095,7 +2095,7 @@ impl LayerShellHandler for App {
             Some(Owner::Atlas(p)) => self.atlas_configure(p, width, height),
             Some(Owner::Picker(i)) => self.picker_configure(i, width, height),
             None if self.caffeinate_owns(layer) => self.caffeinate_configure(),
-            None if self.saver_owns(layer.wl_surface()) => self.saver_configure(width, height),
+            None if self.saver_index(layer.wl_surface()).is_some() => self.saver_configure(layer.wl_surface(), width, height),
             None if self.hot_corner_owns(layer) => self.hot_corner_configure(layer),
             None if self.polkit_owns(layer) => self.polkit_configure(layer, width, height),
             None if self.overlay_owns(layer) => self.overlay_configure(layer, width, height),
@@ -2160,7 +2160,7 @@ impl KeyboardHandler for App {
 
     fn press_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, event: KeyEvent) {
         if self.saver.active && !self.lock.locked {
-            self.saver_pointer(screensaver::SaverInput::Key);
+            self.saver_input(None, screensaver::SaverInput::Key);
             return;
         }
         self.key_event(event);
@@ -2194,6 +2194,8 @@ impl OutputHandler for App {
     /// here may rebuild heads from that list.
     fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, output: wl_output::WlOutput) {
         self.drop_head(&output);
+        self.saver_output_gone(&output);
+        self.lock_output_gone(&output);
     }
 }
 
@@ -2202,6 +2204,7 @@ impl App {
         self.lock_outputs();
         self.sync_hot_corners();
         self.sync_heads();
+        self.saver_outputs();
         if self.bar_surface.is_none() && !self.bar.hidden {
             self.place_chrome();
         }

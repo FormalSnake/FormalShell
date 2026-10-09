@@ -507,10 +507,16 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   running shell leaves no decoder, the static art in the bar and the bar not
   committing, even with the panel animating over it.
 - `multi_output.sh` `--multi-output`: a wallpaper, a bar and four frame
-  zones on every output, read off `hyprctl -j layers`, with a headless
+  zones (none under a theme with no ring, off `debug dump`) on every
+  output, read off `hyprctl -j layers`, with a headless
   second output created after the shell started at scale 1.25 (g815's
   laptop panel shape), each output grabbed with `grim -o`, and the second
-  removed again leaving the first's chrome alone.
+  removed again leaving the first's chrome alone. The screensaver on both
+  outputs, a `formalshell:screensaver` layer and a mostly black frame on
+  each, dismissed off both by one real pointer move on the second, then
+  the second removed and created again under a running screensaver and
+  given an overlay of its own; and the lock drawn on both outputs, lifted
+  by the real password.
 - `nix_run.sh` `--nix-run`: a menu.jsonc row carrying `@ipc:nix.run:hello`
   run through `menu activate`, read off `hyprctl clients` and `pgrep`: a
   `formalshell-console.run` window running `nix run nixpkgs#hello; read`,

@@ -278,6 +278,12 @@ impl App {
         }
     }
 
+    /// The output gone: its lock surface destroyed with it, as
+    /// ext-session-lock asks of a client.
+    pub(super) fn lock_output_gone(&mut self, output: &WlOutput) {
+        self.lock.outs.retain(|o| o.output != *output);
+    }
+
     /// The avatar and the scrimmed wallpaper, decoded on the pool.
     fn load_lock_pictures(&mut self) {
         let (Some(rt), Some(tx)) = (&self.runtime, self.lock.tx.clone()) else { return };

@@ -1,13 +1,18 @@
 //! The screensaver: one controller deciding when to show,
-//! the session's idle state crossed with the live media guard, and one
-//! full-output overlay drawing the banner cell by cell. ttfx is the frame
-//! source when it is on PATH (its stdout parsed on the service thread),
-//! fs-screensaver's built-in effects when it is not. The overlay fades in
-//! and out through `wp_alpha_modifier_v1`, so a fade step is a multiplier
-//! and a commit, and nothing draws or ticks while it is down.
+//! the session's idle state crossed with the live media guard, and an
+//! overlay on every output drawing the banner cell by cell at that output's
+//! own size. ttfx is the frame source when it is on PATH (one child per
+//! output, its stdout parsed on the service thread), fs-screensaver's
+//! built-in effects when it is not. Every output shows the same effect off
+//! the same seed, and the hold before the next one starts once every
+//! output's run has converged. An output arriving while it shows gets an
+//! overlay of its own, one leaving takes its overlay and run with it, and
+//! input on any of them dismisses all. The overlays fade in and out together
+//! through `wp_alpha_modifier_v1`, so a fade step is a multiplier and a
+//! commit, and nothing draws or ticks while they are down.
 //!
-//! When the overlay unmaps, the end of its fade, the hot corner that fired
-//! it is told the action ended (`hot_corner_action_ended`): that is the
+//! When the overlays unmap, the end of their fade, the hot corner that fired
+//! them is told the action ended (`hot_corner_action_ended`): that is the
 //! moment the pointer comes back to a corner it may never have left.
 
 use std::collections::HashMap;
@@ -20,7 +25,9 @@ use fs_screensaver::{blocks, effect, ttfx};
 use fs_theme::color::Rgba;
 use parley::GenericFamily;
 use serde_json::json;
+use smithay_client_toolkit::reexports::client::protocol::wl_output::WlOutput;
 use smithay_client_toolkit::reexports::client::protocol::wl_pointer;
+use smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface;
 use smithay_client_toolkit::reexports::protocols::wp::alpha_modifier::v1::client::wp_alpha_modifier_surface_v1::WpAlphaModifierSurfaceV1;
 use smithay_client_toolkit::shell::WaylandSurface;
 use smithay_client_toolkit::shell::wlr_layer::{Anchor, KeyboardInteractivity, Layer};
@@ -46,7 +53,16 @@ const FOREGROUND: Rgba = Rgba { r: 1.0, g: 1.0, b: 1.0, a: 1.0 };
 type Row = Vec<(i64, char, Rgba)>;
 
 pub struct Overlay {
+    output: WlOutput,
     surface: Surface,
+    /// Its ttfx run, 0 while none.
+    run: u64,
+    /// That run ended on its own, converged.
+    ended: bool,
+    /// The frames that run produced, once it ended pinned.
+    frames: usize,
+    /// The rows on screen, ttfx's or the built-in engine's.
+    grid: Vec<Row>,
     fade: WpAlphaModifierSurfaceV1,
     scene: Scene,
     background: Option<NodeId>,
@@ -77,13 +93,10 @@ pub struct Saver {
     cycles: u64,
     seed: i64,
     previous: String,
-    ttfx_frames: usize,
     run: u64,
     logged_unknown: bool,
     auto_frame: i64,
-    /// The rows on screen, ttfx's or the built-in engine's.
-    grid: Vec<Row>,
-    overlay: Option<Overlay>,
+    overlays: Vec<Overlay>,
     opacity: Animated,
     hold: Option<RegistrationToken>,
     tick: Option<RegistrationToken>,
@@ -101,12 +114,10 @@ impl Default for Saver {
             cycles: 0,
             seed: 0,
             previous: String::new(),
-            ttfx_frames: 0,
             run: 0,
             logged_unknown: false,
             auto_frame: 0,
-            grid: Vec::new(),
-            overlay: None,
+            overlays: Vec::new(),
             opacity: Animated::new(0.0, EFFECTS_SLOW),
             hold: None,
             tick: None,
@@ -172,7 +183,7 @@ impl App {
 
     fn saver_convergence(&self) -> i64 {
         if self.saver_ttfx() {
-            self.saver.ttfx_frames as i64
+            self.saver.overlays.iter().map(|o| o.frames).max().unwrap_or(0) as i64
         } else {
             effect::convergence_frame(&self.saver_effect(), &self.saver_banner())
         }
@@ -219,9 +230,9 @@ impl App {
         self.saver_cancel_hold();
         self.saver.pinned = frame;
         if self.saver_ttfx() {
-            self.saver_start_run();
+            self.saver_start_runs();
         } else {
-            self.saver_paint_builtin();
+            self.saver_paint();
         }
     }
 
@@ -259,21 +270,19 @@ impl App {
             let s = &mut self.saver;
             s.previous.clear();
             s.cycles = 0;
-            s.ttfx_frames = 0;
             s.seed = now_ms();
             s.auto_frame = 0;
-            s.grid.clear();
             let requested = self.saver_requested_effect();
             let known = if self.saver_ttfx() { ttfx::is_known_effect(&requested) } else { effect::is_known_effect(&requested) };
             if requested != "random" && !known && !self.saver.logged_unknown {
                 eprintln!("screensaver: unknown screensaver.effect '{requested}', falling back to random");
                 self.saver.logged_unknown = true;
             }
-            if self.saver.overlay.is_none() {
-                self.saver_map();
-            }
-            if let Some(o) = &mut self.saver.overlay {
+            self.saver_outputs();
+            for o in &mut self.saver.overlays {
                 o.baseline = None;
+                o.frames = 0;
+                o.grid.clear();
                 o.surface.layer.set_keyboard_interactivity(KeyboardInteractivity::OnDemand);
                 o.surface.layer.commit();
             }
@@ -282,12 +291,12 @@ impl App {
         } else {
             self.saver.pinned = effect::next_pinned_frame(false, self.saver.pinned);
             self.saver.opacity.set(now, 0.0, reveal);
-            if let Some(o) = &mut self.saver.overlay {
+            for o in &mut self.saver.overlays {
                 o.surface.layer.set_keyboard_interactivity(KeyboardInteractivity::None);
                 o.surface.layer.commit();
             }
         }
-        self.saver_start_run();
+        self.saver_start_runs();
         self.saver_arm_tick();
         self.saver_arm_chain();
     }
@@ -321,9 +330,38 @@ impl App {
         theme.motion().families.reveal * self.motion_scale
     }
 
-    fn saver_map(&mut self) {
+    /// An overlay on every output that has none, while it shows. Never
+    /// called from `output_destroyed`, whose output is still listed then.
+    pub(super) fn saver_outputs(&mut self) {
+        if !self.saver.active {
+            return;
+        }
+        let outputs: Vec<WlOutput> = self.outputs.outputs().collect();
+        let mut added = false;
+        for output in outputs {
+            if !self.saver.overlays.iter().any(|o| o.output == output) {
+                self.saver_map(output);
+                added = true;
+            }
+        }
+        if added {
+            self.log(&format!("screensaver on {} outputs", self.saver.overlays.len()));
+            self.saver_rebase();
+        }
+    }
+
+    /// The compositor warps the cursor when an output comes or goes, which
+    /// is no one touching anything: the next position on any overlay is a
+    /// baseline again.
+    fn saver_rebase(&mut self) {
+        for o in &mut self.saver.overlays {
+            o.baseline = None;
+        }
+    }
+
+    fn saver_map(&mut self, output: WlOutput) {
         let surface = self.compositor.create_surface(&self.qh);
-        let layer = self.layer_shell.create_layer_surface(&self.qh, surface, Layer::Overlay, Some(NAMESPACE), None);
+        let layer = self.layer_shell.create_layer_surface(&self.qh, surface, Layer::Overlay, Some(NAMESPACE), Some(&output));
         layer.set_anchor(Anchor::all());
         layer.set_size(0, 0);
         layer.set_exclusive_zone(-1);
@@ -332,8 +370,13 @@ impl App {
         let fade = self.pixels.alpha.get_surface(layer.wl_surface(), &self.qh, Ignore);
         let mut surface = Surface::new("screensaver", layer, &self.shm, self.started);
         surface.wait_map = true;
-        self.saver.overlay = Some(Overlay {
+        self.saver.overlays.push(Overlay {
+            output,
             surface,
+            run: 0,
+            ended: false,
+            frames: 0,
+            grid: Vec::new(),
             fade,
             scene: Scene::new(1, 1),
             background: None,
@@ -350,18 +393,37 @@ impl App {
     }
 
     pub(super) fn saver_mapped(&self) -> bool {
-        self.saver.overlay.is_some()
+        !self.saver.overlays.is_empty()
     }
 
-    pub(super) fn saver_owns(&self, surface: &smithay_client_toolkit::reexports::client::protocol::wl_surface::WlSurface) -> bool {
-        self.saver.overlay.as_ref().is_some_and(|o| o.surface.layer.wl_surface() == surface)
+    pub(super) fn saver_index(&self, surface: &WlSurface) -> Option<usize> {
+        self.saver.overlays.iter().position(|o| o.surface.layer.wl_surface() == surface)
+    }
+
+    /// Overlay `i` gone, its run stopped with it.
+    fn saver_drop(&mut self, i: usize) {
+        let o = self.saver.overlays.remove(i);
+        self.log(&format!("screensaver off {}", self.output_name(&o.output)));
+        self.saver_stop_run(o.run);
+        if self.saver.active && self.saver.pinned < 0 && self.saver_ttfx() && !self.saver.overlays.is_empty() && self.saver_converged() {
+            self.saver_arm_hold();
+        }
+    }
+
+    /// The output gone: its overlay with it.
+    pub(super) fn saver_output_gone(&mut self, output: &WlOutput) {
+        if let Some(i) = self.saver.overlays.iter().position(|o| o.output == *output) {
+            self.saver_drop(i);
+            self.saver_rebase();
+        }
     }
 
     /// The canvas measured in cells of the mono font at the size that fits
     /// the banner.
-    pub(super) fn saver_configure(&mut self, width: i32, height: i32) {
+    pub(super) fn saver_configure(&mut self, surface: &WlSurface, width: i32, height: i32) {
+        let Some(i) = self.saver_index(surface) else { return };
         let banner = self.saver_banner();
-        let Some(o) = &mut self.saver.overlay else { return };
+        let Some(o) = self.saver.overlays.get_mut(i) else { return };
         if width <= 0 || height <= 0 {
             return;
         }
@@ -388,29 +450,53 @@ impl App {
             o.background = Some(o.scene.add(IRect::new(0, 0, width, height), Paint::Rect { fill: BACKGROUND, radius: 0.0 }));
             o.rows_drawn.clear();
             o.glyphs.clear();
-            self.saver_start_run();
-            self.saver_paint();
+            self.saver_start_run(i);
+            self.saver_paint_one(i);
         }
     }
 
-    pub(super) fn saver_closed(&mut self) {
-        self.saver.overlay = None;
+    pub(super) fn saver_closed(&mut self, surface: &WlSurface) {
+        if let Some(i) = self.saver_index(surface) {
+            self.saver_drop(i);
+        }
     }
 
-    pub(super) fn saver_frame_callback(&mut self) {
-        let Some(o) = &mut self.saver.overlay else { return };
+    pub(super) fn saver_frame_callback(&mut self, surface: &WlSurface) {
+        let Some(i) = self.saver_index(surface) else { return };
+        let o = &mut self.saver.overlays[i];
         let s = &mut o.surface;
         (s.frame_pending, s.mapped, s.callbacks) = (false, true, s.callbacks + 1);
     }
 
-    /// Restarts ttfx for the canvas, effect and seed in force, or stops it.
-    fn saver_start_run(&mut self) {
-        let size = self.saver.overlay.as_ref().map(|o| (o.columns, o.rows));
-        let Some(rt) = &self.runtime else { return };
-        let Some((columns, rows)) = size.filter(|(c, r)| *c > 0 && *r > 0 && self.saver.active && self.saver_ttfx()) else {
+    fn saver_stop_run(&self, run: u64) {
+        if let Some(rt) = self.runtime.as_ref().filter(|_| run != 0) {
+            rt.service(move |ctx| service::stop_run(ctx, run));
+        }
+    }
+
+    /// Every overlay's ttfx run restarted for the effect and seed in force,
+    /// or stopped.
+    fn saver_start_runs(&mut self) {
+        if self.saver.overlays.is_empty()
+            && let Some(rt) = &self.runtime
+        {
             rt.service(service::stop);
+        }
+        for i in 0..self.saver.overlays.len() {
+            self.saver_start_run(i);
+        }
+    }
+
+    /// Restarts overlay `i`'s ttfx for its canvas, or stops it.
+    fn saver_start_run(&mut self, i: usize) {
+        let Some(o) = self.saver.overlays.get_mut(i) else { return };
+        let (columns, rows) = (o.columns, o.rows);
+        let old = std::mem::take(&mut o.run);
+        o.ended = false;
+        self.saver_stop_run(old);
+        if self.runtime.is_none() || columns <= 0 || rows <= 0 || !self.saver.active || !self.saver_ttfx() {
             return;
-        };
+        }
         self.saver.run += 1;
         let pinned = (self.saver.pinned >= 0).then_some(self.saver.pinned as usize);
         let opts = ttfx::Opts {
@@ -423,18 +509,24 @@ impl App {
             seed: self.saver.seed + self.saver.cycles as i64,
         };
         let run = self.saver.run;
-        rt.service(move |ctx| service::start(ctx, run, opts, pinned));
+        self.saver.overlays[i].run = run;
+        if let Some(rt) = &self.runtime {
+            rt.service(move |ctx| service::start(ctx, run, opts, pinned));
+        }
     }
 
-    /// A frame or an end from the run on screen; anything older is ignored.
+    /// Every overlay's run has ended on its own.
+    fn saver_converged(&self) -> bool {
+        self.saver.overlays.iter().all(|o| o.ended)
+    }
+
+    /// Frames and ends from the runs on screen; anything older is ignored.
     pub fn saver_changed(&mut self) {
-        let run = self.saver.run;
-        if let Some((r, _, _)) = &self.store.screensaver.frame
-            && *r == run
-            && self.saver.active
-        {
-            let (_, _, frame) = self.store.screensaver.frame.take().expect("frame");
-            self.saver.grid = frame
+        let frames = std::mem::take(&mut self.store.screensaver.frames);
+        let ended = std::mem::take(&mut self.store.screensaver.ended);
+        for (run, (_, frame)) in frames {
+            let Some(i) = self.saver.overlays.iter().position(|o| o.run == run).filter(|_| self.saver.active) else { continue };
+            self.saver.overlays[i].grid = frame
                 .iter()
                 .map(|runs| {
                     runs.iter()
@@ -445,19 +537,26 @@ impl App {
                         .collect()
                 })
                 .collect();
-            self.saver_paint();
+            self.saver_draw(i);
         }
-        if let Some(end) = self.store.screensaver.ended.take().filter(|e| e.run == run) {
+        for end in ended {
+            let Some(i) = self.saver.overlays.iter().position(|o| o.run == end.run && o.run != 0) else { continue };
             if end.code != 0 {
                 eprintln!("screensaver: ttfx exited {}, falling back to the builtin effects", end.code);
                 self.store.screensaver.ttfx = Avail::Missing;
-                self.saver.grid.clear();
-                self.saver_start_run();
+                for o in &mut self.saver.overlays {
+                    o.grid.clear();
+                }
+                self.saver_start_runs();
                 self.saver_arm_tick();
                 self.saver_paint();
-            } else if self.saver.pinned >= 0 {
-                self.saver.ttfx_frames = end.frames;
-            } else if self.saver.active {
+                return;
+            }
+            let o = &mut self.saver.overlays[i];
+            o.ended = true;
+            if self.saver.pinned >= 0 {
+                o.frames = end.frames;
+            } else if self.saver.active && self.saver_converged() {
                 self.saver_arm_hold();
             }
         }
@@ -487,8 +586,10 @@ impl App {
         self.saver.seed = now_ms();
         self.saver.cycles += 1;
         self.saver.auto_frame = 0;
-        self.saver.grid.clear();
-        self.saver_start_run();
+        for o in &mut self.saver.overlays {
+            o.grid.clear();
+        }
+        self.saver_start_runs();
         self.saver_paint();
     }
 
@@ -523,8 +624,8 @@ impl App {
         }
     }
 
-    fn saver_paint_builtin(&mut self) {
-        let Some(o) = &self.saver.overlay else { return };
+    fn saver_paint_builtin(&mut self, i: usize) {
+        let Some(o) = self.saver.overlays.get(i) else { return };
         let (columns, rows) = (o.columns, o.rows);
         let banner = self.saver_banner();
         let frame = effect::resolve_render_frame(self.saver.pinned, self.saver.auto_frame);
@@ -541,20 +642,26 @@ impl App {
                 }
             }
         }
-        self.saver.grid = out;
-        self.saver_draw();
+        self.saver.overlays[i].grid = out;
+        self.saver_draw(i);
+    }
+
+    fn saver_paint_one(&mut self, i: usize) {
+        if self.saver_ttfx() { self.saver_draw(i) } else { self.saver_paint_builtin(i) }
     }
 
     fn saver_paint(&mut self) {
-        if self.saver_ttfx() { self.saver_draw() } else { self.saver_paint_builtin() }
+        for i in 0..self.saver.overlays.len() {
+            self.saver_paint_one(i);
+        }
     }
 
     /// Each row is one node, rebuilt only when its cells changed. Block
     /// elements are the cell fraction their codepoint names, never a glyph
     /// (blocks.rs has why); edges snap to whole pixels so two blocks meeting
     /// leave no seam. Glyphs sit at their own column so nothing accumulates.
-    fn saver_draw(&mut self) {
-        let Some(o) = &mut self.saver.overlay else { return };
+    fn saver_draw(&mut self, i: usize) {
+        let Some(o) = self.saver.overlays.get_mut(i) else { return };
         if o.size.0 <= 0 {
             return;
         }
@@ -564,7 +671,7 @@ impl App {
         o.rows_drawn.resize(rows.max(o.rows_drawn.len()), None);
         let empty = Vec::new();
         for r in 0..o.rows_drawn.len() {
-            let row = if r < rows { self.saver.grid.get(r).unwrap_or(&empty) } else { &empty };
+            let row = if r < rows { o.grid.get(r).unwrap_or(&empty) } else { &empty };
             let hash = row_hash(row);
             if o.rows_drawn[r].as_ref().is_some_and(|(h, _)| *h == hash) {
                 continue;
@@ -625,13 +732,16 @@ impl App {
     pub(super) fn present_saver(&mut self, now: Instant) {
         let alpha = self.saver.opacity.value(now).clamp(0.0, 1.0);
         let fading = self.saver.opacity.running(now);
-        if self.saver.overlay.is_none() {
+        if self.saver.overlays.is_empty() {
             return;
         }
-        // Stopped and faded out: gone, whether or not it ever mapped (a
-        // session lock over it holds its frames back, so it may not have).
+        // Stopped and faded out: gone, whether or not they ever mapped (a
+        // session lock over them holds their frames back, so they may not
+        // have).
         if !self.saver.active && !fading {
-            self.saver.overlay = None;
+            for o in std::mem::take(&mut self.saver.overlays) {
+                self.saver_stop_run(o.run);
+            }
             self.log("screensaver unmapped");
             if let Some(runtime) = &self.runtime {
                 runtime.pool().submit(crate::trim_heap);
@@ -639,21 +749,29 @@ impl App {
             self.hot_corner_action_ended("screensaver");
             return;
         }
-        let Some(o) = &mut self.saver.overlay else { return };
         let multiplier = (alpha * f64::from(u32::MAX)).round() as u32;
-        if o.multiplier != Some(multiplier) && !o.surface.frame_pending {
-            o.fade.set_multiplier(multiplier);
-            o.multiplier = Some(multiplier);
-        }
+        let animating = fading || !self.saver.active;
         let qh = self.qh.clone();
-        o.surface.present(&mut o.scene, fading || !self.saver.active, &qh);
+        for o in &mut self.saver.overlays {
+            if o.multiplier != Some(multiplier) && !o.surface.frame_pending {
+                o.fade.set_multiplier(multiplier);
+                o.multiplier = Some(multiplier);
+            }
+            o.surface.present(&mut o.scene, animating, &qh);
+        }
     }
 
-    pub(super) fn saver_pointer(&mut self, kind: SaverInput) {
+    /// Input on overlay `i`, or a key wherever the focus is (`None`): any
+    /// of them dismisses every output's.
+    pub(super) fn saver_input(&mut self, i: Option<usize>, kind: SaverInput) {
         if !self.saver.active {
             return;
         }
-        let Some(o) = &mut self.saver.overlay else { return };
+        let Some(i) = i else {
+            self.saver_stop();
+            return;
+        };
+        let Some(o) = self.saver.overlays.get_mut(i) else { return };
         match kind {
             SaverInput::Enter(pointer, serial, at) => {
                 pointer.set_cursor(serial, None, 0, 0);
