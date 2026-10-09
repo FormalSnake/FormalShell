@@ -1390,6 +1390,7 @@ impl App {
             let animating = p.card.animating(now) || content || morphing;
             p.surface.present(&mut p.card.scene, animating, &qh);
         }
+        let strip = self.bar_strip();
         let theme = &self.store.theme.theme;
         for h in [&mut self.outgoing, &mut self.panel].into_iter().flatten() {
             if h.prime_until.is_some_and(|t| t <= now) {
@@ -1397,7 +1398,7 @@ impl App {
             }
             let animating = h.animating(now) || h.content_animating(now);
             if self.panel_dirty || animating {
-                h.sync_region(&self.compositor);
+                h.sync_region(&self.compositor, strip);
                 h.layout(&self.store, theme, &mut self.bar.kit, now);
             }
             let animating = h.animating(now) || h.content_animating(now);
@@ -1716,10 +1717,6 @@ impl App {
                         continue;
                     }
                     if owner == Some(Owner::Panel) {
-                        if let Some(i) = self.bar_under_panel(x, y) {
-                            self.pressed = Some((Owner::Bar, i));
-                            continue;
-                        }
                         if let Some(h) = &mut self.panel {
                             h.press(x, y, &self.store, self.runtime.as_ref());
                         }
@@ -1762,21 +1759,9 @@ impl App {
                         0x112 => Button::Middle,
                         _ => Button::Left,
                     };
-                    let at = if o == Owner::Bar && owner == Some(Owner::Panel) { self.bar_from_panel(x, y) } else { (x, y) };
-                    self.click(o, i, button, at);
+                    self.click(o, i, button, (x, y));
                 }
                 PointerEventKind::Axis { vertical, horizontal, .. } => {
-                    if owner == Some(Owner::Panel)
-                        && let Some(i) = self.bar_under_panel(x, y)
-                    {
-                        let (v, h) = (notches(&vertical), notches(&horizontal));
-                        if v != 0.0 || h != 0.0 {
-                            let action = self.bar.wheel(i, v, h, &self.store);
-                            let anchor = self.bar.slot_anchor(i);
-                            self.act(action, anchor);
-                        }
-                        continue;
-                    }
                     if owner == Some(Owner::Panel) {
                         let (dx, dy) = (notches(&horizontal), notches(&vertical));
                         if let Some(h) = self.panel.as_mut().filter(|_| dx != 0.0 || dy != 0.0) {
@@ -1805,30 +1790,18 @@ impl App {
         }
     }
 
-    /// A point on the open panel's full-output surface, in the bar's own
-    /// surface coordinates. The panel sits on the Overlay layer over the
-    /// whole output, so while it is open every press on the strip lands on
-    /// it rather than on the bar.
-    fn bar_from_panel(&self, x: f64, y: f64) -> (f64, f64) {
+    /// The bar's strip in output coordinates, which an open panel's
+    /// full-output surface leaves to the bar.
+    fn bar_strip(&self) -> IRect {
         let (ow, oh) = self.output_size();
-        let size = self.bar.scene.size;
+        let (ow, oh) = (ow as i32, oh as i32);
+        let t = self.bar.thickness();
         match self.bar.edge() {
-            _ if self.bar.framed() => (x, y),
-            Edge::Bottom => (x, y - (oh - size.h as f64)),
-            Edge::Right => (x - (ow - size.w as f64), y),
-            _ => (x, y),
+            Edge::Bottom => IRect::new(0, oh - t, ow, t),
+            Edge::Left => IRect::new(0, 0, t, oh),
+            Edge::Right => IRect::new(ow - t, 0, t, oh),
+            _ => IRect::new(0, 0, ow, t),
         }
-    }
-
-    /// The bar cell under a point on the open panel's surface that is off
-    /// the card: a click there is meant for the cell, not a dismiss.
-    fn bar_under_panel(&self, x: f64, y: f64) -> Option<usize> {
-        let r = self.panel.as_ref()?.card.live_rect();
-        if x >= r.x as f64 && x < r.right() as f64 && y >= r.y as f64 && y < r.bottom() as f64 {
-            return None;
-        }
-        let (bx, by) = self.bar_from_panel(x, y);
-        self.bar.hit(bx, by)
     }
 
     /// The hand over an interactive cell, the arrow anywhere else; sent
