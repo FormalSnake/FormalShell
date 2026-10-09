@@ -73,8 +73,9 @@ impl App {
         let visible = self.osd.pill.is_some();
         let kind = self.osd.kind.map_or("", Kind::name);
         format!(
-            r#"{{"visible":{visible},"kind":"{kind}","mediaText":{}}}"#,
-            serde_json::Value::String(self.osd.media.clone())
+            r#"{{"visible":{visible},"kind":"{kind}","mediaText":{},"brightness":{}}}"#,
+            serde_json::Value::String(self.osd.media.clone()),
+            self.store.brightness.percent
         )
     }
 
