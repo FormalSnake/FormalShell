@@ -706,6 +706,11 @@ impl App {
         true
     }
 
+    /// The launcher body's viewport on the output, while it is open.
+    pub fn launcher_body(&self) -> Option<crate::scene::IRect> {
+        self.launch.as_ref().filter(|w| w.shown.modal.open).and_then(|w| w.shown.body_rect)
+    }
+
     /// `mirror status`.
     pub fn mirror_status(&self) -> String {
         let mi = &self.store.mirror;
@@ -961,7 +966,10 @@ impl App {
                 if w.shown.set_hover(hit.as_ref().map(|h| h.path.clone())) {
                     self.launcher.dirty = true;
                 }
-                if let Some(i) = hit.and_then(|h| h.on).and_then(|on| on.strip_prefix("row:").and_then(|i| i.parse::<usize>().ok())) {
+                // An enter alone is the card mapping under a pointer that has
+                // not moved, which leaves the cursor where the keys put it.
+                let moved = matches!(e.kind, PointerEventKind::Motion { .. });
+                if let Some(i) = hit.and_then(|h| h.on).filter(|_| moved).and_then(|on| on.strip_prefix("row:").and_then(|i| i.parse::<usize>().ok())) {
                     self.launcher.set_cursor(i);
                 }
             }

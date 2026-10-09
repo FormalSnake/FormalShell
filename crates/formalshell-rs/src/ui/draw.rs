@@ -642,9 +642,10 @@ fn stop_radius(cx: &Cx, el: &El, h: f64) -> f64 {
 #[allow(clippy::too_many_arguments)]
 fn cell(cx: &mut Cx, el: &El, r: Rect, state: CellState, interactive: bool, child: &El, path: &str, stop: Option<String>) {
     let t = cx.theme;
+    let owned = cx.fill_owned();
     let fill_state = if state.active {
         "active"
-    } else if state.selected {
+    } else if state.selected && !owned {
         "selected"
     } else if state.ghost {
         "ghost"
@@ -667,7 +668,7 @@ fn cell(cx: &mut Cx, el: &El, r: Rect, state: CellState, interactive: bool, chil
     let washing = hovered && !state.active && !state.selected;
     b.wash = t.box_style("cell", Some("hover")).wash;
     let (on, ring) = cx.cursor(stop.as_deref());
-    let ring = ring || state.cursor;
+    let ring = (ring || state.cursor) && !owned;
     let b = t.with_cursor(b, ring, !cx.halo_owned() || state.cursor);
     let _ = on;
     let ri = irect(r);

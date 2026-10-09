@@ -66,6 +66,19 @@ impl Rgba {
         }
     }
 
+    /// `t` of the way from `self` to `to`, through premultiplied channels:
+    /// a straight lerp out of `transparent` (black at alpha 0) drags the
+    /// colour through a dark midpoint, where this fades the far colour in
+    /// over whatever is behind.
+    pub fn mix(self, to: Self, t: f32) -> Self {
+        let a = self.a + (to.a - self.a) * t;
+        if a <= 0.0 {
+            return Self::TRANSPARENT;
+        }
+        let ch = |x: f32, y: f32| ((x * self.a + (y * to.a - x * self.a) * t) / a).clamp(0.0, 1.0);
+        Self { r: ch(self.r, to.r), g: ch(self.g, to.g), b: ch(self.b, to.b), a }
+    }
+
     /// Channels as bytes, rounded the way Qt rounds a float channel.
     pub fn to_u8(self) -> [u8; 4] {
         let byte = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
@@ -85,6 +98,24 @@ mod tests {
         assert_eq!(Rgba::parse("ff0000"), None);
         assert_eq!(Rgba::parse("#ff00"), None);
         assert_eq!(Rgba::parse("#gg0000"), None);
+    }
+
+    #[test]
+    fn mix_out_of_transparent_never_darkens() {
+        let accent = Rgba::hex(0xd0e0f0);
+        for i in 0..=10 {
+            let m = Rgba::TRANSPARENT.mix(accent, i as f32 / 10.0);
+            if m.a > 0.0 {
+                assert!((m.r - accent.r).abs() < 1e-5 && (m.b - accent.b).abs() < 1e-5, "{m:?}");
+            }
+            let back = accent.mix(Rgba::TRANSPARENT, i as f32 / 10.0);
+            if back.a > 0.0 {
+                assert!((back.g - accent.g).abs() < 1e-5, "{back:?}");
+            }
+        }
+        let a = Rgba::hex(0x202020);
+        let b = Rgba::hex(0xe0e0e0);
+        assert_eq!(a.mix(b, 0.5).to_u8(), [128, 128, 128, 255]);
     }
 
     #[test]

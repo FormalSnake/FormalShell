@@ -24,9 +24,18 @@
 # the surface does with no keyboard delivery needed, and both are narrow on
 # purpose: the whole 3,944-entry set is a 300KB reply and the IPC socket
 # drops it.
+#
+# Then the whole grid opened again and walked on real keys (Down, Page_Down,
+# End): at each stop the bottom band of the body's viewport, half a cell
+# tall and clear of the grid's own inset, has to carry emoji ink. A grid
+# whose lines came out shorter than their slots stacked every row up the
+# card and left that band empty card fill. The viewport and the cursor's
+# slot come off `menu status` (`body`, `viewCursor`), so nothing here
+# assumes an output size or a theme's padding.
 leg_emoji_flag="--emoji"
 leg_emoji_order=25
-leg_emoji_needs="wl-paste jq"
+leg_emoji_needs="wl-paste jq wtype convert"
+emoji_stops="open Down Page_Down End"
 
 # This leg's own clock: the launcher covers the whole output, so under
 # --wallpaper it starts after that leg's last frame, the rule menu_t0 draws.
@@ -45,7 +54,7 @@ emoji_png="$shot_dir/emoji-search.png"
 leg_emoji_timing() {
   local t0
   t0=$(emoji_t0)
-  leg_timing $((t0 + 13)) $((t0 + 43))
+  leg_timing $((t0 + 13)) $((t0 + 70))
 }
 
 leg_emoji_drive() {
@@ -67,6 +76,20 @@ sleep 3
 "$wl_paste_bin" -n > "$emoji_clipboard_path" 2>&1
 cat "$iso_home/.local/state/formalshell/state.json" > "$emoji_state_path" 2>&1
 $ipc call debug query ':e cry' > "$emoji_after_path" 2>&1
+sleep 2
+$ipc call menu summon emoji > /dev/null 2>&1
+sleep 3
+for stop in $emoji_stops; do
+  case "\$stop" in
+    open) ;;
+    Down) for _ in 1 2 3 4 5 6 7 8 9; do "$wtype_bin" -k Down; sleep 0.1; done ;;
+    *) "$wtype_bin" -k "\$stop" ;;
+  esac
+  sleep 2
+  $ipc call menu status > "$shot_dir/emoji-grid-\$stop.json" 2>&1
+  "$grim_bin" "$shot_dir/emoji-grid-\$stop.png" > /dev/null 2>&1
+done
+$ipc call menu close > /dev/null 2>&1
 EOF
   hypr_exec_once "bash $script"
 }
@@ -126,4 +149,40 @@ leg_emoji_assert() {
     fail "the copy did more than reorder its own rank: $(cat "$emoji_after_path")"
   fi
   echo "SMOKE_EMOJI $emoji_png (':e sob' → 😭, one copy leads its rank)"
+  emoji_grid_assert
+}
+
+# The share of a crop's pixels that are emoji ink: HSL saturation and
+# lightness both past 35%, so a near-black pixel with a saturated hue drops
+# out. A card over the wallpaper at the surface opacity stays under it.
+emoji_ink() {
+  "$convert_bin" "$1" -crop "$2" +repage -colorspace HSL -separate -delete 0 \
+    -evaluate-sequence Min -threshold 35% -format '%[fx:mean]' info: 2>/dev/null
+}
+
+emoji_grid_assert() {
+  local stop f png bx by bw bh top bottom ch scroll band mid ink inset=""
+  for stop in $emoji_stops; do
+    f="$shot_dir/emoji-grid-$stop.json"
+    png="$shot_dir/emoji-grid-$stop.png"
+    { [ -s "$f" ] && [ -f "$png" ]; } || fail "no emoji grid status or frame for the $stop stop"
+    "$jq_bin" -e '.view == "emoji" and .body != null' "$f" > /dev/null \
+      || fail "the emoji grid was not open at the $stop stop: $(cat "$f")"
+    read -r bx by bw bh top bottom scroll < <("$jq_bin" -r '[.body.x, .body.y, .body.width, .body.height, .viewCursor.top, .viewCursor.bottom, .scrollTop] | @tsv' "$f")
+    ch=$((bottom - top))
+    if [ -z "$inset" ]; then
+      # The first cell at scroll 0 sits the grid's own inset under the top.
+      [ "$scroll" = 0 ] || fail "the grid did not open at the top: $(cat "$f")"
+      inset=$top
+    fi
+    band=$((ch / 2))
+    ink=$(emoji_ink "$png" "${bw}x${band}+${bx}+$((by + bh - inset - band))")
+    mid=$(emoji_ink "$png" "${bw}x${band}+${bx}+$((by + bh / 2))")
+    echo "emoji grid $stop: scroll $scroll, cell ${ch}px, viewport ${bw}x${bh}+${bx}+${by}, bottom band ink $ink, middle band ink $mid"
+    awk -v v="$ink" -v m="$mid" 'BEGIN { exit !(v > 0.01 && v > m * 0.25) }' \
+      || fail "the bottom band of the emoji grid carries no emoji at the $stop stop (ink $ink, $mid mid-viewport): $png"
+  done
+  "$jq_bin" -e '.scrollTop > 0 and .cursor == .rows - 1 and .viewCursor.bottom <= .viewCursor.viewport' "$shot_dir/emoji-grid-End.json" > /dev/null \
+    || fail "End did not scroll the grid to its foot: $(cat "$shot_dir/emoji-grid-End.json")"
+  echo "SMOKE_EMOJI_GRID $shot_dir/emoji-grid-open.png (bottom row inked at: $emoji_stops)"
 }

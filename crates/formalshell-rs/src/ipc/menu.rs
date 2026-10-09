@@ -69,7 +69,11 @@ fn refresh(app: &mut App, _: &[Value]) -> Value {
 
 fn status(app: &mut App, _: &[Value]) -> Value {
     app.resolve_launcher();
-    text(app.launcher.status(&app.store).to_string())
+    let mut v = app.launcher.status(&app.store);
+    if let Some(r) = app.launcher_body() {
+        v["body"] = serde_json::json!({"x": r.x, "y": r.y, "width": r.w, "height": r.h});
+    }
+    text(v.to_string())
 }
 
 fn select(app: &mut App, args: &[Value]) -> Value {

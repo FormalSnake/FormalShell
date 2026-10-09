@@ -762,7 +762,10 @@ impl Model {
         self.picker_switch_h = if self.picker_switch(store) { ui::measure(&picker_switch(self), 400.0, theme, kit).1 } else { 0.0 };
         self.layout(theme, kit);
         self.row_motion(before, view, theme);
-        self.place(index, false);
+        // A key's step resolves the level again before it draws: the cursor
+        // landing where the step put it keeps the step's travel.
+        let travels = self.travels && !fresh && !view_changed && index == self.cursor;
+        self.place(index, travels);
         if fresh || view_changed {
             self.scroll = 0.0;
             self.follow();
@@ -1014,6 +1017,7 @@ impl Model {
         json!({
             "view": k, "index": self.cursor, "id": self.rows[self.cursor].id,
             "top": top, "bottom": bottom, "viewport": self.body_h.round() as i64,
+            "left": slot.x.round() as i64, "right": (slot.x + slot.w).round() as i64,
         })
     }
 
@@ -1520,6 +1524,8 @@ pub struct Shown {
     preview: Ui,
     /// The mirror's feed box and the picture inside it, on the surface.
     pub feed: Option<(IRect, Option<IRect>)>,
+    /// The body's viewport on the output, for `menu status`.
+    pub body_rect: Option<IRect>,
     foot: Ui,
     rules: Vec<NodeId>,
     pub output: (f64, f64),
@@ -1534,20 +1540,42 @@ pub struct Shown {
     top_node: NodeId,
     /// The card size the content was last laid out for.
     laid_for: (f64, f64),
+    /// The cursor's fill and ring, one for the whole body, painted between
+    /// `sel_anchor` and the body's own nodes so the cells draw over it.
+    sel_anchor: NodeId,
+    sel_nodes: Vec<NodeId>,
+    /// Its box in body content coordinates (x, y, w, h), travelling.
+    sel: [Animated; 4],
+    /// The level and query it was last drawn on, while it is shown: a move
+    /// inside the same list travels, anything else lands at once.
+    sel_on: Option<(Option<String>, String)>,
 }
 
 impl Shown {
     /// The launcher's deform amount, lighter than a popout card's.
     pub const DEFORM_AMOUNT: f64 = 0.1;
 
-    pub fn new(theme: &Theme, modal: Modal, output: (f64, f64), scale: f64) -> Self {
+    pub fn new(theme: &Theme, mut modal: Modal, output: (f64, f64), scale: f64) -> Self {
         let top = modal.layer.as_ref().map_or(modal.card.top_node(), |l| l.top);
+        let scene = match &mut modal.layer {
+            Some(l) => &mut l.scene,
+            None => &mut modal.card.scene,
+        };
+        let mut marker = |prev: NodeId| {
+            let id = scene.add_after(Some(prev), IRect::default(), crate::scene::Paint::Rect { fill: fs_theme::color::Rgba::TRANSPARENT, radius: 0.0 });
+            scene.set_visible(id, false);
+            id
+        };
+        let sel_anchor = marker(top);
+        let body_anchor = marker(sel_anchor);
+        let sel = || Animated::new(0.0, Clock::SpatialFast.curve());
         Self {
             modal,
             head: Ui::new(Some(top)),
-            body: Ui::new(Some(top)),
+            body: Ui::new(Some(body_anchor)),
             preview: Ui::new(Some(top)),
             feed: None,
+            body_rect: None,
             foot: Ui::new(Some(top)),
             rules: Vec::new(),
             output,
@@ -1558,6 +1586,10 @@ impl Shown {
             top_node: top,
             laid_for: (0.0, 0.0),
             morph: (Animated::new(theme.space.popup_width_menu, Clock::Spatial.curve()), Animated::new(0.0, Clock::Spatial.curve())),
+            sel_anchor,
+            sel_nodes: Vec::new(),
+            sel: [sel(), sel(), sel(), sel()],
+            sel_on: None,
         }
     }
 
@@ -1570,6 +1602,7 @@ impl Shown {
             || self.scroll.running(now)
             || self.morph.0.running(now)
             || self.morph.1.running(now)
+            || self.sel.iter().any(|a| a.running(now))
             || self.wake.is_some_and(|w| w <= now)
     }
 
@@ -1695,16 +1728,49 @@ impl Shown {
         // The body.
         let viewport = IRect::new((fx + pad).round() as i32, body_top.round() as i32, inner_w.round() as i32, body_h.round() as i32);
         let body_clip = viewport.intersect(&clip);
+        self.body_rect = (body_h > 0.0).then(|| IRect::new(viewport.x + on_output.0, viewport.y + on_output.1, viewport.w, viewport.h));
         let scroll = self.scroll.value(now);
         let mut overlays = Vec::new();
         let body = if body_h > 0.0 { body_el(m, store, theme, kit, scroll, body_h, &mut overlays) } else { w::space(0.0) };
         self.body.halo_owned = false;
+        self.body.fill_owned = true;
         self.body.cursor = None;
         let origin = (fx + pad, body_top - scroll);
         let d = self.body.draw(&body, Rect::new(origin.0, origin.1, origin.0 + inner_w, origin.1 + m.layout.content_h), Some(body_clip), alpha, theme, kit, scene, now);
         if d.animating {
             self.wake = Some(now);
         }
+
+        // The cursor's fill travels between cells on `spatialFast` (DESIGN.md
+        // §1 "Motion"), keyboard and pointer alike; a wrap, a filter and a
+        // level change land at once.
+        let id = m.rows.get(m.cursor).map(|r| r.id.as_str());
+        let stop = id.and_then(|id| self.body.stops.iter().find(|st| st.key.split_once(':').is_some_and(|(_, k)| k == id))).cloned();
+        let mut p = Painter::new(scene, &mut self.sel_nodes, Some(body_clip)).after(Some(self.sel_anchor));
+        match stop {
+            Some(st) => {
+                let on = (m.level.clone(), m.query.clone());
+                let travels = self.sel_on.as_ref() == Some(&on) && (m.travels || !m.from_keys);
+                let local = [st.rect.x as f64 - origin.0, st.rect.y as f64 - origin.1, st.rect.w as f64, st.rect.h as f64];
+                let ms = Clock::SpatialFast.ms(theme) * self.scale;
+                for (a, t) in self.sel.iter_mut().zip(local) {
+                    if travels { a.set_on(now, t, ms, Clock::SpatialFast.curve()) } else { a.jump(t) }
+                }
+                self.sel_on = Some(on);
+                let [x, y, w_, h] = [0, 1, 2, 3].map(|i| self.sel[i].value(now));
+                let r = ui::irect(Rect::new(origin.0 + x, origin.1 + y, origin.0 + x + w_, origin.1 + y + h));
+                let mut b = theme.box_style("cell", Some("selected"));
+                b.border = None;
+                b.wash = None;
+                let b = theme.with_cursor(b, m.from_keys, true);
+                crate::ui::boxes::paint(&mut p, r, &b, st.radius, alpha, 0.0);
+                if self.sel.iter().any(|a| a.running(now)) {
+                    self.wake = Some(now);
+                }
+            }
+            None => self.sel_on = None,
+        }
+        p.finish();
         while self.overlays.len() < overlays.len() {
             self.overlays.push(Ui::new(Some(self.top_node)));
         }
@@ -1920,6 +1986,7 @@ fn body_el(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, scroll: f64, 
             } else {
                 El::new(ui::el::Kind::Icon { name: "layout-grid".into(), size: Type::DisplayLarge, ink: Ink::Dim })
                     .width(Size::Px(s.control_height * 2.0))
+                    .height(s.control_height * 2.0)
             };
             let content = w::column(s.row_gap, vec![pic.centred(), w::label(row.label.clone()).elide().hug().centred()]);
             w::cell(content)
@@ -1928,7 +1995,7 @@ fn body_el(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, scroll: f64, 
                 .interactive()
                 .cell_state(|st| st.cursor = selected && m.from_keys)
                 .on(format!("row:{i}"))
-                .key(format!("c:{}", row.id))
+                .stop(format!("c:{}", row.id))
                 .width(Size::Px(slot.w))
                 .pad(gutter, gutter, gutter, gutter)
         } else if m.view == View::Monitor {
@@ -1943,8 +2010,9 @@ fn body_el(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, scroll: f64, 
                 .interactive()
                 .cell_state(|st| st.cursor = selected && m.from_keys)
                 .on(format!("row:{i}"))
-                .key(format!("p:{}", row.id))
+                .stop(format!("p:{}", row.id))
                 .width(Size::Px(slot.w))
+                .height(slot.h - gutter * 2.0)
                 .pad(gutter, gutter, gutter, gutter)
         } else if i < cells {
             let glyph = w::text(row.icon.clone()).size(Type::Display).centred();
@@ -1954,8 +2022,9 @@ fn body_el(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, scroll: f64, 
                 .interactive()
                 .cell_state(|st| st.cursor = selected && m.from_keys)
                 .on(format!("row:{i}"))
-                .key(format!("e:{}", row.id))
+                .stop(format!("e:{}", row.id))
                 .width(Size::Px(slot.w))
+                .height(slot.h)
         } else {
             let checked = toggles::checked_for(Some(row), Some(&snap), Some(&store.menu.checked));
             let alpha = m.motion.alpha(&row.id, now);
@@ -2007,7 +2076,10 @@ fn body_el(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, scroll: f64, 
         if top > y {
             col.push(w::space(top - y));
         }
-        col.push(w::row(0.0, line).top());
+        // Exactly the slot's height: the next line's gap is reckoned from
+        // the layout, so a line shorter than its slot would pull every line
+        // under it up and leave the viewport's foot empty.
+        col.push(w::row(0.0, line).top().height(h));
         y = top + h;
     }
     col.push(w::space((lay.content_h - y).max(0.0)));
@@ -2131,7 +2203,7 @@ fn proc_row(m: &Model, row: &Node, i: usize, selected: bool, theme: &Theme) -> E
         .interactive()
         .cell_state(|st| st.destructive = armed)
         .on(format!("row:{i}"))
-        .key(format!("r:{}", row.id))
+        .stop(format!("r:{}", row.id))
 }
 
 /// The split pane's picture box for an area `w` by `h`.
@@ -2253,5 +2325,5 @@ fn menu_row(m: &Model, row: &Node, i: usize, selected: bool, checked: bool, thum
         .interactive()
         .cell_state(|st| st.destructive = confirming)
         .on(format!("row:{i}"))
-        .key(format!("r:{}", row.id))
+        .stop(format!("r:{}", row.id))
 }
