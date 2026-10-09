@@ -47,6 +47,7 @@ rustCommon.craneLib.buildPackage (rustCommon.commonArgs // {
       --set-default FS_TEMPLATE_DIR $out/share/formalshell/templates \
       --set-default FS_BRANDING_DIR $out/share/formalshell/branding \
       --set-default FS_EARTH_IMAGE ${blue-marble}/share/formalshell/earth.jpg \
+      --set-default FS_EARTH_TILES ${blue-marble}/share/formalshell/tiles \
       --prefix PATH : ${lib.makeBinPath [ matugen brightnessctl ddcutil wlsunset wireplumber cava mpv curl util-linux procps git formalshell-eds qrencode wl-clipboard grim slurp wf-recorder tesseract ffmpeg-headless pulseaudio xdg-utils ttfx ]} \
       --suffix PATH : ${lib.makeBinPath ([ tensaku wtype openssh clipssh localsend-cli uxplay iphone-bridge networkmanager pipewire systemd glib ]
         ++ lib.optional (lib.meta.availableOn stdenvNoCC.hostPlatform asusctl) asusctl

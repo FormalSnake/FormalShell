@@ -18,6 +18,7 @@ use super::App;
 use crate::services::radio::{self, Cmd, Reply};
 use crate::store::Diff;
 use crate::surface::{PixelSurface, Surface};
+use crate::surfaces::atlas::earth;
 use crate::surfaces::atlas::globe::{self, Out};
 use crate::surfaces::atlas::view::Shown;
 use crate::surfaces::atlas::{Atlas, Key};
@@ -78,7 +79,11 @@ impl App {
             && let Some(rt) = &self.runtime
         {
             rt.service(|ctx| {
-                let job = ctx.pool().run(globe::load_earth);
+                let (pool, publisher) = (ctx.pool().clone(), ctx.publisher().clone());
+                let spawn: earth::Spawn = Box::new(move |job| pool.submit(job));
+                let tiles = publisher.clone();
+                let wake: earth::Wake = Box::new(move || tiles.publish(Diff::Atlas(Reply::Tiles)));
+                let job = ctx.pool().run(move || earth::load(spawn, wake));
                 let publisher = ctx.publisher().clone();
                 ctx.spawn(async move {
                     if let Some(earth) = job.await {

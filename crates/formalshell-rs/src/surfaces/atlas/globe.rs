@@ -16,6 +16,7 @@ use fs_theme::color::Rgba;
 use vello_cpu::Pixmap;
 use vello_cpu::kurbo::{self, BezPath, Circle, Shape as _};
 
+use super::earth::{ATMOSPHERE, Earth, Stats};
 use crate::scene::{Bitmap, Brush, VOp};
 
 const COUNTRIES: &str = include_str!("../../../data/countries.json");
@@ -93,271 +94,6 @@ pub fn load() -> Countries {
         }
     }
     Countries { features, outlines }
-}
-
-/// The satellite picture the globe wraps itself in: an equirectangular
-/// RGB raster, longitude -180 at the left edge and the north pole at the
-/// top, held only while the atlas is open.
-pub struct Earth {
-    width: usize,
-    height: usize,
-    /// Three bytes a texel and one past the end, so any texel reads as
-    /// one little-endian u32.
-    rgb: Vec<u8>,
-}
-
-impl Earth {
-    fn new(width: usize, height: usize, mut rgb: Vec<u8>) -> Self {
-        rgb.push(0);
-        Self { width, height, rgb }
-    }
-}
-
-impl std::fmt::Debug for Earth {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Earth({}x{})", self.width, self.height)
-    }
-}
-
-/// The picture `FS_EARTH_IMAGE` names (the package's Blue Marble), decoded
-/// off the UI thread.
-pub fn load_earth() -> Result<Earth, String> {
-    let path = std::env::var_os("FS_EARTH_IMAGE").ok_or("FS_EARTH_IMAGE is not set")?;
-    let image = image::ImageReader::open(&path)
-        .map_err(|e| format!("{}: {e}", path.to_string_lossy()))?
-        .decode()
-        .map_err(|e| format!("{}: {e}", path.to_string_lossy()))?
-        .into_rgb8();
-    let (width, height) = (image.width() as usize, image.height() as usize);
-    if width < 2 || height < 2 {
-        return Err(format!("{}: {width}x{height} is too small", path.to_string_lossy()));
-    }
-    let mut rgb = image.into_raw();
-    tone(&mut rgb);
-    Ok(Earth::new(width, height, rgb))
-}
-
-/// Blue Marble is mastered dark for print: open ocean sits near (7, 21, 52)
-/// and reads as black on a screen. A gamma of 1/1.6 lifts the shadows and
-/// midtones while white stays white, and a 1.15 saturation about the luma
-/// gives back the colour the lift washes out. Run once on decode, so the
-/// sampler's per-pixel work is unchanged.
-const TONE_GAMMA: f32 = 1.0 / 1.6;
-const TONE_SATURATION: f32 = 1.15;
-
-fn tone(rgb: &mut [u8]) {
-    let lut: [f32; 256] = std::array::from_fn(|i| (i as f32 / 255.0).powf(TONE_GAMMA) * 255.0);
-    for px in rgb.chunks_exact_mut(3) {
-        let [r, g, b] = [lut[px[0] as usize], lut[px[1] as usize], lut[px[2] as usize]];
-        let y = 0.299 * r + 0.587 * g + 0.114 * b;
-        for (out, c) in px.iter_mut().zip([r, g, b]) {
-            *out = (y + (c - y) * TONE_SATURATION).round().clamp(0.0, 255.0) as u8;
-        }
-    }
-}
-
-/// The run of pixels the sampler draws between two exactly projected
-/// ones, and the shorter run it takes over the outer rim of the disc, where
-/// the projection bends hardest.
-const SPAN: i32 = 16;
-const RIM_SPAN: i32 = 4;
-
-/// The atmosphere seen edge on: its blue laid over the picture from
-/// `HAZE_FROM` of the way out, rising with the cube of the distance into
-/// it to `HAZE_MAX` at the limb, the way the air thickens along a grazing
-/// line of sight.
-const ATMOSPHERE: [u8; 3] = [118, 170, 255];
-const HAZE_FROM: f32 = 0.55;
-const HAZE_MAX: f32 = 0.55;
-const HAZE_RB: u32 = (ATMOSPHERE[2] as u32) << 16 | ATMOSPHERE[0] as u32;
-const HAZE_G: u32 = ATMOSPHERE[1] as u32;
-
-/// atan2 to within 1e-5 rad, a tenth of a texel on a 4096 wide picture,
-/// without the libm call per pixel.
-#[inline(always)]
-fn fast_atan2(y: f32, x: f32) -> f32 {
-    let (ax, ay) = (x.abs(), y.abs());
-    let (lo, hi) = if ax > ay { (ay, ax) } else { (ax, ay) };
-    if hi == 0.0 {
-        return 0.0;
-    }
-    let a = lo / hi;
-    let s = a * a;
-    let mut r = a * (0.999_977_26 + s * (-0.332_623_47 + s * (0.193_543_46 + s * (-0.116_432_87 + s * (0.052_653_32 + s * -0.011_721_2)))));
-    if ay > ax {
-        r = std::f32::consts::FRAC_PI_2 - r;
-    }
-    if x < 0.0 {
-        r = std::f32::consts::PI - r;
-    }
-    if y < 0.0 { -r } else { r }
-}
-
-impl Earth {
-    /// The near-side view of the picture over `area` (device pixels, the
-    /// disc's box cut to the pane), centred at `centre` with `r` pixels to
-    /// the unit and the camera `distance` sphere radii out, turned by
-    /// `rot`, and lit by `light` the way the flat globe's land is.
-    /// Pixels off the sphere stay clear; the caller clips the edge.
-    ///
-    /// The pixels land in a buffer out of `pool` nothing else holds any
-    /// more (the frame before last's), so a drag maps no fresh pages a
-    /// frame. `coarse` samples every other pixel of every other row and
-    /// doubles each, for a globe in motion.
-    fn sample(&self, pool: &mut Vec<Arc<Pixmap>>, coarse: bool, area: (i32, i32, i32, i32), centre: (f64, f64), r: f64, horizon_px: f64, distance: f64, rot: &Rot) -> Option<Bitmap> {
-        let (x0, y0, x1, y1) = area;
-        let (bw, bh) = ((x1 - x0).max(0) as usize, (y1 - y0).max(0) as usize);
-        if bw == 0 || bh == 0 || bw > u16::MAX as usize || bh > u16::MAX as usize {
-            return None;
-        }
-        let i = match pool.iter_mut().position(|p| Arc::get_mut(p).is_some()) {
-            Some(i) => i,
-            None => {
-                pool.push(Arc::new(Pixmap::new(bw as u16, bh as u16)));
-                pool.len() - 1
-            }
-        };
-        let pixmap = Arc::get_mut(&mut pool[i])?;
-        pixmap.resize(bw as u16, bh as u16);
-        pixmap.set_may_have_transparency(true);
-        let out = pixmap.data_as_u8_slice_mut();
-        let (cx, cy) = (centre.0 as f32, centre.1 as f32);
-        let inv_r = 1.0 / r as f32;
-        let d = distance as f32;
-        let dm1 = d - 1.0;
-        let dd = d * dm1;
-        let k2 = d * d - 1.0;
-        let reach = horizon_px as f32 + 1.0;
-        let inv_horizon = 1.0 / (horizon_px as f32).max(1.0);
-        let (cl, sl) = (rot.cos_lat as f32, rot.sin_lat as f32);
-        let (co, so) = (rot.cos_lon as f32, rot.sin_lon as f32);
-        let l = light();
-        let (l0, l1, l2) = (l[0] as f32, l[1] as f32, l[2] as f32);
-        let (w, h) = (self.width, self.height);
-        let (wf, hf) = (w as f32, h as f32);
-        let to_x = wf / std::f32::consts::TAU;
-        let to_y = hf / std::f32::consts::PI;
-        let stride = w * 3;
-        let tex = &self.rgb[..];
-        let step = if coarse { 2 } else { 1 };
-        for j in 0..bh {
-            if coarse && j % 2 == 1 {
-                out.copy_within((j - 1) * bw * 4..j * bw * 4, j * bw * 4);
-                continue;
-            }
-            let py = (y0 + j as i32) as f32 + 0.5;
-            let dy = py - cy;
-            let half2 = reach * reach - dy * dy;
-            let row = &mut out[j * bw * 4..(j + 1) * bw * 4];
-            if half2 <= 0.0 {
-                row.fill(0);
-                continue;
-            }
-            let half = half2.sqrt();
-            let xs = ((cx - half).floor() as i32).clamp(x0, x1);
-            let xe = ((cx + half).ceil() as i32).clamp(xs, x1);
-            row[..(xs - x0) as usize * 4].fill(0);
-            row[(xe - x0) as usize * 4..].fill(0);
-            let v = -dy * inv_r;
-            let vv = v * v + dm1 * dm1;
-            // The picture's coordinates and the light at a pixel centre,
-            // fx unwrapped (-0.5 up to the width).
-            let exact = |x: i32| {
-                let u = ((x as f32) + 0.5 - cx) * inv_r;
-                let a = u * u + vv;
-                let disc = (dd * dd - a * k2).max(0.0);
-                let t = (dd - disc.sqrt()) / a;
-                let (vx, vy, vz) = (t * u, t * v, d - t * dm1);
-                // The view frame back to the world: Rot::apply inverted.
-                let p2 = cl * vy + sl * vz;
-                let hz = cl * vz - sl * vy;
-                let p0 = hz * co - vx * so;
-                let p1 = hz * so + vx * co;
-                let lon = fast_atan2(p1, p0);
-                let lat = fast_atan2(p2, (1.0 - p2 * p2).max(0.0).sqrt());
-                let shade = (0.7 + 0.4 * (vx * l0 + vy * l1 + vz * l2).max(0.0)).min(1.0);
-                // A narrow limb darkening and the atmosphere's haze over
-                // it, both off the distance from the disc's centre, folded
-                // in here rather than painted as passes over the disc.
-                let dx = x as f32 + 0.5 - cx;
-                let rho = (dx * dx + dy * dy).sqrt() * inv_horizon;
-                let edge = ((rho - 0.94) / 0.06).clamp(0.0, 1.0);
-                let shade = shade * (1.0 - 0.3 * edge);
-                let haze = ((rho - HAZE_FROM) / (1.0 - HAZE_FROM)).clamp(0.0, 1.0);
-                (lon * to_x + wf * 0.5 - 0.5, hf * 0.5 - lat * to_y - 0.5, shade * 256.0, haze * haze * haze * HAZE_MAX * 256.0)
-            };
-            // Exact every SPAN pixels and straight lines between: the
-            // mapping bends slowly enough that the error stays under a
-            // texel everywhere but the last pixels before the limb and
-            // round a pole, where the picture's rows are one colour.
-            let rim = (0.8 * horizon_px as f32).powi(2) - dy * dy;
-            let mut a = xs;
-            let mut at = exact(a);
-            while a < xe {
-                let off = (a as f32 + 0.5 - cx).abs().min((a as f32 + SPAN as f32 + 0.5 - cx).abs());
-                let b = (a + if off * off < rim { SPAN } else { RIM_SPAN }).min(xe);
-                let bt = exact(b);
-                let mut dfx = bt.0 - at.0;
-                if dfx > wf * 0.5 {
-                    dfx -= wf;
-                } else if dfx < -wf * 0.5 {
-                    dfx += wf;
-                }
-                let n = 1.0 / (b - a) as f32;
-                let (sx, sy, ss) = (dfx * n * step as f32, (bt.1 - at.1) * n * step as f32, (bt.2 - at.2) * n * step as f32);
-                let sh = (bt.3 - at.3) * n * step as f32;
-                // Only the runs out near the rim carry any haze.
-                let hazy = at.3 > 0.0 || bt.3 > 0.0;
-                let (mut fx, mut fy, mut shade, mut haze) = at;
-                for x in (a..b).step_by(step) {
-                    let fyc = fy.clamp(0.0, hf - 1.0);
-                    let (gx, gy) = (fx.floor(), fyc.floor());
-                    let (wx, wy) = (((fx - gx) * 256.0) as u32, ((fyc - gy) * 256.0) as u32);
-                    let mut tx0 = gx as i32;
-                    if !(0..w as i32).contains(&tx0) {
-                        tx0 = tx0.rem_euclid(w as i32);
-                    }
-                    let tx0 = tx0 as usize;
-                    let tx1 = if tx0 + 1 == w { 0 } else { tx0 + 1 };
-                    let ty0 = gy as usize;
-                    let ty1 = (ty0 + 1).min(h - 1);
-                    let (r0, r1) = (ty0 * stride, ty1 * stride);
-                    let texel = |i: usize| u32::from_le_bytes(tex[i..i + 4].try_into().unwrap_or([0; 4]));
-                    let (p00, p01) = (texel(r0 + tx0 * 3), texel(r0 + tx1 * 3));
-                    let (p10, p11) = (texel(r1 + tx0 * 3), texel(r1 + tx1 * 3));
-                    // Red and blue lerped side by side in one word, green
-                    // on its own; the fourth byte is the next texel's red.
-                    let lerp = |a: u32, b: u32, t: u32| ((a * (256 - t) + b * t) >> 8) & 0x00ff_00ff;
-                    let rb = |p: u32| p & 0x00ff_00ff;
-                    let g = |p: u32| (p >> 8) & 0xff;
-                    let rb = lerp(lerp(rb(p00), rb(p01), wx), lerp(rb(p10), rb(p11), wx), wy);
-                    let g = lerp(lerp(g(p00), g(p01), wx), lerp(g(p10), g(p11), wx), wy);
-                    let k = shade as u32;
-                    let (mut rb, mut g) = (((rb * k) >> 8) & 0x00ff_00ff, (g * k) >> 8);
-                    if hazy {
-                        let t = haze as u32;
-                        rb = lerp(rb, HAZE_RB, t);
-                        g = lerp(g, HAZE_G, t);
-                    }
-                    let px = rb | (g << 8) | 0xff00_0000;
-                    let o = (x - x0) as usize * 4;
-                    row[o..o + 4].copy_from_slice(&px.to_le_bytes());
-                    if coarse && x + 1 < b {
-                        row[o + 4..o + 8].copy_from_slice(&px.to_le_bytes());
-                    }
-                    fx += sx;
-                    fy += sy;
-                    shade += ss;
-                    haze += sh;
-                }
-                a = b;
-                at = bt;
-            }
-        }
-        let pixmap = pool[i].clone();
-        pool.truncate(3);
-        Some(Bitmap { pixmap })
-    }
 }
 
 const SPACE: Rgba = Rgba { r: 0.018, g: 0.022, b: 0.04, a: 1.0 };
@@ -489,7 +225,7 @@ fn lighter(c: Rgba, factor: f64) -> Rgba {
 
 /// Camera-space light, x right, y up, z toward the viewer: upper left and a
 /// little in front, so the lit side faces the reader.
-fn light() -> [f64; 3] {
+pub(super) fn light() -> [f64; 3] {
     let (x, y, z) = (-0.55, 0.6, 0.58);
     let l = ((x * x + y * y + z * z) as f64).sqrt();
     [x / l, y / l, z / l]
@@ -563,7 +299,7 @@ struct Key {
     selected: String,
     highlight: String,
     stations: u64,
-    imagery: bool,
+    imagery: Option<u64>,
     moving: bool,
 }
 
@@ -572,6 +308,8 @@ pub struct Globe {
     /// The satellite picture, while the atlas is open and it decoded; the
     /// flat globe stands in without it.
     pub earth: Option<Arc<Earth>>,
+    /// What the last frame drew the picture from.
+    pub earth_stats: Stats,
     /// The last few frames' pixels, for the sampler to draw into again.
     sampled: Vec<Arc<Pixmap>>,
     grid: Vec<Vec<[f64; 3]>>,
@@ -604,6 +342,7 @@ impl Default for Globe {
         Self {
             countries: None,
             earth: None,
+            earth_stats: Stats::default(),
             sampled: Vec::new(),
             grid: grid(),
             stars: None,
@@ -949,7 +688,7 @@ impl Globe {
             selected: self.selected.as_ref().map(|s| s.uuid.clone()).unwrap_or_default(),
             highlight: self.highlighted.as_ref().map(|s| s.uuid.clone()).unwrap_or_default(),
             stations: self.stations_version + if self.countries.is_some() { 1 << 40 } else { 0 },
-            imagery: self.earth.is_some(),
+            imagery: self.earth.as_ref().map(|e| e.version()),
             moving: self.moving(),
         };
         if let Some((k, ops)) = &self.drawn
@@ -965,6 +704,7 @@ impl Globe {
     /// Lets go of the satellite picture and every frame drawn from it.
     pub fn drop_earth(&mut self) {
         self.earth = None;
+        self.earth_stats = Stats::default();
         self.drawn = None;
         self.sampled.clear();
         self.stars = None;
@@ -1036,10 +776,11 @@ impl Globe {
                 ((cy + disc + 1.0).ceil().min((oy + h).ceil())) as i32,
             );
             let t = Instant::now();
-            if let Some(image) = earth.sample(&mut self.sampled, moving, area, (cx, cy), r, disc, distance, &rot) {
+            if let Some((image, stats)) = earth.sample(&mut self.sampled, moving, area, (cx, cy), r, disc, distance, &rot) {
                 let px = image.pixmap.width() as u64 * image.pixmap.height() as u64;
                 ops.push(VOp::Image(image, (area.0 as f64, area.1 as f64), alpha));
                 sampled = Some((t.elapsed().as_micros(), px));
+                self.earth_stats = stats;
             }
         }
         let horizon = 1.0 / distance;
@@ -1184,11 +925,17 @@ impl Globe {
         ops.push(VOp::Pop);
         if crate::tracing() {
             let (sample_us, px) = sampled.unwrap_or((0, 0));
+            let s = self.earth_stats;
             crate::trace(format!(
-                "atlas globe build_us={} sample_us={sample_us} px={px} imagery={} coarse={}",
+                "atlas globe build_us={} sample_us={sample_us} px={px} imagery={} coarse={} level={} tiles={} missing={} cached={} cached_kb={}",
                 started.elapsed().as_micros(),
                 earth.is_some(),
-                self.moving()
+                self.moving(),
+                s.level,
+                s.tiles,
+                s.missing,
+                s.cached,
+                s.cached_bytes / 1024
             ));
         }
         ops
@@ -1246,11 +993,11 @@ impl Globe {
     }
 }
 
-struct Rot {
-    sin_lat: f64,
-    cos_lat: f64,
-    sin_lon: f64,
-    cos_lon: f64,
+pub(super) struct Rot {
+    pub(super) sin_lat: f64,
+    pub(super) cos_lat: f64,
+    pub(super) sin_lon: f64,
+    pub(super) cos_lon: f64,
 }
 
 impl Rot {
@@ -1330,7 +1077,7 @@ mod tests {
                 rgb.extend([(x * 256 / width) as u8, (y * 256 / height) as u8, 128]);
             }
         }
-        Earth::new(width, height, rgb)
+        Earth::single(width, height, rgb)
     }
 
     fn picture(g: &mut Globe) -> (Bitmap, (f64, f64)) {
@@ -1377,20 +1124,6 @@ mod tests {
     }
 
     #[test]
-    fn fast_atan2_holds_a_tenth_of_a_texel() {
-        let mut worst = 0.0f32;
-        for i in 0..3600 {
-            let a = (i as f32 / 10.0).to_radians() - std::f32::consts::PI;
-            for m in [0.3f32, 1.0, 7.0] {
-                let (y, x) = (a.sin() * m, a.cos() * m);
-                let e = (fast_atan2(y, x) - y.atan2(x)).abs();
-                worst = worst.max(e.min((e - std::f32::consts::TAU).abs()));
-            }
-        }
-        assert!(worst < 1.5e-4, "{worst}");
-    }
-
-    #[test]
     fn sampling_a_full_disc() {
         // A 1000 px pane, the atlas's globe on a 2560x1440 output.
         let mut g = Globe {
@@ -1411,7 +1144,7 @@ mod tests {
         let mut px = 0;
         let mut pool = Vec::new();
         for _ in 0..20 {
-            let b = earth.sample(&mut pool, false, (100, 50, 900, 850), (500.0, 450.0), 547.0, 396.0, rm::view_distance(1.0), &rot).unwrap();
+            let b = earth.sample(&mut pool, false, (100, 50, 900, 850), (500.0, 450.0), 547.0, 396.0, rm::view_distance(1.0), &rot).unwrap().0;
             px = b.pixmap.width() as usize * b.pixmap.height() as usize;
         }
         eprintln!("sampler alone: {} us over {px} px", t.elapsed().as_micros() / 20);
@@ -1420,7 +1153,7 @@ mod tests {
             earth.sample(&mut pool, true, (100, 50, 900, 850), (500.0, 450.0), 547.0, 396.0, rm::view_distance(1.0), &rot).unwrap();
         }
         eprintln!("sampler coarse: {} us", t.elapsed().as_micros() / 20);
-        let b = earth.sample(&mut pool, true, (100, 50, 900, 850), (500.0, 450.0), 547.0, 396.0, rm::view_distance(1.0), &rot).unwrap();
+        let b = earth.sample(&mut pool, true, (100, 50, 900, 850), (500.0, 450.0), 547.0, 396.0, rm::view_distance(1.0), &rot).unwrap().0;
         assert_eq!(b.pixmap.sample(400, 400), b.pixmap.sample(401, 401), "a coarse sample covers its 2x2 block");
         g.earth = None;
         let t = Instant::now();

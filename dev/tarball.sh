@@ -22,7 +22,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 apt-get update
 apt-get install -y --no-install-recommends \
-  ca-certificates curl git xz-utils unzip patch file binutils imagemagick \
+  ca-certificates curl git xz-utils unzip patch file binutils python3-pil \
   build-essential pkg-config clang libclang-dev nasm protobuf-compiler meson ninja-build \
   libpam0g-dev libpipewire-0.3-dev libfontconfig-dev libxkbcommon-dev libsystemd-dev \
   libdbus-1-dev libbluetooth-dev libpulse-dev libsqlite3-dev \
@@ -78,9 +78,9 @@ for entry in "${sources[@]}"; do
   esac
 done
 
-# Radio Atlas's satellite globe, resized the way nix/blue-marble.nix does.
-earth_url=https://eoimages.gsfc.nasa.gov/images/imagerecords/73000/73751/world.topo.bathy.200407.3x5400x2700.jpg
-earth_sum=4f4240673a3a1b173d61b92ca4b07bac5fd17059ea5f725ba6da5a9c5386b7ba
+# Radio Atlas's satellite globe, cut into tiles the way nix/blue-marble.nix does.
+earth_url=https://eoimages.gsfc.nasa.gov/images/imagerecords/73000/73751/world.topo.bathy.200407.3x21600x10800.jpg
+earth_sum=d225f1f35a6448a4d1d8f6de6e48f3433e470085b70a35800e64f384f269a7b0
 earth=$dl/blue-marble-${earth_url##*/}
 if ! { [ -f "$earth" ] && echo "$earth_sum  $earth" | sha256sum -c --quiet 2>/dev/null; }; then
   curl -fsSL -o "$earth" "$earth_url"
@@ -158,7 +158,7 @@ cp -R "$repo/branding" "$share/branding"
 cp -R "$repo/docs/examples" "$share/examples"
 install -m644 "$tp/lucide-font/lucide.ttf" "$share/fonts/lucide.ttf"
 install -m644 "$tp/nerd-fonts-symbols/SymbolsNerdFont-Regular.ttf" "$tp/nerd-fonts-symbols/SymbolsNerdFontMono-Regular.ttf" "$share/fonts/"
-convert "$earth" -resize '4096x2048!' -strip -quality 90 "$share/earth.jpg"
+python3 "$repo/nix/earth-tiles.py" "$earth" "$share"
 install -m644 "$repo/LICENSE" "$share/LICENSE"
 echo "$VERSION" > "$share/VERSION"
 
@@ -172,6 +172,7 @@ export FS_RS_FONT_DIRS="${FS_RS_FONT_DIRS-$prefix/share/formalshell/fonts}"
 export FS_TEMPLATE_DIR="${FS_TEMPLATE_DIR-$prefix/share/formalshell/templates}"
 export FS_BRANDING_DIR="${FS_BRANDING_DIR-$prefix/share/formalshell/branding}"
 export FS_EARTH_IMAGE="${FS_EARTH_IMAGE-$prefix/share/formalshell/earth.jpg}"
+export FS_EARTH_TILES="${FS_EARTH_TILES-$prefix/share/formalshell/tiles}"
 export PATH="$prefix/lib/formalshell/bin:$prefix/bin:$PATH"
 exec "$prefix/lib/formalshell/formalshell-rs" "$@"
 EOF
