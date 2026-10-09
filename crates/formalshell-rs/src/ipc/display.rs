@@ -1,6 +1,6 @@
 //! `display` and `hdr`: the Display panel's
-//! output controls without the panel, and HDR for a compositor keybind.
-//! Each answers "ok" or why nothing was sent.
+//! output controls without the panel, the brightness keys, and HDR for a
+//! compositor keybind. Each answers "ok" or why nothing was sent.
 
 use fs_system::display::outputs;
 
@@ -20,6 +20,7 @@ pub fn target() -> Target<App> {
             Function { name: "scale", params: &[("output", Type::String), ("scale", Type::Real)], ret: Type::String, call: scale },
             Function { name: "mirror", params: &[("output", Type::String), ("source", Type::String)], ret: Type::String, call: mirror },
             Function { name: "enable", params: &[("output", Type::String), ("enabled", Type::Bool)], ret: Type::String, call: enable },
+            Function { name: "brightnessStep", params: &[("delta", Type::Int)], ret: Type::String, call: brightness_step },
         ],
     }
 }
@@ -83,6 +84,16 @@ fn enable(app: &mut App, args: &[Value]) -> Value {
     }
     hyprland::send(Command::SetOutputEnabled(output.to_owned(), args[1].bool()));
     text("ok")
+}
+
+/// `delta` percent on the focused output: its backlight on a laptop's own
+/// panel, DDC on a monitor.
+fn brightness_step(app: &mut App, args: &[Value]) -> Value {
+    let output = app.store.hyprland.compositor.focused_output_name.clone();
+    match app.brightness_step(&output, args[0].int().into()) {
+        Ok(()) => text("ok"),
+        Err(why) => text(why),
+    }
 }
 
 fn hdr_toggle(app: &mut App, _: &[Value]) -> Value {

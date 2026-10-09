@@ -324,6 +324,7 @@ fn stub() -> Registry<()> {
                     f("enable", &[("output", Type::String), ("enabled", Type::Bool)], Type::String, |_, a| {
                         s(format!("enable {} {}", a[0].str(), a[1].bool()))
                     }),
+                    f("brightnessStep", &[("delta", Type::Int)], Type::String, |_, a| s(format!("brightnessStep {}", a[0].int()))),
                 ],
             },
             Target {

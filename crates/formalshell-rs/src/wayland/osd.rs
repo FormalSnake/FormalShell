@@ -10,8 +10,9 @@
 //!
 //! The volume kind shows itself whenever the default sink's volume or mute
 //! changes, ours or external (`wpctl`, a hardware key). Brightness and
-//! media only ever show over IPC: a brightness keybind runs `brightnessctl`
-//! itself first.
+//! media only ever show over IPC: `display brightnessStep` sets the focused
+//! output's device and shows the value it asked for, and `osd brightness`
+//! shows the backlight after something else set it.
 
 use std::time::{Duration, Instant};
 
@@ -22,6 +23,7 @@ use smithay_client_toolkit::shell::wlr_layer::{Anchor, Layer};
 use vello_cpu::kurbo::Rect;
 
 use super::App;
+use crate::services::display;
 use crate::surface::Surface;
 use crate::surfaces::card::{Card, Ends};
 use crate::surfaces::osd::{self, Kind, Reading};
@@ -31,6 +33,10 @@ const HIDE: Duration = Duration::from_millis(1600);
 /// Harder than a panel: the pill is small, it travels its whole height,
 /// and 0.25 is what caelestia gives an OSD.
 const DEFORM: f64 = 0.25;
+/// How long a step's own value stays the base for the next one. The store
+/// hears of a set one channel hop later, and a held key's repeat can land
+/// inside that hop.
+const STEP_HOLD: Duration = Duration::from_secs(1);
 
 #[derive(Default)]
 pub struct Osd {
@@ -40,6 +46,9 @@ pub struct Osd {
     hide_at: Option<Instant>,
     /// The sink's last reading, for the change that fires the pill.
     audio_seen: Option<(f64, bool)>,
+    /// The last brightness step: the device, the percent it asked for and
+    /// when. The pill shows it until `osd brightness` asks for the backlight.
+    step: Option<(String, i64, Instant)>,
 }
 
 impl App {
@@ -60,6 +69,44 @@ impl App {
         }
     }
 
+    /// Steps the brightness of the device behind `output` by `delta` percent
+    /// and shows the value asked for. The device's own writer coalesces a
+    /// burst, so the newest value lands last.
+    pub fn brightness_step(&mut self, output: &str, delta: i64) -> Result<(), String> {
+        if output.is_empty() {
+            return Err("no focused output".into());
+        }
+        let id = display::brightness_id(output).to_owned();
+        let Some(device) = self.store.display.devices().into_iter().find(|d| d.id == id) else {
+            return Err(format!("no brightness control on {output}"));
+        };
+        let now = Instant::now();
+        let base = match &self.osd.step {
+            Some((last, pct, at)) if *last == id && now < *at + STEP_HOLD => *pct,
+            _ => device.percent,
+        };
+        let pct = display::clamp_percent(&id, base + delta);
+        self.osd.step = Some((id.clone(), pct, now));
+        if let Some(rt) = &self.runtime {
+            let max = device.max;
+            rt.service(move |ctx| display::set_percent(ctx, &id, pct as f64, max));
+        }
+        self.osd_show(Kind::Brightness, "");
+        Ok(())
+    }
+
+    /// `osd brightness`: the backlight's own reading from here on.
+    pub fn osd_brightness_read(&mut self) {
+        self.osd.step = None;
+    }
+
+    fn osd_brightness(&self) -> f64 {
+        match &self.osd.step {
+            Some((_, pct, _)) => *pct as f64,
+            None => self.store.brightness.percent,
+        }
+    }
+
     pub fn osd_close(&mut self) {
         self.osd.hide_at = None;
         self.osd.kind = None;
@@ -75,7 +122,7 @@ impl App {
         format!(
             r#"{{"visible":{visible},"kind":"{kind}","mediaText":{},"brightness":{}}}"#,
             serde_json::Value::String(self.osd.media.clone()),
-            self.store.brightness.percent
+            self.osd_brightness()
         )
     }
 
@@ -98,7 +145,7 @@ impl App {
             media: self.osd.media.clone(),
             volume: audio.volume.unwrap_or(0.0),
             muted: audio.muted,
-            brightness: self.store.brightness.percent,
+            brightness: self.osd_brightness(),
         }
     }
 

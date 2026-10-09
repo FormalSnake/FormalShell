@@ -364,6 +364,10 @@
 {"argv":["call","display","mirror","DP-1","eDP-1"],"live":true,"stdout":"mirror DP-1 eDP-1\n","stderr":"","exit":0}
 {"argv":["call","display","enable","DP-1","false"],"live":true,"stdout":"enable DP-1 false\n","stderr":"","exit":0}
 {"argv":["call","display","enable","DP-1","1"],"live":true,"stdout":"enable DP-1 true\n","stderr":"","exit":0}
+{"argv":["call","display","brightnessStep","5"],"live":true,"stdout":"brightnessStep 5\n","stderr":"","exit":0}
+{"argv":["call","display","brightnessStep","-5"],"live":true,"stdout":"brightnessStep -5\n","stderr":"","exit":0}
+{"argv":["call","display","brightnessStep","2.5"],"live":true,"stdout":"Unable to parse argument 1 as \"int\". Provided argument: \"2.5\"\nFunction definition: function brightnessStep(delta: int): string\n","stderr":"","exit":0}
+{"argv":["call","display","brightnessStep"],"live":true,"stdout":"Too few arguments provided (1 required but 0 were provided.)\nFunction definition: function brightnessStep(delta: int): string\n","stderr":"","exit":0}
 {"argv":["show","display"],"live":true,"stdout":"","stderr":"The following argument was not expected: display\nRun with --help for more information.\n","exit":109}
 {"argv":["call","hdr","toggle"],"live":true,"stdout":"ok\n","stderr":"","exit":0}
 {"argv":["call","hdr","enable"],"live":true,"stdout":"ok\n","stderr":"","exit":0}

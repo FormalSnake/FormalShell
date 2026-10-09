@@ -175,7 +175,12 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   the shell started as its wrapped binary so the shims beat the wrapper's
   own PATH: the keybind path's `osd state` brightness never stepping back
   and landing on 70, the display panel's HDMI-A-1 row written one setvcp at
-  a time rising to 70, and its backlight row falling to 30.
+  a time rising to 70, and its backlight row falling to 30. Then `display
+  brightnessStep` in two bursts of eight, focused on headless outputs named
+  HDMI-A-1 (DDC, -5) and eDP-1 (backlight, +5): `osd state` showing the
+  asked value straight after the first call, samples and device writes
+  moving one way only to 30 and 70, and the DDC burst landing in fewer
+  than eight setvcp calls.
 - `caffeinate.sh` `--caffeinate`: `caffeinate.onStartup` starting the
   session caffeinated with its `formalshell:caffeinate` layer surface
   mapped, the real ext-idle-notify monitor staying non-idle three screensaver

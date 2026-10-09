@@ -41,7 +41,7 @@ run $fs theme status
 run $fs ipc --any-display call switcher prev
 run $fs ipc --any-display call switcher next
 run $fs ipc --any-display call switcher commit
-run $fs ipc --any-display call osd brightness
+run $fs ipc --any-display call display brightnessStep 5
 run $fs ipc --any-display call media playPause
 run $fs ipc --any-display call media next
 run $fs ipc --any-display call media previous

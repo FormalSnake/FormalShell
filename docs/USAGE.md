@@ -144,11 +144,10 @@ as the bind's action.
 | `ALT+PRINT` | `record toggle screen none` |
 | `SUPER+CTRL+V` | `menu summon clipboard` |
 
-Media keys change the value first and then tell the OSD to show it, because
-brightness is read on demand and has no signal of its own to watch:
-`XF86AudioRaiseVolume` / `LowerVolume` / `Mute` run `wpctl` then
-`osd volume`, `XF86MonBrightnessUp` / `Down` run `brightnessctl` then
-`osd brightness`, `XF86AudioMicMute` runs `wpctl`, and `XF86AudioPlay` /
+Media keys: `XF86AudioRaiseVolume` / `LowerVolume` / `Mute` run `wpctl`
+then `osd volume`, `XF86MonBrightnessUp` / `Down` call
+`display brightnessStep 5` / `-5` (the focused output's backlight or DDC
+monitor, the pill shown by the shell), `XF86AudioMicMute` runs `wpctl`, and `XF86AudioPlay` /
 `Pause` / `Next` / `Prev` go straight to `media playPause` / `next` /
 `previous`. All of them are bound with `locked = true`, so they keep working
 over the lock screen.
@@ -1454,12 +1453,14 @@ fs osd close
 fs osd state        # {"visible":…,"kind":…,"mediaText":…}
 ```
 
-Brightness is read on demand, so a brightness key should change it and then
-poke the OSD:
+A brightness key goes through the shell, which sets the focused output's
+backlight or DDC monitor and shows the pill itself (see
+[Display outputs](#display-outputs)). `osd brightness` is for a change made
+by something else: it re-reads the backlight and shows it.
 
 ```lua
 hl.bind("XF86MonBrightnessUp",
-  hl.dsp.exec_cmd("brightnessctl -q set 5%+ && formalshell-ipc call osd brightness"),
+  hl.dsp.exec_cmd("formalshell-ipc call display brightnessStep 5"),
   { locked = true, repeating = true })
 ```
 
@@ -2727,6 +2728,19 @@ three are available without the panel:
 fs display scale eDP-1 1.5
 fs display mirror DP-1 eDP-1   # DP-1 shows eDP-1; an empty source clears it
 fs display enable DP-1 false
+```
+
+`display brightnessStep <delta>` is what the brightness keys call. It steps
+the focused output by `delta` percent: the backlight on a laptop's own panel
+(`eDP`, `LVDS`, `DSI`), DDC on any other monitor, found by its connector. The
+OSD shows the value asked for at once, and each device has one writer, so a
+held key's repeats land in order and only the newest value is written once
+the device is free. An output with no brightness control answers `no
+brightness control on <output>`.
+
+```sh
+fs display brightnessStep 5
+fs display brightnessStep -5
 ```
 
 ### HDR

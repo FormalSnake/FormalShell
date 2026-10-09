@@ -2,12 +2,13 @@
 //! compositor's own outputs: each output's EDID, the
 //! backlight and DDC monitors, and which card drives which connector.
 //!
-//! The EDIDs are read once per set of connector names, off the hyprland
-//! service's own output refresh. The backlight is listed at start and on
-//! every open; a set is never read back, the row holding the value asked for
-//! while one writer per device catches the device up. DDC detection is seconds-slow, so it
-//! runs only when the panel opens, as does the 5s re-read of the outputs the
-//! compositor never announces (a disabled one), for as long as it is open.
+//! The EDIDs and the DDC monitors are read once per set of connector names,
+//! off the hyprland service's own output refresh, and again when the panel
+//! opens. The backlight is listed at start and on every open; a set is never
+//! read back, the row holding the value asked for while one writer per
+//! device catches the device up. The 5s re-read of the outputs the
+//! compositor never announces (a disabled one) runs only while the panel is
+//! open.
 //!
 //! HDR's choice lives in state.json's `hdr`; [`hdr_set`] and its siblings
 //! answer on the UI thread off the store, and [`reconcile`] puts a wanted output back in
@@ -103,6 +104,8 @@ thread_local! {
     static BACKLIGHT: RefCell<String> = const { RefCell::new(String::new()) };
     static BUSES: RefCell<HashMap<String, String>> = RefCell::new(HashMap::new());
     static PENDING: RefCell<HashMap<String, Pending>> = RefCell::new(HashMap::new());
+    /// A detection is out, and another was asked for while it was.
+    static DETECTING: RefCell<(bool, bool)> = const { RefCell::new((false, false)) };
 }
 
 /// A device's write queue: the percent last asked for, and its row's max.
@@ -127,7 +130,8 @@ pub fn start(ctx: &Ctx) {
 }
 
 /// The hyprland service's every output read: a new set of connector names
-/// is read off /sys/class/drm.
+/// is read off /sys/class/drm and detected over DDC, so the brightness keys
+/// reach a monitor whose panel never opened.
 pub fn outputs_changed(ctx: &Ctx, rows: &[Output]) {
     let mut names: Vec<String> = rows.iter().map(|r| r.name.clone()).collect();
     names.sort();
@@ -136,6 +140,7 @@ pub fn outputs_changed(ctx: &Ctx, rows: &[Output]) {
         return;
     }
     EDID_NAMES.with_borrow_mut(|k| *k = key);
+    detect_soon(ctx);
     let ctx2 = ctx.clone();
     ctx.spawn(async move {
         if let Some(edids) = ctx2.pool().run(move || read_edids(&names)).await {
@@ -262,6 +267,32 @@ fn parse_vcp(text: &str) -> Option<(i64, i64)> {
     words.windows(5).find(|w| w[0] == "VCP" && w[1] == "10" && w[2] == "C").and_then(|w| Some((w[3].parse().ok()?, w[4].parse().ok()?)))
 }
 
+/// One detection at a time, and one more after it if another was asked for
+/// meanwhile: two ddcutil walks contend on every bus they share.
+fn detect_soon(ctx: &Ctx) {
+    let first = DETECTING.with_borrow_mut(|d| {
+        d.1 = d.0;
+        !std::mem::replace(&mut d.0, true)
+    });
+    if !first {
+        return;
+    }
+    let ctx = ctx.clone();
+    ctx.clone().spawn(async move {
+        loop {
+            detect(ctx.clone()).await;
+            let again = DETECTING.with_borrow_mut(|d| {
+                let again = std::mem::take(&mut d.1);
+                d.0 = again;
+                again
+            });
+            if !again {
+                return;
+            }
+        }
+    });
+}
+
 async fn detect(ctx: Ctx) {
     let argv: Vec<String> = ["ddcutil", "--skip-ddc-checks", "detect", "--brief"].map(String::from).into();
     let found = match output(&argv).await {
@@ -269,8 +300,9 @@ async fn detect(ctx: Ctx) {
         None => Vec::new(),
     };
     BUSES.with_borrow_mut(|b| *b = found.iter().cloned().collect());
+    // The old rows stand until the first read replaces them, so a step
+    // landing mid-detection still finds its monitor.
     let mut rows = Vec::new();
-    publish(&ctx, Diff::Ddc(rows.clone()));
     // One bus at a time: they share the I2C controller.
     for (connector, bus) in found {
         let argv: Vec<String> = ["ddcutil", "--bus", &bus, "--skip-ddc-checks", "getvcp", "10", "--brief"].map(String::from).into();
@@ -281,23 +313,31 @@ async fn detect(ctx: Ctx) {
             publish(&ctx, Diff::Ddc(rows.clone()));
         }
     }
+    if rows.is_empty() {
+        publish(&ctx, Diff::Ddc(rows));
+    }
 }
 
+/// The brightness device behind an output: the backlight for a laptop's own
+/// panel, the DDC row named after its connector for anything else.
+pub fn brightness_id(output: &str) -> &str {
+    if ["eDP", "LVDS", "DSI"].iter().any(|p| output.starts_with(p)) { "backlight" } else { output }
+}
+
+/// The percent a device takes. Never 0 over DDC: some panels take VCP 10 at
+/// 0 as off rather than dim.
+pub fn clamp_percent(id: &str, pct: i64) -> i64 {
+    let pct = pct.clamp(0, 100);
+    if id == "backlight" { pct } else { pct.max(1) }
+}
 
 /// Sets a device's brightness percent. `max` is the DDC row's own. The row
 /// takes the value at once and the device follows through its queue.
 pub fn set_percent(ctx: &Ctx, id: &str, percent: f64, max: i64) {
-    let mut pct = percent.round().clamp(0.0, 100.0) as i64;
-    if id == "backlight" {
-        if BACKLIGHT.with_borrow(String::is_empty) {
-            return;
-        }
-    } else {
-        if !BUSES.with_borrow(|b| b.contains_key(id)) {
-            return;
-        }
-        // Some panels take VCP 10 at 0 as off rather than dim.
-        pct = pct.max(1);
+    let pct = clamp_percent(id, percent.round() as i64);
+    let known = if id == "backlight" { !BACKLIGHT.with_borrow(String::is_empty) } else { BUSES.with_borrow(|b| b.contains_key(id)) };
+    if !known {
+        return;
     }
     publish(ctx, Diff::Percent(id.to_owned(), pct));
     let idle = PENDING.with_borrow_mut(|p| p.insert(id.to_owned(), Pending { want: pct, max }).is_none());
@@ -342,7 +382,7 @@ async fn write(id: &str, pct: i64, max: i64) {
 /// backlight, the DDC monitors and the cards once.
 pub async fn run(ctx: Ctx) {
     ctx.spawn(backlight(ctx.clone()));
-    ctx.spawn(detect(ctx.clone()));
+    detect_soon(&ctx);
     if let Some(cards) = ctx.pool().run(read_cards).await {
         publish(&ctx, Diff::Cards(cards));
     }
@@ -555,6 +595,15 @@ mod tests {
     fn detect_pairs_bus_and_connector() {
         let text = "Display 1\n   I2C bus:  /dev/i2c-5\n   DRM connector:  card1-DP-1\n   Monitor: X\n\nInvalid display\n   I2C bus: /dev/i2c-7\n";
         assert_eq!(parse_detect(text), vec![("DP-1".to_string(), "5".to_string())]);
+    }
+
+    #[test]
+    fn a_laptop_panel_steps_the_backlight_and_a_monitor_its_own_ddc_row() {
+        assert_eq!(brightness_id("eDP-1"), "backlight");
+        assert_eq!(brightness_id("HDMI-A-1"), "HDMI-A-1");
+        assert_eq!(clamp_percent("backlight", -5), 0);
+        assert_eq!(clamp_percent("HDMI-A-1", -5), 1);
+        assert_eq!(clamp_percent("HDMI-A-1", 105), 100);
     }
 
     #[test]

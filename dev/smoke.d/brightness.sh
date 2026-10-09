@@ -23,6 +23,18 @@
 #     no write overlapped another or was dropped.
 #  3. Left eight times on the panel's backlight row, from 70: the values the
 #     backlight was set to only ever fall, and end at 30.
+#  4. Two headless outputs named HDMI-A-1 and eDP-1, the shim's monitor
+#     found by the detection their arrival starts, then `display
+#     brightnessStep` the way the keys now call it, each call in the
+#     background: -5 eight times focused on HDMI-A-1 (70 to 30 over DDC),
+#     then +5 eight times focused on eDP-1 (30 to 70 on the backlight). The
+#     first call of each burst is followed by `osd state`, which has to show
+#     the value asked for already, and the pill's layer sits on the focused
+#     output (the rig's headless outputs grab as the same picture, so the
+#     layer list is the proof); the samples never step back and end on
+#     the target, the device's own writes only move one way and end there,
+#     and the eight DDC steps reach the monitor in fewer than eight setvcp
+#     calls, none overlapping another.
 #
 # The shell's wrapper puts its own brightnessctl and ddcutil first on PATH,
 # so this leg starts the wrapped binary itself, with the wrapper's own
@@ -39,6 +51,11 @@ brightness_bl_log="$shot_dir/brightness-backlight.log"
 brightness_osd_samples="$shot_dir/brightness-osd.txt"
 brightness_stops_path="$shot_dir/brightness-stops.txt"
 brightness_panel_png="$shot_dir/brightness-panel.png"
+brightness_step_ddc="$shot_dir/brightness-step-ddc.txt"
+brightness_step_bl="$shot_dir/brightness-step-backlight.txt"
+brightness_step_first="$shot_dir/brightness-step-first.txt"
+brightness_step_monitors="$shot_dir/brightness-step-monitors"
+brightness_step_layers="$shot_dir/brightness-step-layers"
 
 leg_brightness_fixture() {
   mkdir -p "$brightness_shim_dir" "$brightness_dev_dir"
@@ -125,7 +142,7 @@ EOF
 }
 
 leg_brightness_timing() {
-  leg_timing 24 60
+  leg_timing 40 80
 }
 
 leg_brightness_drive() {
@@ -162,6 +179,41 @@ sleep 0.2
 for _ in 1 2 3 4 5 6 7 8; do "$wtype_bin" -k Left; sleep 0.04; done
 sleep 3
 call panel close > /dev/null 2>&1
+sleep 1
+# 4. The step verb, one burst per device kind.
+"$hyprctl_bin" output create headless HDMI-A-1 > /dev/null 2>&1
+"$hyprctl_bin" output create headless eDP-1 > /dev/null 2>&1
+sleep 3
+step_burst() {
+  local output=\$1 delta=\$2 samples=\$3 sampler
+  "$hyprctl_bin" dispatch "hl.dsp.focus({ monitor = '\$output' })" > /dev/null 2>&1
+  sleep 0.5
+  "$hyprctl_bin" -j monitors all > "$brightness_step_monitors-\$output.json"
+  echo "--- \$output" >> "$brightness_ddc_log"
+  echo "--- \$output" >> "$brightness_bl_log"
+  ( end=\$((SECONDS + 3)); while [ \$SECONDS -lt \$end ]; do
+      call osd state | "$jq_bin" -r '.brightness // "none"' 2>/dev/null
+      sleep 0.02
+    done ) > "\$samples" &
+  sampler=\$!
+  sleep 0.2
+  call display brightnessStep "\$delta" >> "$brightness_step_first"
+  echo "\$output \$(call osd state | "$jq_bin" -r .brightness)" >> "$brightness_step_first"
+  for _ in 1 2 3 4 5 6 7; do
+    sleep 0.04
+    call display brightnessStep "\$delta" > /dev/null 2>&1 &
+  done
+  # Inside the pill's hold, the burst's writes done.
+  sleep 0.8
+  "$hyprctl_bin" -j layers > "$brightness_step_layers-\$output.json"
+  wait \$sampler
+}
+step_burst HDMI-A-1 -5 "$brightness_step_ddc"
+sleep 2
+step_burst eDP-1 5 "$brightness_step_bl"
+sleep 2
+"$hyprctl_bin" output remove eDP-1 > /dev/null 2>&1
+"$hyprctl_bin" output remove HDMI-A-1 > /dev/null 2>&1
 EOF
   hypr_exec_once "bash $script"
 }
@@ -191,13 +243,65 @@ leg_brightness_assert() {
   [ -z "$back" ] || fail "the backlight itself stepped back during the key burst: $back"
 
   grep -E '^(overlap|dropped) .*setvcp' "$brightness_ddc_log" && fail "a setvcp ran while another held the bus"
-  back=$(grep '^set ' "$brightness_ddc_log" | cut -d' ' -f2 | brightness_backstep up)
+  back=$(brightness_panel_sets "$brightness_ddc_log" | brightness_backstep up)
   [ -z "$back" ] || fail "HDMI-A-1 stepped back during the panel burst: $back"
-  last=$(grep '^set ' "$brightness_ddc_log" | tail -n1 | cut -d' ' -f2)
+  last=$(brightness_panel_sets "$brightness_ddc_log" | tail -n1)
   [ "$last" = 70 ] || fail "HDMI-A-1 ended the panel burst on ${last:-nothing}, not 70"
 
-  back=$(grep '^set ' "$brightness_bl_log" | cut -d' ' -f2 | brightness_backstep down)
+  back=$(brightness_panel_sets "$brightness_bl_log" | brightness_backstep down)
   [ -z "$back" ] || fail "the backlight stepped back up during the panel burst: $back"
-  last=$(grep '^set ' "$brightness_bl_log" | tail -n1 | cut -d' ' -f2)
+  last=$(brightness_panel_sets "$brightness_bl_log" | tail -n1)
   [ "$last" = 30 ] || fail "the backlight ended the panel burst on ${last:-nothing}, not 30"
+
+  brightness_step_assert
+}
+
+# The values a shim log set before the first step burst marker.
+brightness_panel_sets() {
+  sed '/^--- /,$d' "$1" | grep '^set ' | cut -d' ' -f2
+}
+
+# The values a shim log set after the step burst marker for $2.
+brightness_after() {
+  sed -n "/^--- $2\$/,/^--- /p" "$1" | grep '^set ' | cut -d' ' -f2
+}
+
+brightness_step_assert() {
+  local back last writes o
+  [ -s "$brightness_step_ddc" ] && [ -s "$brightness_step_bl" ] || fail "no step burst samples"
+  echo "SMOKE_BRIGHTNESS_STEP_FIRST $brightness_step_first"
+  echo "step first calls: $(tr '\n' ' ' < "$brightness_step_first")"
+  echo "step ddc samples: $(tr '\n' ' ' < "$brightness_step_ddc")"
+  echo "step backlight samples: $(tr '\n' ' ' < "$brightness_step_bl")"
+  for o in HDMI-A-1 eDP-1; do
+    "$jq_bin" -e --arg o "$o" '.[] | select(.name == $o and .focused)' "$brightness_step_monitors-$o.json" > /dev/null \
+      || fail "$o was not the focused output for its burst"
+    "$jq_bin" -e --arg o "$o" '.[$o].levels[][]? | select(.namespace == "formalshell:osd")' "$brightness_step_layers-$o.json" > /dev/null \
+      || fail "the OSD was not on $o during its burst"
+  done
+  [ "$(grep -c '^ok$' "$brightness_step_first")" = 2 ] || fail "brightnessStep did not answer ok: $(cat "$brightness_step_first")"
+  grep -qx 'HDMI-A-1 65' "$brightness_step_first" || fail "the OSD did not show 65 right after the first DDC step"
+  grep -qx 'eDP-1 35' "$brightness_step_first" || fail "the OSD did not show 35 right after the first backlight step"
+
+  back=$(brightness_backstep down < "$brightness_step_ddc")
+  [ -z "$back" ] || fail "the OSD stepped back up during the DDC step burst: $back"
+  last=$(tail -n1 "$brightness_step_ddc")
+  [ "$last" = 30 ] || fail "the OSD ended the DDC step burst on $last, not 30"
+  back=$(brightness_after "$brightness_ddc_log" HDMI-A-1 | brightness_backstep down)
+  [ -z "$back" ] || fail "HDMI-A-1 stepped back up during the step burst: $back"
+  last=$(brightness_after "$brightness_ddc_log" HDMI-A-1 | tail -n1)
+  [ "$last" = 30 ] || fail "HDMI-A-1 ended the step burst on ${last:-nothing}, not 30"
+  writes=$(brightness_after "$brightness_ddc_log" HDMI-A-1 | wc -l)
+  echo "step burst: 8 DDC steps in $writes setvcp calls"
+  [ "$writes" -lt 8 ] || fail "the DDC step burst was not coalesced: $writes setvcp calls for 8 steps"
+
+  back=$(brightness_backstep up < "$brightness_step_bl")
+  [ -z "$back" ] || fail "the OSD stepped back during the backlight step burst: $back"
+  last=$(tail -n1 "$brightness_step_bl")
+  [ "$last" = 70 ] || fail "the OSD ended the backlight step burst on $last, not 70"
+  back=$(brightness_after "$brightness_bl_log" eDP-1 | brightness_backstep up)
+  [ -z "$back" ] || fail "the backlight stepped back during the step burst: $back"
+  last=$(brightness_after "$brightness_bl_log" eDP-1 | tail -n1)
+  [ "$last" = 70 ] || fail "the backlight ended the step burst on ${last:-nothing}, not 70"
+  echo "step burst: 8 backlight steps in $(brightness_after "$brightness_bl_log" eDP-1 | wc -l) writes"
 }

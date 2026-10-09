@@ -1,7 +1,7 @@
 //! `osd`: the bottom pill from outside. It shows itself on a
-//! volume change; this covers brightness (a keybind runs `brightnessctl`
-//! first, this catches the cached percent up and shows it), media text,
-//! close and state.
+//! volume change and on `display brightnessStep`; this covers brightness set
+//! by something else (it catches the cached backlight percent up and shows
+//! it), media text, close and state.
 
 use super::registry::{Function, Target, Type, Value};
 use crate::services::brightness;
@@ -21,6 +21,7 @@ fn show_brightness(app: &mut App, _: &[Value]) -> Value {
     if let Some(rt) = &app.runtime {
         rt.service(brightness::refresh);
     }
+    app.osd_brightness_read();
     app.osd_show(Kind::Brightness, "");
     text("ok")
 }
