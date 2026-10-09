@@ -8,11 +8,18 @@
 # `hl.monitor`. Each output is grabbed on its own with `grim -o`, and the
 # frame the run ends on covers both.
 #
+# Then a real pointer (wlrctl, the only client that sends a surface a real
+# enter): a panel opened on the first output, and a click on the second
+# output's desktop has to close it, through the catcher the second output
+# carries while it is open. A panel opened there again, and a click on the
+# second output's own audio cell (its place read off `bar room` once the
+# pointer has promoted that bar) has to close it and open audio there.
+#
 # The second output is then removed: the shell has to drop that output's
 # surfaces and keep the first one's, still running.
 leg_multi_output_flag="--multi-output"
 leg_multi_output_order=217
-leg_multi_output_needs="jq"
+leg_multi_output_needs="jq wlrctl"
 
 multi_output_second="FS-MULTI"
 multi_output_create="$shot_dir/multi-output-create.txt"
@@ -22,13 +29,22 @@ multi_output_layers_two="$shot_dir/multi-output-layers-two.json"
 multi_output_layers_gone="$shot_dir/multi-output-layers-gone.json"
 multi_output_first_png="$shot_dir/multi-output-first.png"
 multi_output_second_png="$shot_dir/multi-output-second.png"
+multi_output_click="$shot_dir/multi-output-click.txt"
+multi_output_layers_open="$shot_dir/multi-output-layers-open.json"
+multi_output_layers_closed="$shot_dir/multi-output-layers-closed.json"
+multi_output_layers_reopen="$shot_dir/multi-output-layers-reopen.json"
+multi_output_room="$shot_dir/multi-output-room.json"
+multi_output_room_after="$shot_dir/multi-output-room-after.json"
+multi_output_open_png="$shot_dir/multi-output-open.png"
+multi_output_closed_png="$shot_dir/multi-output-closed.png"
+multi_output_cell_png="$shot_dir/multi-output-cell.png"
 
 leg_multi_output_fixture() {
   settings_fragment ', "frame": {"thickness": 6, "radius": 20}'
 }
 
 leg_multi_output_timing() {
-  leg_timing 13 40
+  leg_timing 13 70
 }
 
 leg_multi_output_drive() {
@@ -47,6 +63,44 @@ sleep 4
 "$grim_bin" -o "\$first" "$multi_output_first_png" > /dev/null 2>&1
 "$grim_bin" -o "$multi_output_second" "$multi_output_second_png" > /dev/null 2>&1
 sleep 6
+call() { $ipc call "\$@"; }
+lw=\$("$hyprctl_bin" -j monitors | "$jq_bin" -r '.[0].width / .[0].scale | floor')
+lh=\$("$hyprctl_bin" -j monitors | "$jq_bin" -r '.[0].height / .[0].scale | floor')
+park() {
+  "$wlrctl_bin" pointer move -8000 -8000 >> "$multi_output_click" 2>&1
+  "$wlrctl_bin" pointer move "\$1" "\$2" >> "$multi_output_click" 2>&1
+  sleep 1
+  echo "park \$1 \$2: \$("$hyprctl_bin" cursorpos)" >> "$multi_output_click"
+}
+park \$((lw / 2)) \$((lh / 2))
+echo "open: \$(call panel open network)" >> "$multi_output_click"
+sleep 2
+echo "state open: \$(call panel state)" >> "$multi_output_click"
+"$hyprctl_bin" -j layers > "$multi_output_layers_open" 2>&1
+"$grim_bin" "$multi_output_open_png" > /dev/null 2>&1
+park \$((lw + 640)) 500
+"$wlrctl_bin" pointer click left >> "$multi_output_click" 2>&1
+sleep 2
+echo "state clicked: \$(call panel state)" >> "$multi_output_click"
+"$hyprctl_bin" -j layers > "$multi_output_layers_closed" 2>&1
+"$grim_bin" "$multi_output_closed_png" > /dev/null 2>&1
+park \$((lw + 640)) 2
+call bar room > "$multi_output_room" 2>&1
+park \$((lw / 2)) \$((lh / 2))
+echo "reopen: \$(call panel open network)" >> "$multi_output_click"
+sleep 2
+echo "state reopen: \$(call panel state)" >> "$multi_output_click"
+"$hyprctl_bin" -j layers > "$multi_output_layers_reopen" 2>&1
+cell=\$("$jq_bin" -r '[.[0].cells[] | select(.name == "audio" and .whole)] | first | "\\(.x + .width / 2 | floor) \\(.y + .height / 2 | floor)"' "$multi_output_room" 2>/dev/null)
+echo "audio cell \$cell" >> "$multi_output_click"
+park \$((lw + \${cell%% *})) \${cell##* }
+"$wlrctl_bin" pointer click left >> "$multi_output_click" 2>&1
+sleep 2
+echo "state cell: \$(call panel state)" >> "$multi_output_click"
+call bar room > "$multi_output_room_after" 2>&1
+"$grim_bin" "$multi_output_cell_png" > /dev/null 2>&1
+call panel close > /dev/null 2>&1
+sleep 2
 "$hyprctl_bin" output remove "$multi_output_second" >> "$multi_output_create" 2>&1
 sleep 3
 "$hyprctl_bin" -j layers > "$multi_output_layers_gone" 2>&1
@@ -95,6 +149,26 @@ leg_multi_output_assert() {
     || fail "$multi_output_second still listed after its removal"
   _multi_output_check "$multi_output_layers_gone" "after removal"
   echo "SMOKE_MULTI_OUTPUT_REMOVED the first output keeps its chrome once $multi_output_second is gone"
+
+  cat "$multi_output_click"
+  _multi_output_state() { sed -n "s/^state $1: //p" "$multi_output_click"; }
+  [ "$(_multi_output_state open)" = network ] || fail "panel open network on the first output left panel state at '$(_multi_output_state open)'"
+  n=$(_multi_output_count "$multi_output_layers_open" "$multi_output_second" "formalshell:catcher")
+  [ "$n" = 1 ] || fail "with a panel open on the first output, $multi_output_second carries $n catchers, want 1"
+  [ -z "$(_multi_output_state clicked)" ] || fail "a click on $multi_output_second left the panel open: '$(_multi_output_state clicked)'"
+  n=$("$jq_bin" -r '[.[] | .levels[]?[]? | select(.namespace == "formalshell:catcher")] | length' "$multi_output_layers_closed")
+  [ "$n" = 0 ] || fail "$n catchers still mapped once the panel closed"
+  echo "SMOKE_MULTI_OUTPUT_CLICK a click on $multi_output_second closed the panel open on the first output"
+  [ "$(_multi_output_state reopen)" = network ] || fail "the panel did not open again on the first output: '$(_multi_output_state reopen)'"
+  n=$(_multi_output_count "$multi_output_layers_reopen" "$multi_output_second" "formalshell:panel")
+  [ "$n" = 0 ] || fail "the reopened panel is on $multi_output_second, not the first output"
+  [ "$(_multi_output_state cell)" = audio ] || fail "a click on $multi_output_second's audio cell left panel state at '$(_multi_output_state cell)', want audio"
+  "$jq_bin" -e --arg s "$multi_output_second" '.[0].screen == $s' "$multi_output_room_after" > /dev/null \
+    || fail "the live bar is not on $multi_output_second after its cell was clicked: $("$jq_bin" -c '.[0].screen' "$multi_output_room_after" 2>/dev/null)"
+  echo "SMOKE_MULTI_OUTPUT_CELL a click on $multi_output_second's audio cell closed the first output's panel and opened audio there"
+  echo "SMOKE_MULTI_OUTPUT_OPEN $multi_output_open_png"
+  echo "SMOKE_MULTI_OUTPUT_CLOSED $multi_output_closed_png"
+  echo "SMOKE_MULTI_OUTPUT_CELL_FRAME $multi_output_cell_png"
 
   for f in "$multi_output_first_png" "$multi_output_second_png"; do
     [ -s "$f" ] || fail "no frame at $f"
