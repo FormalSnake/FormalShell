@@ -54,7 +54,7 @@ use crate::store::{Store, Topic};
 use crate::surface::{PixelSurface, Pixels, Surface};
 use crate::surfaces;
 use crate::surfaces::bar::Bar;
-use crate::surfaces::bar::cell::{Action, Button, Env, TrayClick};
+use crate::surfaces::bar::cell::{Action, Button, Env, Look, TrayClick};
 use crate::surfaces::bar::cells::tray as tray_cell;
 use crate::surfaces::bar::slot::Slot;
 use crate::surfaces::card::{Card, Ends, Scrim, Target};
@@ -96,11 +96,42 @@ pub struct Popout {
     pub anchor: f64,
     /// A tray item's dbusmenu in place of cells (`traymenu`).
     menu: Option<Menu>,
+    /// The card's length along the line, on its way to what its cells
+    /// measure: the first size lands at once, every later one travels.
+    fit: Option<crate::motion::Animated>,
 }
 
 impl Popout {
     fn finished(&self, now: Instant) -> bool {
         self.surface.mapped && self.card.finished(now)
+    }
+
+    /// Takes the card toward the size its shown cells add up to, centred on
+    /// its anchor. True when the card's resting rect moved.
+    fn fit(&mut self, look: &Look, scale: f64, length: i32, pad: f64, now: Instant) -> bool {
+        if self.menu.is_some() || !self.card.is_open() {
+            return false;
+        }
+        let present: Vec<f64> = self.slots.iter().filter(|s| s.present()).map(|s| s.natural).collect();
+        let rail = present.iter().sum::<f64>() + look.sm * present.len().saturating_sub(1) as f64;
+        let along = rail + look.panel_padding * 2.0;
+        let across = if self.card.edge.is_vertical() { look.cell_width } else { look.cell_height } + look.panel_padding * 2.0;
+        let armed = self.surface.mapped;
+        let fit = self.fit.get_or_insert_with(|| crate::motion::Animated::new(along, crate::motion::SPATIAL));
+        if armed && look.motion {
+            fit.set(now, along, look.spatial * scale);
+        } else {
+            fit.jump(along);
+        }
+        let size = (fit.value(now), across);
+        // Unrounded, as `new_card` sized it: a card resized by a fraction of
+        // a pixel mid-entrance shakes.
+        let rest = self.card.rest();
+        if (rest.width(), rest.height()) == size {
+            return false;
+        }
+        self.card.resize(now, self.anchor, length, pad, size);
+        true
     }
 
     /// Lays its content out at the card's content rect this frame.
@@ -581,19 +612,12 @@ impl App {
         let env_edge = self.bar.edge();
         if let Some(p) = &mut self.overflow {
             let env = Env { store: &self.store, edge: env_edge, output: &self.bar.output };
+            // Cells land at once while the card is arriving, so it opens
+            // quiet, and travel once it is up.
+            let animate = p.surface.mapped && p.card.is_open();
             for s in &mut p.slots {
                 if topic.is_none_or(|t| s.cell.reads().contains(&t)) {
-                    s.refresh(&mut self.bar.kit, &env, false, false, 0.0, now);
-                }
-            }
-            // The tray's second bar follows the icons it holds as they come and go.
-            if p.name == "trayoverflow" && p.card.is_open() {
-                if let Some(s) = p.slots.first() {
-                    let look = &self.bar.kit.look;
-                    let across = if env_edge.is_vertical() { look.cell_width } else { look.cell_height };
-                    let size = (s.natural + look.panel_padding * 2.0, across + look.panel_padding * 2.0);
-                    let pad = self.store.theme.theme.space.screen_padding;
-                    p.card.resize(now, p.anchor, self.bar.length(), pad, size);
+                    s.refresh(&mut self.bar.kit, &env, false, animate, 0.0, now);
                 }
             }
         }
@@ -822,8 +846,9 @@ impl App {
             surface,
             slots,
             hover: None,
-            anchor: 0.0,
+            anchor,
             menu: None,
+            fit: None,
         });
         self.sync_open(now);
         self.log("overflow mapped");
@@ -969,6 +994,7 @@ impl App {
             hover: None,
             anchor,
             menu: None,
+            fit: None,
         });
         self.sync_open(now);
         self.log("panel trayoverflow mapped");
@@ -1038,6 +1064,7 @@ impl App {
             hover: None,
             anchor,
             menu: Some(menu),
+            fit: None,
         });
         if let Some(p) = &self.menu {
             self.set_popout_input(p);
@@ -1106,6 +1133,27 @@ impl App {
         }
         let (w, h) = (m.width(), m.morph.value(now));
         p.card.resize(now, m.anchor, length, pad, if vertical { (h, w) } else { (w, h) });
+    }
+
+    /// The second bar's card on its way to the size its cells add up to. A
+    /// panel hanging off it keeps its bud inside the card's new span.
+    fn step_overflow(&mut self, now: Instant) {
+        let length = self.bar.length();
+        let pad = self.store.theme.theme.space.screen_padding;
+        let Some(p) = &mut self.overflow else { return };
+        if !p.fit(&self.bar.kit.look, self.bar.kit.motion_scale, length, pad, now) {
+            return;
+        }
+        let live = p.card.live();
+        let target = Target { along: live.x0, length: live.width(), radius: p.card.radius() };
+        if let Some(p) = &self.overflow {
+            self.set_popout_input(p);
+        }
+        if let Some(h) = self.panel.as_mut().filter(|h| h.place.target.is_some()) {
+            h.place.target = Some(target);
+            h.card.target = Some(target);
+            self.panel_dirty = true;
+        }
     }
 
     /// The tray changed: a menu waiting on its tree gets it, one whose item
@@ -1361,11 +1409,12 @@ impl App {
             self.launcher_warm = true;
         }
         self.step_menu(now);
+        self.step_overflow(now);
         for p in [&mut self.overflow, &mut self.menu].into_iter().flatten() {
             p.layout(&mut self.bar, now);
             let kit = &self.bar.kit;
             let content = p.slots.iter_mut().any(|s| s.animating(kit, true, now));
-            let morphing = p.menu.as_ref().is_some_and(|m| m.morph.running(now));
+            let morphing = p.menu.as_ref().is_some_and(|m| m.morph.running(now)) || p.fit.as_ref().is_some_and(|f| f.running(now));
             let animating = p.card.animating(now) || content || morphing;
             p.surface.present(&mut p.card.scene, animating, &qh);
         }

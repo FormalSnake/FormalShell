@@ -68,6 +68,15 @@ fn status(app: &App) -> Value {
             }),
         );
     }
+    // The open second bar's card at rest and this frame, and every shown
+    // cell in it, in the card surface's pixels.
+    let rect = |r: crate::scene::IRect| json!({"x": r.x, "y": r.y, "w": r.w, "h": r.h});
+    if let Some(p) = app.overflow.as_ref().filter(|p| p.card.is_open())
+        && let Some(entry) = p.region.and_then(|r| regions.get_mut(r.as_str()))
+    {
+        let cells: Vec<_> = p.slots.iter().filter(|s| s.present()).map(|s| json!({"name": s.name, "rect": rect(s.rect)})).collect();
+        entry["card"] = json!({"rest": rect(p.card.rest_rect()), "live": rect(p.card.live_rect()), "cells": cells});
+    }
     let names: Vec<&str> = chevron_regions(app).iter().map(|r| r.as_str()).collect();
     text(json!({"regions": regions, "chevronRegions": names}).to_string())
 }
