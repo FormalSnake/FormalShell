@@ -565,6 +565,27 @@ impl App {
         self.refresh_bar(None);
     }
 
+    /// Every card open across a theme change takes the new look: the
+    /// launcher's, the open panel's and the second bar's.
+    pub fn restyle_cards(&mut self) {
+        let now = Instant::now();
+        let theme = &self.store.theme.theme;
+        if let Some(w) = &mut self.launch {
+            w.shown.modal.restyle(theme, self.cast, now);
+            self.launcher.dirty = true;
+        }
+        if let Some(h) = &mut self.panel {
+            h.card.restyle(theme, self.cast);
+            h.card.tick(now);
+            self.panel_dirty = true;
+        }
+        if let Some(p) = &mut self.overflow {
+            p.card.restyle(theme, self.cast);
+            p.card.tick(now);
+        }
+        self.bar_dirty = true;
+    }
+
     /// The cells reading `topic` read again, and everything the strip draws
     /// with them.
     pub fn refresh_bar(&mut self, topic: Option<Topic>) {

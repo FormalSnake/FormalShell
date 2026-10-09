@@ -120,6 +120,8 @@ pub struct Join {
 pub struct Card {
     pub scene: Scene,
     look: Look,
+    /// The box style `look` was resolved from, for a theme change.
+    role: &'static str,
     pub edge: Edge,
     rest: Rect,
     live: Rect,
@@ -179,7 +181,7 @@ impl Card {
     /// A card on a surface `size` (along, across) at `rest`, all in the
     /// card's own coordinates.
     #[allow(clippy::too_many_arguments)]
-    pub fn build(theme: &Theme, role: &str, edge: Edge, size: (i32, i32), line_at: f64, rest: Rect, scale: f64, cast: bool, clear: bool) -> Self {
+    pub fn build(theme: &Theme, role: &'static str, edge: Edge, size: (i32, i32), line_at: f64, rest: Rect, scale: f64, cast: bool, clear: bool) -> Self {
         let look = Look::new(theme, role, cast);
         let (sw, sh) = if edge.is_vertical() { (size.1, size.0) } else { size };
         let mut scene = if clear { Scene::clear(sw, sh) } else { Scene::new(sw, sh) };
@@ -193,6 +195,7 @@ impl Card {
         Self {
             scene,
             look,
+            role,
             edge,
             rest,
             live: rest,
@@ -224,7 +227,15 @@ impl Card {
 
     /// The card as a menu: the `menu` role's fill, border and radius.
     pub fn menu(&mut self, theme: &Theme, cast: bool) {
+        self.role = "menu";
         self.look = Look::new(theme, "menu", cast);
+    }
+
+    /// The look resolved again off a new theme, the clocks left running: a
+    /// card open across a mode flip or a wallpaper change kept the old fill
+    /// under the new ink.
+    pub fn restyle(&mut self, theme: &Theme, cast: bool) {
+        self.look = Look::new(theme, self.role, cast);
     }
 
     /// The same card at `size`, centred on `anchor` along a line `length`
