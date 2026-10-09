@@ -260,7 +260,8 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   `:e sob` reaching 😭 through CLDR's keywords (its Unicode name has no
   "sob" in it), and one copy through the row's own Enter path putting that
   emoji at the head of its own rank and no higher, with no settings key
-  written.
+  written. Then the whole grid walked on real keys (Down, Page_Down, End),
+  the bottom band of the body's viewport carrying emoji ink at every stop.
 - `flexoki.sh` `--flexoki`: a wallpaper under a `flexoki/` directory, and
   the rewrite reaching a user template, its `post_hook`, and the shell's own
   GTK and Qt palettes: Flexoki green and yellow, which no Material scheme
@@ -457,6 +458,11 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   Caffeinate and Overnight rows each flipping their service with the hub
   left open and the rows ticked, Set Reminder's input step setting a
   reminder typed on real keys, and Clear Reminders dropping it.
+- `menu_hover.sh` `--menu-hover`: a real pointer moving onto an emoji cell
+  and one cell on at a tenth speed, the target cell sampled frame by frame
+  with no sample darker than its rest or cursor fill, then a real Right
+  with some frame holding the body's one cursor fill part way between the
+  two cells.
 - `menu_emerge.sh` `--menu-emerge`: the launcher budding off the top line,
   sampled frame by frame under `debug motionScale`: card fill under the line
   with nothing at its resting floor, the bar's own band undimmed while it is

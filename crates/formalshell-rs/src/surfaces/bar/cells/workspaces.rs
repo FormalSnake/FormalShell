@@ -114,10 +114,6 @@ struct LabelInk {
     t: Animated,
 }
 
-fn mix(a: Rgba, b: Rgba, t: f32) -> Rgba {
-    Rgba { r: a.r + (b.r - a.r) * t, g: a.g + (b.g - a.g) * t, b: a.b + (b.b - a.b) * t, a: a.a + (b.a - a.a) * t }
-}
-
 pub struct Workspaces {
     output: String,
     slots: Vec<Slot>,
@@ -303,12 +299,12 @@ impl Workspaces {
     fn label_color(&mut self, idx: i64, target: Rgba, now: Instant, look: &Look, scale: f64) -> Rgba {
         let fx = self.label_ink.entry(idx).or_insert_with(|| LabelInk { from: target, to: target, t: Animated::new(1.0, EFFECTS_SLOW) });
         if fx.to != target {
-            fx.from = mix(fx.from, fx.to, fx.t.value(now) as f32);
+            fx.from = fx.from.mix(fx.to, fx.t.value(now) as f32);
             fx.to = target;
             fx.t.jump(0.0);
             if look.motion { fx.t.set(now, 1.0, look.effects_slow * scale) } else { fx.t.jump(1.0) }
         }
-        mix(fx.from, fx.to, fx.t.value(now).clamp(0.0, 1.0) as f32)
+        fx.from.mix(fx.to, fx.t.value(now).clamp(0.0, 1.0) as f32)
     }
 
     /// An icon's clocks, born at its resting dim and fading in from nothing.

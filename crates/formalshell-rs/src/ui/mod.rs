@@ -146,6 +146,9 @@ pub struct Ui {
     /// The container draws one travelling halo for every row, so rows do
     /// not draw their own.
     pub halo_owned: bool,
+    /// The container draws the selected fill and the cursor ring once for
+    /// the whole list, travelling, so a selected cell draws neither.
+    pub fill_owned: bool,
     /// `debug motionScale` over the theme's clocks.
     pub motion_scale: f64,
 }
@@ -167,6 +170,7 @@ impl Ui {
             cursor: None,
             ring: false,
             halo_owned: true,
+            fill_owned: false,
             motion_scale: 1.0,
         }
     }
@@ -445,6 +449,10 @@ impl Cx<'_> {
         self.ui.halo_owned
     }
 
+    pub fn fill_owned(&self) -> bool {
+        self.ui.fill_owned
+    }
+
     pub fn hit(&mut self, hit: Hit) {
         if !hit.rect.is_empty() {
             let rect = self.clip.map_or(hit.rect, |c| c.intersect(&hit.rect));
@@ -486,7 +494,7 @@ impl Cx<'_> {
 }
 
 pub fn lerp(a: Rgba, b: Rgba, t: f32) -> Rgba {
-    Rgba { r: a.r + (b.r - a.r) * t, g: a.g + (b.g - a.g) * t, b: a.b + (b.b - a.b) * t, a: a.a + (b.a - a.a) * t }
+    a.mix(b, t)
 }
 
 pub fn irect(r: Rect) -> IRect {
