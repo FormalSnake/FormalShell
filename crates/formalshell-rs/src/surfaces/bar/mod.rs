@@ -100,6 +100,10 @@ pub struct Bar {
     /// clock.
     pub hidden: bool,
     born: Instant,
+    /// Cells rebuilt (a new theme or layout) and not yet read in full: that
+    /// read places them where they were rather than growing every one of
+    /// them out of nothing, which blanked the strip on each wallpaper change.
+    rebuilt: bool,
     /// Strip room as last laid out, for `bar room`.
     room: Room,
 }
@@ -133,6 +137,7 @@ impl Bar {
             hover: None,
             hidden: false,
             born: Instant::now(),
+            rebuilt: false,
             room: Room::default(),
         };
         let (w, h) = bar.placed_size(true);
@@ -265,6 +270,7 @@ impl Bar {
             self.strip_nodes.push(id);
         }
         self.hover = None;
+        self.rebuilt = true;
         self.slots.clear();
         for region in Region::ALL {
             let entries = self.resolved.regions.get(region).to_vec();
@@ -285,7 +291,7 @@ impl Bar {
     }
 
     fn animate(&self, now: Instant) -> bool {
-        now.saturating_duration_since(self.born) > REVEAL
+        !self.rebuilt && now.saturating_duration_since(self.born) > REVEAL
     }
 
     /// Re-reads the cells that read `topic` (all of them with `None`).
@@ -298,6 +304,9 @@ impl Bar {
             if topic.is_none_or(|t| slot.cell.reads().contains(&t)) {
                 slot.refresh(&mut self.kit, &env, band, animate, along, now);
             }
+        }
+        if topic.is_none() {
+            self.rebuilt = false;
         }
     }
 
