@@ -534,6 +534,10 @@ impl PixelSurface {
         }
     }
 
+    pub fn size(&self) -> Option<(i32, i32)> {
+        self.size
+    }
+
     /// `fade` multiplies the pixel's own alpha, 0 to 1.
     pub fn present(&mut self, fade: f64, animating: bool, qh: &QueueHandle<App>) {
         let Some((width, height)) = self.size else { return };

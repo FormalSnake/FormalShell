@@ -1,8 +1,8 @@
-//! The internal backlight through `brightnessctl -m`
-//! and every DDC monitor through `ddcutil`. Nothing polls: the backlight is
-//! read when the service starts and after a write, and ddcutil's seconds-slow
-//! I2C detection runs only when a consumer asks for the device list (the
-//! display panel) or for the DDC rows themselves (overnight).
+//! The internal backlight through `brightnessctl -m`, the OSD's reading, and
+//! the `ddcutil` calls overnight makes. Nothing polls: the backlight is read
+//! when the service starts and when the OSD asks, and ddcutil's seconds-slow
+//! I2C detection runs only when overnight asks for the DDC rows. The display
+//! panel's own rows and writes are `services::display`'s.
 
 use std::cell::RefCell;
 use std::time::Duration;
@@ -92,8 +92,9 @@ pub fn parse_getvcp(text: &str) -> Option<(i64, i64)> {
 struct Local {
     device: String,
     state: State,
-    /// The DDC rows, in the order detection found them, and their buses.
-    ddc: Vec<(Device, String)>,
+    /// A read is out, and another was asked for while it was.
+    reading: bool,
+    again: bool,
 }
 
 thread_local! {
@@ -106,7 +107,6 @@ fn publish(ctx: &Ctx) {
         if !l.device.is_empty() {
             devices.push(Device { id: "backlight".into(), label: "INTERNAL".into(), percent: l.state.percent, max: 100 });
         }
-        devices.extend(l.ddc.iter().map(|(d, _)| d.clone()));
         l.state.available = !l.device.is_empty();
         l.state.devices = devices;
         l.state.clone()
@@ -118,11 +118,6 @@ fn publish(ctx: &Ctx) {
 pub async fn backlight() -> Option<(String, f64)> {
     let done = proc::capture(&argv(&["brightnessctl", "-m", "-c", "backlight", "-l"]), BRIGHTNESSCTL).await;
     parse_csv(done.stdout.lines().next()?)
-}
-
-async fn write_backlight(device: &str, arg: &str) -> Option<(String, f64)> {
-    let done = proc::capture(&argv(&["brightnessctl", "-m", "-d", device, "set", arg]), BRIGHTNESSCTL).await;
-    parse_csv(done.stdout.trim())
 }
 
 /// Every DDC monitor: connector and bus, as detection found them. Empty
@@ -173,73 +168,43 @@ pub fn start(ctx: &Ctx) {
 }
 
 /// Reads the backlight again: a keybind's own `brightnessctl set` bypassed
-/// this service, so its cached percent is stale until something asks.
+/// this service, so its cached percent is stale until something asks. One
+/// read at a time, and one more after it if another call landed meanwhile:
+/// a held key fires this at its repeat rate, and reads racing each other
+/// could land oldest last and step the OSD backwards.
 pub fn refresh(ctx: &Ctx) {
-    let ctx = ctx.clone();
-    ctx.clone().spawn(async move {
-        let read = backlight().await;
-        LOCAL.with_borrow_mut(|l| match read {
-            Some((device, percent)) => {
-                l.device = device;
-                l.state.percent = percent;
-            }
-            None => {
-                l.device.clear();
-                l.state.percent = 0.0;
-            }
-        });
-        publish(&ctx);
+    let first = LOCAL.with_borrow_mut(|l| {
+        l.again = l.reading;
+        !std::mem::replace(&mut l.reading, true)
     });
-}
-
-/// The backlight again and a fresh DDC detection, each monitor appearing
-/// as its own read lands. The display panel's call.
-#[allow(dead_code)]
-pub fn refresh_devices(ctx: &Ctx) {
-    refresh(ctx);
-    let ctx = ctx.clone();
-    ctx.clone().spawn(async move {
-        let found = ddc_detect().await;
-        LOCAL.with_borrow_mut(|l| l.ddc.clear());
-        publish(&ctx);
-        for (connector, bus) in found {
-            if let Some((current, max)) = ddc_read(&bus).await {
-                let percent = if max > 0 { (current as f64 * 100.0 / max as f64).round() } else { 0.0 };
-                let device = Device { id: connector.clone(), label: connector, percent, max };
-                LOCAL.with_borrow_mut(|l| l.ddc.push((device, bus)));
-                publish(&ctx);
-            }
-        }
-    });
-}
-
-/// `id` is `backlight` or a DDC connector; the display panel's call.
-#[allow(dead_code)]
-pub fn set_device_percent(ctx: &Ctx, id: &str, percent: f64) {
-    let clamped = percent.round().clamp(0.0, 100.0);
-    if id == "backlight" {
-        let ctx = ctx.clone();
-        let device = LOCAL.with_borrow(|l| l.device.clone());
-        if device.is_empty() {
-            return;
-        }
-        ctx.clone().spawn(async move {
-            if let Some((_, percent)) = write_backlight(&device, &format!("{}%", clamped as i64)).await {
-                LOCAL.with_borrow_mut(|l| l.state.percent = percent);
-                publish(&ctx);
-            }
-        });
+    if !first {
         return;
     }
-    let Some((device, bus)) = LOCAL.with_borrow(|l| l.ddc.iter().find(|(d, _)| d.id == id).cloned()) else { return };
-    let target = clamped.max(1.0);
-    LOCAL.with_borrow_mut(|l| {
-        if let Some((d, _)) = l.ddc.iter_mut().find(|(d, _)| d.id == id) {
-            d.percent = target;
+    let ctx = ctx.clone();
+    ctx.clone().spawn(async move {
+        loop {
+            let read = backlight().await;
+            let again = LOCAL.with_borrow_mut(|l| {
+                match read {
+                    Some((device, percent)) => {
+                        l.device = device;
+                        l.state.percent = percent;
+                    }
+                    None => {
+                        l.device.clear();
+                        l.state.percent = 0.0;
+                    }
+                }
+                let again = std::mem::take(&mut l.again);
+                l.reading = again;
+                again
+            });
+            publish(&ctx);
+            if !again {
+                return;
+            }
         }
     });
-    publish(ctx);
-    ctx.spawn(async move { ddc_write(&bus, ddc_raw(target, device.max)).await });
 }
 
 #[cfg(test)]
