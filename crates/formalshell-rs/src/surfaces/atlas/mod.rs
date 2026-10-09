@@ -90,6 +90,7 @@ pub struct Atlas {
     pub editing: bool,
     pub search_at: Option<Instant>,
     countries_asked: bool,
+    earth_asked: bool,
     estimates: EstimateCache,
     geo_inputs: Option<(Mode, Vec<String>, usize, bool)>,
     pub geo: Vec<Station>,
@@ -128,6 +129,7 @@ impl Default for Atlas {
             editing: false,
             search_at: None,
             countries_asked: false,
+            earth_asked: false,
             estimates: EstimateCache::default(),
             geo_inputs: None,
             geo: Vec::new(),
@@ -171,6 +173,7 @@ impl Atlas {
                 "longitude": self.globe.centre_longitude,
                 "latitude": self.globe.centre_latitude,
                 "coasting": self.globe.kinetic,
+                "imagery": self.globe.earth.is_some(),
             },
         })
     }
@@ -179,6 +182,16 @@ impl Atlas {
     /// atlas opens.
     pub fn want_countries(&mut self) -> bool {
         !std::mem::replace(&mut self.countries_asked, true)
+    }
+
+    /// Whether the satellite picture needs decoding for this open: it is
+    /// let go when the atlas unmaps.
+    pub fn want_earth(&mut self) -> bool {
+        if self.globe.earth.is_some() || self.earth_asked {
+            return false;
+        }
+        self.earth_asked = true;
+        true
     }
 
     fn ask(&mut self, purpose: Purpose, ask: Ask) -> u64 {
@@ -550,6 +563,14 @@ impl Atlas {
         self.dirty = true;
         match reply {
             Reply::Countries(c) => self.globe.set_countries(c),
+            Reply::Earth(earth) => {
+                self.earth_asked = false;
+                match earth {
+                    Ok(e) if self.open => self.globe.earth = Some(e),
+                    Ok(_) => {}
+                    Err(e) => eprintln!("radio atlas: no satellite picture, drawing the flat globe: {e}"),
+                }
+            }
             Reply::Random(answer) => {
                 if self.mode != Mode::Random {
                     return;

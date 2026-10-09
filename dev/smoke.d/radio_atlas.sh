@@ -19,6 +19,15 @@
 # panel header. The example Hyprland config has to carry a layer rule for
 # formalshell:radio (this rig runs with blur off, so a frame cannot show it).
 #
+# The globe wears NASA's Blue Marble (FS_EARTH_IMAGE, nix/blue-marble.nix):
+# `radio status` has to report atlas.globe.imagery true before the open
+# frame is taken, and a square inside the disc has to carry colour the flat
+# globe never had (mean HSL saturation 0.05 and some 450 colours over the
+# same square in the flat globe's frame). Every globe build the shell traces
+# while the leg runs (`atlas globe build_us=`, the sampler's share in
+# sample_us) and every commit of the card (render_us) is summarised as
+# SMOKE_RADIO_ATLAS_FRAME, with FS_CPU_QUOTA the e1504g stand-in.
+#
 # The globe's centre is worked out from the panel's own layout and the
 # spacing tokens (panelPadding 12, controlHeight 32, lg 8, a 16px caption
 # line), since nothing over IPC reports it.
@@ -31,6 +40,7 @@ radio_atlas_open_png="$shot_dir/radio-atlas-open.png"
 radio_atlas_turned_png="$shot_dir/radio-atlas-turned.png"
 radio_atlas_picked_png="$shot_dir/radio-atlas-picked.png"
 radio_atlas_open_path="$shot_dir/radio-atlas-open.txt"
+radio_atlas_imagery_path="$shot_dir/radio-atlas-imagery.json"
 radio_atlas_state_path="$shot_dir/radio-atlas-state.txt"
 radio_atlas_played_path="$shot_dir/radio-atlas-played.json"
 radio_atlas_stopped_path="$shot_dir/radio-atlas-stopped.json"
@@ -84,6 +94,13 @@ echo \$! > "$radio_atlas_loop_pid_path"
 sleep 5
 $ipc call panel open radio > "$radio_atlas_open_path" 2>&1
 sleep 4
+SECONDS=0
+while [ "\$SECONDS" -lt 10 ]; do
+  $ipc call radio status > "$radio_atlas_imagery_path" 2>&1
+  grep -q '"imagery":true' "$radio_atlas_imagery_path" && break
+  sleep 0.5
+done
+sleep 0.5
 $ipc call panel state > "$radio_atlas_state_path" 2>&1
 "$grim_bin" "$radio_atlas_open_png" > /dev/null 2>&1
 "$wtype_bin" -k Return
@@ -190,6 +207,33 @@ leg_radio_atlas_assert() {
   $convert_bin "$radio_atlas_turned_png" -crop "$box" +repage -strip "$shot_dir/radio-atlas-globe-turned.png" > /dev/null 2>&1
   diff=$($convert_bin "$shot_dir/radio-atlas-globe-open.png" "$shot_dir/radio-atlas-globe-turned.png" -compose difference -composite -colorspace gray -format '%[fx:mean*100]' info: 2>/dev/null)
   echo "globe box $box, mean difference after the turn: ${diff}%"
+  "$jq_bin" -e '.atlas.globe.imagery == true' "$radio_atlas_imagery_path" > /dev/null 2>&1 \
+    || fail "the globe had no satellite imagery 10s after opening: $(cat "$radio_atlas_imagery_path" 2>/dev/null)"
+  local side half sat colors
+  side=$(( (gr - gl) < (gb - gt) ? (gr - gl) : (gb - gt) ))
+  half=$(( side / 4 ))
+  $convert_bin "$radio_atlas_open_png" -crop "$((half * 2))x$((half * 2))+$(( (gl + gr) / 2 - half ))+$(( (gt + gb) / 2 - half ))" +repage \
+    "$shot_dir/radio-atlas-disc.png" > /dev/null 2>&1
+  sat=$($convert_bin "$shot_dir/radio-atlas-disc.png" -colorspace HSL -channel G -separate -format '%[fx:mean]' info: 2>/dev/null)
+  colors=$($convert_bin "$shot_dir/radio-atlas-disc.png" -format '%k' info: 2>/dev/null)
+  echo "disc square $((half * 2))px: mean saturation ${sat:-none}, ${colors:-0} colours"
+  awk -v s="${sat:-0}" -v c="${colors:-0}" 'BEGIN { exit !(s > 0.2 && c > 3000) }' \
+    || fail "the disc does not look like satellite imagery (saturation ${sat:-none}, ${colors:-0} colours; the flat globe reads 0.05 and ~450)"
+  echo "SMOKE_RADIO_ATLAS_DISC $shot_dir/radio-atlas-disc.png"
+  awk '
+    function us(line, key) { if (!match(line, key "=[0-9]+")) return -1; return substr(line, RSTART + length(key) + 1, RLENGTH - length(key) - 1) + 0 }
+    /^atlas globe build_us=.*imagery=true/ { b[++nb] = us($0, "build_us"); s[nb] = us($0, "sample_us"); seen = 1 }
+    /^atlas globe build_us=.*imagery=true coarse=true/ { m[++nm] = us($0, "build_us") }
+    seen && /^commit surface=radio / { r[++nr] = us($0, "render_us") }
+    function sort(a, n,   i, j, t) { for (i = 2; i <= n; i++) { t = a[i]; for (j = i - 1; j > 0 && a[j] > t; j--) a[j + 1] = a[j]; a[j + 1] = t } }
+    function q(a, n, p) { return n ? a[int((n - 1) * p) + 1] : -1 }
+    END {
+      sort(b, nb); sort(s, nb); sort(r, nr); sort(m, nm)
+      printf "builds=%d build_us p50=%d p95=%d max=%d sample_us p50=%d p95=%d max=%d; commits=%d render_us p50=%d p95=%d max=%d\n", nb, q(b, nb, 0.5), q(b, nb, 0.95), q(b, nb, 1), q(s, nb, 0.5), q(s, nb, 0.95), q(s, nb, 1), nr, q(r, nr, 0.5), q(r, nr, 0.95), q(r, nr, 1)
+      printf "moving builds=%d build_us p50=%d max=%d\n", nm, q(m, nm, 0.5), q(m, nm, 1)
+    }' "$shell_log_path" | sed 's/^/SMOKE_RADIO_ATLAS_FRAME /'
+  grep -E '^(atlas globe |commit surface=radio |event loop: )' "$shell_log_path" > "$shot_dir/radio-atlas-frames.log" || true
+  echo "SMOKE_RADIO_ATLAS_FRAMES $shot_dir/radio-atlas-frames.log"
   awk -v d="${diff:-0}" 'BEGIN { exit !(d > 1.0) }' || fail "the globe did not turn to the station (mean difference ${diff}%)"
   local before released settled fling_released fling_settled coasting
   read -r before released settled fling_released fling_settled <<< "$(for f in "$radio_atlas_drag_before_path" "$radio_atlas_drag_released_path" \

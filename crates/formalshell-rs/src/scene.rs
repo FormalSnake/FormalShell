@@ -100,6 +100,12 @@ impl Bitmap {
     }
 }
 
+impl PartialEq for Bitmap {
+    fn eq(&self, other: &Self) -> bool {
+        self.same_as(other)
+    }
+}
+
 impl std::fmt::Debug for Bitmap {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Bitmap({}x{})", self.pixmap.width(), self.pixmap.height())
@@ -161,6 +167,9 @@ pub enum VOp {
     /// Everything up to the matching `Pop` is cut to the path.
     Clip(BezPath),
     Pop,
+    /// A bitmap one pixel to a pixel with its top left at the point, at
+    /// an alpha.
+    Image(Bitmap, (f64, f64), f32),
 }
 
 pub struct Node {
