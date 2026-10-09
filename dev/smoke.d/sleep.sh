@@ -10,6 +10,7 @@
 # the suspend and again after wake, when it has to be held again.
 leg_sleep_flag="--sleep"
 leg_sleep_order=112
+leg_sleep_vm_only="it suspends the machine through logind with sudo"
 leg_sleep_needs="jq wtype"
 
 sleep_inhibit_before_path="$shot_dir/sleep-inhibitors-before.txt"

@@ -400,7 +400,12 @@ restore_host_env() {
     fi
   done
 }
-trap restore_host_env EXIT
+system_bus_pid=""
+on_exit() {
+  restore_host_env
+  if [ -n "$system_bus_pid" ]; then kill "$system_bus_pid" 2>/dev/null || true; fi
+}
+trap on_exit EXIT
 
 # A render node is the cheap stand-in for "this machine can nest": both
 # halves of aquamarine's wayland backend (the parent's dmabuf advertisement
@@ -437,6 +442,56 @@ elif vkms_device=$(vkms_card_device); then
 else
   echo "SMOKE_FAIL: no way to bring up Hyprland here: no live parent session with a DRM render node to nest in, and no vkms card to render on" >&2
   exit 1
+fi
+
+# System bus isolation: dbus-run-session below only replaces the session
+# bus. On a real host the system bus is the machine's own, so a nested
+# shell's network panel reaches the real NetworkManager (a driven run took
+# g815's Wi-Fi down, 2026-10-09), and BlueZ, UPower, logind and polkit the
+# same way. A nested run gets a private system bus with nothing on it, so
+# each of those services shows its unavailable state. Exported rather than
+# put in session_env so a takeover leg's own sessions and every helper
+# started from here inherit it too. sudo resets the environment, so a leg
+# that needs root or a real system service declares leg_<n>_vm_only and is
+# refused here. The VM rig keeps its system bus, which is the VM's own.
+if [ "$session_mode" = "nested" ]; then
+  for leg_name in ${active_legs[@]+"${active_legs[@]}"}; do
+    vm_only_var="leg_${leg_name}_vm_only"
+    if [ -n "${!vm_only_var:-}" ]; then
+      flag_var="leg_${leg_name}_flag"
+      flag_decl="${!flag_var}"
+      echo "SMOKE_FAIL: ${flag_decl%% *} needs the VM rig (dev/vm-lock.sh just vm-smoke): ${!vm_only_var}" >&2
+      exit 1
+    fi
+  done
+  system_bus_dir="$shot_dir/system-bus"
+  mkdir -p "$system_bus_dir"
+  cat > "$system_bus_dir/system.conf" <<EOF
+<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+<busconfig>
+  <type>system</type>
+  <listen>unix:path=$system_bus_dir/socket</listen>
+  <auth>EXTERNAL</auth>
+  <policy context="default">
+    <allow send_destination="*" eavesdrop="true"/>
+    <allow eavesdrop="true"/>
+    <allow own="*"/>
+  </policy>
+</busconfig>
+EOF
+  dbus-daemon --config-file="$system_bus_dir/system.conf" --nofork --nopidfile > "$system_bus_dir/daemon.log" 2>&1 &
+  system_bus_pid=$!
+  for _ in $(seq 50); do
+    [ -S "$system_bus_dir/socket" ] && break
+    sleep 0.1
+  done
+  if [ ! -S "$system_bus_dir/socket" ]; then
+    echo "SMOKE_FAIL: the private system bus never came up: $(cat "$system_bus_dir/daemon.log")" >&2
+    exit 1
+  fi
+  export DBUS_SYSTEM_BUS_ADDRESS="unix:path=$system_bus_dir/socket"
+  echo "system bus: private ($DBUS_SYSTEM_BUS_ADDRESS)"
 fi
 
 # D-Bus isolation check (see the header): captured now, compared against the
