@@ -91,12 +91,18 @@ impl App {
         card.commit();
         let mut surface = Surface::new(names[0], card, &self.shm, self.started);
         surface.wait_map = true;
-        let mut modal = Modal::new(theme, surface, band, dim, namespace, output, inset, ends, self.motion_scale, self.cast, deform_amount);
+        Modal::new(theme, surface, band, dim, namespace, output, inset, ends, self.motion_scale, self.cast, deform_amount)
+    }
+
+    /// A popover card's look handed to the compositor, for an owner whose
+    /// content draws on a layer of its own. Content drawn in the card's own
+    /// scene would sit under the look's subsurfaces, so those owners keep
+    /// the look in that scene.
+    pub(super) fn carry_popover_look(&self, modal: &mut Modal) {
         if modal.card.popover() {
-            let quads = self.look_quads(names[0], &modal.surface, modal.card.popover_margin());
+            let quads = self.look_quads(modal.surface.name, &modal.surface, modal.card.popover_margin());
             modal.carry_look(quads);
         }
-        modal
     }
 
     /// A popover card's look as four subsurfaces of `card`, under anything
@@ -111,10 +117,9 @@ impl App {
                     surface.set_input_region(Some(region.wl_region()));
                 }
                 let viewport = self.pixels.viewporter.get_viewport(&surface, &self.qh, Ignore);
-                let fade = self.pixels.alpha.get_surface(&surface, &self.qh, Ignore);
                 let mut s = Surface::new(name, Sub { surface, sub }, &self.shm, self.started);
                 s.raster_budget = Some(LAUNCHER_SLICE);
-                (s, viewport, fade)
+                (s, viewport)
             })
             .collect();
         crate::surfaces::modal::Quads::new(name, parts, margin, self.started)
@@ -175,10 +180,9 @@ impl App {
         if let Ok(region) = Region::new(&self.compositor) {
             surface.set_input_region(Some(region.wl_region()));
         }
-        let fade = self.pixels.alpha.get_surface(&surface, &self.qh, Ignore);
         let viewport = self.pixels.viewporter.get_viewport(&surface, &self.qh, Ignore);
         let s = Surface::new(name, Sub { surface, sub }, &self.shm, self.started);
-        crate::surfaces::modal::Layer::new(s, fade, viewport)
+        crate::surfaces::modal::Layer::new(s, viewport)
     }
 
     /// The window for an open, created fresh unless one is already up.
@@ -189,6 +193,7 @@ impl App {
         }
         self.drop_launch();
         let mut modal = self.new_modal(["menu", "menu-scrim-band", "menu-scrim"], "formalshell:menu", Layer::Overlay, Shown::DEFORM_AMOUNT);
+        self.carry_popover_look(&mut modal);
         if let Some(kept) = self.launch_kept.take() {
             modal.surface.adopt(kept);
         }

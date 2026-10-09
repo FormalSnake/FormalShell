@@ -20,6 +20,19 @@
 # band, and its cells have to say so, which is read off one patch of the
 # frame inside the card: a dark plate with light words on it, not the band's
 # black ink drawn onto it.
+#
+# Then the card's own size (owner, 2026-10-09: "the chevron panel doesnt
+# resize"). The group carries one more cell, a `command` module reading a
+# file, which answers nothing at first and so is no cell at all: the card
+# opens exactly as it did without it, and the click above lands where it
+# always did. With the weather panel still hanging off the card, the file
+# gets a long label, so a cell appears inside the open card; then, panel
+# shut, it gets a short one under `debug motionScale 1000`. Each settled
+# `bar chevron status` has to show the card around its cells, the same
+# padding before the first as after the last, and the samples taken through
+# the shrink have to catch the card at a width between its two rests: it
+# travels to its new size the way a panel card does, rather than keeping the
+# size it opened at or jumping.
 leg_chevron_flag="--chevron"
 leg_chevron_order=180
 leg_chevron_needs="wlrctl convert jq"
@@ -37,17 +50,28 @@ chevron_dispatch_path="$shot_dir/chevron-pointer.txt"
 chevron_bright_wp="$shot_dir/chevron-bright.png"
 chevron_paint_path="$shot_dir/chevron-paint.json"
 chevron_card_ink_path="$shot_dir/chevron-card-ink.png"
+chevron_grow_cmd_path="$shot_dir/chevron-grow.sh"
+chevron_grow_text_path="$shot_dir/chevron-grow.txt"
+chevron_status_grown_child_path="$shot_dir/chevron-status-grown-child.json"
+chevron_grown_child_path="$shot_dir/chevron-grown-child.png"
+chevron_status_grown_path="$shot_dir/chevron-status-grown.json"
+chevron_grown_path="$shot_dir/chevron-grown.png"
+chevron_shrink_samples_path="$shot_dir/chevron-shrink-samples.jsonl"
+chevron_status_shrunk_path="$shot_dir/chevron-status-shrunk.json"
+chevron_shrunk_path="$shot_dir/chevron-shrunk.png"
 
-# One patch of the open frame: the middle cell of the card, 30px either side
-# of the point the pointer below is already asserted to land a panel from, and
-# clear of both the card's own lit top edge and its ends. Two readings off it,
-# since either alone passes for the wrong reason: the mean says the patch is
-# on the card rather than on the wallpaper beside it, and the maximum says
-# there are light words on that card.
-chevron_card_patch="60x20+1783+62"
+# The weather cell's centre in the open card, off `bar chevron status`'s own
+# cell rects: which cells the group shows (and so where weather lands) is the
+# host's, a tray or an indicator being there or not.
+chevron_weather_centre='.regions.right.card.cells[] | select(.name == "weather") | .rect | "\(.x + (.w / 2 | floor)) \(.y + (.h / 2 | floor))"'
 
 leg_chevron_fixture() {
-  settings_fragment ', "bar": {"layout": {"right": ["bluetooth", "weather", "tray", "bell", "indicators", "chevron", "battery", "audio", "network"]}}'
+  : > "$chevron_grow_text_path"
+  write_script "$chevron_grow_cmd_path" <<EOF
+#!/usr/bin/env bash
+printf '{"text": "%s"}' "\$(cat "$chevron_grow_text_path")"
+EOF
+  settings_fragment ', "bar": {"layout": {"right": ["bluetooth", "weather", "tray", "bell", "indicators", "custom:chevgrow", "chevron", "battery", "audio", "network"]}, "modules": [{"id": "chevgrow", "type": "command", "command": ["bash", "'"$chevron_grow_cmd_path"'"], "interval": 500}]}'
   # The wallpaper the band's dark ink comes from, the flat bright field
   # --bar-adaptive reads `dark` off: mean 230, no spread, nothing busy.
   if leg_on pantheon; then
@@ -61,9 +85,9 @@ leg_chevron_timing() {
   # Under --pantheon the wallpaper set and the retheme behind it push every
   # step of that ~9s later.
   if leg_on pantheon; then
-    leg_timing 32 62
+    leg_timing 50 80
   else
-    leg_timing 22 50
+    leg_timing 40 68
   fi
 }
 
@@ -78,10 +102,9 @@ leg_chevron_drive() {
   # panel from nowhere, and what is being proved is that a cell living in a
   # popout opens its own panel on top of that popout rather than in place of
   # it. wlrctl's pointer is relative-only, hence the slam into the corner
-  # before the move, the same trick --wheel documents. 1813x72 is the middle
-  # cell of the card, which sits on the chevron's own centre whatever the
-  # cells either side of it measure: the weather cell on this fixture. A miss
-  # fails the panel assert loudly rather than passing quietly.
+  # before the move, the same trick --wheel documents. The point is the
+  # weather cell's centre as the open status reports it. A miss fails the
+  # panel assert loudly rather than passing quietly.
   #
   # The bright wallpaper and the shell's own reading of the band over it,
   # both empty under any preset but pantheon: the strip habit hands its cells
@@ -109,16 +132,31 @@ sleep 1
 sleep 1
 "$wlrctl_bin" pointer move -4000 -4000 > "$chevron_dispatch_path" 2>&1
 sleep 1
-"$wlrctl_bin" pointer move 1813 72 >> "$chevron_dispatch_path" 2>&1
+"$wlrctl_bin" pointer move \$("$jq_bin" -r '$chevron_weather_centre' "$chevron_status_open_path") >> "$chevron_dispatch_path" 2>&1
 sleep 1
 "$wlrctl_bin" pointer click left >> "$chevron_dispatch_path" 2>&1
 sleep 3
 $ipc call panel state > "$chevron_panel_state_path" 2>&1
 $ipc call bar chevron status > "$chevron_status_child_path" 2>&1
 "$grim_bin" "$chevron_child_path" > /dev/null 2>&1
-sleep 1
+printf 'a label far wider than any cell' > "$chevron_grow_text_path"
+sleep 3
+$ipc call bar chevron status > "$chevron_status_grown_child_path" 2>&1
+"$grim_bin" "$chevron_grown_child_path" > /dev/null 2>&1
 $ipc call panel close > /dev/null 2>&1
-sleep 1
+sleep 2
+$ipc call bar chevron status > "$chevron_status_grown_path" 2>&1
+"$grim_bin" "$chevron_grown_path" > /dev/null 2>&1
+$ipc call debug motionScale 1000 > /dev/null 2>&1
+printf 'ab' > "$chevron_grow_text_path"
+for _ in \$(seq 40); do
+  $ipc call bar chevron status >> "$chevron_shrink_samples_path" 2>&1
+  sleep 0.1
+done
+$ipc call debug motionScale 100 > /dev/null 2>&1
+sleep 2
+$ipc call bar chevron status > "$chevron_status_shrunk_path" 2>&1
+"$grim_bin" "$chevron_shrunk_path" > /dev/null 2>&1
 $ipc call bar chevron collapse > /dev/null 2>&1
 sleep 2
 $ipc call bar chevron status > "$chevron_status_closed_again_path" 2>&1
@@ -159,6 +197,18 @@ _chevron_assert_ink() {
   fi
 
   [ -f "$chevron_open_path" ] || fail "no chevron-open screenshot to read the card's ink off"
+  # One patch of the open frame: 30px either side of the weather cell's
+  # centre, the point the pointer above is already asserted to land a panel
+  # from, and 10px either side of it across, clear of the card's own lit top
+  # edge. Two readings off it, since either alone passes for the wrong
+  # reason: the mean says the patch is on the card rather than on the
+  # wallpaper beside it, and the maximum says there are light words on it.
+  local centre chevron_card_patch
+  centre=$("$jq_bin" -r "$chevron_weather_centre" "$chevron_status_open_path" 2>/dev/null)
+  [ -n "$centre" ] || fail "the open status carries no weather cell to read the card's ink at: $(cat "$chevron_status_open_path")"
+  # shellcheck disable=SC2086
+  set -- $centre
+  chevron_card_patch="60x20+$(( $1 - 30 ))+$(( $2 - 10 ))"
   $convert_bin "$chevron_open_path" -crop "$chevron_card_patch" +repage \
     "$chevron_card_ink_path" > /dev/null 2>&1
   [ -f "$chevron_card_ink_path" ] && echo "SMOKE_CHEVRON_CARD_INK $chevron_card_ink_path"
@@ -175,11 +225,65 @@ _chevron_assert_ink() {
   fi
 }
 
+# A settled status's card around its cells: every shown cell inside the
+# card's resting rect, and as much card before the first as after the last.
+# A card left at the size it opened at fails one or the other.
+_chevron_assert_fit() {
+  local json="$1" what="$2" fit
+  [ -s "$json" ] || fail "no bar chevron status ($what) produced"
+  fit=$("$jq_bin" -r '.regions.right.card as $c | ($c.cells // [] | map(.rect)) as $r
+    | if ($c == null or ($r | length) == 0) then "none"
+      else [($r[0].x - $c.rest.x), (($c.rest.x + $c.rest.w) - ($r[-1].x + $r[-1].w)),
+            ([$r[] | select(.x < $c.rest.x or .x + .w > $c.rest.x + $c.rest.w)] | length),
+            $c.rest.w] | map(tostring) | join(" ") end' "$json" 2>/dev/null)
+  echo "chevron fit ($what): lead trail outside width = $fit"
+  # shellcheck disable=SC2086
+  set -- $fit
+  [ "$#" -eq 4 ] || fail "bar chevron status ($what) carries no card with cells in it: $(cat "$json")"
+  if [ "$3" -ne 0 ] || [ $(( $1 - $2 )) -gt 1 ] || [ $(( $2 - $1 )) -gt 1 ]; then
+    fail "the second bar's card is not sized to its cells ($what): $1px before the first cell, $2px after the last, $3 cells outside it: $(cat "$json")"
+  fi
+}
+
+_chevron_card_w() {
+  "$jq_bin" -r '.regions.right.card.rest.w // 0' "$1" 2>/dev/null
+}
+
+_chevron_assert_resize() {
+  local open_w grown_w shrunk_w lo hi between
+  echo "SMOKE_CHEVRON_GROWN_CHILD $chevron_grown_child_path"
+  echo "SMOKE_CHEVRON_GROWN $chevron_grown_path"
+  echo "SMOKE_CHEVRON_SHRUNK $chevron_shrunk_path"
+  _chevron_assert_fit "$chevron_status_open_path" "open"
+  _chevron_assert_fit "$chevron_status_grown_child_path" "grown, weather panel open"
+  _chevron_assert_fit "$chevron_status_grown_path" "grown"
+  _chevron_assert_fit "$chevron_status_shrunk_path" "shrunk"
+  if ! "$jq_bin" -e '.regions.right.card.cells | map(.name) | index("custom:chevgrow")' "$chevron_status_grown_path" > /dev/null 2>&1; then
+    fail "the command cell given a label never showed in the open card: $(cat "$chevron_status_grown_path")"
+  fi
+  open_w=$(_chevron_card_w "$chevron_status_open_path")
+  grown_w=$(_chevron_card_w "$chevron_status_grown_path")
+  shrunk_w=$(_chevron_card_w "$chevron_status_shrunk_path")
+  echo "chevron resize: card width open=$open_w grown=$grown_w shrunk=$shrunk_w"
+  if [ "$grown_w" -le "$shrunk_w" ] || [ "$shrunk_w" -le "$open_w" ]; then
+    fail "the card did not follow its cells: $open_w wide on open, $grown_w with the long label, $shrunk_w with the short one"
+  fi
+  lo=$(( shrunk_w + 4 ))
+  hi=$(( grown_w - 4 ))
+  between=$("$jq_bin" -r --argjson lo "$lo" --argjson hi "$hi" \
+    'select(.regions.right.card != null) | .regions.right.card.live.w | select(. >= $lo and . <= $hi)' \
+    "$chevron_shrink_samples_path" 2>/dev/null | head -1)
+  if [ -z "$between" ]; then
+    fail "no sample through the shrink caught the card between $grown_w and $shrunk_w wide, so it jumped rather than travelled: $("$jq_bin" -c '.regions.right.card.live.w' "$chevron_shrink_samples_path" 2>/dev/null | tr '\n' ' ')"
+  fi
+  echo "chevron resize: one sample caught the card $between wide on its way"
+}
+
 leg_chevron_assert() {
   # The five names the fixture puts before the chevron. Order matters:
   # `collapses` reports them in layout order, so one grep asserts the whole
   # boundary rather than five independent membership checks.
-  local chevron_hidden_names='"bluetooth","weather","tray","bell","indicators"'
+  local chevron_hidden_names='"bluetooth","weather","tray","bell","indicators","custom:chevgrow"'
   if [ ! -s "$chevron_status_shut_path" ]; then
     fail "no bar chevron status (shut) produced"
   fi
@@ -241,6 +345,7 @@ leg_chevron_assert() {
   if ! grep -q '"open":false' "$chevron_status_closed_again_path"; then
     fail "bar chevron collapse left the group's bar open. Got: $(cat "$chevron_status_closed_again_path")"
   fi
+  _chevron_assert_resize
   if leg_on pantheon; then
     _chevron_assert_ink
   fi

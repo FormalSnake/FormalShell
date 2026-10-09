@@ -158,6 +158,23 @@ impl Atlas {
         remote(self.mode)
     }
 
+    /// `radio status`'s `atlas` block: the list on show and the globe's pose.
+    pub fn status(&self, r: &radio::State) -> serde_json::Value {
+        serde_json::json!({
+            "open": self.open,
+            "mode": format!("{:?}", self.mode).to_lowercase(),
+            "stations": self.display(r).len(),
+            "world": self.world.len(),
+            "fetching": self.fetching,
+            "error": self.fetch_error,
+            "globe": {
+                "longitude": self.globe.centre_longitude,
+                "latitude": self.globe.centre_latitude,
+                "coasting": self.globe.kinetic,
+            },
+        })
+    }
+
     /// Whether the countries still need asking for, the first time the
     /// atlas opens.
     pub fn want_countries(&mut self) -> bool {

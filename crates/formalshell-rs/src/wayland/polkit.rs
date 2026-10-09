@@ -75,6 +75,7 @@ impl App {
             Event::Begin { message, identity } => {
                 let own = !identity.is_empty() && std::env::var("USER").is_ok_and(|u| u == identity);
                 let mut modal = self.new_modal(["polkit", "polkit-scrim-band", "polkit-scrim"], NAMESPACE, Layer::Top, DEFORM_AMOUNT);
+                self.carry_popover_look(&mut modal);
                 let content = self.content_layer("polkit-content", &modal.surface);
                 let top = content.top;
                 modal.layer = Some(content);

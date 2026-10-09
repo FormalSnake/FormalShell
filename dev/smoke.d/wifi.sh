@@ -13,6 +13,7 @@
 # back, never a stale earlier snapshot passing by accident.
 leg_wifi_flag="--wifi"
 leg_wifi_order=190
+leg_wifi_vm_only="it drives NetworkManager against the hostapd radios and restarts wpa_supplicant with sudo"
 
 wifi_reset_status_path="$shot_dir/wifi-reset-status.json"
 wifi_scan_status_path="$shot_dir/wifi-scan-status.json"

@@ -9,6 +9,10 @@
 # that one. After `radio stop`, a real pointer
 # click on the globe's centre (where the playing station now sits) picks the
 # station off the globe and plays it again, read back off `radio status`.
+# Then dev/vpointer.py holds the button across the globe: a drag that
+# stops for 250 ms before its release must leave `radio status`'s
+# atlas.globe.longitude where the release left it, and the same drag let
+# go while moving must coast, less than 2.5 times the drag's own turn.
 # Escape closes the atlas, read back off `panel state`. Before that, the
 # pointer parks on the header's close button, and the formalshell:tooltip
 # layer has to be absent before and present after, the way --tooltip reads a
@@ -20,7 +24,7 @@
 # line), since nothing over IPC reports it.
 leg_radio_atlas_flag="--radio-atlas"
 leg_radio_atlas_order=176
-leg_radio_atlas_needs="ffmpeg wtype wlrctl convert"
+leg_radio_atlas_needs="ffmpeg wtype wlrctl convert jq python3"
 
 radio_atlas_track_path="$shot_dir/radio-atlas-station.mp3"
 radio_atlas_open_png="$shot_dir/radio-atlas-open.png"
@@ -37,6 +41,14 @@ radio_atlas_tip_before_path="$shot_dir/radio-atlas-tip-before.json"
 radio_atlas_tip_after_path="$shot_dir/radio-atlas-tip-after.json"
 radio_atlas_tip_png="$shot_dir/radio-atlas-tooltip.png"
 radio_atlas_loop_pid_path="$shot_dir/radio-atlas-loop.pid"
+radio_atlas_drag_before_path="$shot_dir/radio-atlas-drag-before.json"
+radio_atlas_drag_released_path="$shot_dir/radio-atlas-drag-released.json"
+radio_atlas_drag_settled_path="$shot_dir/radio-atlas-drag-settled.json"
+radio_atlas_fling_released_path="$shot_dir/radio-atlas-fling-released.json"
+radio_atlas_fling_settled_path="$shot_dir/radio-atlas-fling-settled.json"
+radio_atlas_vpointer="$PWD/dev/vpointer.py"
+# Twelve 15px steps a frame apart, about 940 px/s.
+radio_atlas_steps=$(for _ in $(seq 12); do printf 'move 15 0 wait 16 '; done)
 radio_atlas_name="FormalShell Atlas Radio"
 radio_atlas_port=18098
 
@@ -112,6 +124,20 @@ while [ "\$SECONDS" -lt 12 ]; do
 done
 sleep 1
 "$grim_bin" "$radio_atlas_picked_png" > /dev/null 2>&1
+# A held drag across the globe that stops, holds still, then lets go: read
+# the pose before, just after the release and once a coast would be over.
+$ipc call radio status > "$radio_atlas_drag_before_path" 2>&1
+"$python3_bin" "$radio_atlas_vpointer" down $radio_atlas_steps wait 250 up
+sleep 0.1
+$ipc call radio status > "$radio_atlas_drag_released_path" 2>&1
+sleep 1.5
+$ipc call radio status > "$radio_atlas_drag_settled_path" 2>&1
+# The same drag let go while still moving: it coasts, carrying only its
+# own speed.
+"$python3_bin" "$radio_atlas_vpointer" down $radio_atlas_steps up
+$ipc call radio status > "$radio_atlas_fling_released_path" 2>&1
+sleep 2.5
+$ipc call radio status > "$radio_atlas_fling_settled_path" 2>&1
 "$hyprctl_bin" -j layers > "$radio_atlas_tip_before_path" 2>&1
 "$wlrctl_bin" pointer move -4000 -4000
 sleep 0.5
@@ -165,6 +191,23 @@ leg_radio_atlas_assert() {
   diff=$($convert_bin "$shot_dir/radio-atlas-globe-open.png" "$shot_dir/radio-atlas-globe-turned.png" -compose difference -composite -colorspace gray -format '%[fx:mean*100]' info: 2>/dev/null)
   echo "globe box $box, mean difference after the turn: ${diff}%"
   awk -v d="${diff:-0}" 'BEGIN { exit !(d > 1.0) }' || fail "the globe did not turn to the station (mean difference ${diff}%)"
+  local before released settled fling_released fling_settled coasting
+  read -r before released settled fling_released fling_settled <<< "$(for f in "$radio_atlas_drag_before_path" "$radio_atlas_drag_released_path" \
+    "$radio_atlas_drag_settled_path" "$radio_atlas_fling_released_path" "$radio_atlas_fling_settled_path"; do
+    "$jq_bin" -r '.atlas.globe.longitude // "none"' "$f" 2>/dev/null || echo none
+  done | tr '\n' ' ')"
+  coasting=$("$jq_bin" -r '.atlas.globe.coasting' "$radio_atlas_drag_settled_path" 2>/dev/null)
+  echo "drag longitudes: before $before, released $released, settled $settled; fling released $fling_released, settled $fling_settled"
+  awk -v a="$before" -v b="$released" 'function d(x, y) { x = y - x; while (x > 180) x -= 360; while (x < -180) x += 360; return x < 0 ? -x : x }
+    BEGIN { exit !(a != "none" && b != "none" && d(a, b) > 1) }' \
+    || fail "the held drag did not turn the globe (longitude $before to $released)"
+  [ "$released" = "$settled" ] && [ "$coasting" = "false" ] \
+    || fail "a drag that stopped before its release coasted on (longitude $released to $settled, coasting $coasting)"
+  awk -v a="$before" -v b="$released" -v c="$fling_released" -v e="$fling_settled" \
+    'function d(x, y) { x = y - x; while (x > 180) x -= 360; while (x < -180) x += 360; return x < 0 ? -x : x }
+    BEGIN { drag = d(a, b); coast = d(c, e); printf "drag turned %.2f deg, the moving release coasted %.2f deg after it\n", drag, coast
+      exit !(coast > 0 && coast < drag * 2.5) }' \
+    || fail "a release while moving coasted out of proportion to the drag (or not at all)"
   echo "SMOKE_RADIO_ATLAS_OPEN $radio_atlas_open_png"
   echo "SMOKE_RADIO_ATLAS_TURNED $radio_atlas_turned_png"
   echo "SMOKE_RADIO_ATLAS_PICKED $radio_atlas_picked_png"

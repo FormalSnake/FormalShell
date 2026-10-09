@@ -26,7 +26,15 @@ const LAUNCH_SPEED: f64 = 120.0;
 const MAXIMUM_SPEED: f64 = 2400.0;
 const DECELERATION: f64 = 1800.0;
 const MAXIMUM_FRAME_TIME: f64 = 0.1;
-const MAXIMUM_SAMPLE_AGE_MS: f64 = 100.0;
+/// The motion a release carries, in Wayland event milliseconds: the
+/// samples this far back from the release.
+const VELOCITY_WINDOW_MS: u32 = 80;
+/// A pointer that sent no motion for this long before its release had
+/// stopped, and launches nothing.
+const STOPPED_MS: u32 = 40;
+/// The shortest span a velocity is measured over, so two events a
+/// millisecond apart cannot read as a flick.
+const MINIMUM_SPAN_MS: u32 = 16;
 /// QStyleHints::startDragDistance, past which a press is a drag.
 const DRAG_THRESHOLD: f64 = 10.0;
 
@@ -196,10 +204,34 @@ struct Drag {
     press: Option<(f64, f64)>,
     active: bool,
     last: (f64, f64),
-    velocity: (f64, f64),
-    velocity_at: Option<Instant>,
-    sample: (f64, f64),
-    sample_at: Option<Instant>,
+    /// Recent positions by the Wayland event's own time, never the loop's:
+    /// motion the compositor coalesced lands in one loop turn.
+    samples: std::collections::VecDeque<(u32, f64, f64)>,
+}
+
+impl Drag {
+    fn sample(&mut self, time: u32, x: f64, y: f64) {
+        self.samples.push_back((time, x, y));
+        while self.samples.front().is_some_and(|&(t, ..)| time.wrapping_sub(t) > VELOCITY_WINDOW_MS * 2) {
+            self.samples.pop_front();
+        }
+    }
+
+    /// The velocity a release at `time` carries, in pixels a second: the
+    /// travel over the window before it, spread over the time up to the
+    /// release so a pointer slowing into it carries less. Nothing once it
+    /// had stopped.
+    fn release_velocity(&self, time: u32) -> (f64, f64) {
+        let Some(&(last_t, lx, ly)) = self.samples.back() else { return (0.0, 0.0) };
+        if time.wrapping_sub(last_t) > STOPPED_MS {
+            return (0.0, 0.0);
+        }
+        let Some(&(first_t, fx, fy)) = self.samples.iter().find(|&&(t, ..)| time.wrapping_sub(t) <= VELOCITY_WINDOW_MS) else {
+            return (0.0, 0.0);
+        };
+        let span = f64::from(time.wrapping_sub(first_t).max(MINIMUM_SPAN_MS)) / 1000.0;
+        ((lx - fx) / span, (ly - fy) / span)
+    }
 }
 
 /// What a pointer gesture on the globe asked of the atlas.
@@ -502,8 +534,9 @@ impl Globe {
         self.hovered.is_some()
     }
 
-    /// The pointer moved over the globe, in surface coordinates.
-    pub fn motion(&mut self, x: f64, y: f64, now: Instant) -> Out {
+    /// The pointer moved over the globe, in surface coordinates, at the
+    /// Wayland event's `time` (none for an enter).
+    pub fn motion(&mut self, x: f64, y: f64, time: Option<u32>) -> Out {
         let (lx, ly) = self.local(x, y);
         self.hover = (lx, ly);
         if let Some((px, py)) = self.drag.press {
@@ -516,12 +549,11 @@ impl Globe {
                 self.suppress_tap = false;
                 self.hovered = None;
                 self.drag.last = (px, py);
-                self.drag.velocity = (0.0, 0.0);
-                self.drag.velocity_at = None;
-                self.drag.sample = (lx, ly);
-                self.drag.sample_at = Some(now);
+                self.drag.samples.clear();
             }
-            self.sample(lx, ly, now);
+            if let Some(time) = time {
+                self.drag.sample(time, lx, ly);
+            }
             let (dx, dy) = (lx - self.drag.last.0, ly - self.drag.last.1);
             self.drag.last = (lx, ly);
             self.rotate_by(dx, dy);
@@ -529,32 +561,6 @@ impl Globe {
         }
         self.hovered = if self.kinetic { None } else { self.station_under(lx, ly).cloned() };
         Out::None
-    }
-
-    // Qt's filtered velocity can fall below the launch floor before
-    // release, so a short sample of the latest movement stands beside it.
-    fn sample(&mut self, x: f64, y: f64, now: Instant) {
-        let Some(at) = self.drag.sample_at else { return };
-        let ms = now.saturating_duration_since(at).as_secs_f64() * 1000.0;
-        if ms <= 0.0 {
-            return;
-        }
-        let (dx, dy) = (x - self.drag.sample.0, y - self.drag.sample.1);
-        self.drag.sample = (x, y);
-        self.drag.sample_at = Some(now);
-        if ms > 250.0 {
-            return;
-        }
-        let (vx, vy) = (dx * 1000.0 / ms, dy * 1000.0 / ms);
-        if !vx.is_finite() || !vy.is_finite() {
-            return;
-        }
-        self.drag.velocity = if self.drag.velocity_at.is_some() {
-            (self.drag.velocity.0 * 0.25 + vx * 0.75, self.drag.velocity.1 * 0.25 + vy * 0.75)
-        } else {
-            (vx, vy)
-        };
-        self.drag.velocity_at = Some(now);
     }
 
     pub fn leave(&mut self) {
@@ -571,16 +577,17 @@ impl Globe {
         Out::Interaction
     }
 
-    pub fn release(&mut self, x: f64, y: f64, now: Instant) -> Out {
+    /// The button let go at the Wayland event's `time`; `now` starts the
+    /// coast's own clock.
+    pub fn release(&mut self, x: f64, y: f64, time: u32, now: Instant) -> Out {
         let (lx, ly) = self.local(x, y);
         let drag = std::mem::take(&mut self.drag);
         if drag.press.is_none() {
             return Out::None;
         }
         if drag.active {
-            let age = drag.velocity_at.map_or(f64::INFINITY, |t| now.saturating_duration_since(t).as_secs_f64() * 1000.0);
-            let v = rm::kinetic_release_velocity((0.0, 0.0), drag.velocity, age, MAXIMUM_SAMPLE_AGE_MS);
-            self.start(v.x, v.y, now);
+            let (vx, vy) = drag.release_velocity(time);
+            self.start(vx, vy, now);
             return Out::None;
         }
         if std::mem::take(&mut self.suppress_tap) {
@@ -886,22 +893,26 @@ mod tests {
         g.set_stations(vec![s.clone()]);
         let ink = Ink { sphere: Rgba::hex(0x101010ff), land: Rgba::hex(0x303030ff), grid: Rgba::hex(0x404040ff), outline: Rgba::hex(0x808080ff), signal: Rgba::hex(0xff8800ff), accent: Rgba::hex(0xff8800ff) };
         g.paint(&ink, 1.0);
-        let now = Instant::now();
         g.press(210.0, 170.0);
-        assert_eq!(g.release(212.0, 171.0, now), Out::Station(s));
+        assert_eq!(g.release(212.0, 171.0, 0, Instant::now()), Out::Station(s));
     }
 
-    fn dragged() -> (Globe, Instant) {
-        (Globe { rect: (0.0, 0.0, 400.0, 300.0), centre_latitude: 0.0, centre_longitude: 0.0, ..Globe::default() }, Instant::now())
+    fn dragged() -> Globe {
+        Globe { rect: (0.0, 0.0, 400.0, 300.0), centre_latitude: 0.0, centre_longitude: 0.0, ..Globe::default() }
+    }
+
+    /// The coast's speed off a release, or None when it launched nothing.
+    fn coast(g: &Globe) -> Option<f64> {
+        g.kinetic.then(|| g.velocity.0.hypot(g.velocity.1))
     }
 
     #[test]
     fn a_drag_turns_the_globe_by_the_pointer_travel() {
-        let (mut g, t0) = dragged();
+        let mut g = dragged();
         let per_px = g.longitude_sensitivity();
         g.press(100.0, 150.0);
         for i in 1..=10u32 {
-            g.motion(100.0 + 10.0 * f64::from(i), 150.0, t0 + std::time::Duration::from_millis(u64::from(i) * 16));
+            g.motion(100.0 + 10.0 * f64::from(i), 150.0, Some(i * 16));
         }
         let want = -100.0 * per_px;
         assert!((g.centre_longitude - want).abs() < 1e-6, "{} vs {want}", g.centre_longitude);
@@ -909,27 +920,65 @@ mod tests {
 
     #[test]
     fn a_pointer_that_stopped_before_release_does_not_coast() {
-        let (mut g, t0) = dragged();
-        let ms = std::time::Duration::from_millis;
+        let mut g = dragged();
         g.press(100.0, 150.0);
-        g.motion(112.0, 150.0, t0);
-        g.motion(113.0, 150.0, t0 + ms(16));
-        g.release(113.0, 150.0, t0 + ms(17));
-        let before = g.centre_longitude;
-        assert!(!g.animating(), "a 60 px/s tail started a coast");
-        g.tick(t0 + ms(40));
-        assert_eq!(g.centre_longitude, before);
+        for i in 1..=10u32 {
+            g.motion(100.0 + 20.0 * f64::from(i), 150.0, Some(1000 + i * 8));
+        }
+        // Still for 60 ms, then let go: nothing carries, however fast the
+        // drag was.
+        g.release(300.0, 150.0, 1000 + 80 + 60, Instant::now());
+        assert_eq!(coast(&g), None);
     }
 
     #[test]
-    fn a_held_pointer_does_not_coast() {
-        let (mut g, t0) = dragged();
-        let ms = std::time::Duration::from_millis;
+    fn a_slow_tail_does_not_coast() {
+        let mut g = dragged();
         g.press(100.0, 150.0);
-        for i in 1..=5u64 {
-            g.motion(100.0 + 40.0 * i as f64, 150.0, t0 + ms(i * 16));
+        g.motion(112.0, 150.0, Some(0));
+        g.motion(113.0, 150.0, Some(16));
+        g.release(113.0, 150.0, 17, Instant::now());
+        assert_eq!(coast(&g), None, "a 60 px/s tail started a coast");
+    }
+
+    #[test]
+    fn coalesced_motion_does_not_read_as_a_flick() {
+        // Three events the compositor stamped within a millisecond, all
+        // handled in one loop turn: 30 px over the 16 ms floor at most.
+        let mut g = dragged();
+        g.press(100.0, 150.0);
+        g.motion(115.0, 150.0, Some(500));
+        g.motion(125.0, 150.0, Some(500));
+        g.motion(145.0, 150.0, Some(501));
+        g.release(145.0, 150.0, 501, Instant::now());
+        let speed = coast(&g).expect("a moving release coasts");
+        assert!(speed <= 30.0 / 0.016 + 1e-6, "{speed} px/s");
+    }
+
+    #[test]
+    fn a_release_carries_only_the_recent_motion() {
+        // A fast sweep, then 96 ms of crawling at 1 px a frame: the sweep is
+        // past the window and the crawl is under the launch floor.
+        let mut g = dragged();
+        g.press(100.0, 150.0);
+        g.motion(150.0, 150.0, Some(8));
+        g.motion(250.0, 150.0, Some(16));
+        for i in 1..=6u32 {
+            g.motion(250.0 + f64::from(i), 150.0, Some(16 + i * 16));
         }
-        g.release(300.0, 150.0, t0 + ms(400));
-        assert!(!g.animating());
+        g.release(256.0, 150.0, 16 + 96 + 4, Instant::now());
+        assert_eq!(coast(&g), None);
+    }
+
+    #[test]
+    fn a_moving_release_coasts_at_its_own_speed() {
+        let mut g = dragged();
+        g.press(100.0, 150.0);
+        for i in 1..=10u32 {
+            g.motion(100.0 + 8.0 * f64::from(i), 150.0, Some(i * 16));
+        }
+        g.release(180.0, 150.0, 164, Instant::now());
+        let speed = coast(&g).expect("a moving release coasts");
+        assert!((400.0..=500.0).contains(&speed), "{speed} px/s off a 500 px/s drag");
     }
 }

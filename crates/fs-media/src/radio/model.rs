@@ -28,12 +28,6 @@ pub fn wrap_longitude(value: f64) -> f64 {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Velocity {
-    pub x: f64,
-    pub y: f64,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LimitedVelocity {
     pub x: f64,
     pub y: f64,
@@ -90,32 +84,6 @@ pub fn kinetic_launch_velocity(x: f64, y: f64, minimum_speed: f64, maximum_speed
 
 fn finite_or_zero(v: f64) -> f64 {
     if v.is_finite() { v } else { 0.0 }
-}
-
-/// The sampled velocity wins over the native one only while it is fresh,
-/// faster and pointing the same way.
-pub fn kinetic_release_velocity(
-    native: (f64, f64),
-    sampled: (f64, f64),
-    sample_age_ms: f64,
-    maximum_sample_age_ms: f64,
-) -> Velocity {
-    let (nx, ny) = (finite_or_zero(native.0), finite_or_zero(native.1));
-    let (sx, sy) = (finite_or_zero(sampled.0), finite_or_zero(sampled.1));
-    let native_speed = (nx * nx + ny * ny).sqrt();
-    let sampled_speed = (sx * sx + sy * sy).sqrt();
-    let maximum_age = if maximum_sample_age_ms.is_nan() {
-        0.0
-    } else {
-        maximum_sample_age_ms
-    }
-    .max(0.0);
-    let fresh = sample_age_ms.is_finite() && sample_age_ms >= 0.0 && sample_age_ms <= maximum_age;
-    let aligned = native_speed == 0.0 || nx * sx + ny * sy > 0.0;
-    if fresh && sampled_speed > native_speed && aligned {
-        return Velocity { x: sx, y: sy };
-    }
-    Velocity { x: nx, y: ny }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]

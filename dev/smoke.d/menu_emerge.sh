@@ -36,6 +36,11 @@
 #                     asserted: it is the figure the owner's "don't make the
 #                     animation any slower" is checked against, and it has to
 #                     survive a run whose assertions fail.
+#   the fade          the card and the scrim rise through the open and fall
+#                     through the close, read off a second burst taken
+#                     after `menu close`: a popover that travels at full
+#                     opacity and is then cut (a subsurface multiplier
+#                     Hyprland never applied) fails it.
 #
 # Probes are read by mean brightness, not by identity: the card is still being
 # squashed for a beat after it lands (M54 D7), so a probe standing well inside
@@ -68,6 +73,8 @@ menu_emerge_dump_path="$shot_dir/menu-emerge-dump.json"
 menu_emerge_rest_dump_path="$shot_dir/menu-emerge-rest-dump.json"
 menu_emerge_t0_path="$shot_dir/menu-emerge-t0.txt"
 menu_emerge_stamp_path="$shot_dir/menu-emerge-stamps.txt"
+menu_emerge_close_t0_path="$shot_dir/menu-emerge-close-t0.txt"
+menu_emerge_close_stamp_path="$shot_dir/menu-emerge-close-stamps.txt"
 
 menu_emerge_closed_path="$shot_dir/menu-emerge-closed.png"
 menu_emerge_rest_path="$shot_dir/menu-emerge-rest.png"
@@ -82,6 +89,8 @@ menu_emerge_rest_path="$shot_dir/menu-emerge-rest.png"
 # nominal length: the card reads several pixels past its resting edge for most
 # of a second after it has stopped travelling.
 menu_emerge_frames=45
+# The close, photographed the same way straight after the rest frame.
+menu_emerge_close_frames=30
 menu_emerge_frame_gap=0.09
 
 # The motion scale the open runs at, as a percent, and the divisor the settle
@@ -118,7 +127,7 @@ leg_menu_emerge_validate() {
 }
 
 leg_menu_emerge_timing() {
-  leg_timing 32 80
+  leg_timing 48 100
 }
 
 leg_menu_emerge_drive() {
@@ -145,6 +154,12 @@ sleep 5
 call menu status > "$menu_emerge_status_path" 2>&1
 call debug dump > "$menu_emerge_rest_dump_path" 2>&1
 call menu close > "$menu_emerge_close_path" 2>&1
+date +%s%N > "$menu_emerge_close_t0_path"
+for i in \$(seq 1 $menu_emerge_close_frames); do
+  "$grim_bin" "$shot_dir/menu-emerge-close-\$i.png" > /dev/null 2>&1
+  echo "\$i \$(date +%s%N)" >> "$menu_emerge_close_stamp_path"
+  sleep $menu_emerge_frame_gap
+done
 call debug motionScale 100 > /dev/null 2>&1
 EOF
   hypr_exec_once "bash $script"
@@ -305,7 +320,7 @@ leg_menu_emerge_assert() {
   local card cx cy ch fill_box text_box fill_rest text_rest ladder="" lead=""
   card=$("$jq_bin" -r '[.modals[] | select(.namespace == "formalshell:menu") | .card] | first | "\(.x) \(.y) \(.width) \(.height)"' \
     "$menu_emerge_rest_dump_path" 2>/dev/null)
-  read -r cx cy _ ch <<< "$card"
+  read -r cx cy cw ch <<< "$card"
   [ -n "$ch" ] && [ "$ch" != null ] || fail "no launcher card rect in the dump at rest: $card"
   fill_box="6x4+$((cx + 6))+$((cy + 24))"
   text_box="160x16+$((cx + 24))+$((cy + 20))"
@@ -326,6 +341,59 @@ leg_menu_emerge_assert() {
   echo "SMOKE_MENU_EMERGE_CONTENT text/fill$ladder"
   [ -z "$lead" ] || fail "the header's text came in ahead of the card fill under it in frames$lead"
   echo "SMOKE_MENU_EMERGE_CONTENT ok the fill is never behind the text"
+
+  # --- The fade, open and close -----------------------------------------
+  #
+  # How much of the card each frame shows, read as its mean difference from
+  # the closed frame over the card's resting box against the rest frame's,
+  # and the scrim's share the same way off the desktop probe. Across the
+  # open both rise through at least one frame strictly between 0.15 and
+  # 0.85, and across the close both fall through one: a card that travels
+  # at full opacity and is then cut has no such frame, and the pair of
+  # neighbours where it goes from 0.9 or over to 0.1 or under is named.
+  local card_box="$((cw - 16))x$((ch - 16))+$((cx + 8))+$((cy + 8))" card_rest scrim_rest
+  card_rest=$(menu_emerge_moved "$menu_emerge_rest_path" "$card_box")
+  scrim_rest=$(awk -v c="$d_closed" -v r="$d_rest" 'BEGIN { print c - r }')
+  awk -v v="$card_rest" 'BEGIN { exit !(v > 0.01) }' || fail \
+    "the rest frame's card box $card_box reads $card_rest off the closed frame: the probe reads nothing"
+  local phase frames prefix series who_series v
+  for phase in open close; do
+    if [ "$phase" = open ]; then frames=$menu_emerge_frames prefix=menu-emerge; else frames=$menu_emerge_close_frames prefix=menu-emerge-close; fi
+    local card_series="" scrim_series=""
+    for i in $(seq 1 "$frames"); do
+      path="$shot_dir/$prefix-$i.png"
+      [ -f "$path" ] || fail "no screenshot produced at $path"
+      [ "$phase" = close ] && echo "SMOKE_MENU_EMERGE_CLOSE_$i $path"
+      v=$(menu_emerge_moved "$path" "$card_box")
+      card_series="$card_series $(awk -v v="$v" -v r="$card_rest" 'BEGIN { printf "%.2f", v / r }')"
+      v=$(menu_emerge_level "$path" "$menu_emerge_desk_box")
+      scrim_series="$scrim_series $(awk -v c="$d_closed" -v v="$v" -v r="$scrim_rest" 'BEGIN { printf "%.2f", (c - v) / r }')"
+    done
+    for who in card scrim; do
+      if [ "$who" = card ]; then who_series=$card_series; else who_series=$scrim_series; fi
+      echo "SMOKE_MENU_EMERGE_FADE_${phase^^}_${who^^}$who_series"
+      local verdict
+      verdict=$(awk -v phase="$phase" -v s="$who_series" 'BEGIN {
+        n = split(s, a, " "); mid = 0; cut = ""; back = ""; peak = 0; low = 2
+        for (i = 1; i <= n; i++) {
+          if (a[i] > 0.15 && a[i] < 0.85) mid = 1
+          if (i > 1 && phase == "close" && a[i - 1] >= 0.9 && a[i] <= 0.1) cut = cut " " i - 1 "->" i
+          if (i > 1 && phase == "open" && a[i - 1] <= 0.1 && a[i] >= 0.9) cut = cut " " i - 1 "->" i
+          # Against the furthest reached so far: a fade that turns back.
+          if (phase == "open" && a[i] < peak - 0.1 && peak < 0.95) back = back " " i
+          if (phase == "close" && a[i] > low + 0.1 && low > 0.05) back = back " " i
+          if (a[i] > peak) peak = a[i]
+          if (a[i] < low) low = a[i]
+        }
+        if (!mid) { print "no frame strictly between 0.15 and 0.85"; exit }
+        if (cut != "") { print "it jumps between neighbouring frames" cut; exit }
+        if (back != "") { print "it turns back at frames" back; exit }
+        print "ok"
+      }')
+      [ "$verdict" = ok ] || fail "the $who's $phase does not fade ($verdict):$who_series"
+    done
+  done
+  echo "SMOKE_MENU_EMERGE_FADE ok card and scrim fade in across the open and out across the close"
 
   # --- Where the card rests ---------------------------------------------
   #

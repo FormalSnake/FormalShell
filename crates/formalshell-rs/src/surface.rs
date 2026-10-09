@@ -132,6 +132,14 @@ pub struct Surface<R: Role = LayerSurface> {
     react_us: u128,
     render_us: u128,
     slices: u32,
+    /// What the canvas is multiplied by on its way into a buffer, out of
+    /// 256. Hyprland draws no `wp_alpha_modifier` on a layer surface's
+    /// subsurfaces (0.56 wraps only a window's and a popup's in the
+    /// `CWLSurface` its renderer reads the multiplier off), so a
+    /// subsurface fades in its own pixels.
+    opacity: u16,
+    /// The opacity changed: everything drawn goes to the compositor again.
+    refade: bool,
 }
 
 /// Rows per band of a sliced frame.
@@ -234,6 +242,24 @@ impl<R: Role> Surface<R> {
             react_us: 0,
             render_us: 0,
             slices: 0,
+            opacity: 256,
+            refade: false,
+        }
+    }
+
+    /// The opacity everything this surface shows is drawn at, from 0 to 1,
+    /// applied on the next present without drawing the scene again.
+    pub fn set_opacity(&mut self, opacity: f32) {
+        let opacity = (opacity.clamp(0.0, 1.0) * 256.0).round() as u16;
+        if opacity == self.opacity {
+            return;
+        }
+        self.opacity = opacity;
+        if let Some(drawn) = self.drawn {
+            self.refade = true;
+            for b in &mut self.buffers {
+                b.stale.push(drawn);
+            }
         }
     }
 
@@ -347,7 +373,7 @@ impl<R: Role> Surface<R> {
         if self.commits == 0 && !scene.has_damage() && self.raster.is_empty() {
             scene.touch(IRect::new(0, 0, 1, 1));
         }
-        if !scene.has_damage() && self.raster.is_empty() {
+        if !scene.has_damage() && self.raster.is_empty() && !self.refade {
             if request && self.commits > 0 {
                 let surface = self.layer.role_surface();
                 surface.frame(qh, FrameCallbackData(surface.clone()));
@@ -360,8 +386,11 @@ impl<R: Role> Surface<R> {
         if !self.draw(scene) {
             return;
         }
-        let damage = std::mem::take(&mut self.raster);
+        let mut damage = std::mem::take(&mut self.raster);
         let (react_us, render_us) = (self.react_us, self.render_us);
+        if std::mem::take(&mut self.refade) {
+            damage.extend(self.drawn);
+        }
         self.drawn = damage.iter().fold(self.drawn, |u, r| Some(u.map_or(*r, |u| u.union(r))));
 
         let t1 = Instant::now();
@@ -402,7 +431,23 @@ impl<R: Role> Surface<R> {
             .collect();
         let canvas = target.buffer.canvas(&mut self.pool).expect("released buffer");
         let stride = self.renderer.width() as usize;
-        if self.format == wl_shm::Format::Abgr8888 {
+        let k = self.opacity;
+        // Premultiplied, so all four channels scale alike.
+        let fade = |c: u8| ((u16::from(c) * k + 128) >> 8) as u8;
+        if k < 256 {
+            let src = self.renderer.canvas().data_as_u8_slice();
+            let bgra = self.format != wl_shm::Format::Abgr8888;
+            for rect in &copy {
+                for row in rect.y..rect.bottom() {
+                    let start = (row as usize * stride + rect.x as usize) * 4;
+                    let end = start + rect.w as usize * 4;
+                    for (px, dst) in src[start..end].chunks_exact(4).zip(canvas[start..end].chunks_exact_mut(4)) {
+                        let (r, g, b, a) = (fade(px[0]), fade(px[1]), fade(px[2]), fade(px[3]));
+                        dst.copy_from_slice(&if bgra { [b, g, r, a] } else { [r, g, b, a] });
+                    }
+                }
+            }
+        } else if self.format == wl_shm::Format::Abgr8888 {
             // ABGR8888 is the canvas's own RGBA byte order: rows copy whole.
             let src = self.renderer.canvas().data_as_u8_slice();
             for rect in &copy {
