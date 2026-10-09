@@ -64,6 +64,41 @@ pub struct PlacedGlyph {
     /// A colour bitmap (CBDT, sbix) drawn instead of the outline, already
     /// at the pixel size, its top-left at `x, y`.
     pub image: Option<crate::scene::Bitmap>,
+    /// The outline rasterised once on the pixel grid, what the renderer
+    /// draws text from; `None` for a glyph with no ink.
+    pub coverage: Option<Arc<Coverage>>,
+}
+
+/// A glyph's antialiased coverage, one byte a pixel, its top-left at `x, y`
+/// against the glyph's own origin.
+pub struct Coverage {
+    pub x: i32,
+    pub y: i32,
+    pub w: u16,
+    pub h: u16,
+    pub alpha: Vec<u8>,
+}
+
+impl Coverage {
+    fn of(path: &BezPath) -> Option<Self> {
+        use vello_cpu::kurbo::Shape;
+        if path.elements().is_empty() {
+            return None;
+        }
+        let b = path.bounding_box();
+        let (x, y) = (b.x0.floor() as i32, b.y0.floor() as i32);
+        let w = u16::try_from((b.x1.ceil() as i32 - x).max(1)).ok()?;
+        let h = u16::try_from((b.y1.ceil() as i32 - y).max(1)).ok()?;
+        let mut ctx = vello_cpu::RenderContext::new(w, h);
+        ctx.set_transform(vello_cpu::kurbo::Affine::translate((-f64::from(x), -f64::from(y))));
+        ctx.set_paint(vello_cpu::color::AlphaColor::<vello_cpu::color::Srgb>::from_rgba8(255, 255, 255, 255));
+        ctx.fill_path(path);
+        ctx.flush();
+        let mut target = vello_cpu::Pixmap::new(w, h);
+        ctx.render(&mut target, &mut vello_cpu::Resources::new());
+        let alpha: Vec<u8> = target.data().iter().map(|p| p.a).collect();
+        alpha.iter().any(|a| *a > 0).then_some(Self { x, y, w, h, alpha })
+    }
 }
 
 /// The colour emoji face the package ships beside the icon fonts, named so
@@ -208,7 +243,7 @@ struct Inner {
     rendering: Rendering,
     instance_ids: HashMap<InstanceKey, usize>,
     instances: Vec<Option<HintingInstance>>,
-    outlines: HashMap<GlyphKey, Arc<BezPath>>,
+    outlines: HashMap<GlyphKey, (Arc<BezPath>, Option<Arc<Coverage>>)>,
     /// Colour bitmaps by face, glyph and pixel size; `None` where the face
     /// has no bitmap for the glyph.
     bitmaps: HashMap<(u64, u32, u32, u32), Option<(crate::scene::Bitmap, i32, i32)>>,
@@ -334,11 +369,11 @@ impl Inner {
                 let x = PAD + glyph.x.round() as i32;
                 let y = PAD + (baseline + glyph.y - line_baseline).round() as i32;
                 if let Some((image, dx, dy)) = self.bitmap(&font_ref, font.data.id(), font.index, glyph.id, size) {
-                    shaped.glyphs.push(PlacedGlyph { path: Arc::new(BezPath::new()), x: x + dx, y: y + dy, image: Some(image) });
+                    shaped.glyphs.push(PlacedGlyph { path: Arc::new(BezPath::new()), x: x + dx, y: y + dy, image: Some(image), coverage: None });
                     continue;
                 }
-                let path = self.outline(&font_ref, instance, glyph.id, size, &coords);
-                shaped.glyphs.push(PlacedGlyph { path, x, y, image: None });
+                let (path, coverage) = self.outline(&font_ref, instance, glyph.id, size, &coords);
+                shaped.glyphs.push(PlacedGlyph { path, x, y, image: None, coverage });
             }
         }
         shaped
@@ -419,10 +454,10 @@ impl Inner {
         placed
     }
 
-    fn outline(&mut self, font: &FontRef, instance: usize, glyph: u32, size: f32, coords: &[i16]) -> Arc<BezPath> {
+    fn outline(&mut self, font: &FontRef, instance: usize, glyph: u32, size: f32, coords: &[i16]) -> (Arc<BezPath>, Option<Arc<Coverage>>) {
         let key = GlyphKey { instance, glyph };
-        if let Some(path) = self.outlines.get(&key) {
-            return path.clone();
+        if let Some(hit) = self.outlines.get(&key) {
+            return hit.clone();
         }
         let hinting = self.instances[instance].as_ref();
         let mut pen = FlipPen(BezPath::new());
@@ -436,14 +471,15 @@ impl Inner {
                 pen.0 = BezPath::new();
             }
         }
+        let coverage = Coverage::of(&pen.0).map(Arc::new);
         let path = Arc::new(pen.0);
         // The screensaver shapes glyphs no surface draws again; the paths
         // live on in the strings that hold them.
         if self.outlines.len() >= OUTLINE_LIMIT {
             self.outlines.clear();
         }
-        self.outlines.insert(key, path.clone());
-        path
+        self.outlines.insert(key, (path.clone(), coverage.clone()));
+        (path, coverage)
     }
 }
 

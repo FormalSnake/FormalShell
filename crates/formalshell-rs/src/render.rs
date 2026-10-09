@@ -2,19 +2,28 @@
 //! RGBA canvas. Only nodes crossing a rect are encoded, and only that rect is
 //! rasterised; the rest of the canvas keeps what it last held.
 
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use vello_cpu::color::{AlphaColor, Srgb};
 use vello_cpu::kurbo::{Affine, Cap, Join, Rect, RoundedRect, Shape, Stroke, Vec2};
 use vello_cpu::peniko::{BlendMode, Compose, Fill, Mix};
 use vello_cpu::{Pixmap, RenderContext, Resources};
 
-use crate::scene::{Brush, IRect, Paint, Scene, VOp};
+use crate::scene::{Bitmap, Brush, IRect, Paint, Scene, VOp};
+use crate::text::Coverage;
 use fs_theme::color::Rgba;
 
 pub struct Renderer {
     ctx: RenderContext,
     resources: Resources,
     canvas: Pixmap,
+    /// Glyph coverage tinted for an ink, by the coverage's address; the
+    /// entry holds the coverage so the address is never reused under it.
+    inked: HashMap<(usize, [u8; 3]), (Arc<Coverage>, Arc<Pixmap>)>,
 }
+
+const INKED_LIMIT: usize = 8192;
 
 impl Renderer {
     pub fn new(width: u16, height: u16) -> Self {
@@ -22,6 +31,7 @@ impl Renderer {
             ctx: RenderContext::new(1, 1),
             resources: Resources::new(),
             canvas: Pixmap::new(width, height),
+            inked: HashMap::new(),
         }
     }
 
@@ -214,7 +224,16 @@ impl Renderer {
                     for glyph in &text.glyphs {
                         let p = (node.bounds.x + glyph.x, node.bounds.y + glyph.y);
                         self.ctx.set_transform(at * Affine::translate((p.0 as f64, p.1 as f64)));
-                        if let Some(image) = &glyph.image {
+                        if let (None, Some(coverage)) = (&glyph.image, &glyph.coverage) {
+                            let pixmap = self.inked(coverage, *ink);
+                            let shift = Affine::translate(((p.0 + coverage.x) as f64, (p.1 + coverage.y) as f64));
+                            self.ctx.set_transform(at * shift);
+                            self.ctx.set_paint(vello_cpu::Image {
+                                image: vello_cpu::ImageSource::Pixmap(pixmap),
+                                sampler: vello_cpu::peniko::ImageSampler::default().with_alpha(ink.a),
+                            });
+                            self.ctx.fill_rect(&Rect::new(0.0, 0.0, coverage.w as f64, coverage.h as f64));
+                        } else if let Some(image) = &glyph.image {
                             // A colour glyph keeps its own colours and takes only the ink's alpha.
                             self.ctx.set_paint(vello_cpu::Image {
                                 image: vello_cpu::ImageSource::Pixmap(image.pixmap.clone()),
@@ -308,6 +327,31 @@ impl Renderer {
 }
 
 impl Renderer {
+    /// `coverage` in `ink`'s colour, opaque: the ink's alpha is the
+    /// sampler's, so a fade reuses the same pixmap.
+    fn inked(&mut self, coverage: &Arc<Coverage>, ink: Rgba) -> Arc<Pixmap> {
+        let [r, g, b, _] = ink.to_u8();
+        let key = (Arc::as_ptr(coverage) as usize, [r, g, b]);
+        if let Some((_, pixmap)) = self.inked.get(&key) {
+            return pixmap.clone();
+        }
+        if self.inked.len() >= INKED_LIMIT {
+            self.inked.clear();
+        }
+        let lift = coverage_lift([r, g, b]);
+        let mut px = Vec::with_capacity(coverage.alpha.len() * 4);
+        for a in &coverage.alpha {
+            let a = u32::from(lift[*a as usize]);
+            for c in [r, g, b] {
+                px.push(((u32::from(c) * a + 127) / 255) as u8);
+            }
+            px.push(a as u8);
+        }
+        let pixmap = Bitmap::from_premultiplied(coverage.w, coverage.h, px).pixmap;
+        self.inked.insert(key, (coverage.clone(), pixmap.clone()));
+        pixmap
+    }
+
     fn set_brush(&mut self, brush: &Brush) {
         match brush {
             Brush::Solid(c) => self.ctx.set_paint(color(*c)),
@@ -332,7 +376,37 @@ fn drawn_box(bounds: IRect, transform: Affine) -> Option<IRect> {
     Some(IRect::new(bounds.x + dx, bounds.y + dy, bounds.w + ex, bounds.h + ey))
 }
 
+/// The coverage curve for an ink. vello_cpu blends in sRGB-encoded values,
+/// as cairo does, so a pixel half covered by light ink on a dark card gives
+/// off far less than half the light, and the antialiased edges of light
+/// text fall away: stems read a pixel thin. The edges are lifted by a gamma
+/// that grows with how light the ink looks (its luma), up to 1.8 for white,
+/// the value macOS and Skia settle on, so muted words on a dark card keep
+/// their weight too; black ink, which that blend already renders full, keeps
+/// its coverage as drawn. A fully covered pixel stays fully covered either
+/// way, so hinted stems stay as sharp.
+fn coverage_lift([r, g, b]: [u8; 3]) -> [u8; 256] {
+    let luma = (0.2126 * f32::from(r) + 0.7152 * f32::from(g) + 0.0722 * f32::from(b)) / 255.0;
+    let exponent = 1.0 / (1.0 + 0.8 * luma);
+    std::array::from_fn(|a| ((a as f32 / 255.0).powf(exponent) * 255.0).round() as u8)
+}
+
 fn color(c: Rgba) -> AlphaColor<Srgb> {
     let [r, g, b, a] = c.to_u8();
     AlphaColor::from_rgba8(r, g, b, a)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::coverage_lift;
+
+    #[test]
+    fn light_ink_lifts_the_edges_and_dark_ink_keeps_them() {
+        let white = coverage_lift([255, 255, 255]);
+        let black = coverage_lift([0, 0, 0]);
+        assert_eq!((white[0], white[255]), (0, 255));
+        assert!(white[64] > 100, "a quarter covered pixel under white ink: {}", white[64]);
+        assert!((0..256).all(|a| black[a] as usize == a));
+        assert!(white.windows(2).all(|w| w[0] <= w[1]));
+    }
 }
