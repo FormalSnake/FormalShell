@@ -30,7 +30,7 @@ use async_process::{ChildStdin, Stdio};
 use fs_devices::bluetooth::Device as BtDevice;
 use fs_devices::earbuds::{self as model, Device, Value, airpods, nothing, samsung, soundcore};
 use futures_lite::io::BufReader;
-use futures_lite::{AsyncBufReadExt, AsyncWriteExt, StreamExt, future};
+use futures_lite::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, StreamExt, future};
 
 use crate::runtime::Ctx;
 use crate::services::watch::Watch;
@@ -193,8 +193,13 @@ impl Earbuds {
 }
 
 /// `$XDG_RUNTIME_DIR/librepods.sock`; none with the variable unset, the
-/// daemon's own ipcpath.hpp refusing to guess one.
+/// daemon's own ipcpath.hpp refusing to guess one. A nested smoke session
+/// keeps the host's runtime dir, so `FORMALSHELL_SMOKE_LIBREPODS_SOCKET`
+/// points it at the leg's stub instead of a real daemon.
 fn socket_path() -> Option<PathBuf> {
+    if let Some(path) = std::env::var_os("FORMALSHELL_SMOKE_LIBREPODS_SOCKET").filter(|p| !p.is_empty()) {
+        return Some(PathBuf::from(path));
+    }
     std::env::var("XDG_RUNTIME_DIR").ok().filter(|d| !d.is_empty()).map(|d| PathBuf::from(d).join("librepods.sock"))
 }
 
@@ -333,19 +338,52 @@ async fn run_cli(argv: Option<Vec<String>>) -> (i32, String) {
     }
 }
 
+/// How long the daemon gets to take a verb and hang up. It answers from its
+/// own event loop, so a live one is done in milliseconds.
+const AIRPODS_ANSWER: Duration = Duration::from_secs(2);
+
+const AIRPODS_STALLED: &str = "librepods not responding";
+
+/// One verb on the control socket, true once the daemon has read it and hung
+/// up. The kernel queues a connection the daemon never accepts, so a
+/// connect and a write succeeding prove nothing: only its hang-up does.
+async fn airpods_send(socket: PathBuf, verb: String) -> bool {
+    let talk = async {
+        let mut stream = Async::<std::os::unix::net::UnixStream>::connect(&socket).await.ok()?;
+        stream.write_all(verb.as_bytes()).await.ok()?;
+        stream.flush().await.ok()?;
+        let mut rest = Vec::new();
+        stream.read_to_end(&mut rest).await.ok()?;
+        Some(())
+    };
+    future::or(async { talk.await.is_some() }, async {
+        Timer::after(AIRPODS_ANSWER).await;
+        false
+    })
+    .await
+}
+
 /// The AirPods backend over the omarchy-pods librepods daemon: its whole
 /// state is one status.json it rewrites atomically on change and removes on
-/// quit, so a missing file is the daemon being down.
+/// quit, so a missing file is the daemon being down. A daemon whose event
+/// loop is stuck leaves the file in place and never takes a verb; a write
+/// it never answers marks the device until one is answered.
 async fn run_airpods(ctx: Ctx, rx: Receiver<Event>) {
     let path = status_path();
     let mut watch: Option<Watch> = None;
+    let stalled = Rc::new(Cell::new(false));
     let load = |ctx: &Ctx| {
-        let (ctx, path) = (ctx.clone(), path.clone());
+        let (ctx, path, stalled) = (ctx.clone(), path.clone(), stalled.clone());
         async move {
             let text = ctx.pool().run(move || std::fs::read_to_string(&path).unwrap_or_default()).await.unwrap_or_default();
             let status = airpods::parse_status(text.trim());
             let mut backend = Backend::new(status.ok);
             backend.devices = airpods::normalise(&status);
+            if stalled.get() {
+                for d in &mut backend.devices {
+                    d.state_line = AIRPODS_STALLED.into();
+                }
+            }
             publish(&ctx, airpods::BACKEND, backend);
         }
     };
@@ -375,12 +413,13 @@ async fn run_airpods(ctx: Ctx, rx: Receiver<Event>) {
             Some(Event::Hold(false)) => watch = None,
             Some(Event::Op(Op::Airpods(verb))) => {
                 let Some(socket) = socket_path() else { continue };
-                ctx.spawn(async move {
-                    if let Ok(mut stream) = Async::<std::os::unix::net::UnixStream>::connect(&socket).await {
-                        let _ = stream.write_all(verb.as_bytes()).await;
-                        let _ = stream.flush().await;
-                    }
-                });
+                let taken = airpods_send(socket, verb.clone()).await;
+                if !taken {
+                    eprintln!("earbuds: librepods did not take {verb} within {}s", AIRPODS_ANSWER.as_secs());
+                }
+                if stalled.replace(!taken) != !taken {
+                    load(&ctx).await;
+                }
             }
             Some(_) => {}
         }
