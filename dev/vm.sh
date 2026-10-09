@@ -281,6 +281,14 @@ cmd_smoke() {
       scp "${scp_opts[@]}" "test@localhost:$failed_log" "$repo_root/artifacts/$(basename "$failed_log")" > /dev/null 2>&1 \
         && echo "pulled log: $repo_root/artifacts/$(basename "$failed_log")"
     done
+    local failed_tar
+    for failed_tar in $(printf '%s\n' "$out" | grep -oE '^SMOKE_[A-Z0-9_]+ [^[:space:]]+\.tar' | awk '{print $2}'); do
+      mkdir -p "$repo_root/artifacts/$(basename "$failed_tar" .tar)"
+      scp "${scp_opts[@]}" "test@localhost:$failed_tar" "$repo_root/artifacts/$(basename "$failed_tar")" > /dev/null 2>&1 \
+        && tar -xf "$repo_root/artifacts/$(basename "$failed_tar")" -C "$repo_root/artifacts/$(basename "$failed_tar" .tar)" \
+        && rm -f "$repo_root/artifacts/$(basename "$failed_tar")" \
+        && echo "pulled frames: $repo_root/artifacts/$(basename "$failed_tar" .tar)"
+    done
     echo "testvm: smoke run failed (exit $status)" >&2
     exit "$status"
   fi
@@ -328,6 +336,14 @@ cmd_smoke() {
         local_extra="$repo_root/artifacts/$(basename "$remote_extra")"
         scp "${scp_opts[@]}" "test@localhost:$remote_extra" "$local_extra"
         echo "pulled screenshot: $local_extra"
+        ;;
+      *.tar)
+        # A leg's whole frame directory (--use), unpacked beside the rest.
+        local_extra="$repo_root/artifacts/$(basename "$remote_extra" .tar)"
+        mkdir -p "$local_extra"
+        scp "${scp_opts[@]}" "test@localhost:$remote_extra" "$local_extra.tar" \
+          && tar -xf "$local_extra.tar" -C "$local_extra" && rm -f "$local_extra.tar"
+        echo "pulled frames: $local_extra"
         ;;
     esac
   done <<< "$(printf '%s\n' "$out" | grep -oE '^SMOKE_[A-Z0-9_]+ [^[:space:]]+' | grep -v '^SMOKE_OK ')"
