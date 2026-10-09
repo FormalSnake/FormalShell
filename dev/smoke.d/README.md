@@ -7,6 +7,9 @@ frame, teardown) and sources every file here. A leg defines:
 - `leg_<n>_flag` `"--flag"` or `"--flag <arg>"` (`leg_arg <n>` reads it);
   `leg_<n>_order` its place in the flags, fragments, autostart lines and
   results (default 500); `leg_<n>_needs` binaries to resolve.
+- `leg_<n>_vm_only` `"<why>"` for a leg that needs root or a real system
+  service (NetworkManager, logind, polkit): a nested run on a real host
+  gets a private, empty system bus and refuses the leg with `SMOKE_FAIL`.
 - `leg_<n>_fixture_window` `keep` to leave the base run's fixture window in
   the frame; `leg_<n>_validate` usage checks, run before the build.
 - `leg_<n>_fixture` `settings_fragment '<json>'` and staged files;

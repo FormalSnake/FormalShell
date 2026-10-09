@@ -20,6 +20,7 @@
 # its own path.
 leg_device_routes_flag="--device-routes"
 leg_device_routes_order=217
+leg_device_routes_vm_only="it connects and forgets networks through NetworkManager against the hostapd radios"
 leg_device_routes_needs="jq wtype pactl ffmpeg mpv"
 
 device_routes_track_path="$shot_dir/device-routes-station.mp3"

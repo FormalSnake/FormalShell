@@ -43,6 +43,7 @@
 # cases themselves are driven identically.
 leg_panel_morph_flag="--panel-morph"
 leg_panel_morph_order=76
+leg_panel_morph_vm_only="it turns the Wi-Fi radio off and on through NetworkManager, with sudo nmcli in its fixture"
 leg_panel_morph_needs="convert mpv ffmpeg"
 
 panel_morph_bare_path="$shot_dir/panel-morph-bare.png"
