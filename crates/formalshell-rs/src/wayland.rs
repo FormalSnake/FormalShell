@@ -1686,6 +1686,10 @@ impl App {
                         continue;
                     }
                     if owner == Some(Owner::Panel) {
+                        if let Some(i) = self.bar_under_panel(x, y) {
+                            self.pressed = Some((Owner::Bar, i));
+                            continue;
+                        }
                         if let Some(h) = &mut self.panel {
                             h.press(x, y, &self.store, self.runtime.as_ref());
                         }
@@ -1728,9 +1732,21 @@ impl App {
                         0x112 => Button::Middle,
                         _ => Button::Left,
                     };
-                    self.click(o, i, button, (x, y));
+                    let at = if o == Owner::Bar && owner == Some(Owner::Panel) { self.bar_from_panel(x, y) } else { (x, y) };
+                    self.click(o, i, button, at);
                 }
                 PointerEventKind::Axis { vertical, horizontal, .. } => {
+                    if owner == Some(Owner::Panel)
+                        && let Some(i) = self.bar_under_panel(x, y)
+                    {
+                        let (v, h) = (notches(&vertical), notches(&horizontal));
+                        if v != 0.0 || h != 0.0 {
+                            let action = self.bar.wheel(i, v, h, &self.store);
+                            let anchor = self.bar.slot_anchor(i);
+                            self.act(action, anchor);
+                        }
+                        continue;
+                    }
                     if owner == Some(Owner::Panel) {
                         let (dx, dy) = (notches(&horizontal), notches(&vertical));
                         if let Some(h) = self.panel.as_mut().filter(|_| dx != 0.0 || dy != 0.0) {
@@ -1757,6 +1773,32 @@ impl App {
                 }
             }
         }
+    }
+
+    /// A point on the open panel's full-output surface, in the bar's own
+    /// surface coordinates. The panel sits on the Overlay layer over the
+    /// whole output, so while it is open every press on the strip lands on
+    /// it rather than on the bar.
+    fn bar_from_panel(&self, x: f64, y: f64) -> (f64, f64) {
+        let (ow, oh) = self.output_size();
+        let size = self.bar.scene.size;
+        match self.bar.edge() {
+            _ if self.bar.framed() => (x, y),
+            Edge::Bottom => (x, y - (oh - size.h as f64)),
+            Edge::Right => (x - (ow - size.w as f64), y),
+            _ => (x, y),
+        }
+    }
+
+    /// The bar cell under a point on the open panel's surface that is off
+    /// the card: a click there is meant for the cell, not a dismiss.
+    fn bar_under_panel(&self, x: f64, y: f64) -> Option<usize> {
+        let r = self.panel.as_ref()?.card.live_rect();
+        if x >= r.x as f64 && x < r.right() as f64 && y >= r.y as f64 && y < r.bottom() as f64 {
+            return None;
+        }
+        let (bx, by) = self.bar_from_panel(x, y);
+        self.bar.hit(bx, by)
     }
 
     /// The hand over an interactive cell, the arrow anywhere else; sent
