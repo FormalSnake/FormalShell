@@ -846,6 +846,7 @@ impl App {
             anchor: 0.0,
             menu: None,
         });
+        self.tips.hide(None, now);
         self.sync_open(now);
         self.log("overflow mapped");
     }
@@ -991,6 +992,7 @@ impl App {
             anchor,
             menu: None,
         });
+        self.tips.hide(None, now);
         self.sync_open(now);
         self.log("panel trayoverflow mapped");
     }
@@ -1605,9 +1607,15 @@ impl App {
                 self.panel_dirty = true;
             }
         }
+        // No bar tooltip while a panel hangs off the strip, nor on a cell
+        // whose own second bar is open: either would hang over the card.
+        let opened = self.panel.as_ref().is_some_and(|p| p.is_open())
+            || self.overflow.as_ref().is_some_and(|p| p.card.is_open())
+                && self.bar.hover.and_then(|i| self.bar.slots.get(i)).is_some_and(|s| matches!(s.name.as_str(), "chevron" | "tray"));
         // The tooltip the item under the pointer carries, in the output's
         // coordinates.
         let ask = match owner {
+            Some(Owner::Bar) if opened => None,
             Some(Owner::Bar) => self.bar.tooltip().map(|(text, r, edge)| {
                 let (ox, oy) = if self.bar.framed() { (0, 0) } else { self.edge_origin(self.bar.thickness()) };
                 let rect = IRect::new(r.x + ox, r.y + oy, r.w, r.h);
