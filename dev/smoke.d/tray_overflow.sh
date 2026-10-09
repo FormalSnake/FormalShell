@@ -20,6 +20,11 @@
 # correctly the whole time, which is why the claim here is a picture and not
 # a reply.
 #
+# Last, settings.json rewritten to put the dots alone on the strip beside
+# the clock, and the second bar under a real pointer behaving like a panel
+# (owner, 2026-10-09): a click on the desktop shuts it, and a click on the
+# clock shuts it and opens the calendar in its place.
+#
 # It owns bar.layout, so it does not combine with --bar-layout, --bar-position
 # or --chevron, and it registers stubs of its own, so --tray's own count
 # assert does not survive that pair either.
@@ -27,7 +32,7 @@ leg_tray_overflow_flag="--tray-overflow"
 leg_tray_overflow_order=172
 # need_python3 is tray.sh's (sourced first, alphabetically), the same shared
 # `need_<bin>` resolution every leg uses.
-leg_tray_overflow_needs="python3 jq"
+leg_tray_overflow_needs="python3 jq wlrctl"
 
 tray_overflow_pids_path="$shot_dir/tray-overflow-pids.txt"
 tray_overflow_status_path="$shot_dir/tray-overflow-status.json"
@@ -40,6 +45,10 @@ tray_overflow_expanded_path="$shot_dir/tray-overflow-expanded.png"
 tray_overflow_menu_reply_path="$shot_dir/tray-overflow-menu-reply.txt"
 tray_overflow_menu_path="$shot_dir/tray-overflow-menu.json"
 tray_overflow_menu_shot_path="$shot_dir/tray-overflow-menu.png"
+tray_overflow_room_path="$shot_dir/tray-overflow-room.json"
+tray_overflow_clicks_path="$shot_dir/tray-overflow-clicks.txt"
+tray_overflow_outside_path="$shot_dir/tray-overflow-outside.png"
+tray_overflow_handoff_path="$shot_dir/tray-overflow-handoff.png"
 
 leg_tray_overflow_fixture() {
   # The chevron governs what precedes it in a right region, so the tray is the
@@ -51,13 +60,14 @@ leg_tray_overflow_fixture() {
 leg_tray_overflow_timing() {
   # The drive's last step lands ~24s in; the run's own frame is taken past
   # it, with the second bar closed and the chevron expanded again.
-  leg_timing 28 60
+  leg_timing 44 76
 }
 
 leg_tray_overflow_drive() {
   local script="$shot_dir/tray-overflow-drive.sh"
   local kill_script="$shot_dir/tray-overflow-kill.sh"
   local stub="$PWD/dev/sni-stub.py"
+  local settings_path="$iso_home/.config/formalshell/settings.json"
   write_script "$script" <<EOF
 #!/usr/bin/env bash
 sleep 1
@@ -90,6 +100,23 @@ sleep 2
 $ipc call bar chevron expand > /dev/null 2>&1
 sleep 2
 "$grim_bin" "$tray_overflow_expanded_path" > /dev/null 2>&1
+$ipc call bar chevron collapse > /dev/null 2>&1
+$ipc call panel close > /dev/null 2>&1
+"$jq_bin" '.bar.layout.right = ["tray", "clock"]' "$settings_path" > "$settings_path.tmp"
+cat "$settings_path.tmp" > "$settings_path"
+sleep 3
+$ipc call bar room > "$tray_overflow_room_path" 2>&1
+cell() { "$jq_bin" -r --arg n "\$1" '.[0].cells[] | select(.name == \$n) | "\(.x + .width / 2 | floor) \(.y + .height / 2 | floor)"' "$tray_overflow_room_path" | head -n 1; }
+to() { "$wlrctl_bin" pointer move -4000 -4000 > /dev/null 2>&1; "$wlrctl_bin" pointer move "\$1" "\$2" > /dev/null 2>&1; }
+click() { "$wlrctl_bin" pointer click left > /dev/null 2>&1; }
+check() { echo "\$1 open=\$($ipc call tray status 2>/dev/null | "$jq_bin" -c '.overflow.open') panel=\$($ipc call panel state 2>/dev/null)" >> "$tray_overflow_clicks_path"; }
+to \$(cell tray); click; sleep 1.5; check clicked-open
+to 900 700; click; sleep 1.5; check outside
+"$grim_bin" "$tray_overflow_outside_path" > /dev/null 2>&1
+to \$(cell tray); click; sleep 1.5; check reopened
+to \$(cell clock); click; sleep 1.5; check handoff
+"$grim_bin" "$tray_overflow_handoff_path" > /dev/null 2>&1
+$ipc call panel close > /dev/null 2>&1
 EOF
 
   # The stubs sit in GLib.MainLoop().run() forever, same as --tray's.
@@ -175,4 +202,20 @@ leg_tray_overflow_assert() {
   if cmp -s "$tray_overflow_collapsed_path" "$tray_overflow_expanded_path"; then
     fail "the tray's toggle did not come back from a chevron collapse: the two frames are byte-identical"
   fi
+  echo "SMOKE_TRAY_OVERFLOW_OUTSIDE $tray_overflow_outside_path"
+  echo "SMOKE_TRAY_OVERFLOW_HANDOFF $tray_overflow_handoff_path"
+  cat "$tray_overflow_clicks_path" 2>/dev/null
+  _tray_overflow_click_expect clicked-open 'open=true panel=' "a real click on the dots opens the second bar"
+  _tray_overflow_click_expect outside 'open=false panel=' "a click on the desktop shuts it"
+  _tray_overflow_click_expect reopened 'open=true panel=' "the dots open it again"
+  _tray_overflow_click_expect handoff 'open=false panel=calendar' "a click on the clock shuts it and opens the calendar"
+}
+
+_tray_overflow_click_expect() {
+  local name="$1" want="$2" what="$3" line
+  line=$(grep "^$name " "$tray_overflow_clicks_path" 2>/dev/null | head -n 1)
+  case "$line" in
+    *"$want"*) echo "SMOKE_TRAY_OVERFLOW $what" ;;
+    *) fail "$what: $name wanted '$want', got '${line:-nothing}'" ;;
+  esac
 }

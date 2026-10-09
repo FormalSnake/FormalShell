@@ -99,6 +99,9 @@ pub struct Popout {
     /// The card's length along the line, on its way to what its cells
     /// measure: the first size lands at once, every later one travels.
     fit: Option<crate::motion::Animated>,
+    /// A second bar's click outside: input over the whole output but the
+    /// strip, under the card, while the card is open.
+    catcher: Option<PixelSurface>,
 }
 
 impl Popout {
@@ -184,6 +187,8 @@ impl Popout {
 enum Owner {
     Bar,
     Overflow,
+    /// The open second bar's click-outside surface.
+    Catcher,
     Panel,
     Menu,
     Outgoing,
@@ -698,6 +703,11 @@ impl App {
         self.panel.as_ref().is_some_and(|p| p.is_open() && p.id() == "gallery")
     }
 
+    /// Either second bar, the chevron's or the tray's, up.
+    pub fn overflow_open_any(&self) -> bool {
+        self.overflow.as_ref().is_some_and(|p| p.card.is_open())
+    }
+
     pub fn overflow_open(&self) -> Option<BarRegion> {
         self.overflow.as_ref().filter(|p| p.card.is_open()).and_then(|p| p.region)
     }
@@ -831,6 +841,7 @@ impl App {
         if !open {
             if let Some(p) = self.overflow.as_mut().filter(|p| p.region == Some(region) && p.card.is_open()) {
                 p.card.set_open(now, false);
+                p.catcher = None;
                 self.close_tray_menu();
             }
             self.sync_open(now);
@@ -838,6 +849,12 @@ impl App {
         }
         if self.overflow.as_ref().is_some_and(|p| p.region == Some(region) && p.card.is_open()) {
             return;
+        }
+        // A second bar replaces an open panel the way another panel would.
+        self.close_tray_menu();
+        if let Some(h) = &mut self.panel {
+            h.close(now);
+            self.panel_dirty = true;
         }
         let entries = self.bar.overflow_entries(region);
         let edge = self.bar.edge();
@@ -859,6 +876,8 @@ impl App {
             .map_or(self.bar.length() as f64, |i| self.bar.slot_anchor(i));
         let mut card = self.new_card(anchor, size);
         card.ends = self.panel_place(None, false).ends;
+        // Made before the card's own surface, which then stacks over it.
+        let catcher = Some(self.overflow_catcher());
         let surface = self.popout_surface(&card, Layer::Top);
         self.overflow = Some(Popout {
             name: format!("overflow:{}", region.as_str()),
@@ -870,6 +889,7 @@ impl App {
             anchor,
             menu: None,
             fit: None,
+            catcher,
         });
         self.tips.hide(None, now);
         self.sync_open(now);
@@ -939,7 +959,11 @@ impl App {
             self.open_tray_overflow(anchor);
             return;
         }
-        self.close_tray_overflow(now);
+        if nested {
+            self.close_tray_overflow(now);
+        } else {
+            self.close_overflow(now);
+        }
         let Some(module) = panel::build(name) else { return };
         self.open_host(module, anchor, nested, now);
     }
@@ -1006,6 +1030,8 @@ impl App {
         let anchor = anchor.or_else(|| self.bar.panel_anchor("trayoverflow")).unwrap_or(self.bar.length() as f64);
         let mut card = self.new_card(anchor, size);
         card.ends = self.panel_place(None, false).ends;
+        // Made before the card's own surface, which then stacks over it.
+        let catcher = Some(self.overflow_catcher());
         let surface = self.popout_surface(&card, Layer::Top);
         self.overflow = Some(Popout {
             name: "trayoverflow".to_owned(),
@@ -1017,6 +1043,7 @@ impl App {
             anchor,
             menu: None,
             fit: None,
+            catcher,
         });
         self.tips.hide(None, now);
         self.sync_open(now);
@@ -1027,8 +1054,34 @@ impl App {
     fn close_tray_overflow(&mut self, now: Instant) {
         if let Some(p) = self.overflow.as_mut().filter(|p| p.name == "trayoverflow" && p.card.is_open()) {
             p.card.set_open(now, false);
+            p.catcher = None;
             self.sync_open(now);
         }
+    }
+
+    /// Shuts the second bar, whichever it is.
+    pub(crate) fn close_overflow(&mut self, now: Instant) {
+        if let Some(p) = self.overflow.as_mut().filter(|p| p.card.is_open()) {
+            p.card.set_open(now, false);
+            p.catcher = None;
+            self.close_tray_menu();
+            self.sync_open(now);
+        }
+    }
+
+    /// A transparent surface over the live output taking every click but
+    /// the bar strip's, so one outside an open second bar closes it.
+    fn overflow_catcher(&self) -> PixelSurface {
+        let layer = self.overlay("formalshell:catcher", Layer::Top, Anchor::all(), (0, 0), -1);
+        if let Ok(region) = Region::new(&self.compositor) {
+            let (w, h) = self.output_size();
+            let strip = self.bar_strip();
+            region.add(0, 0, w as i32, h as i32);
+            region.subtract(strip.x, strip.y, strip.w, strip.h);
+            layer.set_input_region(Some(region.wl_region()));
+            layer.commit();
+        }
+        PixelSurface::new("catcher", layer, 0.0, &self.pixels, &self.qh, self.started)
     }
 
     /// The input region over a popout's resting rect.
@@ -1088,6 +1141,7 @@ impl App {
             anchor,
             menu: Some(menu),
             fit: None,
+            catcher: None,
         });
         if let Some(p) = &self.menu {
             self.set_popout_input(p);
@@ -1381,6 +1435,7 @@ impl App {
                 self.store.notifications.set_dnd(on);
                 surfaces::changed(self, Topic::Notifications);
             }
+            Action::Launcher => self.menu_toggle(),
         }
     }
 
@@ -1433,6 +1488,9 @@ impl App {
         }
         self.step_menu(now);
         self.step_overflow(now);
+        if let Some(c) = self.overflow.as_mut().and_then(|p| p.catcher.as_mut()) {
+            c.present(0.0, false, &qh);
+        }
         for p in [&mut self.overflow, &mut self.menu].into_iter().flatten() {
             p.layout(&mut self.bar, now);
             let kit = &self.bar.kit;
@@ -1556,6 +1614,9 @@ impl App {
         }
         if self.overflow.as_ref().is_some_and(|p| p.surface.layer.wl_surface() == surface) {
             return Some(Owner::Overflow);
+        }
+        if self.overflow.as_ref().and_then(|p| p.catcher.as_ref()).is_some_and(|c| c.layer.wl_surface() == surface) {
+            return Some(Owner::Catcher);
         }
         if self.panel.as_ref().is_some_and(|p| p.surface.layer.wl_surface() == surface) {
             return Some(Owner::Panel);
@@ -1712,6 +1773,19 @@ impl App {
                     _ => continue,
                 };
                 self.saver_input(Some(i), input);
+                continue;
+            }
+            if self.owner(&e.surface) == Some(Owner::Catcher) {
+                match e.kind {
+                    PointerEventKind::Enter { serial } => {
+                        self.cursor = Some((serial, Shape::Default));
+                        self.pointer_on = None;
+                        self.hover(None, e.position);
+                        self.set_cursor(true);
+                    }
+                    PointerEventKind::Press { .. } => self.close_overflow(Instant::now()),
+                    _ => {}
+                }
                 continue;
             }
             let mut owner = self.owner(&e.surface);
@@ -2063,6 +2137,10 @@ impl CompositorHandler for App {
                 let z = &mut self.zones[i].1;
                 (z.frame_pending, z.mapped, z.callbacks) = (false, true, z.callbacks + 1);
             }
+            Some(Owner::Catcher) => {
+                let Some(c) = self.overflow.as_mut().and_then(|p| p.catcher.as_mut()) else { return };
+                (c.frame_pending, c.mapped, c.callbacks) = (false, true, c.callbacks + 1);
+            }
             Some(Owner::Switcher) => self.switcher_frame(),
             Some(Owner::Atlas(p)) => self.atlas_frame(p, now),
             Some(Owner::Launcher(part)) => self.launcher_frame(part, now),
@@ -2105,6 +2183,11 @@ impl LayerShellHandler for App {
                 self.sync_join();
             }
             Some(Owner::Menu) => self.menu = None,
+            Some(Owner::Catcher) => {
+                if let Some(p) = &mut self.overflow {
+                    p.catcher = None;
+                }
+            }
             Some(Owner::Scrim) => self.scrim = None,
             Some(Owner::Osd) => self.osd.pill = None,
             Some(Owner::Headset) => {
@@ -2182,6 +2265,11 @@ impl LayerShellHandler for App {
             Some(Owner::Osd) => self.osd_configure(),
             Some(Owner::Headset) => self.headset_configure(),
             Some(Owner::Zone(i)) => self.zones[i].1.configure(width.max(1), height.max(1)),
+            Some(Owner::Catcher) => {
+                if let Some(c) = self.overflow.as_mut().and_then(|p| p.catcher.as_mut()) {
+                    c.configure(width.max(1), height.max(1));
+                }
+            }
             Some(Owner::Head(i, part)) => self.head_configure(i, part, width, height),
             Some(Owner::Launcher(part)) => self.launcher_configure(part, width, height),
             Some(Owner::Switcher) => self.switcher_configure(width, height),

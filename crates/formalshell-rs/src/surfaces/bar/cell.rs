@@ -60,6 +60,8 @@ pub enum Action {
     /// The notification centre, open or shut.
     Center,
     Dnd(bool),
+    /// The launcher, open or shut.
+    Launcher,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -21,6 +21,12 @@
 # frame inside the card: a dark plate with light words on it, not the band's
 # black ink drawn onto it.
 #
+# Last, the second bar under a real pointer behaving like a panel (owner,
+# 2026-10-09: it ignored a click outside, and a click on another cell opened
+# that cell's panel beside it): the chevron clicked open, a click on the
+# desktop shutting it, then open again and a click on the clock shutting it
+# and opening the calendar in its place.
+#
 # Then the card's own size (owner, 2026-10-09: "the chevron panel doesnt
 # resize"). The group carries one more cell, a `command` module reading a
 # file, which answers nothing at first and so is no cell at all: the card
@@ -59,6 +65,10 @@ chevron_grown_path="$shot_dir/chevron-grown.png"
 chevron_shrink_samples_path="$shot_dir/chevron-shrink-samples.jsonl"
 chevron_status_shrunk_path="$shot_dir/chevron-status-shrunk.json"
 chevron_shrunk_path="$shot_dir/chevron-shrunk.png"
+chevron_room_path="$shot_dir/chevron-room.json"
+chevron_clicks_path="$shot_dir/chevron-clicks.txt"
+chevron_outside_path="$shot_dir/chevron-outside.png"
+chevron_handoff_path="$shot_dir/chevron-handoff.png"
 
 # The weather cell's centre in the open card, off `bar chevron status`'s own
 # cell rects: which cells the group shows (and so where weather lands) is the
@@ -85,9 +95,9 @@ leg_chevron_timing() {
   # Under --pantheon the wallpaper set and the retheme behind it push every
   # step of that ~9s later.
   if leg_on pantheon; then
-    leg_timing 50 80
+    leg_timing 62 92
   else
-    leg_timing 40 68
+    leg_timing 52 80
   fi
 }
 
@@ -160,6 +170,18 @@ $ipc call bar chevron status > "$chevron_status_shrunk_path" 2>&1
 $ipc call bar chevron collapse > /dev/null 2>&1
 sleep 2
 $ipc call bar chevron status > "$chevron_status_closed_again_path" 2>&1
+$ipc call bar room > "$chevron_room_path" 2>&1
+cell() { "$jq_bin" -r --arg n "\$1" '.[0].cells[] | select(.name == \$n) | "\(.x + .width / 2 | floor) \(.y + .height / 2 | floor)"' "$chevron_room_path" | head -n 1; }
+to() { "$wlrctl_bin" pointer move -4000 -4000 > /dev/null 2>&1; "$wlrctl_bin" pointer move "\$1" "\$2" > /dev/null 2>&1; }
+click() { "$wlrctl_bin" pointer click left > /dev/null 2>&1; }
+check() { echo "\$1 open=\$($ipc call bar chevron status 2>/dev/null | "$jq_bin" -c '.regions.right.open') panel=\$($ipc call panel state 2>/dev/null)" >> "$chevron_clicks_path"; }
+to \$(cell chevron); click; sleep 1.5; check clicked-open
+to 900 700; click; sleep 1.5; check outside
+"$grim_bin" "$chevron_outside_path" > /dev/null 2>&1
+to \$(cell chevron); click; sleep 1.5; check reopened
+to \$(cell clock); click; sleep 1.5; check handoff
+"$grim_bin" "$chevron_handoff_path" > /dev/null 2>&1
+$ipc call panel close > /dev/null 2>&1
 EOF
   hypr_exec_once "bash $script"
 }
@@ -279,6 +301,25 @@ _chevron_assert_resize() {
   echo "chevron resize: one sample caught the card $between wide on its way"
 }
 
+_chevron_click_expect() {
+  local name="$1" want="$2" what="$3" line
+  line=$(grep "^$name " "$chevron_clicks_path" 2>/dev/null | head -n 1)
+  case "$line" in
+    *"$want"*) echo "SMOKE_CHEVRON $what" ;;
+    *) fail "$what: $name wanted '$want', got '${line:-nothing}'" ;;
+  esac
+}
+
+_chevron_assert_clicks() {
+  echo "SMOKE_CHEVRON_OUTSIDE $chevron_outside_path"
+  echo "SMOKE_CHEVRON_HANDOFF $chevron_handoff_path"
+  cat "$chevron_clicks_path" 2>/dev/null
+  _chevron_click_expect clicked-open 'open=true panel=' "a real click on the chevron opens its second bar"
+  _chevron_click_expect outside 'open=false panel=' "a click on the desktop shuts it"
+  _chevron_click_expect reopened 'open=true panel=' "the chevron opens it again"
+  _chevron_click_expect handoff 'open=false panel=calendar' "a click on the clock shuts it and opens the calendar"
+}
+
 leg_chevron_assert() {
   # The five names the fixture puts before the chevron. Order matters:
   # `collapses` reports them in layout order, so one grep asserts the whole
@@ -346,6 +387,7 @@ leg_chevron_assert() {
     fail "bar chevron collapse left the group's bar open. Got: $(cat "$chevron_status_closed_again_path")"
   fi
   _chevron_assert_resize
+  _chevron_assert_clicks
   if leg_on pantheon; then
     _chevron_assert_ink
   fi

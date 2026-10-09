@@ -11,6 +11,10 @@
 #
 # What it asserts, each one a glitch real use hit while every scripted leg
 # passed (2026-10-09):
+#   - A click on the bar's launcher cell opens the launcher: in a fresh
+#     session, after Escape closed it, and over an open panel, each read off
+#     `menu status` and off the card's fill in the frame. The cell's click
+#     answered nothing at all.
 #   - The launcher key opens the launcher after Escape closed it. Escape at
 #     the root closed the card but left the launcher's model open, so the
 #     next press "closed" an invisible launcher and the typing that followed
@@ -63,7 +67,7 @@ leg_use_fixture() {
 }
 
 leg_use_timing() {
-  leg_timing 140 185
+  leg_timing 155 200
 }
 
 leg_use_drive() {
@@ -123,6 +127,14 @@ sleep 6
 $ipc call bar room > "\$d/room.json" 2>&1
 # The pointer starts off every surface.
 to 900 700
+launcher=\$(cell launcher)
+
+log launcher-click
+burst launcher-click 3
+"$grim_bin" "\$d/launcher-click-desktop.png"
+to \$launcher; click; sleep 1.2; check launcher-click-fresh
+"$grim_bin" "\$d/launcher-click-fresh.png"
+key -k Escape; sleep 1.2; to 900 700
 
 log launcher-spam
 burst launcher-spam 3
@@ -150,6 +162,16 @@ key -k BackSpace; sleep 0.4; check level-backspace
 key -k Escape; sleep 1; check levels-closed
 super space; sleep 0.6; check levels-reopen
 key -k Escape; sleep 1.2
+
+log launcher-click-again
+burst launcher-click-again 6
+to \$launcher; click; sleep 1.2; check launcher-click-escaped
+"$grim_bin" "\$d/launcher-click-escaped.png"
+key -k Escape; sleep 1.2
+to \$(cell clock); click; sleep 0.8
+to \$launcher; click; sleep 1.2; check launcher-click-panel
+"$grim_bin" "\$d/launcher-click-panel.png"
+key -k Escape; sleep 1; desktop; sleep 1.2
 
 log cells-quick
 burst cells-quick 7
@@ -293,6 +315,23 @@ use_flip() {
   echo "SMOKE_USE $what took the new mode's fill"
 }
 
+# Each frame grabbed after a click on the launcher cell differs from the
+# desktop grabbed before the first click over the box the card rests in on
+# the rig's 1920x1080 output: its icons and words move the mean difference
+# well past the few hundredths a cursor or a clock tick does.
+use_launcher_box="560x520+680+325"
+use_launcher_frames() {
+  local f rmse
+  for f in launcher-click-fresh launcher-click-escaped launcher-click-panel; do
+    [ -f "$use_dir/$f.png" ] || fail "no $f.png to read the launcher card off"
+    rmse=$($convert_bin "$use_dir/$f.png" "$use_dir/launcher-click-desktop.png" -crop "$use_launcher_box" +repage \
+      -compose difference -composite -colorspace gray -format '%[fx:int(mean*1000)]' info: 2>/dev/null)
+    echo "launcher box against the desktop: $f=$rmse/1000"
+    [ -n "$rmse" ] && [ "$rmse" -gt 30 ] || fail "$f.png does not show the launcher card over the desktop (difference $rmse/1000)"
+    echo "SMOKE_USE $f.png shows the card"
+  done
+}
+
 leg_use_assert() {
   # Packed first, so a failing run still hands every frame back
   # (dev/vm.sh pulls and unpacks a SMOKE_ *.tar).
@@ -302,6 +341,10 @@ leg_use_assert() {
   echo "SMOKE_USE_DIR $use_dir"
   [ -s "$use_dir/checks.txt" ] || fail "--use wrote no checkpoints"
   cat "$use_dir/checks.txt"
+  use_expect launcher-click-fresh '"isOpen":true' "a click on the launcher cell opens the launcher in a fresh session"
+  use_expect launcher-click-escaped '"isOpen":true' "and after Escape closed it"
+  use_expect launcher-click-panel '"isOpen":true' "and over an open panel"
+  use_launcher_frames
   use_expect spam-even '"isOpen":false' "ten fast launcher presses leave it shut"
   use_expect spam-then-one '"isOpen":true' "one more press opens it"
   use_expect type-cleared '"isOpen":true' "Escape over a query clears it and keeps the launcher"

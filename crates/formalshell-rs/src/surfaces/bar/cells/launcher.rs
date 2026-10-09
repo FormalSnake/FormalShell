@@ -1,9 +1,9 @@
 //! `bar.launcherIcon`, by default the distro's own
-//! logo out of font-logos, else an icon by name. The menu it summons is
-//! the launcher's own surface; until that lands a click has nothing to open.
+//! logo out of font-logos, else an icon by name. A left click opens or
+//! closes the launcher.
 
 use crate::store::Topic;
-use crate::surfaces::bar::cell::{Cell, Env, Look, Part, View};
+use crate::surfaces::bar::cell::{Action, Button, Cell, Env, Look, Part, View};
 
 #[derive(Default)]
 pub struct Launcher {
@@ -53,5 +53,9 @@ impl Cell for Launcher {
             v => Part::Icon { name: v.into(), dim: false, dot: false },
         };
         View::new(vec![part], look.xxs).tooltip("LAUNCHER")
+    }
+
+    fn click(&mut self, button: Button, _: (f64, f64), _: &Env) -> Action {
+        if button == Button::Left { Action::Launcher } else { Action::None }
     }
 }

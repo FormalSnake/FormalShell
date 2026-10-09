@@ -175,6 +175,7 @@ impl App {
     pub(super) fn catches(&self) -> bool {
         self.panel.as_ref().is_some_and(|h| h.is_open() && h.module.takes_keyboard())
             || self.menu.as_ref().is_some_and(|p| p.card.is_open())
+            || self.overflow_open_any()
             || self.launcher.open
             || self.atlas_open()
             || self.overlay_open().is_some()
@@ -188,6 +189,7 @@ impl App {
         self.atlas_close();
         self.overlay_close();
         self.close_panels();
+        self.close_overflow(Instant::now());
     }
 
     /// A press on head `i`'s spare bar: whatever a click outside closes is
