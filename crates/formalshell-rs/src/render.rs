@@ -202,6 +202,14 @@ impl Renderer {
                                     depth -= 1;
                                 }
                             }
+                            VOp::Image(image, (x, y), alpha) => {
+                                self.ctx.set_transform(at * Affine::translate((*x, *y)));
+                                let sampler = vello_cpu::peniko::ImageSampler::default().with_quality(vello_cpu::peniko::ImageQuality::Low).with_alpha(*alpha);
+                                self.ctx.set_paint(vello_cpu::Image { image: vello_cpu::ImageSource::Pixmap(image.pixmap.clone()), sampler });
+                                let (w, h) = (image.pixmap.width() as f64, image.pixmap.height() as f64);
+                                self.ctx.fill_rect(&Rect::new(0.0, 0.0, w, h));
+                                self.ctx.set_transform(at);
+                            }
                         }
                     }
                     for _ in 0..depth {

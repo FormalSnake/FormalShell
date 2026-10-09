@@ -1,4 +1,4 @@
-{ lib, stdenvNoCC, rustCommon, makeBinaryWrapper, lucide-font, nerd-fonts, noto-fonts-color-emoji, matugen, brightnessctl, ddcutil, wlsunset
+{ lib, stdenvNoCC, rustCommon, makeBinaryWrapper, lucide-font, blue-marble, nerd-fonts, noto-fonts-color-emoji, matugen, brightnessctl, ddcutil, wlsunset
 , wireplumber, cava, mpv, curl, util-linux, coreutils, procps, systemd, glib, pipewire, asusctl, uxplay, iphone-bridge, openscq30, nothingctl, earbuds
 , formalshell-eds, git, qrencode, networkmanager, wl-clipboard, grim, slurp, wf-recorder, tesseract, ffmpeg-headless, pulseaudio, xdg-utils
 , tensaku, ttfx, clipssh, localsend-cli, wtype, openssh }:
@@ -46,6 +46,7 @@ rustCommon.craneLib.buildPackage (rustCommon.commonArgs // {
       --set-default FS_RS_FONT_DIRS ${nerd-fonts.symbols-only}/share/fonts:${noto-fonts-color-emoji}/share/fonts \
       --set-default FS_TEMPLATE_DIR $out/share/formalshell/templates \
       --set-default FS_BRANDING_DIR $out/share/formalshell/branding \
+      --set-default FS_EARTH_IMAGE ${blue-marble}/share/formalshell/earth.jpg \
       --prefix PATH : ${lib.makeBinPath [ matugen brightnessctl ddcutil wlsunset wireplumber cava mpv curl util-linux procps git formalshell-eds qrencode wl-clipboard grim slurp wf-recorder tesseract ffmpeg-headless pulseaudio xdg-utils ttfx ]} \
       --suffix PATH : ${lib.makeBinPath ([ tensaku wtype openssh clipssh localsend-cli uxplay iphone-bridge networkmanager pipewire systemd glib ]
         ++ lib.optional (lib.meta.availableOn stdenvNoCC.hostPlatform asusctl) asusctl

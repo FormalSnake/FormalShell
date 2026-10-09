@@ -96,6 +96,7 @@
           ttfx = pkgs.callPackage ./nix/ttfx-package.nix { };
           clipssh = pkgs.callPackage ./nix/clipssh-package.nix { };
           lucide-font = pkgs.callPackage ./nix/lucide-font.nix { };
+          blue-marble = pkgs.callPackage ./nix/blue-marble.nix { };
           ancs4linux = pkgs.callPackage ./nix/ancs4linux.nix { };
           iphone-bridge = pkgs.callPackage ./nix/iphone-bridge.nix { };
           localsend-cli = pkgs.callPackage ./nix/localsend-cli.nix { };
@@ -103,7 +104,7 @@
           nothingctl = pkgs.callPackage ./nix/nothingctl.nix { };
           formalshell = pkgs.callPackage ./nix/package.nix {
             rustCommon = rustCommonFor pkgs;
-            inherit lucide-font iphone-bridge openscq30 nothingctl formalshell-eds tensaku ttfx clipssh localsend-cli;
+            inherit lucide-font blue-marble iphone-bridge openscq30 nothingctl formalshell-eds tensaku ttfx clipssh localsend-cli;
             inherit (pkgs) uxplay earbuds;
           };
           formalshell-greeter = pkgs.writeShellScriptBin "formalshell-greeter" ''

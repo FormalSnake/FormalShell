@@ -74,6 +74,19 @@ impl App {
                 });
             });
         }
+        if self.atlas.model.want_earth()
+            && let Some(rt) = &self.runtime
+        {
+            rt.service(|ctx| {
+                let job = ctx.pool().run(globe::load_earth);
+                let publisher = ctx.publisher().clone();
+                ctx.spawn(async move {
+                    if let Some(earth) = job.await {
+                        publisher.publish(Diff::Atlas(Reply::Earth(earth.map(Arc::new))));
+                    }
+                });
+            });
+        }
         self.atlas.win = None;
         let modal = self.new_modal(["radio", "radio-scrim-band", "radio-scrim"], NAMESPACE, Layer::Top, Shown::DEFORM_AMOUNT);
         let shown = Shown::new(modal, self.output_size(), self.motion_scale);
@@ -130,6 +143,7 @@ impl App {
     pub(super) fn present_atlas(&mut self, now: Instant) {
         if self.atlas.win.as_ref().is_some_and(|w| w.shown.modal.finished(now)) {
             self.atlas.win = None;
+            self.atlas.model.globe.drop_earth();
             self.sync_join();
             self.log("radio unmapped");
             return;
@@ -179,6 +193,7 @@ impl App {
     pub(super) fn atlas_closed(&mut self) {
         self.atlas.win = None;
         self.atlas.model.closed();
+        self.atlas.model.globe.drop_earth();
         self.sync_join();
     }
 
