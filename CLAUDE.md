@@ -464,6 +464,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   open-to-rest time printed before any of it is asserted. Which row that
   line is on comes out of a `debug dump`, so the same probes hold on a frame
   ring's top band; a top edge carrying neither prints them as skipped.
+  Then the close photographed the same way, and on every theme the card's
+  and the scrim's share of their rest level rising through the open and
+  falling through the close with a frame between 0.15 and 0.85 each way,
+  never cut from 0.9 to 0.1 between neighbouring frames.
 - `menu_morph.sh` `--menu-morph`: the card opened on the root at a tenth
   speed, then re-levelled onto the clipboard's split route, its left edge read
   off one header row per frame: the root and the rest frames on the

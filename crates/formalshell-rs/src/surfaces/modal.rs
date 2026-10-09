@@ -17,7 +17,6 @@ use smithay_client_toolkit::shell::WaylandSurface;
 use smithay_client_toolkit::shell::wlr_layer::KeyboardInteractivity;
 use vello_cpu::kurbo::Rect;
 
-use smithay_client_toolkit::reexports::protocols::wp::alpha_modifier::v1::client::wp_alpha_modifier_surface_v1::WpAlphaModifierSurfaceV1;
 use smithay_client_toolkit::reexports::protocols::wp::viewporter::client::wp_viewport::WpViewport;
 
 use crate::scene::{IRect, NodeId, Paint, Scene};
@@ -243,14 +242,14 @@ impl Modal {
 
 /// The owner's content on a subsurface of the card, laid out once at the
 /// size the card is headed for: the card's motion moves, fades and cuts
-/// the layer in the compositor (`wl_subsurface.set_position`,
-/// `wp_alpha_modifier`, and a `wp_viewport` source cropping it to the part
-/// inside the card and past the line), so a frame of the card's travel or
-/// a size morph draws only the card's own frame.
+/// the layer in the compositor (`wl_subsurface.set_position` and a
+/// `wp_viewport` source cropping it to the part inside the card and past
+/// the line), so a frame of the card's travel or a size morph draws only
+/// the card's own frame. A fade is the layer's own buffer copied again at
+/// the card's opacity (`Surface::set_opacity`), never a layout.
 pub struct Layer {
     pub scene: Scene,
     pub surface: Surface<Sub>,
-    fade: WpAlphaModifierSurfaceV1,
     viewport: WpViewport,
     pub top: NodeId,
     /// The size the owner last laid its content out at.
@@ -259,17 +258,17 @@ pub struct Layer {
     /// size it was drawn at.
     buffer: (i32, i32),
     drawn: (i32, i32),
-    /// What the compositor last got: the shown part and the multiplier.
-    shown: Option<(IRect, IRect, u32)>,
+    /// What the compositor last got: the shown part and where it sits.
+    shown: Option<(IRect, IRect)>,
 }
 
 impl Layer {
     /// Starts one pixel square; the first layout sizes it to the card.
-    pub fn new(surface: Surface<Sub>, fade: WpAlphaModifierSurfaceV1, viewport: WpViewport) -> Self {
+    pub fn new(surface: Surface<Sub>, viewport: WpViewport) -> Self {
         let mut scene = Scene::clear(1, 1);
         let top = scene.add(IRect::default(), Paint::Shape { fill: None, strokes: Vec::new() });
         scene.set_visible(top, false);
-        let mut layer = Self { scene, surface, fade, viewport, top, laid: (0, 0), buffer: (0, 0), drawn: (0, 0), shown: None };
+        let mut layer = Self { scene, surface, viewport, top, laid: (0, 0), buffer: (0, 0), drawn: (0, 0), shown: None };
         layer.surface.configure(1, 1);
         layer
     }
@@ -312,6 +311,10 @@ impl Layer {
     /// subsurface's commit at once, whatever its parent has shown yet. True
     /// when anything reached the subsurface.
     fn present(&mut self, card: &Card, settled: bool, card_up: bool, qh: &QueueHandle<App>) -> bool {
+        // The opacity goes in ahead of the draw, so a frame that both draws
+        // and fades copies once; only a frame whose draw changes the cut
+        // copies again.
+        self.surface.set_opacity(self.cut(card, settled, card_up).3);
         let before = self.surface.commits();
         self.surface.present(&mut self.scene, false, qh);
         let drew = self.surface.commits() != before;
@@ -319,6 +322,33 @@ impl Layer {
             self.buffer = (self.scene.size.w, self.scene.size.h);
             self.drawn = self.laid;
         }
+        let (shown, at, fits, alpha) = self.cut(card, settled, card_up);
+        let (shown, at) = match self.shown {
+            Some((last, last_at)) if !fits => (last, last_at),
+            _ => (shown, at),
+        };
+        let moved = self.shown != Some((shown, at));
+        if moved {
+            self.shown = Some((shown, at));
+            if fits {
+                self.surface.layer.sub.set_position(shown.x, shown.y);
+                self.viewport.set_source(0.0, 0.0, f64::from(shown.w), f64::from(shown.h));
+                self.viewport.set_destination(shown.w, shown.h);
+            }
+        }
+        self.surface.set_opacity(alpha);
+        let before = self.surface.commits();
+        self.surface.present(&mut self.scene, false, qh);
+        let faded = self.surface.commits() != before;
+        if moved && !faded {
+            self.surface.layer.role_commit();
+        }
+        drew || moved || faded
+    }
+
+    /// This frame's cut of the content: the part shown, where it sits,
+    /// whether the compositor's buffer can show it, and its opacity.
+    fn cut(&self, card: &Card, settled: bool, card_up: bool) -> (IRect, IRect, bool, f32) {
         let at = self.place(card, settled);
         let shown = self.visible(card, settled);
         // A viewport source has to be a non-empty part of the buffer the
@@ -326,33 +356,15 @@ impl Layer {
         // Hyprland 0.56 a source with an offset drew its pixels stretched
         // off the place given. Until such a cut fits, or while the content
         // is cut at its top or left (crossing the line), the last cut stays
-        // and the multiplier hides it.
+        // and the layer is faded out to hide it.
         let fits = !shown.is_empty() && shown.x == at.x && shown.y == at.y
             && shown.right() - at.x <= self.buffer.0 && shown.bottom() - at.y <= self.buffer.1;
         let alpha = if fits && card_up { card.content.1.clamp(0.0, 1.0) } else { 0.0 };
-        let multiplier = (f64::from(alpha) * f64::from(u32::MAX)).round() as u32;
-        let (shown, at) = match self.shown {
-            Some((last, last_at, _)) if !fits => (last, last_at),
-            _ => (shown, at),
-        };
-        let want = (shown, at, multiplier);
-        if self.shown == Some(want) {
-            return drew;
-        }
-        self.shown = Some(want);
-        if fits {
-            self.surface.layer.sub.set_position(shown.x, shown.y);
-            self.viewport.set_source(0.0, 0.0, f64::from(shown.w), f64::from(shown.h));
-            self.viewport.set_destination(shown.w, shown.h);
-        }
-        self.fade.set_multiplier(multiplier);
-        self.surface.layer.role_commit();
-        true
+        (shown, at, fits, alpha)
     }
 
     /// The layer gone, its pool, buffers and canvas kept for the next one.
     pub fn keep(self) -> crate::surface::Kept {
-        self.fade.destroy();
         self.viewport.destroy();
         self.surface.keep()
     }
@@ -361,8 +373,8 @@ impl Layer {
 /// A popover card's look (casts, fill, border) drawn once and carried by
 /// the compositor: four subsurfaces of the card, each holding one corner
 /// of the look drawn at the largest size the card has taken, cropped by
-/// its `wp_viewport` to the card's size this frame and faded by
-/// `wp_alpha_modifier`. The edges between the corners are straight runs of
+/// its `wp_viewport` to the card's size this frame and faded by copying
+/// its buffer again at the card's opacity. The edges between the corners are straight runs of
 /// one fill, so any size up to the drawn one is the four crops side by
 /// side, and the card's open, close and size morph cost no raster at all.
 pub struct Quads {
@@ -384,13 +396,12 @@ struct Quad {
     nodes: (NodeId, NodeId),
     surface: Surface<Sub>,
     viewport: WpViewport,
-    fade: WpAlphaModifierSurfaceV1,
     /// The card size the buffer the compositor holds was drawn at, and the
     /// one being drawn.
     drawn: Option<(i32, i32)>,
     pending: (i32, i32),
-    /// What the compositor last got: the crop, the place and the multiplier.
-    shown: Option<(IRect, (i32, i32), u32)>,
+    /// What the compositor last got: the crop and the place.
+    shown: Option<(IRect, (i32, i32))>,
 }
 
 /// One corner's share of a card `w` by `h`: the left (top) part is the
@@ -400,15 +411,15 @@ fn halves(n: i32) -> (i32, i32) {
 }
 
 impl Quads {
-    pub fn new(name: &'static str, parts: Vec<(Surface<Sub>, WpViewport, WpAlphaModifierSurfaceV1)>, margin: i32, started: std::time::Instant) -> Self {
+    pub fn new(name: &'static str, parts: Vec<(Surface<Sub>, WpViewport)>, margin: i32, started: std::time::Instant) -> Self {
         let parts = parts
             .into_iter()
-            .map(|(surface, viewport, fade)| {
+            .map(|(surface, viewport)| {
                 let mut scene = Scene::clear(1, 1);
                 let empty = || Paint::Shape { fill: None, strokes: Vec::new() };
                 let casts = scene.add(IRect::default(), empty());
                 let shape = scene.add(IRect::default(), empty());
-                Quad { scene, nodes: (casts, shape), surface, viewport, fade, drawn: None, pending: (0, 0), shown: None }
+                Quad { scene, nodes: (casts, shape), surface, viewport, drawn: None, pending: (0, 0), shown: None }
             })
             .collect();
         Self { parts, size: (0, 0), margin, hint: (0, 0), name, started, steps: 0 }
@@ -453,6 +464,9 @@ impl Quads {
         let mut any = false;
         let mut moved = false;
         for (i, q) in self.parts.iter_mut().enumerate() {
+            // Ahead of the draw, so a corner drawn and faded on one frame
+            // is copied once.
+            q.surface.set_opacity(alpha);
             let before = q.surface.commits();
             q.surface.present(&mut q.scene, false, qh);
             if q.surface.commits() != before {
@@ -476,21 +490,28 @@ impl Quads {
                 2 => (IRect::new(0, 0, m + sx, dbh + m), (frame.x - m, frame.y + sy)),
                 _ => (IRect::new(0, 0, drw + m, dbh + m), (frame.x + sx, frame.y + sy)),
             };
-            let multiplier = if crop.is_empty() { 0 } else { (f64::from(alpha.clamp(0.0, 1.0)) * f64::from(u32::MAX)).round() as u32 };
-            let want = (crop, place, multiplier);
-            if q.shown == Some(want) {
-                continue;
+            let placed = q.shown != Some((crop, place));
+            if placed {
+                q.shown = Some((crop, place));
+                if !crop.is_empty() {
+                    q.surface.layer.sub.set_position(place.0, place.1);
+                    q.viewport.set_source(f64::from(crop.x), f64::from(crop.y), f64::from(crop.w), f64::from(crop.h));
+                    q.viewport.set_destination(crop.w, crop.h);
+                }
             }
-            q.shown = Some(want);
-            if !crop.is_empty() {
-                q.surface.layer.sub.set_position(place.0, place.1);
-                q.viewport.set_source(f64::from(crop.x), f64::from(crop.y), f64::from(crop.w), f64::from(crop.h));
-                q.viewport.set_destination(crop.w, crop.h);
+            // A corner still drawing in slices takes its new opacity with
+            // the commit that finishes it.
+            q.surface.set_opacity(if crop.is_empty() { 0.0 } else { alpha });
+            let before = q.surface.commits();
+            if !q.surface.rastering() {
+                q.surface.present(&mut q.scene, false, qh);
             }
-            q.fade.set_multiplier(multiplier);
-            q.surface.layer.role_commit();
-            any = true;
-            moved = true;
+            let faded = q.surface.commits() != before;
+            if placed && !faded {
+                q.surface.layer.role_commit();
+            }
+            any |= placed || faded;
+            moved |= placed || faded;
         }
         // The card's motion lands here rather than in a buffer of its own,
         // so the commit log the budget legs read carries one line per step.
@@ -520,6 +541,5 @@ impl Quads {
 impl Drop for Quad {
     fn drop(&mut self) {
         self.viewport.destroy();
-        self.fade.destroy();
     }
 }
