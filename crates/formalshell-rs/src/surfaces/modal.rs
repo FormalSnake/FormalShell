@@ -78,6 +78,16 @@ impl Modal {
         self.quads = Some(quads);
     }
 
+    /// The card's look off a new theme, the compositor's corners drawn
+    /// again at the next present.
+    pub fn restyle(&mut self, theme: &Theme, cast: bool, now: Instant) {
+        self.card.restyle(theme, cast);
+        self.card.tick(now);
+        if let Some(q) = &mut self.quads {
+            q.size = (0, 0);
+        }
+    }
+
     /// The largest card size the owner is headed for, so a popover's look
     /// is drawn once at it.
     pub fn look_hint(&mut self, w: i32, h: i32) {

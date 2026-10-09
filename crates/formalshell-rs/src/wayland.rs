@@ -596,6 +596,27 @@ impl App {
         self.refresh_bar(None);
     }
 
+    /// Every card open across a theme change takes the new look: the
+    /// launcher's, the open panel's and the second bar's.
+    pub fn restyle_cards(&mut self) {
+        let now = Instant::now();
+        let theme = &self.store.theme.theme;
+        if let Some(w) = &mut self.launch {
+            w.shown.modal.restyle(theme, self.cast, now);
+            self.launcher.dirty = true;
+        }
+        if let Some(h) = &mut self.panel {
+            h.card.restyle(theme, self.cast);
+            h.card.tick(now);
+            self.panel_dirty = true;
+        }
+        if let Some(p) = &mut self.overflow {
+            p.card.restyle(theme, self.cast);
+            p.card.tick(now);
+        }
+        self.bar_dirty = true;
+    }
+
     /// The cells reading `topic` read again, and everything the strip draws
     /// with them.
     pub fn refresh_bar(&mut self, topic: Option<Topic>) {
@@ -850,6 +871,7 @@ impl App {
             menu: None,
             fit: None,
         });
+        self.tips.hide(None, now);
         self.sync_open(now);
         self.log("overflow mapped");
     }
@@ -996,6 +1018,7 @@ impl App {
             menu: None,
             fit: None,
         });
+        self.tips.hide(None, now);
         self.sync_open(now);
         self.log("panel trayoverflow mapped");
     }
@@ -1418,6 +1441,7 @@ impl App {
             let animating = p.card.animating(now) || content || morphing;
             p.surface.present(&mut p.card.scene, animating, &qh);
         }
+        let strip = self.bar_strip();
         let theme = &self.store.theme.theme;
         for h in [&mut self.outgoing, &mut self.panel].into_iter().flatten() {
             if h.prime_until.is_some_and(|t| t <= now) {
@@ -1425,7 +1449,7 @@ impl App {
             }
             let animating = h.animating(now) || h.content_animating(now);
             if self.panel_dirty || animating {
-                h.sync_region(&self.compositor);
+                h.sync_region(&self.compositor, strip);
                 h.layout(&self.store, theme, &mut self.bar.kit, now);
             }
             let animating = h.animating(now) || h.content_animating(now);
@@ -1632,9 +1656,15 @@ impl App {
                 self.panel_dirty = true;
             }
         }
+        // No bar tooltip while a panel hangs off the strip, nor on a cell
+        // whose own second bar is open: either would hang over the card.
+        let opened = self.panel.as_ref().is_some_and(|p| p.is_open())
+            || self.overflow.as_ref().is_some_and(|p| p.card.is_open())
+                && self.bar.hover.and_then(|i| self.bar.slots.get(i)).is_some_and(|s| matches!(s.name.as_str(), "chevron" | "tray"));
         // The tooltip the item under the pointer carries, in the output's
         // coordinates.
         let ask = match owner {
+            Some(Owner::Bar) if opened => None,
             Some(Owner::Bar) => self.bar.tooltip().map(|(text, r, edge)| {
                 let (ox, oy) = if self.bar.framed() { (0, 0) } else { self.edge_origin(self.bar.thickness()) };
                 let rect = IRect::new(r.x + ox, r.y + oy, r.w, r.h);
@@ -1814,6 +1844,20 @@ impl App {
                     }
                 }
             }
+        }
+    }
+
+    /// The bar's strip in output coordinates, which an open panel's
+    /// full-output surface leaves to the bar.
+    fn bar_strip(&self) -> IRect {
+        let (ow, oh) = self.output_size();
+        let (ow, oh) = (ow as i32, oh as i32);
+        let t = self.bar.thickness();
+        match self.bar.edge() {
+            Edge::Bottom => IRect::new(0, oh - t, ow, t),
+            Edge::Left => IRect::new(0, 0, t, oh),
+            Edge::Right => IRect::new(ow - t, 0, t, oh),
+            _ => IRect::new(0, 0, ow, t),
         }
     }
 

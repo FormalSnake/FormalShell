@@ -1230,7 +1230,10 @@ impl Model {
     }
 
     fn pop(&mut self, store: &Store) -> Out {
-        let Some(level) = self.level.clone() else { return Out::Close };
+        let Some(level) = self.level.clone() else {
+            self.close();
+            return Out::Close;
+        };
         let parent = store.menu.nodes().get(&level).and_then(|n| n.parent_id.clone());
         self.enter_level(store, parent);
         Out::None

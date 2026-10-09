@@ -67,6 +67,7 @@ pub fn changed(app: &mut App, topic: Topic) {
         Topic::Plugins => app.apply_config(),
         Topic::Theme => {
             app.set_bar_theme();
+            app.restyle_cards();
             lights_palette(app);
         }
         Topic::Devices => {
