@@ -244,13 +244,18 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   run's JSON sidecar and read by other legs for what the shell resolved.
 - `earbuds.sh` `--earbuds`: the earbuds panel against PATH-shimmed
   `nothingctl` and `openscq30` answering with fixtures captured off the
-  real tools, and a staged librepods status.json, in five
+  real tools, and `dev/librepods-stub.py` playing the omarchy-pods
+  daemon's socket and status file (`FORMALSHELL_SMOKE_LIBREPODS_SOCKET`
+  points the shell at it, never the host's daemon), in five
   phases: the B175 alone (wrapped listening mode and EQ rows, custom bands
   in signed dB), the Soundcore pair alone, both with the device choice
   heading the panel, the AirPods, and a device nothingctl refuses. `earbuds
   set` over IPC reaches nothingctl's stdin as exactly `anc transparency`
   and `eq-custom 5 0 -2` and openscq30 as one `--set
-  ambientSoundMode=NoiseCanceling`; the refused device's `watch` prints the
+  ambientSoundMode=NoiseCanceling`; every AirPods listening mode reaches
+  the stub as exactly `noise:<mode>` and the panel holds the mode it
+  reports back, and a stub that never accepts (a daemon whose event loop
+  is stuck) leaves the device reading "librepods not responding"; the refused device's `watch` prints the
   `unsupported-model` line and exits 3, and 12s later it was started once
   and no device is listed. The VM has no Bluetooth controller, so the leg
   exports `FORMALSHELL_SMOKE_BLUETOOTH`, a device list that replaces the
