@@ -91,7 +91,33 @@ impl App {
         card.commit();
         let mut surface = Surface::new(names[0], card, &self.shm, self.started);
         surface.wait_map = true;
-        Modal::new(theme, surface, band, dim, namespace, output, inset, ends, self.motion_scale, self.cast, deform_amount)
+        let mut modal = Modal::new(theme, surface, band, dim, namespace, output, inset, ends, self.motion_scale, self.cast, deform_amount);
+        if modal.card.popover() {
+            let quads = self.look_quads(names[0], &modal.surface, modal.card.popover_margin());
+            modal.carry_look(quads);
+        }
+        modal
+    }
+
+    /// A popover card's look as four subsurfaces of `card`, under anything
+    /// added to it later, taking no input.
+    fn look_quads(&self, name: &'static str, card: &Surface, margin: i32) -> crate::surfaces::modal::Quads {
+        use crate::surface::{Ignore, Sub};
+        let parts = (0..4)
+            .map(|_| {
+                let surface = self.compositor.create_surface(&self.qh);
+                let sub = self.pixels.subcompositor.get_subsurface(&surface, card.layer.wl_surface(), &self.qh, Ignore);
+                if let Ok(region) = Region::new(&self.compositor) {
+                    surface.set_input_region(Some(region.wl_region()));
+                }
+                let viewport = self.pixels.viewporter.get_viewport(&surface, &self.qh, Ignore);
+                let fade = self.pixels.alpha.get_surface(&surface, &self.qh, Ignore);
+                let mut s = Surface::new(name, Sub { surface, sub }, &self.shm, self.started);
+                s.raster_budget = Some(LAUNCHER_SLICE);
+                (s, viewport, fade)
+            })
+            .collect();
+        crate::surfaces::modal::Quads::new(name, parts, margin, self.started)
     }
 
     /// The launcher's window gone, its card's pool, buffers and canvas kept
@@ -150,8 +176,9 @@ impl App {
             surface.set_input_region(Some(region.wl_region()));
         }
         let fade = self.pixels.alpha.get_surface(&surface, &self.qh, Ignore);
+        let viewport = self.pixels.viewporter.get_viewport(&surface, &self.qh, Ignore);
         let s = Surface::new(name, Sub { surface, sub }, &self.shm, self.started);
-        crate::surfaces::modal::Layer::new(s, fade)
+        crate::surfaces::modal::Layer::new(s, fade, viewport)
     }
 
     /// The window for an open, created fresh unless one is already up.
@@ -809,7 +836,7 @@ impl App {
         let t1 = Instant::now();
         // A frame still being drawn in slices keeps the scene it started on.
         let rastering = w.shown.modal.surface.rastering() || w.shown.modal.layer.as_ref().is_some_and(|l| l.surface.rastering());
-        let wants = self.launcher.dirty || moving || !w.shown.modal.surface.mapped;
+        let wants = (self.launcher.dirty || moving || !w.shown.modal.surface.mapped) && !w.shown.hold_layout(now);
         // A layout held back by a sliced frame runs once it is out, even
         // when whatever moved has stopped by then.
         if rastering && wants {
@@ -821,13 +848,19 @@ impl App {
             w.shown.layout(&mut self.launcher, &self.store, theme, &mut self.bar.kit, now);
             self.launcher_styles = self.bar.kit.seen.take().unwrap_or_default();
             self.launcher.dirty = false;
+        } else {
+            // Every turn, not only while the morph runs: its last step lands
+            // after the morph has stopped running, and a no-op once there.
+            w.shown.place_card(theme, now);
         }
         let laid = t1.elapsed();
         let animating = w.shown.animating(now) || self.launcher.rows_moving(now);
         w.shown.modal.present(animating, now, &qh);
         // The rest of a sliced frame on the next turn, after whatever the
         // loop has waiting (the bar's callback first).
-        if (w.shown.modal.surface.rastering() || w.shown.modal.layer.as_ref().is_some_and(|l| l.surface.rastering()))
+        if (w.shown.modal.surface.rastering()
+            || w.shown.modal.layer.as_ref().is_some_and(|l| l.surface.rastering())
+            || w.shown.modal.look_rastering())
             && let Some(handle) = &self.handle
         {
             handle.insert_idle(|_| {});

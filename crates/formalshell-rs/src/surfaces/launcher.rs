@@ -1532,9 +1532,8 @@ pub struct Shown {
     /// One widget tree per row mid-transition, drawn over the body.
     overlays: Vec<Ui>,
     top_node: NodeId,
-    /// The cut the layer's content was last laid out under, while it
-    /// crosses the line.
-    crop: Option<IRect>,
+    /// The card size the content was last laid out for.
+    laid_for: (f64, f64),
 }
 
 impl Shown {
@@ -1557,7 +1556,7 @@ impl Shown {
             scroll: Animated::new(0.0, Clock::SpatialFast.curve()),
             overlays: Vec::new(),
             top_node: top,
-            crop: None,
+            laid_for: (0.0, 0.0),
             morph: (Animated::new(theme.space.popup_width_menu, Clock::Spatial.curve()), Animated::new(0.0, Clock::Spatial.curve())),
         }
     }
@@ -1575,17 +1574,11 @@ impl Shown {
     }
 
     /// Whether the content itself moves, past the card carrying it: on a
-    /// layer, the card's own motion needs no new layout, only the cut of it
-    /// while it crosses the line.
+    /// layer, the card's own motion and its size morph need no new layout,
+    /// the compositor moves and cuts the layer.
     pub fn content_animating(&self, now: Instant) -> bool {
-        let cut = self.modal.layer.as_ref().is_some_and(|_| {
-            self.crop != Some(crate::surfaces::modal::Layer::crop(&self.modal.card, !self.modal.animating(now)))
-        });
-        cut || (self.modal.layer.is_none() && self.modal.animating(now))
-            || self.scroll.running(now)
-            || self.morph.0.running(now)
-            || self.morph.1.running(now)
-            || self.wake.is_some_and(|w| w <= now)
+        let card = self.modal.layer.is_none() && (self.modal.animating(now) || self.morph.0.running(now) || self.morph.1.running(now));
+        card || self.scroll.running(now) || self.wake.is_some_and(|w| w <= now)
     }
 
     fn metrics(theme: &Theme, m: &Model, output_h: f64) -> (f64, f64, f64) {
@@ -1596,9 +1589,20 @@ impl Shown {
         (band, chrome, body)
     }
 
+    /// The card at this frame of its size morph, centred across the
+    /// output. On a layer that is all a frame of the morph does: the
+    /// content stays laid out at the size the card is headed for.
+    pub fn place_card(&mut self, theme: &Theme, now: Instant) {
+        let (w_, h_) = (self.morph.0.value(now).round(), self.morph.1.value(now).round());
+        let x = ((self.output.0 - w_) / 2.0).round();
+        let pad = theme.space.panel_padding;
+        let max_top = self.output.1 - h_ - pad;
+        let y = if max_top < pad { pad } else { (self.output.1 * 0.3).clamp(pad, max_top) }.round();
+        self.modal.place(Rect::new(x, y, x + w_, y + h_), now);
+    }
+
     /// Lays the card out and draws the three bands.
     pub fn layout(&mut self, m: &mut Model, store: &Store, theme: &Theme, kit: &mut Kit, now: Instant) {
-        let s = theme.space.clone();
         let (_, chrome, body_h) = Self::metrics(theme, m, self.output.1);
         if (m.body_h - body_h).abs() > 0.5 {
             m.body_h = body_h;
@@ -1607,6 +1611,7 @@ impl Shown {
         // A level that changes kind travels into its size;
         // the first frame after an open lands on it.
         let (tw, th) = (m.card_width(theme), chrome + body_h);
+        self.modal.look_hint(tw.round() as i32, th.round() as i32);
         if self.modal.surface.mapped && self.modal.open {
             let ms = Clock::Spatial.ms(theme) * self.scale;
             self.morph.0.set(now, tw, ms);
@@ -1615,12 +1620,7 @@ impl Shown {
             self.morph.0.jump(tw);
             self.morph.1.jump(th);
         }
-        let (w_, h_) = (self.morph.0.value(now).round(), self.morph.1.value(now).round());
-        let x = ((self.output.0 - w_) / 2.0).round();
-        let pad = s.panel_padding;
-        let max_top = self.output.1 - h_ - pad;
-        let y = if max_top < pad { pad } else { (self.output.1 * 0.3).clamp(pad, max_top) }.round();
-        self.modal.place(Rect::new(x, y, x + w_, y + h_), now);
+        self.place_card(theme, now);
         let target = m.scroll;
         if (self.scroll.target() - target).abs() > 0.5 {
             if m.wheeled {
@@ -1631,22 +1631,31 @@ impl Shown {
                 self.scroll.jump(target);
             }
         }
-        self.draw(m, store, theme, kit, now, body_h);
+        self.draw(m, store, theme, kit, now, body_h, (tw, th));
+        self.laid_for = (tw, th);
+    }
+
+    /// On a layer, the card is morphing toward a size its content is
+    /// already laid out for: another layout (a monitor refresh, rows
+    /// settling) waits for the morph to land, since on a starved CPU one
+    /// layout of a long view outlasts several frames of the morph.
+    pub fn hold_layout(&self, now: Instant) -> bool {
+        let morphing = self.morph.0.running(now) || self.morph.1.running(now);
+        morphing && self.modal.layer.is_some() && self.laid_for == (self.morph.0.target(), self.morph.1.target())
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn draw(&mut self, m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, now: Instant, body_h: f64) {
-        // On a layer the content is laid out in the layer's own pixels,
-        // opaque, cut only while it crosses the line: the compositor moves
-        // and fades it with the card.
+    fn draw(&mut self, m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, now: Instant, body_h: f64, target: (f64, f64)) {
+        // On a layer the content is laid out in the layer's own pixels at
+        // the size the card is headed for: the compositor moves, cuts and
+        // fades it with the card.
         let (frame, alpha, clip) = match &self.modal.layer {
             Some(_) => {
-                let rest = self.modal.card.content_rest();
-                (IRect::new(0, 0, rest.w, rest.h), 1.0, crate::surfaces::modal::Layer::crop(&self.modal.card, !self.modal.animating(now)))
+                let size = IRect::new(0, 0, target.0.round() as i32, target.1.round() as i32);
+                (size, 1.0, size)
             }
             None => (self.modal.card.content.0, self.modal.card.content.1, self.modal.card.clip),
         };
-        self.crop = self.modal.layer.as_ref().map(|_| clip);
         let s = theme.space.clone();
         let pad = s.panel_padding;
         let (fx, fy, fw) = (frame.x as f64, frame.y as f64, frame.w as f64);
@@ -1655,15 +1664,15 @@ impl Shown {
         self.wake = None;
         // Where the layer's pixels sit on the output once settled, for the
         // rects reported out.
+        if let Some(l) = &mut self.modal.layer {
+            l.fit(frame.w, frame.h);
+        }
         let on_output = match &self.modal.layer {
-            Some(_) => { let r = self.modal.card.content_rest(); (r.x, r.y) }
+            Some(l) => { let r = l.place(&self.modal.card, true); (r.x, r.y) }
             None => (0, 0),
         };
         let scene = match &mut self.modal.layer {
-            Some(l) => {
-                l.fit(frame.w, frame.h);
-                &mut l.scene
-            }
+            Some(l) => &mut l.scene,
             None => &mut self.modal.card.scene,
         };
         self.head.motion_scale = self.scale;
@@ -1755,8 +1764,8 @@ impl Shown {
     /// control.
     pub fn hit(&self, x: f64, y: f64) -> Option<crate::ui::Hit> {
         let (x, y) = match &self.modal.layer {
-            Some(_) => {
-                let at = crate::surfaces::modal::Layer::place(&self.modal.card, !self.modal.animating(Instant::now()));
+            Some(l) => {
+                let at = l.place(&self.modal.card, !self.modal.animating(Instant::now()));
                 (x - f64::from(at.x), y - f64::from(at.y))
             }
             None => (x, y),

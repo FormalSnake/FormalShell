@@ -151,6 +151,11 @@ pub struct Card {
     pub joins: Vec<Join>,
     /// Where content goes this frame, in surface pixels, and how opaque.
     pub content: (IRect, f32),
+    /// A popover's frame this frame, in surface pixels, and how opaque.
+    pub popover_frame: (IRect, f32),
+    /// The compositor draws a popover's look off `popover_frame`; the
+    /// card's own surface paints none of it.
+    pub compositor_look: bool,
     /// The band content may draw in, held to the bud while it is clamped.
     pub clip: IRect,
 }
@@ -211,6 +216,8 @@ impl Card {
             shape,
             joins: Vec::new(),
             content: (IRect::default(), 0.0),
+            popover_frame: (IRect::default(), 0.0),
+            compositor_look: false,
             clip: IRect::default(),
         }
     }
@@ -354,6 +361,64 @@ impl Card {
         }
     }
 
+    /// A popover's casts, fill and border for a card at `card`, `alpha`
+    /// opaque, onto `nodes` of `scene`.
+    fn paint_popover(look: &Look, scene: &mut Scene, nodes: (NodeId, NodeId), card: Rect, alpha: f32, shown: bool) {
+        let radius = look.radius;
+        let layers: Vec<Cast> = look
+            .casts
+            .iter()
+            .map(|c| Cast { x: c.x, y: c.y, blur: c.blur, spread: c.spread, color: c.color.with_alpha(c.color.a * alpha) })
+            .collect();
+        let reach = Self::cast_reach(look);
+        let rr = |r: Rect, radius: f64| vello_cpu::kurbo::Shape::to_path(&vello_cpu::kurbo::RoundedRect::from_rect(r, radius.max(0.0)), 0.1);
+        let size = scene.size;
+        scene.update_with(
+            nodes.0,
+            Scene::cover(card, Affine::IDENTITY, reach).intersect(&size),
+            Paint::Casts { rect: card, radius, layers, cutout: rr(card, radius) },
+            shown && !look.casts.is_empty(),
+            Affine::IDENTITY,
+            None,
+        );
+        let fill = look.fill.with_alpha(look.fill.a * alpha);
+        let border = look.border.with_alpha(look.border.a * alpha);
+        let half = look.border_width / 2.0;
+        let mut line = rr(card.inflate(-half, -half), radius - half);
+        line.close_path();
+        scene.update_with(
+            nodes.1,
+            Scene::cover(card, Affine::IDENTITY, 2.0),
+            Paint::Shape { fill: Some((rr(card, radius), fill)), strokes: vec![(line, border, look.border_width)] },
+            shown,
+            Affine::IDENTITY,
+            None,
+        );
+    }
+
+    /// How far past the card a popover's casts reach.
+    fn cast_reach(look: &Look) -> f64 {
+        let reach = look.casts.iter().map(|c| c.blur + c.spread.max(0.0) + c.x.abs().max(c.y.abs())).fold(0.0, f64::max);
+        reach * 1.25 + 2.0
+    }
+
+    /// Whether the card buds as a popover, whose look the compositor can
+    /// carry (`popover_look`).
+    pub fn popover(&self) -> bool {
+        self.look.popover
+    }
+
+    /// The popover's look painted fully opaque at `card` onto `nodes` of
+    /// `scene`.
+    pub fn popover_look(&self, scene: &mut Scene, nodes: (NodeId, NodeId), card: Rect) {
+        Self::paint_popover(&self.look, scene, nodes, card, 1.0, true);
+    }
+
+    /// The room a popover's casts need around the card.
+    pub fn popover_margin(&self) -> i32 {
+        Self::cast_reach(&self.look).ceil() as i32
+    }
+
     fn tick_popover(&mut self, now: Instant) {
         // A popover never hangs off its line. `attach` starts at 1 for the
         // joined habit, and the scrim's band over the bar fades by 1 - attach.
@@ -366,37 +431,12 @@ impl Card {
         let map = self.edge_map();
         let at = self.live + vello_cpu::kurbo::Vec2::new(0.0, -drop);
         let device = Scene::cover(at, map, 0.0);
-        let radius = self.look.radius;
-        let layers: Vec<Cast> = self
-            .look
-            .casts
-            .iter()
-            .map(|c| Cast { x: c.x, y: c.y, blur: c.blur, spread: c.spread, color: c.color.with_alpha(c.color.a * alpha) })
-            .collect();
-        let reach = layers.iter().map(|c| c.blur + c.spread.max(0.0) + c.x.abs().max(c.y.abs())).fold(0.0, f64::max);
         let card = Rect::new(device.x as f64, device.y as f64, device.right() as f64, device.bottom() as f64);
-        let rr = |r: Rect, radius: f64| vello_cpu::kurbo::Shape::to_path(&vello_cpu::kurbo::RoundedRect::from_rect(r, radius.max(0.0)), 0.1);
-        self.scene.update_with(
-            self.casts,
-            Scene::cover(card, Affine::IDENTITY, reach * 1.25 + 2.0).intersect(&self.scene.size),
-            Paint::Casts { rect: card, radius, layers, cutout: rr(card, radius) },
-            shown && !self.look.casts.is_empty(),
-            Affine::IDENTITY,
-            None,
-        );
-        let fill = self.look.fill.with_alpha(self.look.fill.a * alpha);
-        let border = self.look.border.with_alpha(self.look.border.a * alpha);
-        let half = self.look.border_width / 2.0;
-        let mut line = rr(card.inflate(-half, -half), radius - half);
-        line.close_path();
-        self.scene.update_with(
-            self.shape,
-            Scene::cover(card, Affine::IDENTITY, 2.0),
-            Paint::Shape { fill: Some((rr(card, radius), fill)), strokes: vec![(line, border, self.look.border_width)] },
-            shown,
-            Affine::IDENTITY,
-            None,
-        );
+        // Painted by the compositor instead (`popover_look`): the card's own
+        // surface carries nothing of it.
+        let here = shown && !self.compositor_look;
+        Self::paint_popover(&self.look, &mut self.scene, (self.casts, self.shape), card, alpha, here);
+        self.popover_frame = (device, if shown { alpha } else { 0.0 });
         self.content = (device, if shown { self.content_alpha(pose) * self.frame_alpha } else { 0.0 });
         self.clip = self.scene.size;
         self.joins.clear();
