@@ -284,7 +284,7 @@ impl App {
         let home = std::env::var("HOME").unwrap_or_default();
         let path = self.store.config.avatar_path(&home);
         let size = (self.store.theme.theme.font_size.display_large * 3.0).round() as u32;
-        let picture = self.store.wallpaper.picture.clone();
+        let picture = self.store.wallpaper.latest().cloned();
         let avatar_tx = tx.clone();
         rt.pool().submit(move || {
             let _ = avatar_tx.send(LockMsg::Avatar(view::avatar(&path, size.max(1))));
@@ -555,7 +555,7 @@ impl App {
             error: &self.lock.error,
             has_wallpaper,
             backdrop: self.lock.backdrop.as_ref(),
-            picture: self.store.wallpaper.picture.as_ref().filter(|p| has_wallpaper && p.path == self.store.state.data.wallpaper),
+            picture: self.store.wallpaper.latest().filter(|p| has_wallpaper && p.path == self.store.state.data.wallpaper),
             avatar: self.lock.avatar.as_ref(),
             media: None,
             enter: (self.lock.fade.value(now).clamp(0.0, 1.0) as f32, self.lock.rise.value(now)),

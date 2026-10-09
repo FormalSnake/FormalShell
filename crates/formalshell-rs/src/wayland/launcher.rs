@@ -75,7 +75,7 @@ impl App {
             let ls = self.overlay(namespace, layer, Anchor::TOP | Anchor::LEFT | Anchor::RIGHT, (0, inset as u32), -1);
             PixelSurface::new(names[1], ls, tone, &self.pixels, &self.qh, self.started)
         });
-        let ls = self.layer_shell.create_layer_surface(&self.qh, self.compositor.create_surface(&self.qh), layer, Some(namespace), None);
+        let ls = self.layer_shell.create_layer_surface(&self.qh, self.compositor.create_surface(&self.qh), layer, Some(namespace), self.bar_wl.as_ref());
         ls.set_anchor(Anchor::all());
         ls.set_size(0, 0);
         ls.set_margin(inset as i32, 0, 0, 0);

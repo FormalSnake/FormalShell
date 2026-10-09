@@ -1,8 +1,8 @@
 //! The desktop's picture: the wallpaper decoded and
-//! cover-cropped to the output on the pool, handed to the UI thread as
-//! ready pixels, through the retro dither pass when
-//! `wallpaper.dither` asks for it. The backdrop crossfades between two of
-//! these.
+//! cover-cropped to each output's size on the pool, handed to the UI thread
+//! as ready pixels, through the retro dither pass when
+//! `wallpaper.dither` asks for it. Each output's backdrop crossfades between
+//! two of these.
 
 use std::sync::{Arc, OnceLock};
 
@@ -21,22 +21,48 @@ pub struct Picture {
     pub bgra: Vec<u8>,
 }
 
+/// The newest picture for each output size asked for.
 #[derive(Default)]
 pub struct State {
+    pictures: Vec<Arc<Picture>>,
+}
+
+/// The picture for one size, none when the wallpaper is unset or failed.
+pub struct Diff {
+    pub size: (u32, u32),
     pub picture: Option<Arc<Picture>>,
 }
 
-pub struct Diff(pub Option<Arc<Picture>>);
+/// More sizes than any desk carries outputs; the oldest goes first.
+const KEPT: usize = 4;
 
 impl State {
-    pub fn apply(&mut self, Diff(picture): Diff) -> bool {
-        let same = match (&self.picture, &picture) {
+    pub fn apply(&mut self, Diff { size, picture }: Diff) -> bool {
+        let at = self.pictures.iter().position(|p| (p.width, p.height) == size);
+        let old = at.map(|i| self.pictures.remove(i));
+        let same = match (&old, &picture) {
             (Some(a), Some(b)) => Arc::ptr_eq(a, b),
             (None, None) => true,
             _ => false,
         };
-        self.picture = picture;
+        if let Some(p) = picture {
+            self.pictures.retain(|q| q.path == p.path);
+            self.pictures.push(p);
+            if self.pictures.len() > KEPT {
+                self.pictures.remove(0);
+            }
+        }
         !same
+    }
+
+    /// The picture made for an output `width` by `height`.
+    pub fn sized(&self, width: u32, height: u32) -> Option<&Arc<Picture>> {
+        self.pictures.iter().rev().find(|p| (p.width, p.height) == (width, height))
+    }
+
+    /// The latest picture of any size, for a surface that scales its own.
+    pub fn latest(&self) -> Option<&Arc<Picture>> {
+        self.pictures.last()
     }
 }
 
@@ -102,24 +128,31 @@ fn render(path: &str, width: u32, height: u32, colors: Option<usize>) -> Option<
     Some(Picture { path: path.to_owned(), dither: colors, width, height, bgra })
 }
 
+/// Requests queued behind one another collapse to the newest per size, so
+/// each output's backdrop gets its own picture and none waits on a stale one.
 pub async fn run(ctx: Ctx) {
     let (tx, rx) = async_channel::unbounded();
     let _ = REQUESTS.set(tx);
-    let mut last = None;
-    while let Ok(mut request) = rx.recv().await {
+    let mut last: Vec<Request> = Vec::new();
+    while let Ok(first) = rx.recv().await {
+        let mut batch: Vec<Request> = vec![first];
         while let Ok(newer) = rx.try_recv() {
-            request = newer;
+            batch.retain(|r| (r.1, r.2) != (newer.1, newer.2));
+            batch.push(newer);
         }
-        if last.as_ref() == Some(&request) || request.1 == 0 || request.2 == 0 {
-            continue;
+        for request in batch {
+            if last.contains(&request) || request.1 == 0 || request.2 == 0 {
+                continue;
+            }
+            last.retain(|r| (r.1, r.2) != (request.1, request.2));
+            last.push(request.clone());
+            let (path, w, h, colors) = request;
+            let picture = if path.is_empty() {
+                None
+            } else {
+                ctx.pool().run(move || render(&path, w, h, colors)).await.flatten().map(Arc::new)
+            };
+            ctx.publish(store::Diff::Wallpaper(Diff { size: (w, h), picture }));
         }
-        last = Some(request.clone());
-        let (path, w, h, colors) = request;
-        let picture = if path.is_empty() {
-            None
-        } else {
-            ctx.pool().run(move || render(&path, w, h, colors)).await.flatten().map(Arc::new)
-        };
-        ctx.publish(store::Diff::Wallpaper(Diff(picture)));
     }
 }
