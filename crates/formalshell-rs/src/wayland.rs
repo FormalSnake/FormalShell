@@ -9,6 +9,7 @@ mod caffeinate;
 pub mod capture;
 mod console;
 mod headset;
+mod heads;
 mod hotcorners;
 mod launcher;
 pub mod lock;
@@ -48,9 +49,9 @@ use smithay_client_toolkit::{delegate_dispatch2, delegate_registry, registry_han
 use crate::ipc;
 use crate::runtime::{Msg, Runtime};
 use crate::scene::{IRect, NodeId};
-use crate::services::{barpaint, commands, devices, hyprland, info, media, nightlight, overnight, theme, tray, wallpaper};
+use crate::services::{barpaint, commands, devices, hyprland, info, media, nightlight, overnight, theme, tray};
 use crate::store::{Store, Topic};
-use crate::surface::{Backdrop, PixelSurface, Pixels, Surface};
+use crate::surface::{PixelSurface, Pixels, Surface};
 use crate::surfaces;
 use crate::surfaces::bar::Bar;
 use crate::surfaces::bar::cell::{Action, Button, Env, TrayClick};
@@ -162,7 +163,8 @@ enum Owner {
     Osd,
     Headset,
     Zone(usize),
-    Backdrop,
+    /// An output's wallpaper, or its bar while that is a spare.
+    Head(usize, heads::Part),
     /// The launcher's card or one of its two scrims.
     Launcher(crate::surfaces::modal::Part),
     Switcher,
@@ -197,7 +199,9 @@ pub struct App {
     peek: preview::State,
     pub bar: Bar,
     bar_surface: Option<Surface>,
-    backdrop: Option<Backdrop>,
+    /// The output the live bar is on.
+    bar_wl: Option<wl_output::WlOutput>,
+    heads: Vec<heads::Head>,
     zones: Vec<(Edge, PixelSurface)>,
     pub overflow: Option<Popout>,
     pub panel: Option<Host>,
@@ -305,7 +309,8 @@ impl App {
             peek: preview::State::default(),
             bar,
             bar_surface: None,
-            backdrop: None,
+            bar_wl: None,
+            heads: Vec::new(),
             zones: Vec::new(),
             overflow: None,
             panel: None,
@@ -352,25 +357,8 @@ impl App {
             capture: Default::default(),
             pickers: Default::default(),
         };
-        app.place_chrome();
-        let layer = app.overlay("formalshell:wallpaper", Layer::Background, Anchor::all(), (0, 0), -1);
-        app.backdrop = Some(Backdrop::new(layer, &app.shm));
+        app.sync_heads();
         app
-    }
-
-    /// The wallpaper for the output's size, asked for again whenever either
-    /// moves, and drawn once it is ready.
-    fn update_backdrop(&mut self) {
-        let Some(b) = &mut self.backdrop else { return };
-        let Some((w, h)) = b.size() else { return };
-        let theme = &self.store.theme.theme;
-        let dither = theme.wallpaper_dither.then(|| self.store.config.f64("wallpaper.ditherColors").unwrap_or(6.0).max(1.0) as usize);
-        wallpaper::show(&self.store.state.data.wallpaper, w as u32, h as u32, dither);
-        let background = theme.colors.get("background");
-        let picture = self.store.wallpaper.picture.clone();
-        let wanted = &self.store.state.data.wallpaper;
-        let reveal = theme.motion().families.reveal * self.motion_scale;
-        b.draw(picture.filter(|p| p.path == *wanted && p.dither == dither), background, reveal, &self.qh);
     }
 
     pub fn set_handle(&mut self, handle: LoopHandle<'static, App>) {
@@ -378,10 +366,15 @@ impl App {
         self.start_lock();
     }
 
-    /// A layer surface that takes no input and reserves nothing.
+    /// A layer surface that takes no input and reserves nothing, on the
+    /// live bar's output.
     fn overlay(&self, namespace: &'static str, layer: Layer, anchor: Anchor, size: (u32, u32), zone: i32) -> LayerSurface {
+        self.overlay_on(namespace, layer, anchor, size, zone, self.bar_wl.as_ref())
+    }
+
+    fn overlay_on(&self, namespace: &'static str, layer: Layer, anchor: Anchor, size: (u32, u32), zone: i32, output: Option<&wl_output::WlOutput>) -> LayerSurface {
         let surface = self.compositor.create_surface(&self.qh);
-        let ls = self.layer_shell.create_layer_surface(&self.qh, surface, layer, Some(namespace), None);
+        let ls = self.layer_shell.create_layer_surface(&self.qh, surface, layer, Some(namespace), output);
         ls.set_anchor(anchor);
         ls.set_size(size.0, size.1);
         ls.set_exclusive_zone(zone);
@@ -425,8 +418,12 @@ impl App {
     }
 
     fn chrome_hidden(&self) -> bool {
+        self.hidden_on(&self.bar.output)
+    }
+
+    fn hidden_on(&self, output: &str) -> bool {
         let hide = self.store.config.bool("fullscreen.hideChrome").unwrap_or(true);
-        hide && self.store.hyprland.compositor.fullscreen_outputs.contains(&self.bar.output)
+        hide && self.store.hyprland.compositor.fullscreen_outputs.iter().any(|o| o == output)
     }
 
     /// The bar's window and the frame's zones as the config and the
@@ -449,11 +446,21 @@ impl App {
             self.sync_join();
             return;
         }
-        let framed = self.bar.framed();
-        let edge = self.bar.edge();
-        let t = self.bar.thickness();
+        let Some(output) = self.bar_wl.clone() else { return };
+        let (surface, zones) = self.build_chrome(&self.bar, &output);
+        self.bar_surface = Some(surface);
+        self.zones = zones;
+        self.bar_dirty = true;
+    }
+
+    /// A bar's window on `output` and, for a framed one, the four zones
+    /// reserving the frame's edges.
+    fn build_chrome(&self, bar: &Bar, output: &wl_output::WlOutput) -> (Surface, Vec<(Edge, PixelSurface)>) {
+        let framed = bar.framed();
+        let edge = bar.edge();
+        let t = bar.thickness();
         let surface = self.compositor.create_surface(&self.qh);
-        let layer = self.layer_shell.create_layer_surface(&self.qh, surface, Layer::Top, Some("formalshell:bar"), None);
+        let layer = self.layer_shell.create_layer_surface(&self.qh, surface, Layer::Top, Some("formalshell:bar"), Some(output));
         layer.set_keyboard_interactivity(KeyboardInteractivity::None);
         if framed {
             layer.set_anchor(Anchor::all());
@@ -469,27 +476,33 @@ impl App {
         }
         layer.commit();
         let mut surface = Surface::new("bar", layer, &self.shm, self.started);
-        surface.presize(self.bar.scene.size.w, self.bar.scene.size.h);
-        self.bar_surface = Some(surface);
-        self.bar_dirty = true;
-
-        self.zones.clear();
+        surface.presize(bar.scene.size.w, bar.scene.size.h);
+        let mut zones = Vec::new();
         if framed {
-            let ft = self.bar.frame_thickness() as i32;
+            let ft = bar.frame_thickness() as i32;
             for e in [Edge::Top, Edge::Bottom, Edge::Left, Edge::Right] {
                 let zone = if e == edge { t } else { ft };
                 let size = if e.is_vertical() { (1, 0) } else { (0, 1) };
-                let ls = self.overlay("formalshell:frame-zone", Layer::Overlay, edge_anchor(e), size, zone);
+                let ls = self.overlay_on("formalshell:frame-zone", Layer::Overlay, edge_anchor(e), size, zone, Some(output));
                 let ps = PixelSurface::new("frame-zone", ls, 0.0, &self.pixels, &self.qh, self.started);
-                self.zones.push((e, ps));
+                zones.push((e, ps));
             }
         }
+        (surface, zones)
     }
 
     fn set_input_region(&self) {
-        let (Some(s), true) = (&self.bar_surface, self.bar.framed()) else { return };
+        if let Some(s) = &self.bar_surface {
+            self.set_input_region_for(&self.bar, s);
+        }
+    }
+
+    fn set_input_region_for(&self, bar: &Bar, s: &Surface) {
+        if !bar.framed() {
+            return;
+        }
         if let Ok(region) = Region::new(&self.compositor) {
-            let r = self.bar.strip();
+            let r = bar.strip();
             region.add(r.x, r.y, r.w, r.h);
             s.layer.set_input_region(Some(region.wl_region()));
             s.layer.commit();
@@ -519,6 +532,10 @@ impl App {
         self.arm_caffeinate();
         let edge = layout::position(self.store.config.str("bar.position"));
         let moved = self.bar.set_edge(edge);
+        for s in self.heads.iter_mut().filter_map(|h| h.spare.as_mut()) {
+            s.bar.set_edge(edge);
+            s.bar.set_layout(resolved.clone());
+        }
         let relaid = self.bar.set_layout(resolved);
         if moved || relaid {
             self.overflow = None;
@@ -528,6 +545,7 @@ impl App {
         }
         if moved {
             self.place_chrome();
+            self.place_spares();
         }
         self.refresh_bar(None);
     }
@@ -537,8 +555,12 @@ impl App {
     pub fn set_bar_theme(&mut self) {
         let before = (self.bar.thickness(), self.bar.framed(), self.bar.frame_thickness());
         self.bar.set_theme(&self.store.theme.theme);
+        for s in self.heads.iter_mut().filter_map(|h| h.spare.as_mut()) {
+            s.bar.set_theme(&self.store.theme.theme);
+        }
         if (self.bar.thickness(), self.bar.framed(), self.bar.frame_thickness()) != before {
             self.place_chrome();
+            self.place_spares();
         }
         self.refresh_bar(None);
     }
@@ -579,7 +601,8 @@ impl App {
             self.panel_dirty = true;
         }
         self.sync_open(now);
-        self.update_backdrop();
+        self.refresh_spares(topic, now);
+        self.update_backdrops();
         self.bar_dirty = true;
     }
 
@@ -598,19 +621,18 @@ impl App {
         });
     }
 
+    /// The live bar's output, which every card hanging off it is sized to.
     fn output_size(&self) -> (f64, f64) {
-        self.outputs
-            .outputs()
-            .next()
-            .and_then(|o| self.outputs.info(&o))
+        self.bar_wl
+            .as_ref()
+            .and_then(|o| self.outputs.info(o))
             .and_then(|i| i.logical_size.or_else(|| i.modes.iter().find(|m| m.current).map(|m| m.dimensions)))
             .map_or((0.0, 0.0), |(w, h)| (w as f64, h as f64))
     }
 
-    /// The output the bar's cells answer for: the first one the registry
-    /// announced, the one a layer surface with no output lands on.
+    /// The output the live bar's cells answer for.
     pub fn bar_output_name(&self) -> String {
-        self.outputs.outputs().next().and_then(|o| self.outputs.info(&o)).and_then(|i| i.name).unwrap_or_default()
+        self.bar_wl.as_ref().map(|o| self.output_name(o)).unwrap_or_default()
     }
 
     /// An IPC verb for the open panel `name`; `None` when it is not up or
@@ -691,22 +713,11 @@ impl App {
     /// edge rather than in the bar's line.
     fn sync_join(&mut self) {
         let nested = self.panel.as_ref().is_some_and(|p| p.place.target.is_some());
-        let mut joins: Vec<(Edge, f64, f64, f64)> = Vec::new();
         let child = if nested { self.panel.as_ref().and_then(|p| p.card.join()) } else { None };
         if let Some(o) = &mut self.overflow {
             o.card.far_gap = child.map(|(x, w, r)| (x - r, x + w + r));
         }
-        for h in [&self.panel, &self.outgoing].into_iter().flatten().filter(|h| h.place.target.is_none()) {
-            joins.extend(h.card.joins.iter().map(|j| (j.edge, j.x, j.width, j.reach)));
-        }
-        if let Some(o) = &self.overflow {
-            joins.extend(o.card.joins.iter().map(|j| (j.edge, j.x, j.width, j.reach)));
-        }
-        joins.extend(self.launcher_joins());
-        joins.extend(self.atlas_joins());
-        joins.extend(self.polkit_joins());
-        joins.extend(self.overlay_joins());
-        joins.extend(self.popup_joins());
+        let mut joins = self.joins();
         let edge = self.bar.edge();
         if !joins.iter().any(|j| j.0 == edge)
             && let Some((x, width)) = self.debug_join
@@ -718,6 +729,23 @@ impl App {
         joins.retain(|j| if seen.contains(&j.0) { false } else { seen.push(j.0); true });
         self.bar.set_joins(&joins);
         self.bar_dirty = true;
+    }
+
+    /// Every card joined to the live bar's lines.
+    fn joins(&self) -> Vec<(Edge, f64, f64, f64)> {
+        let mut joins: Vec<(Edge, f64, f64, f64)> = Vec::new();
+        for h in [&self.panel, &self.outgoing].into_iter().flatten().filter(|h| h.place.target.is_none()) {
+            joins.extend(h.card.joins.iter().map(|j| (j.edge, j.x, j.width, j.reach)));
+        }
+        if let Some(o) = &self.overflow {
+            joins.extend(o.card.joins.iter().map(|j| (j.edge, j.x, j.width, j.reach)));
+        }
+        joins.extend(self.launcher_joins());
+        joins.extend(self.atlas_joins());
+        joins.extend(self.polkit_joins());
+        joins.extend(self.overlay_joins());
+        joins.extend(self.popup_joins());
+        joins
     }
 
     /// A card's layer surface on the bar's edge, taking input over its
@@ -1313,7 +1341,9 @@ impl App {
             self.scrim = None;
             self.log("scrim unmapped");
         }
+        self.follow_focus();
         let qh = self.qh.clone();
+        self.present_heads(self.bar_dirty, now);
         let animating = self.bar.animating(now);
         if self.bar_dirty || (animating && !self.bar.step_in_place(now)) {
             self.bar.layout(&self.store, now);
@@ -1420,7 +1450,7 @@ impl App {
     fn arm_wake(&mut self, now: Instant) {
         let hosts = [&self.panel, &self.outgoing];
         let notifications = self.store.notifications.wake().map(|at| crate::services::notifications::instant_at(at, now));
-        let at = [self.bar.wake(now), self.tips.wake(), notifications, self.osd_wake(), self.headset.wake(), self.switcher_deadline(), self.atlas_deadline(), self.preview_deadline(), self.toasts.as_ref().map(|t| t.rel_at + surfaces::toasts::REL_EVERY)]
+        let at = [self.bar.wake(now), self.spares_wake(now), self.tips.wake(), notifications, self.osd_wake(), self.headset.wake(), self.switcher_deadline(), self.atlas_deadline(), self.preview_deadline(), self.toasts.as_ref().map(|t| t.rel_at + surfaces::toasts::REL_EVERY)]
             .into_iter()
             .chain(hosts.iter().filter_map(|h| h.as_ref()).flat_map(|h| [h.prime_until, h.wake.filter(|w| *w > now)]))
             .flatten()
@@ -1434,6 +1464,7 @@ impl App {
         let _ = handle.insert_source(Timer::from_deadline(at), |_, _, app: &mut App| {
             app.wake = None;
             app.bar.tick(&app.store, Instant::now());
+            app.tick_spares(Instant::now());
             app.bar_dirty = true;
             app.panel_dirty = true;
             TimeoutAction::Drop
@@ -1480,8 +1511,8 @@ impl App {
         if self.headset_owns(surface) {
             return Some(Owner::Headset);
         }
-        if self.backdrop.as_ref().is_some_and(|b| b.layer.wl_surface() == surface) {
-            return Some(Owner::Backdrop);
+        if let Some((i, part)) = self.head_part(surface) {
+            return Some(Owner::Head(i, part));
         }
         if self.switcher.owns(surface) {
             return Some(Owner::Switcher);
@@ -1604,7 +1635,13 @@ impl App {
                 self.saver_pointer(input);
                 continue;
             }
-            let owner = self.owner(&e.surface);
+            let mut owner = self.owner(&e.surface);
+            if let Some(Owner::Head(i, heads::Part::Bar)) = owner
+                && matches!(e.kind, PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } | PointerEventKind::Press { .. })
+                && self.promote(i)
+            {
+                owner = self.owner(&e.surface);
+            }
             if let Some(Owner::Picker(i)) = owner {
                 self.picker_pointer(i, e);
                 continue;
@@ -1928,11 +1965,7 @@ impl CompositorHandler for App {
             Some(Owner::Atlas(p)) => self.atlas_frame(p, now),
             Some(Owner::Launcher(part)) => self.launcher_frame(part, now),
             Some(Owner::Picker(i)) => self.picker_frame(i),
-            Some(Owner::Backdrop) => {
-                if let Some(b) = &mut self.backdrop {
-                    b.step(now, &self.qh);
-                }
-            }
+            Some(Owner::Head(i, part)) => self.head_frame(i, part, now),
             None if self.saver_owns(surface) => self.saver_frame_callback(),
             None => {
                 if !self.polkit_frame(surface) && !self.overlay_frame(surface) {
@@ -1950,7 +1983,10 @@ impl CompositorHandler for App {
 impl LayerShellHandler for App {
     fn closed(&mut self, _: &Connection, _: &QueueHandle<Self>, layer: &LayerSurface) {
         match self.owner(layer.wl_surface()) {
-            Some(Owner::Bar) => self.exit = true,
+            Some(Owner::Bar) => {
+                self.bar_surface = None;
+                self.zones.clear();
+            }
             Some(Owner::Panel) => {
                 self.panel = None;
                 self.sync_join();
@@ -1973,7 +2009,7 @@ impl LayerShellHandler for App {
                 self.headset.card = None;
                 self.sync_join();
             }
-            Some(Owner::Backdrop) => self.backdrop = None,
+            Some(Owner::Head(i, part)) => self.head_closed(i, part),
             Some(Owner::Launcher(crate::surfaces::modal::Part::Card)) => self.launcher_closed(),
             Some(Owner::Switcher) => self.switcher_close(),
             Some(Owner::Atlas(_)) => self.atlas_closed(),
@@ -2044,12 +2080,7 @@ impl LayerShellHandler for App {
             Some(Owner::Osd) => self.osd_configure(),
             Some(Owner::Headset) => self.headset_configure(),
             Some(Owner::Zone(i)) => self.zones[i].1.configure(width.max(1), height.max(1)),
-            Some(Owner::Backdrop) => {
-                if let Some(b) = &mut self.backdrop {
-                    b.configure(width, height);
-                }
-                self.update_backdrop();
-            }
+            Some(Owner::Head(i, part)) => self.head_configure(i, part, width, height),
             Some(Owner::Launcher(part)) => self.launcher_configure(part, width, height),
             Some(Owner::Switcher) => self.switcher_configure(width, height),
             Some(Owner::Atlas(p)) => self.atlas_configure(p, width, height),
@@ -2150,13 +2181,21 @@ impl OutputHandler for App {
         self.on_outputs();
     }
 
-    fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_output::WlOutput) {}
+    /// sctk calls this while the output is still in its list, so nothing
+    /// here may rebuild heads from that list.
+    fn output_destroyed(&mut self, _: &Connection, _: &QueueHandle<Self>, output: wl_output::WlOutput) {
+        self.drop_head(&output);
+    }
 }
 
 impl App {
     fn on_outputs(&mut self) {
         self.lock_outputs();
         self.sync_hot_corners();
+        self.sync_heads();
+        if self.bar_surface.is_none() && !self.bar.hidden {
+            self.place_chrome();
+        }
         let name = self.bar_output_name();
         if name != self.bar.output {
             self.bar.output = name;
