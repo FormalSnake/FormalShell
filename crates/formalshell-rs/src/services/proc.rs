@@ -46,15 +46,27 @@ pub fn argv(parts: &[&str]) -> Vec<String> {
 
 /// Dropping the future kills the child.
 pub async fn capture(argv: &[String], timeout: Duration) -> Done {
-    run(argv, timeout, false).await
+    run(argv, timeout, false, false).await
 }
 
 /// [`capture`], reading stderr too (a failure whose words pick the state).
 pub async fn capture_err(argv: &[String], timeout: Duration) -> Done {
-    run(argv, timeout, true).await
+    run(argv, timeout, true, false).await
 }
 
-async fn run(argv: &[String], timeout: Duration, err: bool) -> Done {
+/// [`capture_err`], done when the child exits rather than when its pipes
+/// close. For a child that leaves a daemon behind holding them: `wl-copy`
+/// forks one that serves the clipboard until the next copy, with stdout on
+/// /dev/null but stderr still the pipe.
+pub async fn capture_exit(argv: &[String], timeout: Duration) -> Done {
+    run(argv, timeout, true, true).await
+}
+
+/// What a child wrote before it exited is already in the pipe; this is
+/// only the readers' turn to take it.
+const DRAIN: Duration = Duration::from_millis(100);
+
+async fn run(argv: &[String], timeout: Duration, err: bool, on_exit: bool) -> Done {
     let none = |code| Done { code, stdout: String::new(), stderr: String::new() };
     let Some((program, args)) = argv.split_first() else { return none(MISSING) };
     let child = command(program)
@@ -75,18 +87,36 @@ async fn run(argv: &[String], timeout: Duration, err: bool) -> Done {
     let mut stderr = child.stderr.take();
     let run = async {
         let (mut raw, mut errs) = (Vec::new(), Vec::new());
-        let out = async {
-            if let Some(out) = stdout.as_mut() {
-                let _ = out.read_to_end(&mut raw).await;
+        let mut exited = None;
+        {
+            let out = async {
+                if let Some(out) = stdout.as_mut() {
+                    let _ = out.read_to_end(&mut raw).await;
+                }
+            };
+            let error = async {
+                if let Some(e) = stderr.as_mut() {
+                    let _ = e.read_to_end(&mut errs).await;
+                }
+            };
+            let read = async {
+                futures_lite::future::zip(out, error).await;
+            };
+            if on_exit {
+                let exit = async {
+                    exited = Some(child.status().await);
+                    Timer::after(DRAIN).await;
+                };
+                read.or(exit).await;
+            } else {
+                read.await;
             }
+        }
+        let status = match exited {
+            Some(status) => status,
+            None => child.status().await,
         };
-        let error = async {
-            if let Some(e) = stderr.as_mut() {
-                let _ = e.read_to_end(&mut errs).await;
-            }
-        };
-        futures_lite::future::zip(out, error).await;
-        let code = child.status().await.ok().and_then(|s| s.code()).unwrap_or(-1);
+        let code = status.ok().and_then(|s| s.code()).unwrap_or(-1);
         Done { code, stdout: String::from_utf8_lossy(&raw).into_owned(), stderr: String::from_utf8_lossy(&errs).into_owned() }
     };
     let expired = async {

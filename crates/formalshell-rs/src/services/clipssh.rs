@@ -166,7 +166,7 @@ pub async fn run(ctx: Ctx) {
         };
         let tx = done_tx.clone();
         ctx.spawn(async move {
-            let done = proc::capture_err(&argv, Duration::from_secs(3600)).await;
+            let done = proc::capture_exit(&argv, Duration::from_secs(3600)).await;
             let _ = tx.send(done).await;
         });
     }

@@ -72,6 +72,18 @@ fn dump(app: &mut App, _: &[Value]) -> Value {
             json!({"namespace": m.namespace, "open": m.open, "scrims": scrims})
         })
         .collect();
+    // Every toast the model holds, tier by tier, for a leg reading what one
+    // said rather than only how many there were.
+    let m = &app.store.notifications.model;
+    let toasts: Vec<serde_json::Value> = [("popup", &m.popups), ("pending", &m.pending), ("past", &m.past)]
+        .into_iter()
+        .flat_map(|(tier, list)| {
+            list.iter().map(move |e| {
+                let actions: Vec<&str> = e.actions.iter().map(|a| a.label.as_str()).collect();
+                json!({"tier": tier, "summary": e.summary, "body": e.body, "urgency": u8::from(e.urgency), "actions": actions, "arrivedAt": e.arrived_at})
+            })
+        })
+        .collect();
     let phone = &app.store.info.iphone;
     let dump = json!({
         "compositor": "hyprland",
@@ -98,6 +110,7 @@ fn dump(app: &mut App, _: &[Value]) -> Value {
         "bar": [{"screen": screen, "edge": edge.as_str(), "line": line, "paint": app.bar.paint_state(&app.store)}],
         "join": join,
         "modals": modals,
+        "toasts": toasts,
         "frame": app.bar.frame_state(),
         "theme": {
             "radius": number(theme.radius),

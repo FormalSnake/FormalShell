@@ -25,7 +25,7 @@
 # of the image, and the image row is the only one whose label matches.
 leg_clipssh_image_flag="--clipssh-image"
 leg_clipssh_image_order=136
-leg_clipssh_image_needs="wl-copy wl-paste convert"
+leg_clipssh_image_needs="wl-copy wl-paste convert jq"
 
 clipssh_image_shim_dir="$shot_dir/clipssh-image-shim"
 clipssh_image_calls_path="$shot_dir/clipssh-image-calls.txt"
@@ -35,6 +35,13 @@ clipssh_image_summon_reply_path="$shot_dir/clipssh-image-summon-reply.txt"
 clipssh_image_filter_reply_path="$shot_dir/clipssh-image-filter-reply.txt"
 clipssh_image_alt_reply_path="$shot_dir/clipssh-image-alt-reply.txt"
 clipssh_image_route_png="$shot_dir/clipssh-image-route.png"
+clipssh_image_remote_path="/tmp/clipboard-1755180000.png"
+clipssh_image_paste_auto_path="$shot_dir/clipssh-image-paste-auto.txt"
+clipssh_image_dump_auto_path="$shot_dir/clipssh-image-dump-auto.json"
+clipssh_image_paste_alt_path="$shot_dir/clipssh-image-paste-alt.txt"
+clipssh_image_room_path="$shot_dir/clipssh-image-room.json"
+clipssh_image_list_path="$shot_dir/clipssh-image-list.json"
+clipssh_image_dump_path="$shot_dir/clipssh-image-dump.json"
 
 leg_clipssh_image_fixture() {
   # One alias saved and one named, so neither path has anything to ask: the
@@ -55,14 +62,18 @@ leg_clipssh_image_fixture() {
   mkdir -p "$clipssh_image_shim_dir"
   # `<alias> <sha256 of the clipboard>` per invocation, and `none` where the
   # clipboard holds no image at all, which is the failure this leg exists to
-  # catch. Fast (no sleep): the second send waits on the first having
-  # finished, not on catching it mid-flight.
+  # catch. Then the real one's last act, the remote path wl-copied as text.
+  # The second's upload stands in for an ssh with a second's sleep, so the
+  # image Shift+Enter put back is in history while the send still runs and
+  # the auto-send stays quiet about it, as it does over a real link.
   cat > "$clipssh_image_shim_dir/clipssh" <<EOF
 #!/usr/bin/env bash
 digest=\$(wl-paste --no-newline --type image/png 2>/dev/null | sha256sum | cut -d ' ' -f1)
 if ! wl-paste --list-types 2>/dev/null | grep -q '^image/png$'; then digest=none; fi
 printf '%s %s\n' "\${1:-}" "\$digest" >> "$clipssh_image_calls_path"
-printf '\033[0;32mUploaded: /tmp/clipboard-1755180000.png\033[0m\n'
+sleep 1
+printf '%s' "$clipssh_image_remote_path" | wl-copy
+printf '\033[0;32mUploaded: $clipssh_image_remote_path\033[0m\n'
 EOF
   chmod +x "$clipssh_image_shim_dir/clipssh"
   # PATH is not in session_env, so this is what Hyprland and everything it
@@ -72,7 +83,7 @@ EOF
 }
 
 leg_clipssh_image_timing() {
-  leg_timing 28 65
+  leg_timing 32 70
 }
 
 leg_clipssh_image_drive() {
@@ -89,13 +100,20 @@ sleep 4
 # image landing in history is the whole event.
 "$wl_copy_bin" --type image/png < "$clipssh_image_fixture_path"
 sleep 6
+"$wl_paste_bin" --no-newline > "$clipssh_image_paste_auto_path" 2>&1
+$ipc call debug dump > "$clipssh_image_dump_auto_path" 2>&1
 $ipc call menu summon clipboard > "$clipssh_image_summon_reply_path" 2>&1
 sleep 2
 $ipc call menu filter image > "$clipssh_image_filter_reply_path" 2>&1
 sleep 2
 "$grim_bin" "$clipssh_image_route_png" > /dev/null 2>&1
 $ipc call menu activateAlternate 0 > "$clipssh_image_alt_reply_path" 2>&1
-sleep 5
+sleep 4
+"$wl_paste_bin" --no-newline > "$clipssh_image_paste_alt_path" 2>&1
+$ipc call bar room > "$clipssh_image_room_path" 2>&1
+$ipc call clipboard list > "$clipssh_image_list_path" 2>&1
+$ipc call debug dump > "$clipssh_image_dump_path" 2>&1
+sleep 1
 EOF
   hypr_exec_once "bash $script"
 }
@@ -128,6 +146,33 @@ leg_clipssh_image_assert() {
   if [ "$(cat "$clipssh_image_calls_path")" != "box $want
 box $want" ]; then
     fail "want two 'box $want' invocations, got: $(tr '\n' ' ' < "$clipssh_image_calls_path")"
+  fi
+
+  # After each send: the remote path on the clipboard as text, read in the
+  # nested session, and one COPIED toast per send raised before anything
+  # else copied (a send whose completion waited on the next clipboard
+  # change would raise it only then).
+  local p f copied
+  for p in "$clipssh_image_paste_auto_path" "$clipssh_image_paste_alt_path"; do
+    if [ "$(cat "$p" 2>/dev/null)" != "$clipssh_image_remote_path" ]; then
+      fail "the clipboard after a send holds '$(cat "$p" 2>/dev/null)', want $clipssh_image_remote_path"
+    fi
+  done
+  for f in "$clipssh_image_dump_auto_path:1" "$clipssh_image_dump_path:2"; do
+    copied=$("$jq_bin" --arg b "$clipssh_image_remote_path is on the clipboard" \
+      '[.toasts[] | select(.summary == "CLIPSSH COPIED" and .body == $b and .urgency == 1)] | length' "${f%:*}" 2>/dev/null)
+    if [ "${copied:-0}" -ne "${f##*:}" ]; then
+      fail "want ${f##*:} CLIPSSH COPIED toasts in ${f%:*}, got ${copied:-none}: $(cat "${f%:*}")"
+    fi
+  done
+  if [ "$("$jq_bin" '[.[0].cells[] | select(.name == "indicators")] | length' "$clipssh_image_room_path" 2>/dev/null)" != 0 ]; then
+    fail "the clipssh indicator is still up after the Shift+Enter send finished: $(cat "$clipssh_image_room_path")"
+  fi
+  # History after both sends: the path text on top, the image kept under it.
+  if ! "$jq_bin" -e --arg p "$clipssh_image_remote_path" \
+    '(.[0].kind == "text") and ((.[0].text // "") | startswith($p)) and ([.[] | select(.kind == "image")] | length) == 1' \
+    "$clipssh_image_list_path" > /dev/null 2>&1; then
+    fail "want the remote path on top of history and the image still in it: $(cat "$clipssh_image_list_path")"
   fi
 
   if [ ! -f "$clipssh_image_route_png" ]; then
