@@ -1820,6 +1820,7 @@ fn footer(m: &Model, store: &Store, theme: &Theme) -> El {
         node,
         at_root: m.level.is_none(),
         confirming: !m.confirm.is_empty() && node.is_some_and(|n| n.id == m.confirm),
+        clipssh_image: node.is_some_and(|n| n.alternate.is_none() && !n.clipssh_path.is_empty()),
         alternate_label: node.and_then(|n| n.alternate_label.as_deref()).unwrap_or(""),
         ..Default::default()
     });
