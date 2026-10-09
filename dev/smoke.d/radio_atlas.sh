@@ -23,10 +23,13 @@
 # `radio status` has to report atlas.globe.imagery true before the open
 # frame is taken, and a square inside the disc has to carry colour the flat
 # globe never had (mean HSL saturation 0.05 and some 450 colours over the
-# same square in the flat globe's frame). Every globe build the shell traces
-# while the leg runs (`atlas globe build_us=`, the sampler's share in
-# sample_us) and every commit of the card (render_us) is summarised as
-# SMOKE_RADIO_ATLAS_FRAME, with FS_CPU_QUOTA the e1504g stand-in.
+# same square in the flat globe's frame), and the whole disc's mean
+# luminance has to clear 0.18: the picture as NASA masters it read 0.127,
+# and the tone `load_earth` lays over it once lifts that to about 0.26.
+# Every globe build the shell traces while the leg runs (`atlas globe
+# build_us=`, the sampler's share in sample_us) and every commit of the
+# card (render_us) is summarised as SMOKE_RADIO_ATLAS_FRAME, with
+# FS_CPU_QUOTA the e1504g stand-in.
 #
 # The globe's centre is worked out from the panel's own layout and the
 # spacing tokens (panelPadding 12, controlHeight 32, lg 8, a 16px caption
@@ -220,6 +223,17 @@ leg_radio_atlas_assert() {
   awk -v s="${sat:-0}" -v c="${colors:-0}" 'BEGIN { exit !(s > 0.2 && c > 3000) }' \
     || fail "the disc does not look like satellite imagery (saturation ${sat:-none}, ${colors:-0} colours; the flat globe reads 0.05 and ~450)"
   echo "SMOKE_RADIO_ATLAS_DISC $shot_dir/radio-atlas-disc.png"
+  local disc_r lum
+  disc_r=$(( side * 44 * 97 / 10000 ))
+  $convert_bin "$radio_atlas_open_png" -crop "$((disc_r * 2))x$((disc_r * 2))+$(( (gl + gr) / 2 - disc_r ))+$(( (gt + gb) / 2 - disc_r ))" +repage \
+    -colorspace gray "$shot_dir/radio-atlas-lum.png" > /dev/null 2>&1
+  $convert_bin -size "$((disc_r * 2))x$((disc_r * 2))" xc:black -fill white -draw "circle $disc_r,$disc_r $disc_r,1" \
+    "$shot_dir/radio-atlas-lum-mask.png" > /dev/null 2>&1
+  lum=$($convert_bin "$shot_dir/radio-atlas-lum.png" "$shot_dir/radio-atlas-lum-mask.png" -compose multiply -composite -format '%[fx:mean]' info: 2>/dev/null)
+  lum=$(awk -v l="${lum:-0}" -v m="$($convert_bin "$shot_dir/radio-atlas-lum-mask.png" -format '%[fx:mean]' info: 2>/dev/null)" 'BEGIN { printf "%.4f", (m > 0 ? l / m : 0) }')
+  echo "disc mean luminance ${lum}"
+  awk -v l="$lum" 'BEGIN { exit !(l > 0.18) }' \
+    || fail "the disc reads dark: mean luminance ${lum}, where the untoned picture read 0.127 and the toned one 0.26"
   awk '
     function us(line, key) { if (!match(line, key "=[0-9]+")) return -1; return substr(line, RSTART + length(key) + 1, RLENGTH - length(key) - 1) + 0 }
     /^atlas globe build_us=.*imagery=true/ { b[++nb] = us($0, "build_us"); s[nb] = us($0, "sample_us"); seen = 1 }

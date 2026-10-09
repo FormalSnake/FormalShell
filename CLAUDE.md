@@ -626,7 +626,8 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   The globe wears the packaged Blue Marble (`nix/blue-marble.nix`,
   `FS_EARTH_IMAGE`): `radio status` reports `imagery` true and a square
   of the disc carries saturation and colours the flat globe never had,
-  and every globe build and card commit is summarised as
+  the whole disc's mean luminance clears 0.18 (the untoned picture read
+  0.127), and every globe build and card commit is summarised as
   `SMOKE_RADIO_ATLAS_FRAME`.
 - `radio_atlas_cold.sh` `--radio-atlas-cold`: Radio Atlas opened with no
   world cache, a frame a second in and another once `radio status`
@@ -956,7 +957,10 @@ behaviour on hosts where a real owner exists.
   above), every other surface sits over the desktop with its border doing
   the work. The lyrics pane is the one exception (owner, 2026-09-17, M56
   spec P12): depth of field on every line but the lit ones, behind
-  `media.lyricsBlur`, and a glow on the chunk being sung. Motion is
+  `media.lyricsBlur`, and a glow on the chunk being sung. Radio Atlas's
+  globe is the other (owner, 2026-10-09): an atmosphere glow and rim haze
+  over a starfield, part of the illustration and kept inside its pane.
+  Motion is
   `docs/DESIGN.md` §1 "Motion": the two clock families in
   `crates/formalshell-rs/src/motion.rs`, and the joined shape a card hanging
   off the bar draws instead of a plain card.

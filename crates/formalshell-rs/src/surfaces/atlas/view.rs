@@ -243,7 +243,7 @@ impl Shown {
         a.globe.set_selected(r.station.clone().or_else(|| a.selected.clone()));
         a.globe.active_country = a.active_code.clone();
         let c = |n: &str| theme.colors.get(n);
-        let ink = GlobeInk { sphere: c("background"), land: c("muted"), grid: c("border"), outline: c("mutedForeground"), signal: c("primary"), accent: c("primary") };
+        let ink = GlobeInk { sphere: c("background"), land: c("muted"), grid: c("border"), outline: c("mutedForeground"), signal: c("primary"), accent: c("primary"), radius: theme.radii.lg };
         let ops = a.globe.paint(&ink, alpha);
         let (gx, gy, gw, gh) = a.globe.rect;
         let bounds = IRect::new(gx.floor() as i32, gy.floor() as i32, gw.ceil() as i32 + 1, gh.ceil() as i32 + 1);

@@ -132,7 +132,28 @@ pub fn load_earth() -> Result<Earth, String> {
     if width < 2 || height < 2 {
         return Err(format!("{}: {width}x{height} is too small", path.to_string_lossy()));
     }
-    Ok(Earth::new(width, height, image.into_raw()))
+    let mut rgb = image.into_raw();
+    tone(&mut rgb);
+    Ok(Earth::new(width, height, rgb))
+}
+
+/// Blue Marble is mastered dark for print: open ocean sits near (7, 21, 52)
+/// and reads as black on a screen. A gamma of 1/1.6 lifts the shadows and
+/// midtones while white stays white, and a 1.15 saturation about the luma
+/// gives back the colour the lift washes out. Run once on decode, so the
+/// sampler's per-pixel work is unchanged.
+const TONE_GAMMA: f32 = 1.0 / 1.6;
+const TONE_SATURATION: f32 = 1.15;
+
+fn tone(rgb: &mut [u8]) {
+    let lut: [f32; 256] = std::array::from_fn(|i| (i as f32 / 255.0).powf(TONE_GAMMA) * 255.0);
+    for px in rgb.chunks_exact_mut(3) {
+        let [r, g, b] = [lut[px[0] as usize], lut[px[1] as usize], lut[px[2] as usize]];
+        let y = 0.299 * r + 0.587 * g + 0.114 * b;
+        for (out, c) in px.iter_mut().zip([r, g, b]) {
+            *out = (y + (c - y) * TONE_SATURATION).round().clamp(0.0, 255.0) as u8;
+        }
+    }
 }
 
 /// The run of pixels the sampler draws between two exactly projected
@@ -140,6 +161,16 @@ pub fn load_earth() -> Result<Earth, String> {
 /// the projection bends hardest.
 const SPAN: i32 = 16;
 const RIM_SPAN: i32 = 4;
+
+/// The atmosphere seen edge on: its blue laid over the picture from
+/// `HAZE_FROM` of the way out, rising with the cube of the distance into
+/// it to `HAZE_MAX` at the limb, the way the air thickens along a grazing
+/// line of sight.
+const ATMOSPHERE: [u8; 3] = [118, 170, 255];
+const HAZE_FROM: f32 = 0.55;
+const HAZE_MAX: f32 = 0.55;
+const HAZE_RB: u32 = (ATMOSPHERE[2] as u32) << 16 | ATMOSPHERE[0] as u32;
+const HAZE_G: u32 = ATMOSPHERE[1] as u32;
 
 /// atan2 to within 1e-5 rad, a tenth of a texel on a 4096 wide picture,
 /// without the libm call per pixel.
@@ -244,13 +275,16 @@ impl Earth {
                 let p1 = hz * so + vx * co;
                 let lon = fast_atan2(p1, p0);
                 let lat = fast_atan2(p2, (1.0 - p2 * p2).max(0.0).sqrt());
-                let shade = (0.62 + 0.45 * (vx * l0 + vy * l1 + vz * l2).max(0.0)).min(1.0);
-                // The flat globe's limb darkening, folded in here rather
-                // than painted as a second pass over the disc.
+                let shade = (0.7 + 0.4 * (vx * l0 + vy * l1 + vz * l2).max(0.0)).min(1.0);
+                // A narrow limb darkening and the atmosphere's haze over
+                // it, both off the distance from the disc's centre, folded
+                // in here rather than painted as passes over the disc.
                 let dx = x as f32 + 0.5 - cx;
-                let edge = (((dx * dx + dy * dy).sqrt() * inv_horizon - 0.85) / 0.15).clamp(0.0, 1.0);
-                let shade = shade * (1.0 - 0.55 * edge);
-                (lon * to_x + wf * 0.5 - 0.5, hf * 0.5 - lat * to_y - 0.5, shade * 256.0)
+                let rho = (dx * dx + dy * dy).sqrt() * inv_horizon;
+                let edge = ((rho - 0.94) / 0.06).clamp(0.0, 1.0);
+                let shade = shade * (1.0 - 0.3 * edge);
+                let haze = ((rho - HAZE_FROM) / (1.0 - HAZE_FROM)).clamp(0.0, 1.0);
+                (lon * to_x + wf * 0.5 - 0.5, hf * 0.5 - lat * to_y - 0.5, shade * 256.0, haze * haze * haze * HAZE_MAX * 256.0)
             };
             // Exact every SPAN pixels and straight lines between: the
             // mapping bends slowly enough that the error stays under a
@@ -271,7 +305,10 @@ impl Earth {
                 }
                 let n = 1.0 / (b - a) as f32;
                 let (sx, sy, ss) = (dfx * n * step as f32, (bt.1 - at.1) * n * step as f32, (bt.2 - at.2) * n * step as f32);
-                let (mut fx, mut fy, mut shade) = at;
+                let sh = (bt.3 - at.3) * n * step as f32;
+                // Only the runs out near the rim carry any haze.
+                let hazy = at.3 > 0.0 || bt.3 > 0.0;
+                let (mut fx, mut fy, mut shade, mut haze) = at;
                 for x in (a..b).step_by(step) {
                     let fyc = fy.clamp(0.0, hf - 1.0);
                     let (gx, gy) = (fx.floor(), fyc.floor());
@@ -296,7 +333,13 @@ impl Earth {
                     let rb = lerp(lerp(rb(p00), rb(p01), wx), lerp(rb(p10), rb(p11), wx), wy);
                     let g = lerp(lerp(g(p00), g(p01), wx), lerp(g(p10), g(p11), wx), wy);
                     let k = shade as u32;
-                    let px = (((rb * k) >> 8) & 0x00ff_00ff) | (((g * k) >> 8) << 8) | 0xff00_0000;
+                    let (mut rb, mut g) = (((rb * k) >> 8) & 0x00ff_00ff, (g * k) >> 8);
+                    if hazy {
+                        let t = haze as u32;
+                        rb = lerp(rb, HAZE_RB, t);
+                        g = lerp(g, HAZE_G, t);
+                    }
+                    let px = rb | (g << 8) | 0xff00_0000;
                     let o = (x - x0) as usize * 4;
                     row[o..o + 4].copy_from_slice(&px.to_le_bytes());
                     if coarse && x + 1 < b {
@@ -305,6 +348,7 @@ impl Earth {
                     fx += sx;
                     fy += sy;
                     shade += ss;
+                    haze += sh;
                 }
                 a = b;
                 at = bt;
@@ -314,6 +358,34 @@ impl Earth {
         pool.truncate(3);
         Some(Bitmap { pixmap })
     }
+}
+
+const SPACE: Rgba = Rgba { r: 0.018, g: 0.022, b: 0.04, a: 1.0 };
+const STAR: Rgba = Rgba { r: 0.92, g: 0.94, b: 1.0, a: 1.0 };
+const AIR: Rgba = Rgba { r: ATMOSPHERE[0] as f32 / 255.0, g: ATMOSPHERE[1] as f32 / 255.0, b: ATMOSPHERE[2] as f32 / 255.0, a: 1.0 };
+
+/// A sparse field over a `w` by `h` pane, the same field for the same
+/// size: about one star per 3000 square pixels, most of them faint and
+/// under a pixel across, as paths in four brightness steps.
+fn stars(w: f64, h: f64) -> Vec<(BezPath, f32)> {
+    const STEPS: [f32; 4] = [0.18, 0.32, 0.5, 0.8];
+    let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+    let mut next = || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        (seed >> 11) as f64 / (1u64 << 53) as f64
+    };
+    let mut layers: Vec<BezPath> = (0..STEPS.len()).map(|_| BezPath::new()).collect();
+    for _ in 0..((w * h) / 3000.0) as usize {
+        let (x, y) = (next() * w, next() * h);
+        // Squared, so the bright ones are rare.
+        let bright = next() * next();
+        let step = ((bright * STEPS.len() as f64) as usize).min(STEPS.len() - 1);
+        let radius = 0.35 + bright * 0.75 + next() * 0.15;
+        layers[step].extend(Circle::new((x, y), radius).path_elements(0.1));
+    }
+    layers.into_iter().zip(STEPS).filter(|(p, _)| !p.is_empty()).collect()
 }
 
 fn grid() -> Vec<Vec<[f64; 3]>> {
@@ -336,6 +408,21 @@ pub struct Ink {
     pub outline: Rgba,
     pub signal: Rgba,
     pub accent: Rgba,
+    /// The pane's corner.
+    pub radius: f64,
+}
+
+impl Ink {
+    /// The palette over the satellite picture, which sits on space in
+    /// either theme mode: the signal and accent keep their hue but always
+    /// read light, and the graticule is starlight.
+    fn on_picture(&self) -> Ink {
+        let light = |c: Rgba| {
+            let (h, s, v) = hsv(c);
+            from_hsv(h, s.min(0.6), v.max(0.95), c.a)
+        };
+        Ink { signal: light(self.signal), accent: light(self.accent), grid: STAR, ..*self }
+    }
 }
 
 fn rgba(r: f64, g: f64, b: f64, a: f64) -> Rgba {
@@ -470,6 +557,7 @@ struct Key {
     pose: [f64; 3],
     size: (f64, f64, f64, f64),
     ink: [u32; 6],
+    radius: u64,
     alpha: u32,
     active: String,
     selected: String,
@@ -507,6 +595,8 @@ pub struct Globe {
     drag: Drag,
     suppress_tap: bool,
     drawn: Option<(Key, Arc<Vec<VOp>>)>,
+    /// The starfield for a pane of this size, at the pane's origin.
+    stars: Option<((u32, u32), Vec<(BezPath, f32)>)>,
 }
 
 impl Default for Globe {
@@ -516,6 +606,7 @@ impl Default for Globe {
             earth: None,
             sampled: Vec::new(),
             grid: grid(),
+            stars: None,
             stations: Vec::new(),
             stations_version: 0,
             points: Vec::new(),
@@ -852,6 +943,7 @@ impl Globe {
             pose: [self.centre_latitude, self.centre_longitude, self.scale],
             size: self.rect,
             ink: [bits(ink.sphere), bits(ink.land), bits(ink.grid), bits(ink.outline), bits(ink.signal), bits(ink.accent)],
+            radius: ink.radius.to_bits(),
             alpha: alpha.to_bits(),
             active: self.active_country.clone(),
             selected: self.selected.as_ref().map(|s| s.uuid.clone()).unwrap_or_default(),
@@ -875,6 +967,7 @@ impl Globe {
         self.earth = None;
         self.drawn = None;
         self.sampled.clear();
+        self.stars = None;
     }
 
     fn build(&mut self, ink: &Ink, alpha: f32) -> Vec<VOp> {
@@ -893,6 +986,21 @@ impl Globe {
         let circle = |radius: f64| Circle::new((cx, cy), radius.max(0.0)).to_path(0.1);
         ops.push(VOp::Clip(kurbo::Rect::new(ox, oy, ox + w, oy + h).to_path(0.1)));
 
+        // Space behind the globe, in either theme mode: a field of stars
+        // made once per pane size and moved with the pane.
+        let pane = kurbo::RoundedRect::new(ox, oy, ox + w, oy + h, ink.radius.max(0.0));
+        ops.push(VOp::Fill(pane.to_path(0.1), solid(SPACE)));
+        let size = (w.round() as u32, h.round() as u32);
+        if self.stars.as_ref().is_none_or(|(s, _)| *s != size) {
+            self.stars = Some((size, stars(w, h)));
+        }
+        if let Some((_, layers)) = &self.stars {
+            let to = kurbo::Affine::translate((ox, oy));
+            for (path, a) in layers {
+                ops.push(VOp::Fill(to * path.clone(), solid(Rgba { a: *a, ..STAR })));
+            }
+        }
+
         // The ocean, lit from the point facing the light.
         let l = light();
         let lit_k = r * (distance - 1.0) / (distance - l[2]);
@@ -904,6 +1012,13 @@ impl Globe {
             (1.0, fade(darker(ink.sphere, 2.5))),
         ];
         let earth = self.earth.clone();
+        let picture_ink;
+        let ink = if earth.is_some() {
+            picture_ink = ink.on_picture();
+            &picture_ink
+        } else {
+            ink
+        };
         if earth.is_none() {
             ops.push(VOp::Fill(circle(disc), Brush::Radial { centre: lit, r0: disc * 0.05, r1: disc * 2.1, stops }));
         }
@@ -932,7 +1047,7 @@ impl Globe {
 
         // The graticule, each segment thinning and fading toward the limb.
         let base = (r / 500.0).clamp(0.7, 1.5);
-        let grid_ink = with_alpha(ink.grid, if earth.is_some() { 0.18 } else { 0.3 });
+        let grid_ink = with_alpha(ink.grid, if earth.is_some() { 0.1 } else { 0.3 });
         for curve in &self.grid {
             let mut last: Option<(f64, f64)> = None;
             for p in curve {
@@ -981,7 +1096,7 @@ impl Globe {
                     let stroke = if is_active {
                         with_alpha(ink.accent, 0.95)
                     } else if earth.is_some() {
-                        with_alpha(ink.outline, 0.08 + near * 0.22)
+                        with_alpha(STAR, 0.1 + near * 0.18)
                     } else {
                         with_alpha(ink.outline, 0.12 + near * 0.3)
                     };
@@ -1057,11 +1172,15 @@ impl Globe {
         self.paint_signals(&mut ops, ink, alpha, &rot, (cx, cy));
         ops.push(VOp::Pop);
 
-        // The atmosphere: a thin rim of the accent just outside the horizon.
-        let rim = r * 0.04;
-        let stops = vec![(0.0, fade(with_alpha(ink.accent, 0.35))), (1.0, fade(with_alpha(ink.accent, 0.0)))];
-        ops.push(VOp::Stroke(circle(disc + rim / 2.0), Brush::Radial { centre: (cx, cy), r0: disc, r1: disc + rim, stops }, rim));
-        ops.push(VOp::Stroke(circle(disc), solid(with_alpha(ink.outline, 0.3)), 1.0));
+        // The atmosphere's glow off the limb, fading out over a few percent
+        // of the radius. This and the haze the sampler lays over the rim
+        // are the globe's own illustration, kept inside the atlas pane:
+        // the one glow the shell draws besides the lyrics pane's.
+        let glow = disc * 0.07;
+        let air = |a: f64| fade(with_alpha(AIR, a));
+        let stops = vec![(0.0, air(0.7)), (0.12, air(0.42)), (0.4, air(0.14)), (0.7, air(0.04)), (1.0, air(0.0))];
+        let inner = disc - 1.0;
+        ops.push(VOp::Stroke(circle(inner + (glow + 1.0) / 2.0), Brush::Radial { centre: (cx, cy), r0: inner, r1: disc + glow, stops }, glow + 1.0));
         ops.push(VOp::Pop);
         if crate::tracing() {
             let (sample_us, px) = sampled.unwrap_or((0, 0));
@@ -1113,9 +1232,9 @@ impl Globe {
             let c = if is_selected || is_highlighted { ink.accent } else { with_alpha(marker, 0.25 + depth * 0.7) };
             let dot = Circle::new(at, radius).to_path(0.1);
             if self.earth.is_some() && !is_selected && !is_highlighted {
-                // A rim in the card's own colour keeps a small dot apart
-                // from the picture under it.
-                ops.push(VOp::Stroke(dot.clone(), Brush::Solid(fade(with_alpha(ink.sphere, 0.25 + depth * 0.55))), 1.2));
+                // A dark rim keeps a small dot apart from the picture
+                // under it.
+                ops.push(VOp::Stroke(dot.clone(), Brush::Solid(fade(with_alpha(SPACE, 0.35 + depth * 0.45))), 1.2));
             }
             ops.push(VOp::Fill(dot, Brush::Solid(fade(c))));
             if is_selected || is_highlighted {
@@ -1179,7 +1298,7 @@ mod tests {
     #[test]
     fn a_still_globe_hands_back_the_same_list() {
         let mut g = Globe { rect: (0.0, 0.0, 400.0, 300.0), countries: Some(Arc::new(load())), ..Globe::default() };
-        let ink = Ink { sphere: Rgba::hex(0x101010ff), land: Rgba::hex(0x303030ff), grid: Rgba::hex(0x404040ff), outline: Rgba::hex(0x808080ff), signal: Rgba::hex(0xff8800ff), accent: Rgba::hex(0xff8800ff) };
+        let ink = Ink { sphere: Rgba::hex(0x101010ff), land: Rgba::hex(0x303030ff), grid: Rgba::hex(0x404040ff), outline: Rgba::hex(0x808080ff), signal: Rgba::hex(0xff8800ff), accent: Rgba::hex(0xff8800ff), radius: 8.0 };
         let a = g.paint(&ink, 1.0);
         let b = g.paint(&ink, 1.0);
         assert!(Arc::ptr_eq(&a, &b));
@@ -1192,14 +1311,14 @@ mod tests {
         let mut g = Globe { rect: (10.0, 20.0, 400.0, 300.0), ..Globe::default() };
         let s = Station { uuid: "u".into(), name: "Smoke".into(), latitude: Some(18.0), longitude: Some(-20.0), ..Station::default() };
         g.set_stations(vec![s.clone()]);
-        let ink = Ink { sphere: Rgba::hex(0x101010ff), land: Rgba::hex(0x303030ff), grid: Rgba::hex(0x404040ff), outline: Rgba::hex(0x808080ff), signal: Rgba::hex(0xff8800ff), accent: Rgba::hex(0xff8800ff) };
+        let ink = Ink { sphere: Rgba::hex(0x101010ff), land: Rgba::hex(0x303030ff), grid: Rgba::hex(0x404040ff), outline: Rgba::hex(0x808080ff), signal: Rgba::hex(0xff8800ff), accent: Rgba::hex(0xff8800ff), radius: 8.0 };
         g.paint(&ink, 1.0);
         g.press(210.0, 170.0);
         assert_eq!(g.release(212.0, 171.0, 0, Instant::now()), Out::Station(s));
     }
 
     fn ink() -> Ink {
-        Ink { sphere: Rgba::hex(0x101010ff), land: Rgba::hex(0x303030ff), grid: Rgba::hex(0x404040ff), outline: Rgba::hex(0x808080ff), signal: Rgba::hex(0xff8800ff), accent: Rgba::hex(0xff8800ff) }
+        Ink { sphere: Rgba::hex(0x101010ff), land: Rgba::hex(0x303030ff), grid: Rgba::hex(0x404040ff), outline: Rgba::hex(0x808080ff), signal: Rgba::hex(0xff8800ff), accent: Rgba::hex(0xff8800ff), radius: 8.0 }
     }
 
     /// A picture whose texel says where it is: red the longitude, green
