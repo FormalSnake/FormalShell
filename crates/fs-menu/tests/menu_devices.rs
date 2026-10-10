@@ -20,7 +20,7 @@ fn id_part_round_trips_and_has_no_dot() {
 }
 
 fn net(name: &str) -> WifiNetwork {
-    WifiNetwork { name: name.into(), secured: true, signal: 0.5, ..WifiNetwork::default() }
+    WifiNetwork { name: name.into(), secured: true, in_range: true, signal: 0.5, ..WifiNetwork::default() }
 }
 
 fn wifi(networks: Vec<WifiNetwork>) -> Vec<Node> {
@@ -73,6 +73,26 @@ fn wifi_order_connected_saved_nearby() {
     assert_eq!(labels(&rows), ["Live", "Saved", "Near"]);
     let sections: Vec<_> = rows.iter().map(|r| r.section.as_deref()).collect();
     assert_eq!(sections, [Some("Saved"), Some("Saved"), Some("Nearby")]);
+}
+
+#[test]
+fn wifi_saved_out_of_range_sits_under_known_networks() {
+    let away = |name| WifiNetwork { known: true, in_range: false, signal: 0.0, ..net(name) };
+    let rows = wifi(vec![away("Hostel"), WifiNetwork { known: true, ..net("Home") }, net("Cafe"), away("Airport")]);
+    let top: Vec<&str> = rows.iter().filter(|r| r.parent_id.is_none()).map(|r| r.label.as_str()).collect();
+    assert_eq!(top, ["Home", "Cafe", "Known networks"]);
+    let known = rows.iter().find(|r| r.id == "wifi.known").unwrap();
+    assert_eq!(known.child_ids, ["wifi.net.Airport", "wifi.net.Hostel"]);
+    let hostel = rows.iter().find(|r| r.label == "Hostel").unwrap();
+    assert_eq!(hostel.parent_id.as_deref(), Some("wifi.known"));
+    assert_eq!(hostel.alternate.as_deref(), Some("@ipc:wifi.forget:Hostel"));
+}
+
+#[test]
+fn wifi_with_only_saved_networks_out_of_range_says_none_found() {
+    let rows = wifi(vec![WifiNetwork { known: true, in_range: false, ..net("Hostel") }]);
+    assert_eq!(rows[0].id, "wifi.empty");
+    assert_eq!(rows[1].id, "wifi.known");
 }
 
 #[test]

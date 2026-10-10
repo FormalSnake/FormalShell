@@ -45,6 +45,8 @@ pub struct Row {
     pub changing: bool,
     pub secured: bool,
     pub enterprise: bool,
+    /// An access point broadcasts it; false only for a saved network.
+    pub in_range: bool,
     /// 0 to 1.
     pub signal: f64,
 }
@@ -183,7 +185,8 @@ pub struct Network {
     /// The first Wi-Fi device's interface and hardware address.
     pub wifi_device: Option<(String, String)>,
     pub wired_rows: Vec<Wired>,
-    /// Connected first, then known, each tier strongest first.
+    /// Connected first, then the rest in range (saved, then by signal), then
+    /// saved networks out of range.
     pub rows: Vec<Row>,
     pub action: Option<(ActionKind, String)>,
     pub failure: Option<Failure>,
@@ -265,6 +268,7 @@ fn view(i: &Inner) -> Network {
             changing: w.state.is_changing(),
             secured: w.security.is_secured(),
             enterprise: w.security.is_enterprise(),
+            in_range: w.visible || w.connected(),
             signal: w.signal.as_fraction(),
         })
         .collect();

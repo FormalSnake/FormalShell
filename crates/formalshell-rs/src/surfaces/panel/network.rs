@@ -1,7 +1,8 @@
 //! A hero for the connected network, the throughput the
-//! last speed test measured, the wired devices, one row per Wi-Fi network
-//! (connected, then known, then by signal), the inline passphrase prompt a
-//! secured network nobody knows opens, and the speed test footer.
+//! last speed test measured, the wired devices, one row per Wi-Fi network in
+//! range (connected, then known, then by signal), saved networks out of range
+//! behind a closed "Known networks" disclosure, the inline passphrase prompt
+//! a secured network nobody knows opens, and the speed test footer.
 //!
 //! The panel holds the scanner while it is open; its close ends a running
 //! speed test (`network::Hold`).
@@ -30,6 +31,8 @@ pub struct Network {
     identity: String,
     password: String,
     field: Option<Field>,
+    /// The "Known networks" disclosure, closed on every open.
+    known_open: bool,
 }
 
 fn row_key(ssid: &str) -> String {
@@ -146,7 +149,12 @@ impl Network {
         };
         let failed = status.as_ref().is_some_and(|(_, f)| *f);
         let name = if r.ssid.is_empty() { w::label("Hidden network").ink(Ink::Muted) } else { w::label(r.ssid.clone()) };
-        let mut top = vec![w::icon("wifi"), name.elide(), w::value(format!("{}%", (r.signal * 100.0).round()))];
+        // Out of range has no signal to show, and 0% would read as one.
+        let mut top = if r.in_range {
+            vec![w::icon("wifi"), name.elide(), w::value(format!("{}%", (r.signal * 100.0).round()))]
+        } else {
+            vec![w::icon("wifi-off").ink(Ink::Dim), name.elide().fill()]
+        };
         // Forget reveals on the row the pointer is on.
         if r.known && !r.connected && v.hovered.as_deref() == Some(key.as_str()) && n.action.is_none() {
             top.push(w::icon("trash").ink(Ink::Dim).on(format!("forget:{}", r.ssid)).tip("Forget"));
@@ -172,6 +180,25 @@ impl Network {
             parts.push(w::column(s.xs, fields));
         }
         w::cell(w::column(s.xs, parts).fill()).ghost().interactive().stop(key).on(format!("row:{}", r.ssid))
+    }
+
+    /// The disclosure row over saved networks out of range, then those rows
+    /// while it is open.
+    fn known(&self, v: &View, rows: &[&net::Row]) -> El {
+        let s = &v.theme.space;
+        let head = w::row(
+            s.icon_gap,
+            vec![
+                w::section_label(s, "Known networks", Some(rows.len()), false).fill(),
+                w::icon(if self.known_open { "chevron-down" } else { "chevron-right" }).size(Type::Caption).ink(Ink::Dim),
+            ],
+        )
+        .fill();
+        let mut parts = vec![w::cell(head).ghost().interactive().stop("known").on("known")];
+        if self.known_open {
+            parts.extend(rows.iter().map(|r| self.wifi_row(v, r)));
+        }
+        w::column(0.0, parts)
     }
 
     fn throughput(&self, v: &View) -> El {
@@ -358,11 +385,15 @@ impl Panel for Network {
             parts.push(w::section(s, "Wired", Some(n.wired_rows.len()), rows));
         }
         if n.wifi_device.is_some() {
-            let mut rows: Vec<El> = n.rows.iter().map(|r| self.wifi_row(v, r)).collect();
+            let (near, away): (Vec<&net::Row>, Vec<&net::Row>) = n.rows.iter().partition(|r| r.in_range);
+            let mut rows: Vec<El> = near.iter().map(|r| self.wifi_row(v, r)).collect();
             if rows.is_empty() {
                 rows.push(w::section_label(s, if n.wifi_enabled { "Scanning" } else { "Radio off" }, None, true));
             }
-            parts.push(w::section(s, "Networks", Some(n.rows.len()), rows));
+            parts.push(w::section(s, "Networks", Some(near.len()), rows));
+            if !away.is_empty() {
+                parts.push(self.known(v, &away));
+            }
             parts.push(self.share(v));
         }
         parts.push(w::separator());
@@ -376,11 +407,16 @@ impl Panel for Network {
 
     fn closed(&mut self) {
         self.hold = None;
+        self.known_open = false;
         self.cancel_prompt();
     }
 
     fn editing(&self) -> bool {
         self.prompt.is_some()
+    }
+
+    fn call(&mut self, verb: &str, _arg: &str) -> Option<String> {
+        (verb == "knownOpen").then(|| self.known_open.to_string())
     }
 
     fn edit(&mut self, e: Edit, fx: &mut Effect) {
@@ -416,6 +452,7 @@ impl Panel for Network {
             ("speedtest", What::Click) => Self::speed(fx),
             ("share", What::Click) => fx.service(net::qr_toggle),
             ("password", What::Click) => fx.service(net::reveal_toggle),
+            ("known", What::Click) => self.known_open = !self.known_open,
             (on, What::Click) => {
                 if let Some(ssid) = on.strip_prefix("row:") {
                     self.activate_row(ssid, fx);
@@ -436,6 +473,8 @@ impl Panel for Network {
             fx.service(net::qr_toggle);
         } else if stop == "password" {
             fx.service(net::reveal_toggle);
+        } else if stop == "known" {
+            self.known_open = !self.known_open;
         } else if let Some(ssid) = stop.strip_prefix("wifi:") {
             self.activate_row(ssid, fx);
         } else if let Some(name) = stop.strip_prefix("wired:") {

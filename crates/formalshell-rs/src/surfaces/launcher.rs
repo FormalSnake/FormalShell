@@ -350,6 +350,7 @@ pub fn device_sources(store: &Store) -> Vec<(&'static str, Vec<Node>)> {
                 connected: r.connected,
                 secured: r.secured,
                 enterprise: r.enterprise,
+                in_range: r.in_range,
                 signal: r.signal,
                 signal_strength: None,
             })
