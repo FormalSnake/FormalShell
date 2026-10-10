@@ -133,9 +133,11 @@
     // Deliberately disabled -- flipping it on is the owner's call, not
     // something to change incidentally.
     "system.lock": { "action": "@ipc:lock.lock", "when": "false" },
-    "system.suspend": { "action": "systemctl suspend" },
-    "system.reboot": { "action": "systemctl reboot", "confirm": true },
-    "system.shutdown": { "action": "systemctl poweroff", "confirm": true },
+    // logind over D-Bus in process, never a spawned `systemctl`: logind's
+    // answer has to reach the shell, a refusal as a toast.
+    "system.suspend": { "action": "@ipc:power.suspend" },
+    "system.reboot": { "action": "@ipc:power.reboot", "confirm": true },
+    "system.shutdown": { "action": "@ipc:power.poweroff", "confirm": true },
     "system.logout": {
         "action": "hyprctl dispatch 'hl.dsp.exit()'",
         "when": "test -n \"$HYPRLAND_INSTANCE_SIGNATURE\""

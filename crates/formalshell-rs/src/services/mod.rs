@@ -34,6 +34,7 @@ pub mod info;
 pub mod lyrics;
 pub mod plugins;
 pub mod polkit;
+pub mod power;
 pub mod proc;
 pub mod radio;
 pub mod recording;
@@ -83,6 +84,7 @@ pub fn start(ctx: &Ctx) {
     ctx.spawn(screensaver::run(ctx.clone()));
     ctx.spawn(clipboard::run(ctx.clone()));
     ctx.spawn(clipssh::run(ctx.clone()));
+    ctx.spawn(power::run(ctx.clone()));
     ctx.spawn(picker::run(ctx.clone()));
     ctx.spawn(localsend::run(ctx.clone()));
     ctx.spawn(mirror::run(ctx.clone()));

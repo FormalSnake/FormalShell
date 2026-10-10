@@ -610,6 +610,17 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `polkit.sh` `--polkit`: a real `pkexec` conversation through the shell's
   agent, the prompt, the error state and pkexec's own exit code, with the
   card's own open off the top line sampled at a tenth speed first.
+- `power.sh` `--power`: the launcher's Shutdown and Reboot rows, which
+  call logind over D-Bus with interactive auth (`services/power.rs`), with a
+  second user's login session open on seat0 so logind answers
+  `CanPowerOff` with challenge. Shutdown typed on real keys: the first
+  Return only arms the row, the second raises the shell's polkit prompt, a
+  wrong password lands in polkitd's journal against
+  `power-off-multiple-sessions` and the shell, and Escape leaves a critical
+  "Shutdown failed" toast; Reboot is cancelled the same way. The real
+  password is never typed: a runtime-masked `reboot.target` and a root
+  block inhibitor both failed to stop logind on systemd 261, and the VM
+  rebooted.
 - `processes.sh` `--processes`: the process table's search, the two-press
   TERM, and `monitor restart` re-running the same argv under a new pid.
 - `record.sh` `--record`: `record` start to finished GIF through a real

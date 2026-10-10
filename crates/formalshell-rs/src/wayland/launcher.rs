@@ -339,6 +339,9 @@ impl App {
         if let Some(alias) = name.strip_prefix("clipssh.send:") {
             return crate::services::clipssh::command(crate::services::clipssh::Cmd::Send(alias.to_owned()));
         }
+        if let Some(action) = name.strip_prefix("power.").and_then(crate::services::power::Action::parse) {
+            return crate::services::power::request(action);
+        }
         if let Some(id) = name.strip_prefix("clipboard.copy:") {
             return crate::services::clipboard::command(crate::services::clipboard::Cmd::Copy(id.to_owned()));
         }
