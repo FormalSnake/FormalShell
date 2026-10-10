@@ -26,9 +26,18 @@
 # every cell transparent to the wheel would pass the half above and silently
 # break this one. wpctl reads the sink back, since no frame can show that a
 # volume moved for the right reason.
+#
+# Between the two, a touchpad over the same grid, through dev/vpointer.py's
+# `finger` frames (axis_source finger) and `lift` (axis_stop), which wlrctl
+# cannot send. From the end, 100px of finger travel up has to move
+# scrollTop by exactly the finger gain (scroll.rs FINGER_GAIN, 1.12). Then
+# 200px down with the fingers held: a status read mid-gesture has to show
+# scrollTop past scrollMax, by less than the stretch's 40px ceiling, and
+# 400ms after the lift exactly on it again. Last a wheel notch down while
+# already at the end, read five times through its glide: never past it.
 leg_wheel_flag="--wheel"
 leg_wheel_order=125
-leg_wheel_needs="wlrctl convert wpctl"
+leg_wheel_needs="wlrctl convert wpctl python3"
 
 wheel_before_png="$shot_dir/wheel-before.png"
 wheel_after_png="$shot_dir/wheel-after.png"
@@ -37,6 +46,13 @@ wheel_menu_after_path="$shot_dir/wheel-menu-after.json"
 wheel_picker_before_path="$shot_dir/wheel-picker-before.json"
 wheel_picker_after_path="$shot_dir/wheel-picker-after.json"
 wheel_menu_end_path="$shot_dir/wheel-menu-end.json"
+wheel_finger_up_path="$shot_dir/wheel-finger-up.json"
+wheel_finger_mid_path="$shot_dir/wheel-finger-mid.json"
+wheel_finger_settled_path="$shot_dir/wheel-finger-settled.json"
+wheel_notch_end_path="$shot_dir/wheel-notch-end.jsonl"
+wheel_finger_png="$shot_dir/wheel-finger-stretch.png"
+wheel_finger_settled_png="$shot_dir/wheel-finger-settled.png"
+wheel_vpointer="$PWD/dev/vpointer.py"
 wheel_dispatch_path="$shot_dir/wheel-dispatch.txt"
 wheel_bar_png="$shot_dir/wheel-bar.png"
 wheel_volume_before_path="$shot_dir/wheel-volume-before.txt"
@@ -72,7 +88,7 @@ wheel_t0() {
 leg_wheel_timing() {
   local t0
   t0=$(wheel_t0)
-  leg_timing $((17 + t0)) $((50 + t0))
+  leg_timing $((17 + t0)) $((58 + t0))
 }
 
 leg_wheel_drive() {
@@ -109,6 +125,23 @@ $ipc call picker status > "$wheel_picker_after_path" 2>&1
 "$wlrctl_bin" pointer scroll 100000 0 >> "$wheel_dispatch_path" 2>&1
 sleep 2
 $ipc call menu status > "$wheel_menu_end_path" 2>&1
+"$python3_bin" "$wheel_vpointer" finger -50 wait 16 finger -50 wait 16 lift >> "$wheel_dispatch_path" 2>&1
+sleep 1
+$ipc call menu status > "$wheel_finger_up_path" 2>&1
+"$python3_bin" "$wheel_vpointer" $(for _ in $(seq 20); do printf 'finger 10 wait 8 '; done) wait 100 >> "$wheel_dispatch_path" 2>&1
+$ipc call menu status > "$wheel_finger_mid_path" 2>&1
+"$grim_bin" "$wheel_finger_png" > /dev/null 2>&1
+"$python3_bin" "$wheel_vpointer" lift >> "$wheel_dispatch_path" 2>&1
+sleep 0.4
+$ipc call menu status > "$wheel_finger_settled_path" 2>&1
+"$grim_bin" "$wheel_finger_settled_png" > /dev/null 2>&1
+: > "$wheel_notch_end_path"
+"$wlrctl_bin" pointer scroll 15 0 >> "$wheel_dispatch_path" 2>&1
+for _ in 1 2 3 4 5; do
+  $ipc call menu status >> "$wheel_notch_end_path" 2>&1
+  echo >> "$wheel_notch_end_path"
+done
+sleep 1
 $ipc call menu close > /dev/null 2>&1
 sleep 1
 "$wpctl_bin" get-volume @DEFAULT_AUDIO_SINK@ 2>&1 | grep '^Volume:' > "$wheel_volume_before_path"
@@ -168,6 +201,40 @@ leg_wheel_assert() {
     fail "a scroll far past the end left scrollTop at $end_scroll against a scrollMax of $end_max"
   fi
   echo "SMOKE_WHEEL_END scrollTop $end_scroll = scrollMax $end_max"
+  # The touchpad half, from that end.
+  local up_scroll mid_scroll mid_over settled_scroll settled_over want_up
+  for f in "$wheel_finger_up_path" "$wheel_finger_mid_path" "$wheel_finger_settled_path"; do
+    if [ ! -s "$f" ]; then
+      fail "no status dump produced at $f"
+    fi
+  done
+  up_scroll=$(wheel_field "$wheel_finger_up_path" scrollTop)
+  want_up=$((end_max - 112))
+  if [ "$up_scroll" != "$want_up" ]; then
+    fail "100px of finger travel up from $end_max left scrollTop at $up_scroll, not $want_up (the 1.12 gain)"
+  fi
+  mid_scroll=$(wheel_field "$wheel_finger_mid_path" scrollTop)
+  mid_over=$(wheel_field "$wheel_finger_mid_path" overscroll)
+  if [ -z "$mid_scroll" ] || [ "$mid_scroll" -le "$end_max" ] || [ "$((mid_scroll - end_max))" -ge 40 ]; then
+    fail "a finger held past the end read scrollTop $mid_scroll against scrollMax $end_max, not a stretch under 40px"
+  fi
+  settled_scroll=$(wheel_field "$wheel_finger_settled_path" scrollTop)
+  settled_over=$(wheel_field "$wheel_finger_settled_path" overscroll)
+  if [ "$settled_scroll" != "$end_max" ] || [ "$settled_over" != "0" ]; then
+    fail "400ms after the lift scrollTop read $settled_scroll (overscroll $settled_over) against scrollMax $end_max"
+  fi
+  echo "SMOKE_WHEEL_FINGER up $up_scroll, held $mid_scroll (overscroll $mid_over), 400ms after lift $settled_scroll = scrollMax $end_max"
+  local reads over
+  reads=$(sed -n 's/.*"scrollTop":\([0-9-]*\).*/\1/p' "$wheel_notch_end_path" | tr '\n' ' ')
+  if [ "$(echo "$reads" | wc -w)" -lt 5 ]; then
+    fail "the notch at the end produced $(echo "$reads" | wc -w) status reads, not 5"
+  fi
+  for over in $reads; do
+    if [ "$over" -gt "$end_max" ]; then
+      fail "a wheel notch at the end read scrollTop $over past scrollMax $end_max"
+    fi
+  done
+  echo "SMOKE_WHEEL_NOTCH_END scrollTop $reads<= scrollMax $end_max"
   if [ -z "$before_cursor" ] || [ "$before_cursor" != "$after_cursor" ]; then
     fail "the wheel moved the cursor from $before_cursor to $after_cursor"
   fi
@@ -179,6 +246,8 @@ leg_wheel_assert() {
   done
   echo "SMOKE_WHEEL_BEFORE $wheel_before_png"
   echo "SMOKE_WHEEL_AFTER $wheel_after_png"
+  echo "SMOKE_WHEEL_FINGER_STRETCH $wheel_finger_png"
+  echo "SMOKE_WHEEL_FINGER_SETTLED $wheel_finger_settled_png"
   # The slider half: a notch on the bar's audio cell still moves the sink.
   local before_volume after_volume
   before_volume=$(cat "$wheel_volume_before_path" 2>/dev/null)

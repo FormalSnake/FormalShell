@@ -7,7 +7,6 @@ use std::time::Instant;
 use fs_chrome::types::Edge;
 use fs_menu::nav;
 use smithay_client_toolkit::compositor::Region;
-use smithay_client_toolkit::reexports::client::protocol::wl_pointer;
 use smithay_client_toolkit::seat::keyboard::{KeyEvent, Keysym};
 use smithay_client_toolkit::seat::pointer::{PointerEvent, PointerEventKind};
 use smithay_client_toolkit::shell::WaylandSurface;
@@ -1010,24 +1009,8 @@ impl App {
                 }
             }
             PointerEventKind::Axis { vertical, source, .. } => {
-                // A wheel's notches (value120, or discrete on an older seat)
-                // scroll a row each; a touchpad's travel is content pixels.
-                // A wheel carries the continuous value too, so only one of
-                // them is ever read.
-                let step = self.launcher.wheel_step();
-                let continuous = matches!(source, Some(wl_pointer::AxisSource::Finger | wl_pointer::AxisSource::Continuous));
-                let (dy, glide) = if vertical.value120 != 0 {
-                    (f64::from(vertical.value120) / 120.0 * step, true)
-                } else if vertical.discrete != 0 {
-                    (f64::from(vertical.discrete) * step, true)
-                } else if continuous {
-                    (vertical.absolute, false)
-                } else {
-                    (vertical.absolute / 15.0 * step, true)
-                };
-                if dy != 0.0 {
-                    self.launcher.scroll_by(dy, glide);
-                }
+                let ms = crate::motion::Kind::SpatialFast.ms(&self.store.theme.theme) * self.motion_scale;
+                self.launcher.scroll(crate::scroll::travel(&vertical, source), ms);
             }
         }
         true

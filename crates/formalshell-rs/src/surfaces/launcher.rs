@@ -26,6 +26,7 @@ use vello_cpu::kurbo::Rect;
 
 use crate::motion::{Animated, Kind as Clock};
 use crate::scene::{IRect, NodeId};
+use crate::scroll::{Stretch, Travel};
 use crate::services::menu::{self as index, Ask};
 use crate::services::{hyprland, state};
 use crate::store::Store;
@@ -112,6 +113,8 @@ pub struct Model {
     wheeled: bool,
     confirm: String,
     pub scroll: f64,
+    /// A touchpad's pull past either end, drawn over `scroll`.
+    pub stretch: Stretch,
     layout: Layout,
     body_h: f64,
     /// The rows changed since the window last drew.
@@ -259,6 +262,7 @@ impl Default for Model {
             wheeled: false,
             confirm: String::new(),
             scroll: 0.0,
+            stretch: Stretch::new(),
             layout: Layout::default(),
             body_h: 0.0,
             dirty: true,
@@ -768,6 +772,7 @@ impl Model {
         self.place(index, travels);
         if fresh || view_changed {
             self.scroll = 0.0;
+            self.stretch.settle();
             self.follow();
         }
         self.dirty = true;
@@ -818,7 +823,7 @@ impl Model {
 
     /// A transition is still running, so the body draws again.
     pub fn rows_moving(&self, now: Instant) -> bool {
-        self.motion.running(now)
+        self.motion.running(now) || self.stretch.running(now)
     }
 
     fn place(&mut self, index: usize, travels: bool) {
@@ -977,17 +982,29 @@ impl Model {
         if matches!(self.view, View::Rows | View::Monitor) { 32.0 } else { self.layout.cell_h.max(1.0) }
     }
 
-    /// The view scrolled by `dy` pixels, clamped to its ends, with the
-    /// cursor left where it is: a wheel's notches glide there, a
-    /// touchpad's travel lands at once.
-    pub fn scroll_by(&mut self, dy: f64, glide: bool) {
-        let next = (self.scroll + dy).clamp(0.0, self.max_scroll());
-        if next != self.scroll {
-            self.scroll = next;
-            self.travels = false;
-            self.wheeled = glide;
-            self.dirty = true;
-        }
+    /// One axis frame over the view, with the cursor left where it is: a
+    /// wheel's notches glide a step each and stop on either end, a
+    /// touchpad's travel lands at once and stretches past an end until the
+    /// fingers lift, springing back over `release_ms`.
+    pub fn scroll(&mut self, travel: Travel, release_ms: f64) {
+        let now = Instant::now();
+        let (next, glide) = match travel {
+            Travel::Notches(n) => {
+                self.stretch.settle();
+                ((self.scroll + n * self.wheel_step()).clamp(0.0, self.max_scroll()), true)
+            }
+            Travel::Pixels { px, finger: true } => (self.stretch.drag(now, self.scroll, self.max_scroll(), px, self.body_h), false),
+            Travel::Pixels { px, finger: false } => ((self.scroll + px).clamp(0.0, self.max_scroll()), false),
+            Travel::Lift => {
+                self.stretch.release(now, release_ms);
+                (self.scroll, false)
+            }
+            Travel::None => return,
+        };
+        self.travels = false;
+        self.wheeled = glide;
+        self.scroll = next;
+        self.dirty = true;
     }
 
     fn max_scroll(&self) -> f64 {
@@ -1042,8 +1059,9 @@ impl Model {
         json!({
             "isOpen": self.open,
             "level": self.level,
-            "scrollTop": self.scroll.round() as i64,
+            "scrollTop": (self.scroll + self.stretch.value(Instant::now())).round() as i64,
             "scrollMax": self.max_scroll().round() as i64,
+            "overscroll": self.stretch.value(Instant::now()).round() as i64,
             "wheelStep": self.wheel_step().round() as i64,
             "placeholder": self.placeholder(store),
             "sections": self.section_names(),
@@ -1732,7 +1750,7 @@ impl Shown {
         let viewport = IRect::new((fx + pad).round() as i32, body_top.round() as i32, inner_w.round() as i32, body_h.round() as i32);
         let body_clip = viewport.intersect(&clip);
         self.body_rect = (body_h > 0.0).then(|| IRect::new(viewport.x + on_output.0, viewport.y + on_output.1, viewport.w, viewport.h));
-        let scroll = self.scroll.value(now);
+        let scroll = self.scroll.value(now) + m.stretch.value(now);
         let mut overlays = Vec::new();
         let body = if body_h > 0.0 { body_el(m, store, theme, kit, scroll, body_h, &mut overlays) } else { w::space(0.0) };
         self.body.halo_owned = false;

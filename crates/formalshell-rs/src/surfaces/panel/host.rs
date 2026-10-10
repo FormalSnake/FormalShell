@@ -25,6 +25,7 @@ use super::{Edit, Effect, Panel, View};
 use crate::motion::{Animated, Kind as Clock, SPATIAL};
 use crate::runtime::Runtime;
 use crate::scene::{IRect, NodeId, Paint};
+use crate::scroll::{Stretch, Travel};
 use crate::store::Store;
 use crate::surface::Surface;
 use crate::surfaces::bar::cell::{Kit, Painter};
@@ -114,6 +115,8 @@ pub struct Host {
     halo: [Animated; 4],
     halo_shown: bool,
     scroll: Animated,
+    /// A touchpad's pull past either end, drawn over `scroll`.
+    stretch: Stretch,
     content_h: f64,
     viewport: IRect,
     handoff: Option<Handoff>,
@@ -165,6 +168,7 @@ impl Host {
             halo: std::array::from_fn(|_| Animated::new(0.0, SPATIAL)),
             halo_shown: false,
             scroll: Animated::new(0.0, Clock::SpatialFast.curve()),
+            stretch: Stretch::new(),
             content_h: 0.0,
             viewport: IRect::default(),
             handoff: None,
@@ -264,6 +268,7 @@ impl Host {
             || self.handoff.as_ref().is_some_and(|h| !h.started || h.travel.running(now) || h.alpha.running(now))
             || self.halo.iter().any(|a| a.running(now))
             || self.scroll.running(now)
+            || self.stretch.running(now)
     }
 
     fn view<'a>(&'a self, store: &'a Store, theme: &'a Theme) -> View<'a> {
@@ -452,7 +457,7 @@ impl Host {
         if self.scroll.target() > max_scroll {
             self.scroll.jump(max_scroll);
         }
-        let scroll = self.scroll.value(now);
+        let scroll = self.scroll.value(now) + self.stretch.value(now);
         let vp = self.viewport;
         let r_ = ring.ceil() as i32;
         let body_clip = IRect::new(vp.x - r_, vp.y - r_, vp.w + r_ * 2, vp.h + r_ * 2).intersect(&clip);
@@ -740,8 +745,15 @@ impl Host {
     /// pointer takes both axes (a pane the host moves a control height a
     /// notch, as WheelHandler's angleDelta over 120 does), a track under it
     /// steps on a vertical one, and anything else scrolls the body
-    /// vertically.
-    pub fn scroll(&mut self, x: f64, y: f64, dx: f64, dy: f64, store: &Store, runtime: Option<&Runtime>) {
+    /// vertically by `travel`, the same frame read as a wheel's or a
+    /// touchpad's.
+    #[allow(clippy::too_many_arguments)]
+    pub fn scroll(&mut self, x: f64, y: f64, dx: f64, dy: f64, travel: Travel, store: &Store, runtime: Option<&Runtime>) {
+        let now = Instant::now();
+        if travel == Travel::Lift {
+            self.stretch.release(now, Clock::SpatialFast.ms(&store.theme.theme) * self.scale);
+            return;
+        }
         let point = IRect::new(x.floor() as i32, y.floor() as i32, 1, 1);
         if self.viewport.intersects(&point)
             && let Some(h) = self.body.scroll_hit(x, y).cloned()
@@ -764,12 +776,18 @@ impl Host {
             self.module.event(&Event { on, what: What::Wheel(if up { 1 } else { -1 }) }, &mut fx);
             return;
         }
-        let now = Instant::now();
         let view = self.viewport.h as f64;
         let max = (self.content_h - view).max(0.0);
         if max <= 0.0 {
             return;
         }
+        if let Travel::Pixels { px, finger } = travel {
+            let base = self.scroll.target();
+            let next = if finger { self.stretch.drag(now, base, max, px, view) } else { (base + px).clamp(0.0, max) };
+            self.scroll.jump(next);
+            return;
+        }
+        self.stretch.settle();
         let step = 32.0;
         let base = self.scroll.target();
         let next = (base + if up { -step } else { step }).clamp(0.0, max);
