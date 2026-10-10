@@ -811,7 +811,14 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   off `dev/vpointer.py` (`finger`, `lift`): 100px of finger travel moving
   the grid 112 (`scroll.rs`'s gain), a held pull past the end reading
   `scrollTop` past `scrollMax` by under 40px, exactly on it 400ms after the
-  lift, and a wheel notch at the end never past it in five reads.
+  lift, and a wheel notch at the end never past it in five reads. Then the
+  coast after a lift (`scroll.rs` `Touchpad`), status read back to back: a
+  70 px/s drag lifted at once not moving after, a fast flick's `scrollTop`
+  rising after the lift, never back and slower each third, settled within
+  1.3s no further than one `viewHeight` past the lift, a finger 150ms in
+  stopping it short of that, and the same flick near the end bouncing under
+  40px of `overscroll` and settling exactly on `scrollMax`, the last row
+  whole in the frame.
 - `workspaces.sh` `--workspaces`: the bar's workspace indicator as one pill
   that travels, read off the bar region alone before, 80ms into, and after a
   workspace switch.

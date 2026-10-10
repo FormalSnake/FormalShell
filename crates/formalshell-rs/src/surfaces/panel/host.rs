@@ -25,7 +25,7 @@ use super::{Edit, Effect, Panel, View};
 use crate::motion::{Animated, Kind as Clock, SPATIAL};
 use crate::runtime::Runtime;
 use crate::scene::{IRect, NodeId, Paint};
-use crate::scroll::{Stretch, Travel};
+use crate::scroll::{Touchpad, Travel};
 use crate::store::Store;
 use crate::surface::Surface;
 use crate::surfaces::bar::cell::{Kit, Painter};
@@ -115,8 +115,9 @@ pub struct Host {
     halo: [Animated; 4],
     halo_shown: bool,
     scroll: Animated,
-    /// A touchpad's pull past either end, drawn over `scroll`.
-    stretch: Stretch,
+    /// A touchpad's pull past either end, drawn over `scroll`, and the
+    /// coast after a flick, which moves `scroll` frame by frame.
+    touch: Touchpad,
     content_h: f64,
     viewport: IRect,
     handoff: Option<Handoff>,
@@ -168,7 +169,7 @@ impl Host {
             halo: std::array::from_fn(|_| Animated::new(0.0, SPATIAL)),
             halo_shown: false,
             scroll: Animated::new(0.0, Clock::SpatialFast.curve()),
-            stretch: Stretch::new(),
+            touch: Touchpad::new(),
             content_h: 0.0,
             viewport: IRect::default(),
             handoff: None,
@@ -268,7 +269,7 @@ impl Host {
             || self.handoff.as_ref().is_some_and(|h| !h.started || h.travel.running(now) || h.alpha.running(now))
             || self.halo.iter().any(|a| a.running(now))
             || self.scroll.running(now)
-            || self.stretch.running(now)
+            || self.touch.running(now)
     }
 
     fn view<'a>(&'a self, store: &'a Store, theme: &'a Theme) -> View<'a> {
@@ -457,7 +458,10 @@ impl Host {
         if self.scroll.target() > max_scroll {
             self.scroll.jump(max_scroll);
         }
-        let scroll = self.scroll.value(now) + self.stretch.value(now);
+        if let Some(coast) = self.touch.tick(now, max_scroll) {
+            self.scroll.jump(coast);
+        }
+        let scroll = self.scroll.value(now) + self.touch.value(now);
         let vp = self.viewport;
         let r_ = ring.ceil() as i32;
         let body_clip = IRect::new(vp.x - r_, vp.y - r_, vp.w + r_ * 2, vp.h + r_ * 2).intersect(&clip);
@@ -549,6 +553,7 @@ impl Host {
         self.cursor.key = Some(self.body.stops[next].key.clone());
         self.cursor.active = true;
         self.cursor.keyed = true;
+        self.touch.settle();
         self.follow();
     }
 
@@ -750,8 +755,9 @@ impl Host {
     #[allow(clippy::too_many_arguments)]
     pub fn scroll(&mut self, x: f64, y: f64, dx: f64, dy: f64, travel: Travel, store: &Store, runtime: Option<&Runtime>) {
         let now = Instant::now();
-        if travel == Travel::Lift {
-            self.stretch.release(now, Clock::SpatialFast.ms(&store.theme.theme) * self.scale);
+        if let Travel::Lift(time) = travel {
+            let max = (self.content_h - self.viewport.h as f64).max(0.0);
+            self.touch.release(now, time, self.scroll.target(), max, Clock::SpatialFast.ms(&store.theme.theme) * self.scale, self.scale);
             return;
         }
         let point = IRect::new(x.floor() as i32, y.floor() as i32, 1, 1);
@@ -781,13 +787,18 @@ impl Host {
         if max <= 0.0 {
             return;
         }
-        if let Travel::Pixels { px, finger } = travel {
+        if let Travel::Pixels { px, finger, time } = travel {
             let base = self.scroll.target();
-            let next = if finger { self.stretch.drag(now, base, max, px, view) } else { (base + px).clamp(0.0, max) };
+            let next = if finger {
+                self.touch.drag(now, time, base, max, px, view)
+            } else {
+                self.touch.settle();
+                (base + px).clamp(0.0, max)
+            };
             self.scroll.jump(next);
             return;
         }
-        self.stretch.settle();
+        self.touch.settle();
         let step = 32.0;
         let base = self.scroll.target();
         let next = (base + if up { -step } else { step }).clamp(0.0, max);

@@ -1011,9 +1011,9 @@ impl App {
                     None => {}
                 }
             }
-            PointerEventKind::Axis { vertical, source, .. } => {
+            PointerEventKind::Axis { time, vertical, source, .. } => {
                 let ms = crate::motion::Kind::SpatialFast.ms(&self.store.theme.theme) * self.motion_scale;
-                self.launcher.scroll(crate::scroll::travel(&vertical, source), ms);
+                self.launcher.scroll(crate::scroll::travel(&vertical, source, time), ms);
             }
         }
         true

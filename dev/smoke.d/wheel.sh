@@ -33,8 +33,21 @@
 # scrollTop by exactly the finger gain (scroll.rs FINGER_GAIN, 1.12). Then
 # 200px down with the fingers held: a status read mid-gesture has to show
 # scrollTop past scrollMax, by less than the stretch's 40px ceiling, and
-# 400ms after the lift exactly on it again. Last a wheel notch down while
+# 400ms after the lift exactly on it again. Then a wheel notch down while
 # already at the end, read five times through its glide: never past it.
+#
+# Last the coast after a flick (scroll.rs `Touchpad`), status read back to
+# back behind a millisecond stamp each. 30px of fingers at 70 px/s lifted
+# at once coasts nothing. From the top, seven 60px finger frames 8ms apart
+# and a lift at once: scrollTop keeps rising after the lift, never back,
+# slower in each third of the run, and stops within 1.3s, its coast no
+# longer than one viewHeight (the cap). The same flick with a finger
+# touching 150ms after the lift stops there, short of where the free one
+# went. The same flick 5 notches short of the end runs into it: overscroll
+# goes above 0 and stays under the 40px stretch cap, and it settles
+# exactly on scrollMax with nothing stretched, the frame then showing the
+# last row whole. The 100px of travel up above lifts after a 100ms pause,
+# so it coasts nothing either.
 leg_wheel_flag="--wheel"
 leg_wheel_order=125
 leg_wheel_needs="wlrctl convert wpctl python3"
@@ -52,6 +65,14 @@ wheel_finger_settled_path="$shot_dir/wheel-finger-settled.json"
 wheel_notch_end_path="$shot_dir/wheel-notch-end.jsonl"
 wheel_finger_png="$shot_dir/wheel-finger-stretch.png"
 wheel_finger_settled_png="$shot_dir/wheel-finger-settled.png"
+wheel_slow_lift_path="$shot_dir/wheel-slow-lift.json"
+wheel_slow_settled_path="$shot_dir/wheel-slow-settled.json"
+wheel_coast_path="$shot_dir/wheel-coast.txt"
+wheel_touch_path="$shot_dir/wheel-touch.json"
+wheel_touch_settled_path="$shot_dir/wheel-touch-settled.json"
+wheel_bounce_path="$shot_dir/wheel-bounce.txt"
+wheel_coast_png="$shot_dir/wheel-coast-settled.png"
+wheel_bounce_png="$shot_dir/wheel-bounce-settled.png"
 wheel_vpointer="$PWD/dev/vpointer.py"
 wheel_dispatch_path="$shot_dir/wheel-dispatch.txt"
 wheel_bar_png="$shot_dir/wheel-bar.png"
@@ -73,7 +94,7 @@ leg_wheel_fixture() {
   mkdir -p "$wheel_dir"
   # Small: 40 of them, and nothing here reads a pixel of the thumbnails.
   # The hue walks so a screenshot shows which rows are on screen.
-  for i in $(seq 0 39); do
+  for i in $(seq 0 119); do
     $convert_bin -size 320x180 "xc:hsl($((i * 9)),70%,45%)" "$wheel_dir/img-$(printf '%02d' "$i").png"
   done
   settings_fragment ', "picker": {"directory": "'"$wheel_dir"'"}'
@@ -88,7 +109,7 @@ wheel_t0() {
 leg_wheel_timing() {
   local t0
   t0=$(wheel_t0)
-  leg_timing $((17 + t0)) $((58 + t0))
+  leg_timing $((32 + t0)) $((73 + t0))
 }
 
 leg_wheel_drive() {
@@ -125,7 +146,7 @@ $ipc call picker status > "$wheel_picker_after_path" 2>&1
 "$wlrctl_bin" pointer scroll 100000 0 >> "$wheel_dispatch_path" 2>&1
 sleep 2
 $ipc call menu status > "$wheel_menu_end_path" 2>&1
-"$python3_bin" "$wheel_vpointer" finger -50 wait 16 finger -50 wait 16 lift >> "$wheel_dispatch_path" 2>&1
+"$python3_bin" "$wheel_vpointer" finger -50 wait 16 finger -50 wait 100 lift >> "$wheel_dispatch_path" 2>&1
 sleep 1
 $ipc call menu status > "$wheel_finger_up_path" 2>&1
 "$python3_bin" "$wheel_vpointer" $(for _ in $(seq 20); do printf 'finger 10 wait 8 '; done) wait 100 >> "$wheel_dispatch_path" 2>&1
@@ -142,6 +163,41 @@ for _ in 1 2 3 4 5; do
   echo >> "$wheel_notch_end_path"
 done
 sleep 1
+# One status a line behind its millisecond stamp, for \$2 ms.
+sample() {
+  local end=\$((\$(date +%s%3N) + \$2))
+  : > "\$1"
+  while [ "\$(date +%s%3N)" -lt "\$end" ]; do
+    printf '%s ' "\$(date +%s%3N)" >> "\$1"
+    $ipc call menu status 2>&1 | tr -d '\n' >> "\$1"
+    echo >> "\$1"
+  done
+}
+flick="\$(for _ in 1 2 3 4 5 6; do printf 'finger 60 wait 8 '; done)finger 60 lift"
+"$python3_bin" "$wheel_vpointer" \$(for _ in \$(seq 30); do printf 'finger -1 wait 16 '; done) lift >> "$wheel_dispatch_path" 2>&1
+$ipc call menu status > "$wheel_slow_lift_path" 2>&1
+sleep 0.6
+$ipc call menu status > "$wheel_slow_settled_path" 2>&1
+"$wlrctl_bin" pointer scroll -100000 0 >> "$wheel_dispatch_path" 2>&1
+sleep 1.5
+"$python3_bin" "$wheel_vpointer" \$flick >> "$wheel_dispatch_path" 2>&1
+echo "\$(date +%s%3N)" > "$wheel_coast_path.lift"
+sample "$wheel_coast_path" 1800
+"$grim_bin" "$wheel_coast_png" > /dev/null 2>&1
+"$wlrctl_bin" pointer scroll -100000 0 >> "$wheel_dispatch_path" 2>&1
+sleep 1.5
+"$python3_bin" "$wheel_vpointer" \$flick wait 150 finger 1 wait 300 lift >> "$wheel_dispatch_path" 2>&1
+$ipc call menu status > "$wheel_touch_path" 2>&1
+sleep 0.5
+$ipc call menu status > "$wheel_touch_settled_path" 2>&1
+"$wlrctl_bin" pointer scroll 100000 0 >> "$wheel_dispatch_path" 2>&1
+sleep 1.5
+"$wlrctl_bin" pointer scroll -75 0 >> "$wheel_dispatch_path" 2>&1
+sleep 1.5
+"$python3_bin" "$wheel_vpointer" \$flick >> "$wheel_dispatch_path" 2>&1
+echo "\$(date +%s%3N)" > "$wheel_bounce_path.lift"
+sample "$wheel_bounce_path" 1800
+"$grim_bin" "$wheel_bounce_png" > /dev/null 2>&1
 $ipc call menu close > /dev/null 2>&1
 sleep 1
 "$wpctl_bin" get-volume @DEFAULT_AUDIO_SINK@ 2>&1 | grep '^Volume:' > "$wheel_volume_before_path"
@@ -173,8 +229,8 @@ leg_wheel_assert() {
   # Printed on the happy path too: the only evidence of where the pointer
   # ended up and that the axis event was sent at all.
   cat "$wheel_dispatch_path" 2>/dev/null || true
-  if ! grep -q '"count":40' "$wheel_picker_before_path"; then
-    fail "the grid did not list all 40 fixtures, so an unscrolled view proves nothing, got: $(cat "$wheel_picker_before_path")"
+  if ! grep -q '"count":120' "$wheel_picker_before_path"; then
+    fail "the grid did not list all 120 fixtures, so an unscrolled view proves nothing, got: $(cat "$wheel_picker_before_path")"
   fi
   before_scroll=$(wheel_field "$wheel_menu_before_path" scrollTop)
   after_scroll=$(wheel_field "$wheel_menu_after_path" scrollTop)
@@ -235,6 +291,7 @@ leg_wheel_assert() {
     fi
   done
   echo "SMOKE_WHEEL_NOTCH_END scrollTop $reads<= scrollMax $end_max"
+  wheel_assert_coast "$end_max"
   if [ -z "$before_cursor" ] || [ "$before_cursor" != "$after_cursor" ]; then
     fail "the wheel moved the cursor from $before_cursor to $after_cursor"
   fi
@@ -261,4 +318,93 @@ leg_wheel_assert() {
     fail "a notch on the bar's audio cell left the sink at $after_volume, so Cell.wheeled no longer reaches its consumer"
   fi
   echo "SMOKE_WHEEL_BAR $wheel_bar_png"
+}
+
+# `stamp scrollTop overscroll coasting` a line, off a sample file.
+wheel_samples() {
+  local line top over coast
+  while IFS= read -r line; do
+    top=$(sed -n 's/.*"scrollTop":\([0-9-]*\).*/\1/p' <<< "$line")
+    over=$(sed -n 's/.*"overscroll":\([0-9-]*\).*/\1/p' <<< "$line")
+    coast=$(sed -n 's/.*"coasting":\([a-z]*\).*/\1/p' <<< "$line")
+    if [ -n "$top" ] && [ -n "$over" ] && [ -n "$coast" ]; then
+      echo "${line%% *} $top $over $coast"
+    fi
+  done < "$1"
+}
+
+wheel_assert_coast() {
+  local end_max=$1 f slow_a slow_b view lift report free_final touch_a touch_b
+  for f in "$wheel_slow_lift_path" "$wheel_slow_settled_path" "$wheel_touch_path" "$wheel_touch_settled_path" \
+    "$wheel_coast_path" "$wheel_bounce_path" "$wheel_coast_path.lift" "$wheel_bounce_path.lift"; do
+    if [ ! -s "$f" ]; then
+      fail "no coast reading produced at $f"
+    fi
+  done
+  # 70 px/s of fingers lifted at once stays where it was lifted.
+  slow_a=$(wheel_field "$wheel_slow_lift_path" scrollTop)
+  slow_b=$(wheel_field "$wheel_slow_settled_path" scrollTop)
+  if [ -z "$slow_a" ] || [ "$slow_a" != "$slow_b" ] || [ "$slow_a" -ge "$end_max" ] || grep -q '"coasting":true' "$wheel_slow_settled_path"; then
+    fail "a slow drag lifted at scrollTop $slow_a read $slow_b 600ms later (scrollMax $end_max): it coasted"
+  fi
+  echo "SMOKE_WHEEL_SLOW_LIFT scrollTop $slow_a held at $slow_b"
+  view=$(wheel_field "$wheel_slow_settled_path" viewHeight)
+  # The flick from 0 lifts at 7 x 60 x 1.12 = 470.
+  lift=$(cat "$wheel_coast_path.lift")
+  if ! report=$(wheel_samples "$wheel_coast_path" | awk -v lift="$lift" -v view="$view" -v start=470 '
+    { t[n] = $1 - lift; p[n] = $2; c[n] = $4; n++ }
+    END {
+      if (n < 10) { print "only " n " coast samples"; exit 1 }
+      for (i = 1; i < n; i++) if (p[i] < p[i - 1]) { print "scrollTop went back from " p[i - 1] " to " p[i] " at " t[i] "ms"; exit 1 }
+      final = p[n - 1]
+      if (c[n - 1] != "false") { print "still coasting " t[n - 1] "ms after the lift"; exit 1 }
+      settle = -1
+      for (i = 0; i < n; i++) if (p[i] == final && c[i] == "false") { settle = t[i]; break }
+      run = final - start
+      if (run < 100) { print "the flick coasted " run "px, from 470 to " final; exit 1 }
+      if (run > view + 1) { print "the flick coasted " run "px past its one viewHeight cap of " view; exit 1 }
+      if (settle > 1300) { print "the coast settled " settle "ms after the lift"; exit 1 }
+      # Speed over each third of the run, lift to settle.
+      for (k = 0; k < 3; k++) {
+        a = settle * k / 3; b = settle * (k + 1) / 3; lo = -1; hi = -1
+        for (i = 0; i < n; i++) { if (t[i] >= a && lo < 0) lo = i; if (t[i] <= b) hi = i }
+        v[k] = (hi > lo && lo >= 0) ? (p[hi] - p[lo]) * 1000 / (t[hi] - t[lo]) : 0
+      }
+      if (!(v[0] > v[1] && v[1] >= v[2])) { printf "the coast did not slow: %d, %d, %d px/s by thirds\n", v[0], v[1], v[2]; exit 1 }
+      printf "coasted %dpx (cap %d) from 470 to %d, settled %dms after the lift, %d %d %d px/s by thirds, %d samples\n", run, view, final, settle, v[0], v[1], v[2], n
+    }'); then
+    fail "$report"
+  fi
+  echo "SMOKE_WHEEL_COAST $report"
+  free_final=$(wheel_samples "$wheel_coast_path" | tail -1 | cut -d' ' -f2)
+  touch_a=$(wheel_field "$wheel_touch_path" scrollTop)
+  touch_b=$(wheel_field "$wheel_touch_settled_path" scrollTop)
+  if [ -z "$touch_a" ] || [ "$touch_a" != "$touch_b" ] || [ "$touch_a" -le 470 ] || [ "$touch_a" -ge "$((free_final - 20))" ] \
+    || grep -q '"coasting":true' "$wheel_touch_settled_path"; then
+    fail "a finger 150ms into the coast left scrollTop $touch_a then $touch_b, against 470 at the lift and $free_final for a free coast"
+  fi
+  echo "SMOKE_WHEEL_COAST_TOUCH stopped at $touch_a, a free coast went to $free_final"
+  lift=$(cat "$wheel_bounce_path.lift")
+  if ! report=$(wheel_samples "$wheel_bounce_path" | awk -v lift="$lift" -v max="$end_max" '
+    BEGIN { settle = -1; peak = 0 }
+    {
+      t = $1 - lift
+      if ($2 - $3 > max) { print "scrollTop " $2 " less overscroll " $3 " past scrollMax " max; bad = 1; exit 1 }
+      if ($3 > peak) peak = $3
+      last = $2; over = $3; c = $4; n++
+      if (last == max && over == 0 && c == "false") { if (settle < 0) settle = t } else settle = -1
+    }
+    END {
+      if (bad) exit 1
+      if (n < 10) { print "only " n " bounce samples"; exit 1 }
+      if (peak <= 0 || peak >= 40) { print "the bounce peaked at " peak "px, not between 0 and 40"; exit 1 }
+      if (settle < 0) { print "it ended at " last " overscroll " over " coasting " c " against scrollMax " max; exit 1 }
+      if (settle > 1500) { print "the bounce settled " settle "ms after the lift"; exit 1 }
+      printf "bounced %dpx past scrollMax %d, settled on it %dms after the lift, %d samples\n", peak, max, settle, n
+    }'); then
+    fail "$report"
+  fi
+  echo "SMOKE_WHEEL_COAST_BOUNCE $report"
+  echo "SMOKE_WHEEL_COAST_SETTLED $wheel_coast_png"
+  echo "SMOKE_WHEEL_BOUNCE_SETTLED $wheel_bounce_png"
 }

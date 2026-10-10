@@ -1892,10 +1892,10 @@ impl App {
                     };
                     self.click(o, i, button, (x, y));
                 }
-                PointerEventKind::Axis { vertical, horizontal, source, .. } => {
+                PointerEventKind::Axis { time, vertical, horizontal, source } => {
                     if owner == Some(Owner::Panel) {
                         let (dx, dy) = (notches(&horizontal), notches(&vertical));
-                        let travel = crate::scroll::travel(&vertical, source);
+                        let travel = crate::scroll::travel(&vertical, source, time);
                         if let Some(h) = self.panel.as_mut().filter(|_| dx != 0.0 || dy != 0.0 || travel != crate::scroll::Travel::None) {
                             h.scroll(x, y, dx, dy, travel, &self.store, self.runtime.as_ref());
                         }
