@@ -6,7 +6,8 @@
 //! off the hyprland service's own output refresh, and again when the panel
 //! opens. The backlight is listed at start and on every open; a set is never
 //! read back, the row holding the value asked for while one writer per
-//! device catches the device up. The 5s re-read of the outputs the
+//! device catches the device up; overnight's dim and restore go through the
+//! same writers. The 5s re-read of the outputs the
 //! compositor never announces (a disabled one) runs only while the panel is
 //! open.
 //!
@@ -106,6 +107,39 @@ thread_local! {
     static PENDING: RefCell<HashMap<String, Pending>> = RefCell::new(HashMap::new());
     /// A detection is out, and another was asked for while it was.
     static DETECTING: RefCell<(bool, bool)> = const { RefCell::new((false, false)) };
+    /// Callers waiting for the detection loop to finish.
+    static DETECTED: RefCell<Vec<async_channel::Sender<()>>> = const { RefCell::new(Vec::new()) };
+    /// Each device's percent as last read or asked for, and its max.
+    static LEVELS: RefCell<HashMap<String, (i64, i64)>> = RefCell::new(HashMap::new());
+    /// One ddcutil at a time: a second one on a bus waits on that bus's
+    /// flock and gives up after its retries, dropping the call.
+    static I2C: (async_channel::Sender<()>, async_channel::Receiver<()>) = {
+        let (tx, rx) = async_channel::bounded(1);
+        let _ = tx.try_send(());
+        (tx, rx)
+    };
+}
+
+/// Holds the I2C token; dropping it hands the token on.
+struct I2cTurn;
+
+impl Drop for I2cTurn {
+    fn drop(&mut self) {
+        I2C.with(|(tx, _)| {
+            let _ = tx.try_send(());
+        });
+    }
+}
+
+async fn i2c_turn() -> I2cTurn {
+    let rx = I2C.with(|(_, rx)| rx.clone());
+    let _ = rx.recv().await;
+    I2cTurn
+}
+
+async fn ddcutil(argv: &[String]) -> Option<(i32, String)> {
+    let _turn = i2c_turn().await;
+    output(argv).await
 }
 
 /// A device's write queue: the percent last asked for, and its row's max.
@@ -221,14 +255,12 @@ async fn backlight(ctx: Ctx) {
     let fields: Vec<&str> = line.split(',').collect();
     let device = if fields.len() >= 4 && !fields[0].is_empty() {
         BACKLIGHT.with_borrow_mut(|b| *b = fields[0].to_owned());
-        Some(Brightness {
-            id: "backlight".into(),
-            label: "INTERNAL".into(),
-            percent: pending("backlight").unwrap_or_else(|| fields[3].trim_end_matches('%').parse().unwrap_or(0)),
-            max: 100,
-        })
+        let percent = pending("backlight").unwrap_or_else(|| fields[3].trim_end_matches('%').parse().unwrap_or(0));
+        LEVELS.with_borrow_mut(|l| l.insert("backlight".into(), (percent, 100)));
+        Some(Brightness { id: "backlight".into(), label: "INTERNAL".into(), percent, max: 100 })
     } else if line.is_empty() {
         BACKLIGHT.with_borrow_mut(String::clear);
+        LEVELS.with_borrow_mut(|l| l.remove("backlight"));
         None
     } else {
         return;
@@ -287,15 +319,45 @@ fn detect_soon(ctx: &Ctx) {
                 again
             });
             if !again {
+                for waiter in DETECTED.with_borrow_mut(std::mem::take) {
+                    let _ = waiter.try_send(());
+                }
                 return;
             }
         }
     });
 }
 
+/// Every brightness device read now, the backlight first: `(id, percent,
+/// max)`, a device with a write still out at the percent asked for.
+/// Overnight dims and restores through these and [`set_level`], so each
+/// device keeps one writer and its row follows what was written.
+pub async fn levels(ctx: &Ctx) -> Vec<(String, i64, i64)> {
+    backlight(ctx.clone()).await;
+    let (tx, rx) = async_channel::bounded(1);
+    DETECTED.with_borrow_mut(|d| d.push(tx));
+    detect_soon(ctx);
+    let _ = rx.recv().await;
+    let mut out: Vec<(String, i64, i64)> = LEVELS.with_borrow(|l| l.iter().map(|(id, (pct, max))| (id.clone(), *pct, *max)).collect());
+    out.sort_by(|a, b| (a.0 != "backlight", &a.0).cmp(&(b.0 != "backlight", &b.0)));
+    out
+}
+
+/// Whether a device has been read, so [`set_level`] can reach it.
+pub fn known(id: &str) -> bool {
+    LEVELS.with_borrow(|l| l.contains_key(id))
+}
+
+/// [`set_percent`] with the max the device was last read with.
+pub fn set_level(ctx: &Ctx, id: &str, percent: i64) {
+    if let Some((_, max)) = LEVELS.with_borrow(|l| l.get(id).copied()) {
+        set_percent(ctx, id, percent as f64, max);
+    }
+}
+
 async fn detect(ctx: Ctx) {
     let argv: Vec<String> = ["ddcutil", "--skip-ddc-checks", "detect", "--brief"].map(String::from).into();
-    let found = match output(&argv).await {
+    let found = match ddcutil(&argv).await {
         Some((_, text)) => parse_detect(&text),
         None => Vec::new(),
     };
@@ -306,13 +368,15 @@ async fn detect(ctx: Ctx) {
     // One bus at a time: they share the I2C controller.
     for (connector, bus) in found {
         let argv: Vec<String> = ["ddcutil", "--bus", &bus, "--skip-ddc-checks", "getvcp", "10", "--brief"].map(String::from).into();
-        if let Some((current, max)) = output(&argv).await.and_then(|(_, t)| parse_vcp(&t)) {
+        if let Some((current, max)) = ddcutil(&argv).await.and_then(|(_, t)| parse_vcp(&t)) {
             let read = if max > 0 { (current as f64 * 100.0 / max as f64).round() as i64 } else { 0 };
             let percent = pending(&connector).unwrap_or(read);
+            LEVELS.with_borrow_mut(|l| l.insert(connector.clone(), (percent, max)));
             rows.push(Brightness { id: connector.clone(), label: connector, percent, max });
             publish(&ctx, Diff::Ddc(rows.clone()));
         }
     }
+    LEVELS.with_borrow_mut(|l| l.retain(|id, _| id == "backlight" || rows.iter().any(|r| r.id == *id)));
     if rows.is_empty() {
         publish(&ctx, Diff::Ddc(rows));
     }
@@ -340,6 +404,11 @@ pub fn set_percent(ctx: &Ctx, id: &str, percent: f64, max: i64) {
         return;
     }
     publish(ctx, Diff::Percent(id.to_owned(), pct));
+    LEVELS.with_borrow_mut(|l| {
+        if let Some(level) = l.get_mut(id) {
+            level.0 = pct;
+        }
+    });
     let idle = PENDING.with_borrow_mut(|p| p.insert(id.to_owned(), Pending { want: pct, max }).is_none());
     if idle {
         ctx.spawn(drain(id.to_owned()));
@@ -366,16 +435,17 @@ async fn drain(id: String) {
 }
 
 async fn write(id: &str, pct: i64, max: i64) {
-    let argv: Vec<String> = if id == "backlight" {
+    if id == "backlight" {
         let device = BACKLIGHT.with_borrow(Clone::clone);
-        ["brightnessctl", "-q", "-d", &device, "set", &format!("{pct}%")].map(String::from).into()
+        let argv: Vec<String> = ["brightnessctl", "-q", "-d", &device, "set", &format!("{pct}%")].map(String::from).into();
+        let _ = output(&argv).await;
     } else {
         let Some(bus) = BUSES.with_borrow(|b| b.get(id).cloned()) else { return };
         let raw = (pct as f64 * max as f64 / 100.0).round() as i64;
         // --noverify: setvcp reads nothing back, so a write is one round trip.
-        ["ddcutil", "--bus", &bus, "--skip-ddc-checks", "--noverify", "setvcp", "10", &raw.to_string()].map(String::from).into()
-    };
-    let _ = output(&argv).await;
+        let argv: Vec<String> = ["ddcutil", "--bus", &bus, "--skip-ddc-checks", "--noverify", "setvcp", "10", &raw.to_string()].map(String::from).into();
+        let _ = ddcutil(&argv).await;
+    }
 }
 
 /// While the panel is open: the outputs read now and every 5s, the

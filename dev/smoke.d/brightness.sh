@@ -35,6 +35,13 @@
 #     the target, the device's own writes only move one way and end there,
 #     and the eight DDC steps reach the monitor in fewer than eight setvcp
 #     calls, none overlapping another.
+#  5. Overnight over the same pair (backlight 70, HDMI-A-1 30): enabled,
+#     the display panel opened on the dimmed devices, then disabled as a
+#     new output's DDC detection starts; then disabled 0.3s after enable.
+#     Every value each device was given sits between 1 and its level
+#     before, the last is that level, no setvcp overlaps another, and a
+#     zero `brightnessStep` afterwards shows the restored level, the row
+#     the next key steps from.
 #
 # The shell's wrapper puts its own brightnessctl and ddcutil first on PATH,
 # so this leg starts the wrapped binary itself, with the wrapper's own
@@ -56,6 +63,8 @@ brightness_step_bl="$shot_dir/brightness-step-backlight.txt"
 brightness_step_first="$shot_dir/brightness-step-first.txt"
 brightness_step_monitors="$shot_dir/brightness-step-monitors"
 brightness_step_layers="$shot_dir/brightness-step-layers"
+brightness_overnight_status="$shot_dir/brightness-overnight"
+brightness_overnight_rows="$shot_dir/brightness-overnight-rows.txt"
 
 leg_brightness_fixture() {
   mkdir -p "$brightness_shim_dir" "$brightness_dev_dir"
@@ -142,7 +151,7 @@ EOF
 }
 
 leg_brightness_timing() {
-  leg_timing 40 80
+  leg_timing 75 115
 }
 
 leg_brightness_drive() {
@@ -212,6 +221,39 @@ step_burst HDMI-A-1 -5 "$brightness_step_ddc"
 sleep 2
 step_burst eDP-1 5 "$brightness_step_bl"
 sleep 2
+# 5. Overnight over the same pair, the backlight at 70 and HDMI-A-1 at 30.
+# a: enable, settle, then disable with a new output's DDC detection
+# starting on the same bus. b: disable 0.3s after enable, mid-flight.
+overnight_cycle() {
+  echo "--- overnight-\$1" >> "$brightness_ddc_log"
+  echo "--- overnight-\$1" >> "$brightness_bl_log"
+  call overnight enable > /dev/null 2>&1
+  sleep "\$2"
+  call overnight status > "$brightness_overnight_status-\$1.json" 2>&1
+  if [ "\$1" = a ]; then
+    # The panel reads both devices again, dimmed.
+    call panel open display > /dev/null 2>&1
+    sleep 3
+    call panel close > /dev/null 2>&1
+    "$hyprctl_bin" output create headless HDMI-A-2 > /dev/null 2>&1
+  fi
+  call overnight disable > /dev/null 2>&1
+  sleep 6
+  call overnight status > "$brightness_overnight_status-\$1-off.json" 2>&1
+}
+overnight_cycle a 6
+overnight_cycle b 0.3
+# The rows the keys step from: a zero step shows the row's own percent.
+echo "--- rows" >> "$brightness_ddc_log"
+echo "--- rows" >> "$brightness_bl_log"
+for o in eDP-1 HDMI-A-1; do
+  "$hyprctl_bin" dispatch "hl.dsp.focus({ monitor = '\$o' })" > /dev/null 2>&1
+  sleep 1.5
+  call display brightnessStep 0 > /dev/null 2>&1
+  echo "\$o \$(call osd state | "$jq_bin" -r .brightness)" >> "$brightness_overnight_rows"
+done
+sleep 2
+"$hyprctl_bin" output remove HDMI-A-2 > /dev/null 2>&1
 "$hyprctl_bin" output remove eDP-1 > /dev/null 2>&1
 "$hyprctl_bin" output remove HDMI-A-1 > /dev/null 2>&1
 EOF
@@ -254,6 +296,7 @@ leg_brightness_assert() {
   [ "$last" = 30 ] || fail "the backlight ended the panel burst on ${last:-nothing}, not 30"
 
   brightness_step_assert
+  brightness_overnight_assert
 }
 
 # The values a shim log set before the first step burst marker.
@@ -304,4 +347,38 @@ brightness_step_assert() {
   last=$(brightness_after "$brightness_bl_log" eDP-1 | tail -n1)
   [ "$last" = 70 ] || fail "the backlight ended the step burst on ${last:-nothing}, not 70"
   echo "step burst: 8 backlight steps in $(brightness_after "$brightness_bl_log" eDP-1 | wc -l) writes"
+}
+
+# Every value overnight cycle $2 wrote to one device sits between the dimmed
+# 1 and the level the device had before, $3, and the last one is $3.
+brightness_overnight_span() {
+  local log=$1 cycle=$2 level=$3 name=$4 sets
+  sets=$(brightness_after "$log" "overnight-$cycle")
+  echo "overnight $cycle $name writes: $(tr '\n' ' ' <<< "$sets")"
+  [ -n "$sets" ] || fail "overnight $cycle wrote nothing to $name"
+  [ -z "$(awk -v hi="$level" '$1 < 1 || $1 > hi' <<< "$sets")" ] \
+    || fail "overnight $cycle wrote $name outside 1..$level: $(tr '\n' ' ' <<< "$sets")"
+  [ "$(tail -n1 <<< "$sets")" = "$level" ] || fail "overnight $cycle left $name on $(tail -n1 <<< "$sets"), not $level"
+}
+
+brightness_overnight_assert() {
+  local c
+  echo "SMOKE_BRIGHTNESS_OVERNIGHT $brightness_overnight_status-a.json"
+  cat "$brightness_overnight_status-a.json"; echo
+  "$jq_bin" -e '.active and .restore.backlight == 70 and .restore.ddc["HDMI-A-1"] == 30' "$brightness_overnight_status-a.json" > /dev/null \
+    || fail "overnight did not record the backlight at 70 and HDMI-A-1 at 30"
+  for c in a b; do
+    "$jq_bin" -e '.active == false and .restore == null' "$brightness_overnight_status-$c-off.json" > /dev/null \
+      || fail "overnight $c is still on after disable: $(cat "$brightness_overnight_status-$c-off.json")"
+    # b's disable can land before the enable reached a device at all.
+    if [ "$c" = a ] || [ -n "$(brightness_after "$brightness_bl_log" overnight-b)" ]; then
+      brightness_overnight_span "$brightness_bl_log" "$c" 70 backlight
+    fi
+    if [ "$c" = a ] || [ -n "$(brightness_after "$brightness_ddc_log" overnight-b)" ]; then
+      brightness_overnight_span "$brightness_ddc_log" "$c" 30 HDMI-A-1
+    fi
+  done
+  echo "overnight rows: $(tr '\n' ' ' < "$brightness_overnight_rows")"
+  grep -qx 'eDP-1 70' "$brightness_overnight_rows" || fail "the backlight row did not read 70 after overnight"
+  grep -qx 'HDMI-A-1 30' "$brightness_overnight_rows" || fail "the HDMI-A-1 row did not read 30 after overnight"
 }
