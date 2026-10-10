@@ -8,6 +8,7 @@ mod motion;
 mod render;
 mod runtime;
 mod scene;
+mod scroll;
 mod services;
 mod store;
 mod surface;

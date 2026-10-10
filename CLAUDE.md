@@ -799,7 +799,11 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   scan, wrong password, connect, forget, and the enterprise round trip.
 - `wheel.sh` `--wheel`: a virtual-pointer scroll moves the picker grid
   (`menu status` `scrollTop`) without moving the cursor, and a wheel over the
-  bar's audio cell still steps the volume.
+  bar's audio cell still steps the volume. Between the two, touchpad frames
+  off `dev/vpointer.py` (`finger`, `lift`): 100px of finger travel moving
+  the grid 112 (`scroll.rs`'s gain), a held pull past the end reading
+  `scrollTop` past `scrollMax` by under 40px, exactly on it 400ms after the
+  lift, and a wheel notch at the end never past it in five reads.
 - `workspaces.sh` `--workspaces`: the bar's workspace indicator as one pill
   that travels, read off the bar region alone before, 80ms into, and after a
   workspace switch.
