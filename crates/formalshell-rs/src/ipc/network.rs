@@ -49,17 +49,21 @@ fn status(app: &mut App, _: &[Value]) -> Value {
         .iter()
         .map(|r| {
             format!(
-                "{{\"name\":{},\"known\":{},\"connected\":{},\"stateChanging\":{},\"secured\":{},\"signal\":{}}}",
+                "{{\"name\":{},\"known\":{},\"connected\":{},\"stateChanging\":{},\"secured\":{},\"signal\":{},\"inRange\":{}}}",
                 quote(&r.ssid),
                 r.known,
                 r.connected,
                 r.changing,
                 r.secured,
-                js::num_str(r.signal)
+                js::num_str(r.signal),
+                r.in_range
             )
         })
         .collect();
-    Value::Str(format!("{{\"wifiEnabled\":{},\"networks\":[{}]}}", n.wifi_enabled, rows.join(",")))
+    let enabled = n.wifi_enabled;
+    // The panel's "Known networks" disclosure, null while the panel is closed.
+    let known_open = app.panel_call("network", "knownOpen", "").unwrap_or_else(|| "null".into());
+    Value::Str(format!("{{\"wifiEnabled\":{enabled},\"knownOpen\":{known_open},\"networks\":[{}]}}", rows.join(",")))
 }
 
 /// A network action already in flight is refused rather than queued.

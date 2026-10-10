@@ -68,12 +68,15 @@ pub type ProviderFn<'a> = Box<dyn Fn() -> Vec<Node> + 'a>;
 /// Parents `children` under the node `provider_id`, registers them in
 /// `tree.nodes` and appends them to its `child_ids`. This is the one-source
 /// primitive: a caller that recomputed a single provider's rows attaches just
-/// those.
+/// those. A child that already names a parent is one level further down, under
+/// a node earlier in the same batch that lists it in its own `child_ids`.
 pub fn attach_children(tree: &mut Tree, provider_id: &str, children: Vec<Node>) {
     for mut child in children {
-        child.parent_id = Some(provider_id.to_string());
-        if let Some(node) = tree.nodes.get_mut(provider_id) {
-            node.child_ids.push(child.id.clone());
+        if child.parent_id.is_none() {
+            child.parent_id = Some(provider_id.to_string());
+            if let Some(node) = tree.nodes.get_mut(provider_id) {
+                node.child_ids.push(child.id.clone());
+            }
         }
         tree.nodes.insert(child.id.clone(), child);
     }

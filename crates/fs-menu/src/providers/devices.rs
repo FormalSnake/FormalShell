@@ -31,6 +31,8 @@ pub struct WifiNetwork {
     pub connected: bool,
     pub secured: bool,
     pub enterprise: bool,
+    /// An access point broadcasts it; false only for a saved network.
+    pub in_range: bool,
     pub signal: f64,
     /// Overrides `signal` when the source carries its own 0..1 fraction.
     pub signal_strength: Option<f64>,
@@ -63,10 +65,11 @@ impl WifiRowLike for WifiNetwork {
     }
 }
 
-/// Wi-Fi route. Saved networks are reachable from a root query; nearby ones
-/// are `local_only`, so a stranger's SSID never turns up in a search typed
-/// outside the level. Enter on a secured unknown network asks for a password,
-/// Shift+Enter on a saved one forgets it.
+/// Wi-Fi route. The level lists networks in range; saved ones out of range
+/// sit one level down under "Known networks". Saved networks are reachable
+/// from a root query; nearby ones are `local_only`, so a stranger's SSID
+/// never turns up in a search typed outside the level. Enter on a secured
+/// unknown network asks for a password, Shift+Enter on a saved one forgets it.
 pub fn wifi_rows(st: &WifiState) -> Vec<Node> {
     if !st.has_device {
         return vec![Node::note("wifi.unavailable", "No Wi-Fi device")];
@@ -75,52 +78,68 @@ pub fn wifi_rows(st: &WifiState) -> Vec<Node> {
         return vec![key_row("wifi.off".into(), "Turn Wi-Fi on".into(), "@ipc:wifi.enable", "Turn on")];
     }
     let mut seen: HashSet<&str> = HashSet::new();
-    let visible: Vec<WifiNetwork> =
+    let named: Vec<WifiNetwork> =
         st.networks.iter().filter(|n| !n.name.is_empty() && seen.insert(n.name.as_str())).cloned().collect();
-    if visible.is_empty() {
-        return vec![Node::note("wifi.empty", "No networks found")];
+    let (near, mut away): (Vec<WifiNetwork>, Vec<WifiNetwork>) = named.into_iter().partition(|n| n.in_range || n.connected);
+    let mut rows: Vec<Node> = sort_wifi_rows(&near).into_iter().map(|n| wifi_row(st, n)).collect();
+    if rows.is_empty() {
+        rows.push(Node::note("wifi.empty", "No networks found"));
     }
-    sort_wifi_rows(&visible)
-        .into_iter()
-        .map(|n| {
-            let busy = match st.action_kind.as_str() {
-                "connect" => "Connecting",
-                "disconnect" => "Disconnecting",
-                "forget" => "Forgetting",
-                _ => "",
-            };
-            let desc = if !st.action_kind.is_empty() && st.action_ssid == n.name {
-                busy
-            } else if st.failure_ssid == n.name && !st.failure_text.is_empty() {
-                st.failure_text.as_str()
-            } else if !n.known {
-                if n.enterprise {
-                    "Enterprise"
-                } else if n.secured {
-                    "Secured"
-                } else {
-                    ""
-                }
-            } else {
-                ""
-            };
-            let mut row = Node {
-                desc: Some(desc.to_string()),
-                verb: Some(if n.connected { "Disconnect" } else { "Connect" }.to_string()),
-                action: Some(format!("@ipc:wifi.activate:{}", n.name)),
-                checked: Some(format!("@state:wifi.ssid={}", n.name)),
-                keep_open: Some(true),
-                local_only: !n.known,
-                section: Some(if n.known { "Saved" } else { "Nearby" }.to_string()),
-                ..Node::new(format!("wifi.net.{}", id_part(&n.name)), n.name.clone(), Kind::Action)
-            };
-            if n.known {
-                row.alternate = Some(format!("@ipc:wifi.forget:{}", n.name));
-                row.alternate_label = Some("Forget".to_string());
-            }
-            row
-        })
-        .collect()
+    if !away.is_empty() {
+        away.sort_by(|a, b| a.name.cmp(&b.name));
+        let known: Vec<Node> =
+            away.into_iter().map(|n| Node { parent_id: Some(KNOWN_ID.to_string()), ..wifi_row(st, n) }).collect();
+        rows.push(Node {
+            child_ids: known.iter().map(|n| n.id.clone()).collect(),
+            ..Node::new(KNOWN_ID, "Known networks", Kind::Provider)
+        });
+        rows.extend(known);
+    }
+    rows
+}
+
+/// The level saved networks out of range sit in, under the Wi-Fi route. A
+/// row carrying this as its `parent_id` stays under it when the route's rows
+/// are attached.
+const KNOWN_ID: &str = "wifi.known";
+
+fn wifi_row(st: &WifiState, n: WifiNetwork) -> Node {
+    let busy = match st.action_kind.as_str() {
+        "connect" => "Connecting",
+        "disconnect" => "Disconnecting",
+        "forget" => "Forgetting",
+        _ => "",
+    };
+    let desc = if !st.action_kind.is_empty() && st.action_ssid == n.name {
+        busy
+    } else if st.failure_ssid == n.name && !st.failure_text.is_empty() {
+        st.failure_text.as_str()
+    } else if !n.known {
+        if n.enterprise {
+            "Enterprise"
+        } else if n.secured {
+            "Secured"
+        } else {
+            ""
+        }
+    } else {
+        ""
+    };
+    let mut row = Node {
+        desc: Some(desc.to_string()),
+        verb: Some(if n.connected { "Disconnect" } else { "Connect" }.to_string()),
+        action: Some(format!("@ipc:wifi.activate:{}", n.name)),
+        checked: Some(format!("@state:wifi.ssid={}", n.name)),
+        keep_open: Some(true),
+        local_only: !n.known,
+        section: Some(if n.known { "Saved" } else { "Nearby" }.to_string()),
+        ..Node::new(format!("wifi.net.{}", id_part(&n.name)), n.name.clone(), Kind::Action)
+    };
+    if n.known {
+        row.alternate = Some(format!("@ipc:wifi.forget:{}", n.name));
+        row.alternate_label = Some("Forget".to_string());
+    }
+    row
 }
 
 /// `LiveMenuSources.bluetooth`.

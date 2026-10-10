@@ -178,7 +178,8 @@ impl WifiNetwork {
 pub struct Snapshot {
     pub wifi_enabled: bool,
     pub devices: Vec<Device>,
-    /// Connected first, then known, each tier strongest first.
+    /// Connected first, then the rest in range, then saved ones out of
+    /// range; known before unknown in each tier, strongest first.
     pub networks: Vec<WifiNetwork>,
 }
 

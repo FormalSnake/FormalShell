@@ -8,15 +8,28 @@
 # enterprise round trip through hostapd's integrated PEAP/MSCHAPv2 server,
 # and a closing forget.
 #
+# Before the first connect, a saved profile for FORMALGHOST, an SSID neither
+# radio broadcasts: it has to stay out of the panel's Networks list and its
+# count, and show up under the closed "Known networks" disclosure once real
+# keys walk the cursor onto it and press Enter. Read off `network status`
+# (`inRange`, `knownOpen`) and off tesseract over the two frames.
+#
 # Everything is strictly ordered, so it is one script. Each poll writes over
 # its own path, so what the loop last saw is exactly what the assertions read
 # back, never a stale earlier snapshot passing by accident.
 leg_wifi_flag="--wifi"
 leg_wifi_order=190
+leg_wifi_needs="wtype jq"
 leg_wifi_vm_only="it drives NetworkManager against the hostapd radios and restarts wpa_supplicant with sudo"
 
 wifi_reset_status_path="$shot_dir/wifi-reset-status.json"
 wifi_scan_status_path="$shot_dir/wifi-scan-status.json"
+wifi_ghost_add_path="$shot_dir/wifi-ghost-add.txt"
+wifi_ghost_closed_path="$shot_dir/wifi-ghost-closed.png"
+wifi_ghost_closed_status_path="$shot_dir/wifi-ghost-closed-status.json"
+wifi_ghost_open_path="$shot_dir/wifi-ghost-open.png"
+wifi_ghost_open_status_path="$shot_dir/wifi-ghost-open-status.json"
+wifi_ghost_gone_status_path="$shot_dir/wifi-ghost-gone-status.json"
 wifi_wrong_path="$shot_dir/wifi-wrong.png"
 wifi_wrong_status_path="$shot_dir/wifi-wrong-status.json"
 wifi_connected_path="$shot_dir/wifi-connected.png"
@@ -29,7 +42,7 @@ wifi_eap_forget_status_path="$shot_dir/wifi-eap-forget-status.json"
 leg_wifi_timing() {
   # Every ceiling below is a poll that breaks the moment the state settles;
   # the sum is the worst case NetworkManager and hostapd can genuinely take.
-  leg_timing 190 215
+  leg_timing 205 230
 }
 
 leg_wifi_drive() {
@@ -69,12 +82,43 @@ for ssid in FORMALTEST FORMALTEST-EAP; do
   fi
 done
 
+sudo nmcli connection delete FORMALGHOST > /dev/null 2>&1 || true
+
 SECONDS=0
 while [ "\$SECONDS" -lt 25 ]; do
   $ipc call network status > "$wifi_scan_status_path" 2>&1
   if grep -qF '"name":"FORMALTEST"' "$wifi_scan_status_path" && grep -qF '"name":"FORMALTEST-EAP"' "$wifi_scan_status_path"; then
     break
   fi
+  sleep 1
+done
+
+sudo nmcli connection add type wifi ifname wlan0 con-name FORMALGHOST ssid FORMALGHOST \\
+  connection.autoconnect no wifi-sec.key-mgmt wpa-psk wifi-sec.psk formalghost-psk > "$wifi_ghost_add_path" 2>&1
+SECONDS=0
+while [ "\$SECONDS" -lt 10 ]; do
+  $ipc call network status > "$wifi_ghost_closed_status_path" 2>&1
+  grep -qF '"name":"FORMALGHOST","known":true' "$wifi_ghost_closed_status_path" && break
+  sleep 1
+done
+# Reopened so the disclosure starts closed and the card settles on the new list.
+$ipc call panel close > /dev/null 2>&1
+sleep 1
+$ipc call panel open network > /dev/null 2>&1
+sleep 2
+$ipc call network status > "$wifi_ghost_closed_status_path" 2>&1
+"$grim_bin" "$wifi_ghost_closed_path" > /dev/null 2>&1
+# Nothing is connected here, so the stops end Known networks, Share network,
+# Speed test: past the end, then two back.
+"$wtype_bin" \$(printf -- '-k Down %.0s' \$(seq 1 40)) -k Up -k Up -k Return
+sleep 2
+$ipc call network status > "$wifi_ghost_open_status_path" 2>&1
+"$grim_bin" "$wifi_ghost_open_path" > /dev/null 2>&1
+sudo nmcli connection delete FORMALGHOST > /dev/null 2>&1
+SECONDS=0
+while [ "\$SECONDS" -lt 10 ]; do
+  $ipc call network status > "$wifi_ghost_gone_status_path" 2>&1
+  grep -qF '"name":"FORMALGHOST"' "$wifi_ghost_gone_status_path" || break
   sleep 1
 done
 
@@ -160,6 +204,7 @@ leg_wifi_assert() {
     fail "FORMALTEST/FORMALTEST-EAP never surfaced in a wifi scan"
   fi
   cat "$wifi_scan_status_path"; echo
+  leg_wifi_assert_ghost
   # NetworkManager must have genuinely given up before the frame below can be
   # trusted as the failure state rather than a lucky mid-flight capture.
   if [ ! -s "$wifi_wrong_status_path" ] \
@@ -200,4 +245,52 @@ leg_wifi_assert() {
     fail "closing forget did not settle FORMALTEST-EAP to known:false/stateChanging:false within the poll budget"
   fi
   cat "$wifi_eap_forget_status_path"; echo
+}
+
+# Tesseract out of the shell's own closure, the one `capture text` runs. The
+# closure carries two builds, and only the wrapped one ships eng.
+wifi_ocr() {
+  local c
+  for c in $(nix-store -qR "$PWD/result" | grep -E -- '-tesseract-[0-9.]+$'); do
+    if "$c/bin/tesseract" --list-langs 2>/dev/null | grep -qx eng; then
+      "$c/bin/tesseract" "$1" - 2>/dev/null
+      return
+    fi
+  done
+  fail "no tesseract with eng data in the shell's closure"
+}
+
+leg_wifi_assert_ghost() {
+  local f near closed_text open_text
+  for f in "$wifi_ghost_closed_status_path" "$wifi_ghost_open_status_path" "$wifi_ghost_gone_status_path"; do
+    [ -s "$f" ] || fail "no network status produced at $f"
+  done
+  cat "$wifi_ghost_add_path"
+  cat "$wifi_ghost_closed_status_path"; echo
+  "$jq_bin" -e '.knownOpen == false and any(.networks[]; .name == "FORMALGHOST" and .known and (.inRange | not))' \
+    "$wifi_ghost_closed_status_path" > /dev/null \
+    || fail "FORMALGHOST is not a saved network out of range under a closed disclosure"
+  cat "$wifi_ghost_open_status_path"; echo
+  "$jq_bin" -e '.knownOpen == true' "$wifi_ghost_open_status_path" > /dev/null \
+    || fail "Down, Up, Up, Return did not open the Known networks disclosure"
+  if grep -qF '"name":"FORMALGHOST"' "$wifi_ghost_gone_status_path"; then
+    fail "FORMALGHOST's profile outlived the leg: $(cat "$wifi_ghost_gone_status_path")"
+  fi
+  [ -f "$wifi_ghost_closed_path" ] || fail "no wifi-ghost-closed screenshot produced"
+  [ -f "$wifi_ghost_open_path" ] || fail "no wifi-ghost-open screenshot produced"
+  echo "SMOKE_WIFI_GHOST_CLOSED $wifi_ghost_closed_path"
+  echo "SMOKE_WIFI_GHOST_OPEN $wifi_ghost_open_path"
+  near=$("$jq_bin" '[.networks[] | select(.inRange)] | length' "$wifi_ghost_closed_status_path")
+  closed_text=$(wifi_ocr "$wifi_ghost_closed_path")
+  open_text=$(wifi_ocr "$wifi_ghost_open_path")
+  printf 'closed frame text:\n%s\nopen frame text:\n%s\n' "$closed_text" "$open_text"
+  # Tesseract reads the count's closing paren as `]` and the header's K as
+  # lowercase on some frames.
+  grep -qE "^Networks \($near[])]" <<< "$closed_text" || fail "the closed frame does not read \"Networks ($near)\", the in-range count"
+  grep -qiF "Known networks" <<< "$closed_text" || fail "the closed frame carries no Known networks header"
+  grep -qiF "Known networks" <<< "$open_text" || fail "the open frame lost the Known networks header"
+  if grep -qF FORMALGHOST <<< "$closed_text"; then
+    fail "FORMALGHOST shows in the panel with the disclosure closed"
+  fi
+  grep -qF FORMALGHOST <<< "$open_text" || fail "FORMALGHOST is not under the opened Known networks disclosure"
 }

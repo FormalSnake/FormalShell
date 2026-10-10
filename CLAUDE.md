@@ -805,6 +805,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   crossfade to a second one, and both sides of the opt-in dither key.
 - `wifi.sh` `--wifi`: the network panel against two real hostapd radios:
   scan, wrong password, connect, forget, and the enterprise round trip.
+  First a saved profile for an SSID neither radio broadcasts: `inRange`
+  false in `network status`, left out of the Networks list and its count,
+  and under the closed "Known networks" disclosure until real Down, Up,
+  Up and Return open it (`knownOpen`), read off tesseract over both frames.
 - `wheel.sh` `--wheel`: a virtual-pointer scroll moves the picker grid
   (`menu status` `scrollTop`) without moving the cursor, and a wheel over the
   bar's audio cell still steps the volume. Between the two, touchpad frames

@@ -60,6 +60,7 @@ pub const ROUTE_ICONS: &[(&str, &str)] = &[
     ("lights.brightness", "sun"),
     ("wifi", "wifi"),
     ("wifi.off", "wifi-off"),
+    ("wifi.known", "history"),
     ("bluetooth", "bluetooth"),
     ("bluetooth.off", "bluetooth"),
     ("audio", "volume-2"),

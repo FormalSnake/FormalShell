@@ -173,8 +173,8 @@ impl Reading {
             }
         }
         networks.sort_by(|a, b| {
-            (b.connected(), b.known, b.signal)
-                .cmp(&(a.connected(), a.known, a.signal))
+            (b.connected(), b.visible, b.known, b.signal)
+                .cmp(&(a.connected(), a.visible, a.known, a.signal))
                 .then_with(|| a.ssid.cmp(&b.ssid))
         });
         Snapshot { wifi_enabled: self.wifi_enabled, devices, networks }
@@ -926,6 +926,23 @@ mod tests {
         assert!(home.state.is_changing());
         let cafe = rows.iter().find(|r| r.ssid == "cafe").unwrap();
         assert!(!cafe.known && cafe.visible);
+    }
+
+    #[test]
+    fn saved_networks_out_of_range_sort_after_every_network_in_range() {
+        let wifi = WifiDevice {
+            device: device(),
+            access_points: vec![ap(1, "cafe", 30), ap(2, "home", 20), ap(3, "street", 70)],
+            active_ap: None,
+            active: None,
+        };
+        let profiles = vec![
+            (path("/org/freedesktop/NetworkManager/Settings/1"), profile("home")),
+            (path("/org/freedesktop/NetworkManager/Settings/2"), profile("hostel")),
+        ];
+        let reading = Reading { wifi_enabled: true, profiles, devices: vec![ReadDevice::Wifi(wifi)] };
+        let order: Vec<String> = reading.snapshot().networks.into_iter().map(|n| n.ssid).collect();
+        assert_eq!(order, ["home", "street", "cafe", "hostel"]);
     }
 
     #[test]
