@@ -2327,7 +2327,10 @@ impl SeatHandler for App {
 
 impl PointerHandler for App {
     fn pointer_frame(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_pointer::WlPointer, events: &[PointerEvent]) {
-        self.lock_pointer(events.iter().map(|e| e.surface.clone()));
+        // Enter and leave are the compositor mapping a surface under a
+        // still pointer, not activity.
+        let moved = events.iter().filter(|e| !matches!(e.kind, PointerEventKind::Enter { .. } | PointerEventKind::Leave { .. }));
+        self.lock_pointer(moved.map(|e| e.surface.clone()));
         let rest = self.hot_corner_pointer(events);
         if !rest.is_empty() {
             self.pointer_events(&rest);

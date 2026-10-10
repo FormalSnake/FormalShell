@@ -1,17 +1,22 @@
 # shellcheck shell=bash
 # shellcheck disable=SC2034,SC2154  # dev/smoke.sh reads leg_* and supplies shot_dir, the *_bin paths and fail()
-# --lock-media: the lock surface's now-playing block and the ink its words
-# take off the wallpaper under them. One real MPRIS player (mpv carrying
+# --lock-media: the lock surface's now-playing card and the clock's ink off
+# the wallpaper. One real MPRIS player (mpv carrying
 # mpris.lua, the --media leg's own need_mpv) loops a tagged fixture track
-# with a striped cover while the session locks over a flat white wallpaper;
-# the block is photographed with its cover and title, then driven by real
+# with a striped cover while the session locks in dark mode over a flat
+# white wallpaper; the card is photographed with its cover and title, then
+# driven by real
 # keys through the password field's own filter (Tab onto the transport,
 # Right to play/pause, Return) and `media status` has to say the player
 # paused. The wallpaper is then swapped for a flat dark one under the same
 # lock, and the clock's ink has to flip: dark words over the white field
 # (black at 0.5 over white is mid grey, where black out-contrasts white) and
 # light ones over the dark field. Both are read off `lock status`'s per
-# output report and off the frame, inside the clock's own rect. The real
+# output report and off the frame, inside the clock's own rect. Then the
+# mode goes light under the same lock: the card is the theme's `card` box,
+# so a band of its top padding (`mediaCard` off the report) is one flat
+# fill in both modes, dark in dark mode and light in light mode over the
+# same dark wallpaper. The real
 # password typed last unlocks, which is the proof its first character still
 # reached the field with the transport cursor on.
 #
@@ -37,6 +42,8 @@ lock_media_cursor_png="$shot_dir/lock-media-cursor.png"
 lock_media_paused_json="$shot_dir/lock-media-paused.json"
 lock_media_dark_json="$shot_dir/lock-media-dark-status.json"
 lock_media_dark_png="$shot_dir/lock-media-dark-frame.png"
+lock_media_light_json="$shot_dir/lock-media-light-status.json"
+lock_media_light_png="$shot_dir/lock-media-light-frame.png"
 lock_media_unlocked_txt="$shot_dir/lock-media-unlocked.txt"
 
 lock_media_t0() {
@@ -58,7 +65,7 @@ leg_lock_media_fixture() {
 leg_lock_media_timing() {
   local t0
   t0=$(lock_media_t0)
-  leg_timing $((t0 + 42)) $((t0 + 70))
+  leg_timing $((t0 + 50)) $((t0 + 80))
 }
 
 leg_lock_media_drive() {
@@ -69,6 +76,7 @@ leg_lock_media_drive() {
 sleep $t0
 "$mpv_bin" --no-video --really-quiet --loop-file=inf "$lock_media_track" &
 echo \$! > "$lock_media_pid"
+$ipc call theme mode dark > /dev/null 2>&1
 $ipc call wallpaper set "$lock_media_bright_wp" > /dev/null 2>&1
 sleep 6
 $ipc call media status > "$lock_media_before_json" 2>&1
@@ -89,6 +97,10 @@ $ipc call wallpaper set "$lock_media_dark_wp" > /dev/null 2>&1
 sleep 7
 $ipc call lock status > "$lock_media_dark_json" 2>&1
 "$grim_bin" "$lock_media_dark_png" > /dev/null 2>&1
+$ipc call theme mode light > /dev/null 2>&1
+sleep 7
+$ipc call lock status > "$lock_media_light_json" 2>&1
+"$grim_bin" "$lock_media_light_png" > /dev/null 2>&1
 "$wtype_bin" "formalshell-test"
 "$wtype_bin" -k Return
 sleep 4
@@ -122,8 +134,19 @@ _lock_media_ink_px() {
   echo "${dark:-0} ${light:-0}"
 }
 
+# Mean and standard deviation, in thousandths, of a band of the card's top
+# padding: inside its border and clear of the rounded corners.
+_lock_media_card_band() {
+  local json="$1" png="$2" geom
+  geom=$("$jq_bin" -r '.outputs | to_entries | .[0].value.mediaCard // empty
+    | "\((.width - 48) | floor)x6+\((.x + 24) | floor)+\((.y + 3) | floor)"' "$json" 2>/dev/null)
+  [ -n "$geom" ] || return 0
+  $convert_bin "$png" -crop "$geom" +repage -colorspace gray \
+    -format '%[fx:int(mean*1000)] %[fx:int(standard_deviation*1000)]' info: 2>/dev/null
+}
+
 leg_lock_media_assert() {
-  local f ink media_ink shown title playing cursor px dark light stripes
+  local f ink shown title playing cursor px dark light stripes dmean dsd lmean lsd
   for f in "$lock_media_before_json" "$lock_media_bright_json" "$lock_media_cursor_json" \
     "$lock_media_paused_json" "$lock_media_dark_json"; do
     [ -s "$f" ] || fail "lock-media: no reply produced at $f"
@@ -161,12 +184,10 @@ leg_lock_media_assert() {
 
   # The ink, off the report and off the frame, over each wallpaper.
   ink=$(_lock_media_out "$lock_media_bright_json" clockInk)
-  media_ink=$(_lock_media_out "$lock_media_bright_json" mediaInk)
   px=$(_lock_media_ink_px "$lock_media_bright_json" "$lock_media_bright_png")
   read -r dark light <<< "$px"
-  echo "lock-media: white wallpaper clockInk=$ink mediaInk=$media_ink luma=$(_lock_media_out "$lock_media_bright_json" clockLuma) clock-dark-px=$dark clock-light-px=$light"
+  echo "lock-media: white wallpaper clockInk=$ink luma=$(_lock_media_out "$lock_media_bright_json" clockLuma) clock-dark-px=$dark clock-light-px=$light"
   [ "$ink" = "dark" ] || fail "lock-media: the clock took '$ink' ink over a white wallpaper, not dark"
-  [ "$media_ink" = "dark" ] || fail "lock-media: the now-playing words took '$media_ink' ink over a white wallpaper, not dark"
   [ "$dark" -ge 400 ] || fail "lock-media: the clock's rect carries $dark dark pixels over a white wallpaper; the dark ink never reached the frame"
   [ "$light" -le 40 ] || fail "lock-media: the clock's rect carries $light light pixels over a white wallpaper"
 
@@ -176,6 +197,21 @@ leg_lock_media_assert() {
   echo "lock-media: dark wallpaper clockInk=$ink luma=$(_lock_media_out "$lock_media_dark_json" clockLuma) clock-dark-px=$dark clock-light-px=$light"
   [ "$ink" = "light" ] || fail "lock-media: the clock took '$ink' ink over a dark wallpaper, not light"
   [ "$light" -ge 400 ] || fail "lock-media: the clock's rect carries $light light pixels over a dark wallpaper; the light ink never reached the frame"
+
+  # The card over the same dark wallpaper in each mode.
+  [ -s "$lock_media_light_json" ] || fail "lock-media: no reply produced at $lock_media_light_json"
+  [ -f "$lock_media_light_png" ] || fail "lock-media: no frame produced at $lock_media_light_png"
+  echo "SMOKE_LOCK_MEDIA_LIGHT $lock_media_light_png"
+  local band_dark band_light
+  band_dark=$(_lock_media_card_band "$lock_media_dark_json" "$lock_media_dark_png")
+  band_light=$(_lock_media_card_band "$lock_media_light_json" "$lock_media_light_png")
+  echo "lock-media: card padding band (mean sd, thousandths) dark mode=$band_dark light mode=$band_light"
+  read -r dmean dsd <<< "$band_dark"
+  read -r lmean lsd <<< "$band_light"
+  [[ "$dmean" =~ ^[0-9]+$ && "$lmean" =~ ^[0-9]+$ ]] || fail "lock-media: the report carries no mediaCard rect"
+  [ "$dsd" -le 30 ] && [ "$lsd" -le 30 ] || fail "lock-media: the card's padding is not one flat fill (sd $dsd, $lsd)"
+  [ "$lmean" -ge $((dmean + 300)) ] \
+    || fail "lock-media: the card did not follow the mode: dark-mode fill $dmean, light-mode fill $lmean"
 
   if [ ! -s "$lock_media_unlocked_txt" ] || ! grep -q "^false$" "$lock_media_unlocked_txt"; then
     fail "lock-media: the real password typed with the transport cursor on did not unlock. Got: $(cat "$lock_media_unlocked_txt" 2>/dev/null)"
