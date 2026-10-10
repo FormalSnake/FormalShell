@@ -348,17 +348,26 @@ impl App {
             LockMsg::Sleep(sleeping) => {
                 // Waking from a real suspend with the lock up blanks it until
                 // the next input: CLOCK_BOOTTIME
-                // runs through a suspend and CLOCK_MONOTONIC does not.
+                // runs through a suspend and CLOCK_MONOTONIC does not. The
+                // blank goes up before the machine sleeps, cut rather than
+                // faded, so the frame the panel shows on wake is already black
+                // and nothing on screen changes until a key or the pointer.
                 if sleeping {
                     self.lock.slept_at = Some((boottime(), Instant::now()));
-                } else if let Some((boot, mono)) = self.lock.slept_at.take()
-                    && self.lock.session.is_some()
-                    && (boottime() - boot) - mono.elapsed().as_secs_f64() > 3.0
-                {
-                    self.lock.resume_guard = true;
-                    self.lock.dirty = true;
+                    self.prepare_for_sleep(true);
+                    if self.lock.session.is_some() {
+                        self.lock.resume_guard = true;
+                        self.lock.wake.jump(0.0);
+                        self.lock.dirty = true;
+                    }
+                } else {
+                    let slept = self.lock.slept_at.take().is_some_and(|(boot, mono)| (boottime() - boot) - mono.elapsed().as_secs_f64() > 3.0);
+                    if self.lock.session.is_some() && !slept && self.lock.resume_guard {
+                        self.lock.resume_guard = false;
+                        self.lock.dirty = true;
+                    }
+                    self.prepare_for_sleep(false);
                 }
-                self.prepare_for_sleep(sleeping);
             }
             LockMsg::Inhibiting(on) => self.lock.sleep.inhibiting = on,
             LockMsg::Monitoring(on) => self.lock.sleep.monitoring = on,
@@ -665,7 +674,11 @@ impl App {
         let elapsed = started.elapsed().as_millis() as u64;
         let external = self.lock_external();
         let result = self.lock.sleep.result.as_str();
-        let why = if result == "already" {
+        // The blank set for the sleep is committed before the machine may go.
+        let drawing = self.lock.dirty && !self.lock.outs.is_empty() && elapsed < 3000;
+        let why = if drawing {
+            ""
+        } else if result == "already" {
             "already"
         } else if external {
             if elapsed >= 1000 { "external" } else { "" }

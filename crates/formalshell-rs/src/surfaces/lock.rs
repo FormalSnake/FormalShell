@@ -208,15 +208,20 @@ impl View {
         let glow: Vec<Glow<Rgba>> = if s.palette_ink { Vec::new() } else { style.ink_shadow.clone() };
 
         let mut p = Painter::new(&mut self.scene, &mut self.nodes, None);
-        match s.backdrop.filter(|b| (b.pixmap.width() as i32, b.pixmap.height() as i32) == (w, h)) {
-            Some(b) => {
-                p.rect(full, theme.colors.get("background"), 0.0);
-                p.image(b, (0, 0), s.wake);
-            }
-            None => {
-                p.rect(full, theme.colors.get("background"), 0.0);
+        // Black under everything, the screen faded in over it: a light
+        // theme's `background` under a part-faded backdrop is a white flash
+        // in a dark room on every blank and wake.
+        let black = Rgba { r: 0.0, g: 0.0, b: 0.0, a: 1.0 };
+        p.rect(full, black, 0.0);
+        match s.backdrop {
+            Some(b) if (b.pixmap.width() as i32, b.pixmap.height() as i32) == (w, h) => p.image(b, (0, 0), s.wake),
+            // The wallpaper still decoding: dark, never the theme's background.
+            None if s.has_wallpaper => {}
+            _ => {
+                let bg = theme.colors.get("background");
+                p.rect(full, bg.with_alpha(bg.a * s.wake), 0.0);
                 if s.has_wallpaper {
-                    p.rect(full, Rgba { r: 0.0, g: 0.0, b: 0.0, a: SCRIM as f32 * s.wake }, 0.0);
+                    p.rect(full, black.with_alpha(SCRIM as f32), 0.0);
                 }
             }
         }
@@ -229,28 +234,18 @@ impl View {
         p.text(&clock, (clock_x, clock_rect.y), clock_ink, &glow);
         let date_x = clock_rect.x + ((clock_w - date.width as f64) / 2.0).round() as i32;
         p.text(&date, (date_x, clock_rect.y + clock.line_height() + space.lg as i32), date_ink.with_alpha(date_ink.a * fade), &glow);
-        // The now-playing block hangs `sectionGap * 2` under the field,
-        // centred, `popupWidthNarrow` wide.
-        let media_rect = s.media.as_ref().map(|m| {
-            let block = now_playing(m, theme, kit, Rgba::TRANSPARENT, Rgba::TRANSPARENT);
-            let (bw, bh) = ui::measure(&block, space.popup_width_narrow, theme, kit);
-            IRect::new((cx - bw / 2.0).round() as i32, (field_at.1 + field_h + space.section_gap * 2.0).round() as i32, bw.round() as i32, bh.round() as i32)
+        // The now-playing card hangs `sectionGap * 2` under the field,
+        // `popupWidthNarrow` wide, its words in the card's own inks.
+        let pad = space.panel_padding;
+        let card_w = space.popup_width_narrow;
+        let media = s.media.as_ref().map(|m| {
+            let (_, bh) = ui::measure(&now_playing(m, theme), card_w - pad * 2.0, theme, kit);
+            let y = (field_at.1 + field_h + space.section_gap * 2.0).round() as i32;
+            (IRect::new((cx - card_w / 2.0).round() as i32, y, card_w.round() as i32, (bh + pad * 2.0).round() as i32), bh)
         });
-        let (media_ink, media_luma) = match media_rect {
-            Some(r) => {
-                let (i, l, _) = ink(s, theme, r, (w, h));
-                (i, l)
-            }
-            None => {
-                let fallback = if s.has_wallpaper { 0.0 } else { luma_of(theme.colors.get("background")) };
-                (ink_of(fallback), fallback)
-            }
-        };
-        let media_style = theme.box_style("lock.ink", Some(media_ink));
-        if let (Some(m), Some(r)) = (s.media.as_ref(), media_rect)
-            && let Some(art) = m.art
-        {
-            p.image(art, (r.x, r.y), fade);
+        if let Some((r, _)) = media {
+            let card = theme.box_style("card", None);
+            crate::ui::boxes::paint(&mut p, r, &card, theme.box_radius(&card, r.h as f64), fade, 0.0);
         }
         let last = p.last();
         p.finish();
@@ -258,11 +253,11 @@ impl View {
         self.ui.anchor = last;
         let mut column = vec![field];
         let mut height = field_h;
-        if let (Some(m), Some(r)) = (s.media.as_ref(), media_rect) {
-            let gap = r.y as f64 - (field_at.1 + field_h);
+        if let (Some(m), Some((r, bh))) = (s.media.as_ref(), media) {
+            let gap = r.y as f64 + pad.round() - (field_at.1 + field_h);
             column.push(w::space(gap));
-            column.push(now_playing(m, theme, kit, media_style.ink, media_style.ink).width(Size::Px(r.w as f64)).centred());
-            height += gap + r.h as f64;
+            column.push(now_playing(m, theme).width(Size::Px(card_w - pad * 2.0)).centred());
+            height += gap + bh;
         }
         let cursor = s.media.as_ref().map_or(-1, |m| m.cursor);
         self.ui.cursor = (cursor >= 0).then(|| "transport".to_owned());
@@ -270,15 +265,13 @@ impl View {
         let body = w::column(0.0, column);
         let x0 = (cx - space.popup_width_narrow / 2.0).round();
         let drawn = self.ui.draw(&body, Rect::new(x0, field_at.1, x0 + space.popup_width_narrow, field_at.1 + height), None, fade, theme, kit, &mut self.scene, now);
-        let media = media_ink;
-        let fallback = media_luma;
+        let card = media.map(|(r, _)| json!({"x": r.x, "y": r.y, "width": r.w, "height": r.h}));
         self.report = json!({
             "clockInk": ink_name,
             "clockLuma": js(luma),
             "clockSampled": sampled,
             "clockRect": {"x": rest.x, "y": rest.y, "width": rest.w, "height": rest.h},
-            "mediaInk": media,
-            "mediaLuma": js(fallback),
+            "mediaCard": card,
             "nowPlaying": s.media.is_some(),
             "transportCursor": cursor,
         });
@@ -286,17 +279,17 @@ impl View {
     }
 }
 
-/// The block's words and controls; the cover is painted under it.
-fn now_playing(m: &NowPlaying, theme: &Theme, _kit: &mut Kit, ink: Rgba, sub: Rgba) -> El {
+/// The card's cover, words and controls.
+fn now_playing(m: &NowPlaying, theme: &Theme) -> El {
     let s = &theme.space;
     let title = if m.title.is_empty() { "Unknown title" } else { m.title };
-    let mut words = vec![w::label(title).ink(Ink::Color(ink)).elide()];
+    let mut words = vec![w::label(title).elide()];
     if !m.artist.is_empty() {
-        words.push(w::text(m.artist).size(Type::BodySmall).ink(Ink::Color(sub)).elide());
+        words.push(w::text(m.artist).size(Type::BodySmall).ink(Ink::Muted).elide());
     }
     let mut info = Vec::new();
-    if m.art.is_some() {
-        info.push(w::space(s.control_height * 2.0));
+    if let Some(art) = m.art {
+        info.push(w::picture(Some(art.clone()), s.control_height * 2.0));
     }
     info.push(w::column(s.xxs, words).fill());
     let mut rows = vec![w::row(s.lg, info).fill()];
@@ -483,6 +476,46 @@ mod tests {
         let (off, half, on) = (corner(0.0), corner(0.5), corner(1.0));
         assert_eq!(off, 0);
         assert!(half > off + 40 && half < on - 40, "{off} {half} {on}");
+    }
+
+    #[test]
+    fn wake_never_passes_a_light_background() {
+        use crate::render::Renderer;
+        let theme = Theme::resolve(|_| None, &fs_theme::palette::fallback("light"));
+        assert!(luma_of(theme.colors.get("background")) > 200.0);
+        let mut kit = Kit::new(&theme);
+        // Big enough that the corner is clear of the column.
+        let (w, h) = (900, 700);
+        let dim =Bitmap::from_rgba(w as u16, h as u16, [24, 24, 24, 255].repeat((w * h) as usize));
+        let mut corner = |backdrop: Option<&Bitmap>, has_wallpaper: bool, wake: f32| {
+            let shared = Shared {
+                now: Local::now(),
+                prompt: Prompt::password(0, true),
+                error: "",
+                has_wallpaper,
+                backdrop,
+                picture: None,
+                avatar: None,
+                media: None,
+                enter: (1.0, 0.0),
+                blanked: true,
+                wake,
+                palette_ink: false,
+            };
+            let mut view = View::new(w, h);
+            view.draw(&shared, &theme, &mut kit, Instant::now());
+            let mut r = Renderer::new(w as u16, h as u16);
+            r.render(&view.scene, IRect::new(0, 0, w, h));
+            r.canvas().data()[0].r as i32
+        };
+        for (backdrop, has) in [(Some(&dim), true), (None, true), (None, false)] {
+            let rest = corner(backdrop, has, 1.0);
+            for wake in [0.05, 0.25, 0.5, 0.75] {
+                let at = corner(backdrop, has, wake);
+                assert!(at <= rest, "wake {wake} drew {at}, brighter than the settled {rest}");
+            }
+        }
+        assert_eq!(corner(None, true, 1.0), 0, "a wallpaper still decoding draws dark");
     }
 
     #[test]

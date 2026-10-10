@@ -404,12 +404,15 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   what this rig can still honestly prove of that half.
 - `lock_media.sh` `--lock-media`: a real MPRIS player looping a fixture
   track while the session locks over a flat white wallpaper, the now-playing
-  block under the field photographed with its cover, real Tab, Right and
+  card under the field photographed with its cover, real Tab, Right and
   Return through the password field's own key filter pausing the player
   (`media status`), and the clock's ink flipping from dark to light when a
   flat dark wallpaper replaces the white one under the same lock, read off
   `lock status`'s per-output report and off the frame inside the clock's
-  own rect. The real password typed last still unlocks.
+  own rect. Then the mode goes light under the same lock: the card is the
+  theme's `card` box, a band of its padding (`mediaCard` off the report)
+  one flat fill in both modes, dark then light. The real password typed
+  last still unlocks.
 - `lyrics.sh` `--lyrics`: three tracks (two cached, one a sibling `.lrc` of
   the shape a line-synced provider really returns), the lit set on a duet and
   background overlap, quality and estimated timing, the estimated wipe read
@@ -674,7 +677,12 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   back after wake: the stub's millisecond stamp has to come after the shell
   let its delay inhibitor go with the surface secure, and the `FormalShell`
   inhibitor shows in `systemd-inhibit --list` before the suspend and again
-  after wake.
+  after wake. All of it in light mode over a dark wallpaper at a tenth
+  speed with quarter-size frames grabbed throughout: the lock black while
+  logind holds the machine asleep, fading in after wake, blanking on
+  `lock.blankAfterSeconds` and waking on a real Shift, and from the first
+  black frame on no frame's mean luminance past the settled lock's (the
+  white flash a light theme's background put through every fade).
 - `spaces.sh` `--spaces`: the Spaces cell over windows on two workspaces,
   each listed with its icon under its own chip in `workspaces status`, every
   occupied chip showing its icons and every chip its ordinal, and the chip
