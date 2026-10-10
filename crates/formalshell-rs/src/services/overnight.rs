@@ -9,24 +9,40 @@
 //! The UI decides enable or disable off the store's record; the work runs
 //! here, on the service thread.
 //!
-//! DDC monitors are detected and read through the brightness service's
-//! ddcutil helpers; `ddc` records each one's percent before it is dimmed,
-//! keyed by connector, and disable puts those back.
+//! The screens are the display service's devices, read and written through
+//! its per-device writers: `ddc` records each monitor's percent keyed by
+//! connector, and disable puts every screen back through the same queue,
+//! so a write still out from the dim lands before the restore and the rows
+//! the brightness keys step from end on the restored level.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 
 use fs_system::overnight::{self, AURA_ZONES, SCREEN_PERCENT};
 use fs_upower::{PowerProfiles, Profile};
 use serde_json::{Map, Value, json};
 
 use crate::runtime::Ctx;
-use crate::services::brightness;
+use crate::services::display;
 use crate::services::state::{self, Field};
 
 thread_local! {
     /// The record this thread last wrote while active, for the merges the
     /// LED listing and the Aura probe make once they finish.
     static RECORD: RefCell<Option<Map<String, Value>>> = const { RefCell::new(None) };
+    /// Bumped by every enable and disable: an enable still awaiting a read
+    /// after a newer call stops there and touches nothing.
+    static GENERATION: Cell<u64> = const { Cell::new(0) };
+}
+
+fn next_generation() -> u64 {
+    GENERATION.with(|g| {
+        g.set(g.get() + 1);
+        g.get()
+    })
+}
+
+fn current(generation: u64) -> bool {
+    GENERATION.with(Cell::get) == generation
 }
 
 /// The `PowerProfile` enum numbers, what the record has always held.
@@ -70,24 +86,6 @@ async fn output(argv: &[&str]) -> Option<(i32, String)> {
     Some((out.status.code().unwrap_or(-1), String::from_utf8_lossy(&out.stdout).into_owned()))
 }
 
-/// The backlight: `brightnessctl -m -c backlight -l`'s
-/// first row, name and percent.
-async fn backlight() -> Option<(String, i64)> {
-    let (_, text) = output(&["brightnessctl", "-m", "-c", "backlight", "-l"]).await?;
-    let line = text.lines().next()?;
-    let fields: Vec<&str> = line.split(',').collect();
-    if fields.len() < 4 || fields[0].is_empty() {
-        return None;
-    }
-    let percent = fields[3].trim().trim_end_matches('%').parse().unwrap_or(0);
-    Some((fields[0].to_owned(), percent))
-}
-
-async fn set_backlight(device: &str, percent: i64) {
-    let arg = format!("{}%", percent.clamp(0, 100));
-    let _ = output(&["brightnessctl", "-m", "-d", device, "set", &arg]).await;
-}
-
 async fn profiles() -> Option<PowerProfiles> {
     let conn = zbus::Connection::system().await.ok()?;
     PowerProfiles::connect(&conn).await.ok()
@@ -119,37 +117,47 @@ pub fn enable(ctx: &Ctx) {
     if RECORD.with_borrow(Option::is_some) {
         return;
     }
-    RECORD.with_borrow_mut(|r| *r = Some(Map::new()));
-    ctx.spawn(async {
+    let generation = next_generation();
+    // Empty until the reads below land, but the store reads active at once,
+    // so a disable right behind this one is not dropped as a no-op.
+    write(Some(Map::new()));
+    let ctx = ctx.clone();
+    ctx.clone().spawn(async move {
         let profiles = profiles().await;
         let active = match &profiles {
             Some(p) => p.state().await.ok().map(|s| s.active),
             None => None,
         };
-        let light = backlight().await;
+        let screens = display::levels(&ctx).await;
+        if !current(generation) {
+            return;
+        }
         let mut rec = Map::new();
         if let Some(p) = active {
             rec.insert("profile".into(), json!(profile_number(p)));
         }
-        rec.insert("backlight".into(), json!(light.as_ref().map_or(-1, |(_, pct)| *pct)));
-        rec.insert("ddc".into(), json!({}));
+        let backlight = screens.iter().find(|(id, ..)| id == "backlight").map_or(-1, |(_, pct, _)| *pct);
+        rec.insert("backlight".into(), json!(backlight));
+        let ddc: Map<String, Value> =
+            screens.iter().filter(|(id, pct, _)| id != "backlight" && *pct > SCREEN_PERCENT).map(|(id, pct, _)| (id.clone(), json!(pct))).collect();
+        rec.insert("ddc".into(), Value::Object(ddc));
         rec.insert("leds".into(), json!({}));
         rec.insert("aura".into(), json!(false));
-        if RECORD.with_borrow(Option::is_none) {
-            return;
-        }
         write(Some(rec));
+        // Recorded first, so a restart from here on still knows what to put back.
+        for (id, pct, _) in &screens {
+            if *pct > SCREEN_PERCENT {
+                display::set_level(&ctx, id, SCREEN_PERCENT);
+            }
+        }
         if let (Some(p), Some(Profile::Performance)) = (&profiles, active) {
             let _ = p.set_active(Profile::Balanced).await;
-        }
-        if let Some((device, _)) = &light {
-            set_backlight(device, SCREEN_PERCENT).await;
         }
         let zones: Vec<String> = AURA_ZONES.iter().map(|z| z.to_string()).collect();
         let leds = async {
             let Some((_, text)) = run(sh(LED_LIST, &[])).await else { return };
             let leds = overnight::parse_leds(&text);
-            if leds.is_empty() || RECORD.with_borrow(Option::is_none) {
+            if leds.is_empty() || !current(generation) {
                 return;
             }
             let snapshot: Map<String, Value> = overnight::led_snapshot(&leds).into_iter().map(|(n, b)| (n, json!(b))).collect();
@@ -158,44 +166,45 @@ pub fn enable(ctx: &Ctx) {
             let _ = run(sh(LED_OFF, &names)).await;
         };
         let aura = async {
-            if let Some((0, _)) = run(sh(AURA_OFF, &zones)).await {
+            if let Some((0, _)) = run(sh(AURA_OFF, &zones)).await
+                && current(generation)
+            {
                 record("aura", json!(true));
             }
         };
-        // Each monitor lands in the record before it is dimmed, so a restart
-        // mid-walk still knows what to put back.
-        let ddc = async {
-            let mut dimmed = Map::new();
-            for row in brightness::ddc_rows().await {
-                if RECORD.with_borrow(Option::is_none) {
-                    return;
-                }
-                if row.percent > SCREEN_PERCENT as f64 {
-                    dimmed.insert(row.connector, json!(row.percent));
-                    record("ddc", Value::Object(dimmed.clone()));
-                    brightness::ddc_write(&row.bus, brightness::ddc_raw(SCREEN_PERCENT as f64, row.max)).await;
-                }
-            }
-        };
-        futures_lite::future::zip(futures_lite::future::zip(leds, aura), ddc).await;
+        futures_lite::future::zip(leds, aura).await;
     });
 }
 
-/// `snap`: the record state.json holds, which is what gets put back.
+/// `snap`: the record state.json holds, which is what gets put back unless
+/// this thread holds a newer one.
 pub fn disable(ctx: &Ctx, snap: Value) {
+    next_generation();
+    let snap = RECORD.with_borrow_mut(Option::take).map_or(snap, Value::Object);
     write(None);
-    ctx.spawn(async move {
+    let mut screens: Vec<(String, i64)> = Vec::new();
+    if let Some(level) = snap.get("backlight").and_then(Value::as_f64).filter(|l| *l >= 0.0) {
+        screens.push(("backlight".into(), level.round() as i64));
+    }
+    if let Some(Value::Object(ddc)) = snap.get("ddc") {
+        screens.extend(ddc.iter().filter_map(|(id, pct)| Some((id.clone(), pct.as_f64()?.round() as i64))));
+    }
+    // Queued now, behind whatever the dim still has out on each device.
+    let unknown: Vec<(String, i64)> = screens.into_iter().filter(|(id, pct)| !restore(ctx, id, *pct)).collect();
+    let ctx = ctx.clone();
+    ctx.clone().spawn(async move {
+        // A restart since the dim: the devices are read before they are set.
+        if !unknown.is_empty() {
+            display::levels(&ctx).await;
+            for (id, pct) in &unknown {
+                restore(&ctx, id, *pct);
+            }
+        }
         if let Some(want) = snap.get("profile").and_then(Value::as_i64).and_then(profile_of)
             && let Some(p) = profiles().await
             && p.state().await.is_ok_and(|s| s.active != want)
         {
             let _ = p.set_active(want).await;
-        }
-        let level = snap.get("backlight").and_then(Value::as_f64).unwrap_or(-1.0);
-        if level >= 0.0
-            && let Some((device, _)) = backlight().await
-        {
-            set_backlight(&device, level.round() as i64).await;
         }
         let leds: Vec<(String, Value)> = match snap.get("leds") {
             Some(Value::Object(m)) => m.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
@@ -209,17 +218,15 @@ pub fn disable(ctx: &Ctx, snap: Value) {
         if !restore.is_empty() {
             let _ = run(sh(LED_RESTORE, &restore)).await;
         }
-        if let Some(Value::Object(ddc)) = snap.get("ddc")
-            && !ddc.is_empty()
-        {
-            let buses = brightness::ddc_detect().await;
-            for (connector, percent) in ddc {
-                let Some(percent) = percent.as_f64() else { continue };
-                let Some((_, bus)) = buses.iter().find(|(c, _)| c == connector) else { continue };
-                if let Some((_, max)) = brightness::ddc_read(bus).await {
-                    brightness::ddc_write(bus, brightness::ddc_raw(percent, max)).await;
-                }
-            }
-        }
     });
+}
+
+/// Queues one screen's restore; false while the display service has not
+/// read that device yet.
+fn restore(ctx: &Ctx, id: &str, percent: i64) -> bool {
+    if !display::known(id) {
+        return false;
+    }
+    display::set_level(ctx, id, percent);
+    true
 }

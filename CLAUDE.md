@@ -180,7 +180,12 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   HDMI-A-1 (DDC, -5) and eDP-1 (backlight, +5): `osd state` showing the
   asked value straight after the first call, samples and device writes
   moving one way only to 30 and 70, and the DDC burst landing in fewer
-  than eight setvcp calls.
+  than eight setvcp calls. Then overnight over the same pair: enabled,
+  the display panel reading the dimmed devices, disabled as a new output's
+  DDC detection starts, and again disabled 0.3s after enable; every value
+  each device was given between 1 and its level before, the last one that
+  level (70 and 30), no setvcp overlapping another, and a zero
+  `brightnessStep` showing 70 and 30, the rows the next key steps from.
 - `caffeinate.sh` `--caffeinate`: `caffeinate.onStartup` starting the
   session caffeinated with its `formalshell:caffeinate` layer surface
   mapped, the real ext-idle-notify monitor staying non-idle three screensaver
@@ -564,7 +569,8 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
 - `overnight.sh` `--overnight`: overnight enabled and disabled over IPC, the
   restore record's full shape in `overnight status` (the rig's honest
   backlight -1, no LEDs, no asusctl), the bar's moon glyph in the frame,
-  and state.json's record gone after disable.
+  and state.json's record gone after disable. The screens' dim and restore
+  are `--brightness`'s, against its shims.
 - `osd.sh` `--osd`: the pill's own entrance off the bottom line sampled frame
   by frame under `debug motionScale`, ink on the output's very last row early
   and a plain pill a `screenPadding` clear of it at rest, then at full speed a
