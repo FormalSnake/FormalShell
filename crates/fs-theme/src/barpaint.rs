@@ -105,51 +105,132 @@ fn js_round(x: f64) -> f64 {
     if x - floor >= 0.5 { floor + 1.0 } else { floor }
 }
 
-/// The three numbers, off one RGBA run (a Canvas `getImageData().data`) of
-/// `width` by `height` samples. `acutance` is the mean absolute luminance
-/// difference between horizontally adjacent samples, so a flat field reads 0
-/// and a checker reads the contrast between its squares. A run shorter than
-/// the grid needs reads as unsampled.
-pub fn stats(data: &[u8], width: usize, height: usize) -> Stats {
-    let count = width * height;
-    if count == 0 || data.len() < count * 4 {
-        return Stats {
-            mean: 0.0,
-            std: 0.0,
-            acutance: 0.0,
-            sampled: false,
-        };
+/// The sums the three numbers are read off, for one stretch of the band.
+/// Two of them add, so a span of the band pools its columns exactly.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Column {
+    sum: f64,
+    square: f64,
+    edge: f64,
+    edges: u64,
+    count: u64,
+}
+
+impl Column {
+    fn add(&mut self, other: &Column) {
+        self.sum += other.sum;
+        self.square += other.square;
+        self.edge += other.edge;
+        self.edges += other.edges;
+        self.count += other.count;
     }
 
-    let mut sum = 0.0;
-    let mut square = 0.0;
-    let mut edge = 0.0;
-    let mut edges = 0u64;
-    for y in 0..height {
-        let mut prev = -1.0;
-        for x in 0..width {
-            let i = (y * width + x) * 4;
-            let luma =
-                LUMA_R * data[i] as f64 + LUMA_G * data[i + 1] as f64 + LUMA_B * data[i + 2] as f64;
-            sum += luma;
-            square += luma * luma;
-            if prev >= 0.0 {
-                edge += (luma - prev).abs();
-                edges += 1;
-            }
-            prev = luma;
+    fn stats(&self) -> Stats {
+        if self.count == 0 {
+            return Stats {
+                mean: 0.0,
+                std: 0.0,
+                acutance: 0.0,
+                sampled: false,
+            };
+        }
+        let count = self.count as f64;
+        let mean = self.sum / count;
+        // Clamped at 0: the variance of a flat field is a difference of two
+        // large sums and lands a hair below zero in floating point.
+        let variance = (self.square / count - mean * mean).max(0.0);
+        Stats {
+            mean,
+            std: variance.sqrt(),
+            acutance: if self.edges > 0 {
+                self.edge / self.edges as f64
+            } else {
+                0.0
+            },
+            sampled: true,
         }
     }
-    let mean = sum / count as f64;
-    // Clamped at 0: the variance of a flat field is a difference of two
-    // large sums and lands a hair below zero in floating point.
-    let variance = (square / count as f64 - mean * mean).max(0.0);
-    Stats {
-        mean,
-        std: variance.sqrt(),
-        acutance: if edges > 0 { edge / edges as f64 } else { 0.0 },
-        sampled: true,
+}
+
+/// The band's samples kept per column along it, so the whole band and any
+/// stretch of it (one cell's) read off the same sums. Empty when the run was
+/// shorter than the grid needs.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Profile {
+    columns: Vec<Column>,
+}
+
+impl Profile {
+    /// One RGBA run (a Canvas `getImageData().data`) of `width` by `height`
+    /// samples, bucketed along the band: per sample column for a horizontal
+    /// band (`along_x`), per row for a vertical one. `acutance` is the mean
+    /// absolute luminance difference between horizontally adjacent samples,
+    /// so a flat field reads 0 and a checker reads the contrast between its
+    /// squares; each difference lands in the bucket of its right-hand sample.
+    pub fn read(data: &[u8], width: usize, height: usize, along_x: bool) -> Self {
+        let count = width * height;
+        if count == 0 || data.len() < count * 4 {
+            return Self::default();
+        }
+        let mut columns = vec![Column::default(); if along_x { width } else { height }];
+        for y in 0..height {
+            let mut prev = -1.0;
+            for x in 0..width {
+                let i = (y * width + x) * 4;
+                let luma = LUMA_R * data[i] as f64
+                    + LUMA_G * data[i + 1] as f64
+                    + LUMA_B * data[i + 2] as f64;
+                let c = &mut columns[if along_x { x } else { y }];
+                c.sum += luma;
+                c.square += luma * luma;
+                c.count += 1;
+                if prev >= 0.0 {
+                    c.edge += (luma - prev).abs();
+                    c.edges += 1;
+                }
+                prev = luma;
+            }
+        }
+        Self { columns }
     }
+
+    pub fn len(&self) -> usize {
+        self.columns.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.columns.is_empty()
+    }
+
+    /// The three numbers over the whole band.
+    pub fn stats(&self) -> Stats {
+        self.span(0.0, 1.0)
+    }
+
+    /// The three numbers over the stretch from `from` to `to`, fractions of
+    /// the band's length. Never fewer than one column, so a cell thinner than
+    /// a sample still reads the column under it.
+    pub fn span(&self, from: f64, to: f64) -> Stats {
+        let n = self.columns.len();
+        if n == 0 {
+            return Column::default().stats();
+        }
+        let (from, to) = (from.min(to), from.max(to));
+        let first = ((from * n as f64).floor() as usize).min(n - 1);
+        let last = ((to * n as f64).ceil() as usize).clamp(first + 1, n);
+        let mut pooled = Column::default();
+        for c in &self.columns[first..last] {
+            pooled.add(c);
+        }
+        pooled.stats()
+    }
+}
+
+/// The three numbers over one RGBA run of `width` by `height` samples
+/// (`Profile::read` pooled). A run shorter than the grid needs reads as
+/// unsampled.
+pub fn stats(data: &[u8], width: usize, height: usize) -> Stats {
+    Profile::read(data, width, height, true).stats()
 }
 
 /// Whether the band is too busy to read ink off directly, which is what makes
@@ -198,10 +279,29 @@ pub fn decide(s: Option<&Stats>, mode: &str, fullscreen: bool, pinned: Option<&s
             Paint::TranslucentDark
         };
     }
+    bare(s)
+}
+
+/// The bare band's ink off its mean alone: dark words over a bright field,
+/// light ones (with their shadow) over anything else.
+fn bare(s: &Stats) -> Paint {
     if s.mean > LUMA_THRESHOLD {
         Paint::Dark
     } else {
         Paint::Light
+    }
+}
+
+/// The ink one cell wears, given the band's paint and the reading of the
+/// stretch under that cell. A bare band (no fill of its own, under the
+/// rule or `transparent`) lets each cell read its own stretch, which is
+/// what keeps the words legible over a wallpaper bright at one end and
+/// dark at the other; a band with a fill, a pinned paint and a covered
+/// output keep one ink across, since the fill is what the words sit on.
+pub fn cell(band: Paint, pinned: Option<&str>, span: &Stats) -> Paint {
+    match (pin(pinned), band) {
+        (Pin::Auto | Pin::Transparent, Paint::Light | Paint::Dark) if span.sampled => bare(span),
+        _ => band,
     }
 }
 
@@ -338,6 +438,75 @@ mod tests {
     fn no_samples_is_not_a_reading() {
         let s = stats(&[], 0, 0);
         assert!(!s.sampled);
+        assert!(Profile::read(&[], 0, 0, true).is_empty());
+        assert!(!Profile::default().span(0.0, 1.0).sampled);
+    }
+
+    #[test]
+    fn a_span_reads_its_own_stretch_of_the_band() {
+        // Two rows, black on the left half and white on the right.
+        let p = Profile::read(&pixels(&[0, 0, 255, 255, 0, 0, 255, 255]), 4, 2, true);
+        assert_eq!(p.len(), 4);
+        assert!(near(p.stats().mean, 127.5));
+        assert!(near(p.span(0.0, 0.5).mean, 0.0));
+        assert!(near(p.span(0.5, 1.0).mean, 255.0));
+        assert!(near(p.span(0.0, 0.5).std, 0.0));
+        // The edge between the halves lands in the right half's first column.
+        assert!(near(p.span(0.5, 0.75).acutance, 255.0));
+        assert!(near(p.span(0.0, 0.5).acutance, 0.0));
+    }
+
+    #[test]
+    fn a_span_is_never_narrower_than_one_column() {
+        let p = Profile::read(&pixels(&[0, 255, 0, 255]), 4, 1, true);
+        assert!(near(p.span(0.3, 0.3).mean, 255.0));
+        assert!(near(p.span(1.0, 1.0).mean, 255.0));
+        assert!(near(p.span(0.0, 0.0).mean, 0.0));
+    }
+
+    #[test]
+    fn a_vertical_band_profiles_down_its_rows() {
+        let p = Profile::read(&pixels(&[0, 0, 255, 255]), 1, 4, false);
+        assert_eq!(p.len(), 4);
+        assert!(near(p.span(0.0, 0.5).mean, 0.0));
+        assert!(near(p.span(0.5, 1.0).mean, 255.0));
+        assert!(near(p.stats().acutance, 0.0));
+    }
+
+    #[test]
+    fn a_cell_on_a_bare_band_reads_its_own_stretch() {
+        assert_eq!(cell(Paint::Dark, None, &st(30.0, 0.0, 0.0)), Paint::Light);
+        assert_eq!(cell(Paint::Light, None, &st(230.0, 0.0, 0.0)), Paint::Dark);
+        assert_eq!(
+            cell(Paint::Dark, Some("transparent"), &st(30.0, 0.0, 0.0)),
+            Paint::Light
+        );
+        assert_eq!(
+            cell(Paint::Dark, Some("auto"), &st(230.0, 0.0, 0.0)),
+            Paint::Dark
+        );
+    }
+
+    #[test]
+    fn a_cell_keeps_the_band_paint_when_the_band_has_a_fill_or_a_pin() {
+        let dark = st(30.0, 0.0, 0.0);
+        assert_eq!(
+            cell(Paint::TranslucentDark, None, &dark),
+            Paint::TranslucentDark
+        );
+        assert_eq!(
+            cell(Paint::TranslucentLight, None, &dark),
+            Paint::TranslucentLight
+        );
+        assert_eq!(cell(Paint::Maximized, None, &dark), Paint::Maximized);
+        assert_eq!(cell(Paint::Dark, Some("dark"), &dark), Paint::Dark);
+        let unsampled = Stats {
+            mean: 0.0,
+            std: 0.0,
+            acutance: 0.0,
+            sampled: false,
+        };
+        assert_eq!(cell(Paint::Dark, None, &unsampled), Paint::Dark);
     }
 
     #[test]

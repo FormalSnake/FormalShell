@@ -136,6 +136,13 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   numbers `bar paint` reports, and the fill the band actually drew, off a
   patch of the frame above the cells. Pins `theme.preset` and
   `fullscreen.hideChrome` itself.
+- `bar_ink.sh` `--bar-ink`: each cell of the wingpanel band reading its ink
+  off its own stretch of the wallpaper: one half black, one half white,
+  under pantheon's own `transparent` paint, every whole cell clear of the
+  seam reporting light ink on the black half and dark on the white in
+  `bar paint`'s `cells`, and one cell per half read off the frame over its
+  `bar room` rect for a glyph of that ink. Refuses `--bar-adaptive`, which
+  pins `bar.paint: auto`.
 - `bar_layout.sh` `--bar-layout`: user `bar.modules` and a reordered layout
   resolved from settings.json alone, every `command` module failure path
   (`services/commands.rs`) in the one frame.

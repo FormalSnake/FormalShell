@@ -696,6 +696,19 @@ second bar or the tray's is on a popover card with a fill of its own, so it
 resolves its ink from its state against that card, never off the band's
 reading of a wallpaper it is not drawn on.
 
+On a bare band (the `light` and `dark` paints, under the rule or
+`transparent`) each cell reads its own ink off the stretch of wallpaper
+under it rather than wearing the band's: the sampler keeps the band as a
+profile along its length (`barpaint::Profile`), the bar pools the columns
+under each placed cell's rect and `barpaint::cell` applies the mean rule
+to that alone, so a wallpaper white at one end and dark at the other gets
+dark words over the white and light ones over the dark, with the `light`
+paint's shadow under them, instead of one ink that reads on half the
+strip. The band itself still decides the fill: a band busy enough for a
+translucent paint, a pinned paint and a covered output keep one ink
+across, since the fill is what the words sit on. `bar paint`'s `cells`
+lists what each placed cell settled on.
+
 **Frame.** A theme habit first (`habits.frame`): a table that says it wears
 no ring reads `frame.thickness` as 0 whatever settings.json holds, so the
 key reserves nothing and the `window` role's own gaps are the whole margin

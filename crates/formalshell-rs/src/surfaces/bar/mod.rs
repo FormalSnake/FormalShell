@@ -82,6 +82,9 @@ pub struct Bar {
     edge: Edge,
     /// The wingpanel band's ink and glow for its cells, and its fill.
     band_box: Option<(Rgba, Vec<Glow<Rgba>>)>,
+    /// The two inks a cell on a bare band picks between off its own stretch
+    /// of wallpaper: the `light` paint's and the `dark` paint's.
+    bare_inks: Option<[(Rgba, Vec<Glow<Rgba>>); 2]>,
     band_fill: Option<Rgba>,
     /// The ring's fill, line width and line colour.
     ring_box: (Rgba, f64, Rgba),
@@ -124,6 +127,7 @@ impl Bar {
             style,
             edge,
             band_box: None,
+            bare_inks: None,
             band_fill: None,
             ring_box: (Rgba::TRANSPARENT, 0.0, Rgba::TRANSPARENT),
             resolved: layout::resolve(None, &[]),
@@ -371,7 +375,7 @@ impl Bar {
             let pin_raw = store.config.str("bar.paint").map(str::to_owned).or_else(|| theme.habit("paint").and_then(Value::as_str).map(str::to_owned));
             let pin = barpaint::pin(pin_raw.as_deref()).as_str();
             let fullscreen = store.compositor.snapshot.fullscreen_outputs.contains(&self.output);
-            let stats = store.bar_paint.stats;
+            let stats = store.bar_paint.stats();
             let paint = barpaint::decide(stats.as_ref(), &theme.colors.mode, fullscreen, Some(pin));
             PaintState { paint, pin, fullscreen }
         });
@@ -380,13 +384,24 @@ impl Bar {
         let ring = theme.box_style("frame", state);
         let line = ring.border.clone().unwrap_or(fs_theme::style::Line { color: Rgba::TRANSPARENT, width: 0.0 });
         let band_box = paint.as_ref().map(|_| (bar.ink, bar.ink_shadow.clone()));
+        let bare_inks = paint.as_ref().map(|_| {
+            [barpaint::Paint::Light, barpaint::Paint::Dark].map(|p| {
+                let b = theme.box_style("bar", Some(p.as_str()));
+                (b.ink, b.ink_shadow)
+            })
+        });
         let band_fill = paint.as_ref().map(|_| bar.fill);
         let ring_box = (ring.fill, line.width, line.color);
-        let changed = paint != self.paint || band_box != self.band_box || band_fill != self.band_fill || ring_box != self.ring_box;
+        let changed = paint != self.paint
+            || band_box != self.band_box
+            || bare_inks != self.bare_inks
+            || band_fill != self.band_fill
+            || ring_box != self.ring_box;
         if changed {
             let ink_changed = band_box != self.band_box;
             self.paint = paint;
             self.band_box = band_box;
+            self.bare_inks = bare_inks;
             self.band_fill = band_fill;
             self.ring_box = ring_box;
             self.strip_key = None;
@@ -398,12 +413,21 @@ impl Bar {
         changed
     }
 
-    /// `bar paint`'s answer for this bar, null under a strip.
+    /// `bar paint`'s answer for this bar, null under a strip. `cells` is the
+    /// ink each placed cell wears, the band's own unless its stretch of a
+    /// bare band read otherwise.
     pub fn paint_state(&self, store: &Store) -> Value {
         let Some(p) = &self.paint else { return Value::Null };
         let s = store.bar_paint.numbers();
+        let cells: Vec<Value> = self
+            .slots
+            .iter()
+            .filter(|s| !s.rect.is_empty())
+            .map(|s| json!({"name": s.name, "paint": s.ink.unwrap_or(p.paint).as_str()}))
+            .collect();
         json!({
             "paint": p.paint.as_str(),
+            "cells": cells,
             "source": store.bar_paint.source,
             "pin": p.pin,
             "pinned": p.pin != "auto",
@@ -443,22 +467,52 @@ impl Bar {
     /// One pass: budgets, positions and paint. Cheap enough per frame;
     /// unchanged nodes damage nothing.
     pub fn layout(&mut self, store: &Store, now: Instant) {
-        let band = self.band();
         self.refit(store, now);
         self.place(now);
         if self.fit_rooms(store, now) {
             self.place(now);
         }
+        self.ink_cells(store);
         self.paint_strip();
         let visible = !self.hidden;
         let edge = self.edge;
-        let band_ref = band.as_ref().map(|(c, g)| (*c, g.as_slice()));
+        let (band, bare) = (&self.band_box, &self.bare_inks);
         for (i, slot) in self.slots.iter_mut().enumerate() {
             if slot.rect.is_empty() {
                 slot.hide(&mut self.scene);
                 continue;
             }
-            slot.paint(&mut self.kit, &mut self.scene, edge, self.hover == Some(i), band_ref, 1.0, visible, now);
+            let ink = slot_ink(band, bare, slot.ink);
+            slot.paint(&mut self.kit, &mut self.scene, edge, self.hover == Some(i), ink, 1.0, visible, now);
+        }
+    }
+
+    /// Each placed cell's ink off the stretch of wallpaper under it
+    /// (`barpaint::cell`), read where the cell stands now, so a cell
+    /// gliding across a bright-to-dark seam flips as it crosses.
+    fn ink_cells(&mut self, store: &Store) {
+        let Some(p) = &self.paint else {
+            for slot in &mut self.slots {
+                slot.ink = None;
+            }
+            return;
+        };
+        let strip = self.strip();
+        let vertical = self.edge.is_vertical();
+        let profile = store.bar_paint.profile.as_ref();
+        for slot in &mut self.slots {
+            let r = slot.rect;
+            slot.ink = match profile {
+                Some(profile) if !r.is_empty() => {
+                    let (from, to) = if vertical {
+                        ((r.y - strip.y) as f64 / strip.h.max(1) as f64, (r.bottom() - strip.y) as f64 / strip.h.max(1) as f64)
+                    } else {
+                        ((r.x - strip.x) as f64 / strip.w.max(1) as f64, (r.right() - strip.x) as f64 / strip.w.max(1) as f64)
+                    };
+                    Some(barpaint::cell(p.paint, Some(p.pin), &profile.span(from, to)))
+                }
+                _ => Some(p.paint),
+            };
         }
     }
 
@@ -695,13 +749,13 @@ impl Bar {
             return false;
         }
         let edge = self.edge;
-        let band = self.band();
-        let band_ref = band.as_ref().map(|(c, g)| (*c, g.as_slice()));
+        let (band, bare) = (&self.band_box, &self.bare_inks);
         for (i, slot) in self.slots.iter_mut().enumerate() {
             if slot.rect.is_empty() || !slot.drawing(now) {
                 continue;
             }
-            slot.paint(&mut self.kit, &mut self.scene, edge, self.hover == Some(i), band_ref, 1.0, visible, now);
+            let ink = slot_ink(band, bare, slot.ink);
+            slot.paint(&mut self.kit, &mut self.scene, edge, self.hover == Some(i), ink, 1.0, visible, now);
         }
         true
     }
@@ -828,4 +882,19 @@ impl Bar {
 /// A number as JSON.stringify prints it: no `.0` on a whole one.
 pub fn number(n: f64) -> Value {
     if n.fract() == 0.0 && n.abs() < 1e15 { json!(n as i64) } else { json!(n) }
+}
+
+/// The band ink one slot draws with: the `light` or `dark` paint's when its
+/// own stretch read one, the band's otherwise, none under a strip.
+fn slot_ink<'a>(
+    band: &'a Option<(Rgba, Vec<Glow<Rgba>>)>,
+    bare: &'a Option<[(Rgba, Vec<Glow<Rgba>>); 2]>,
+    ink: Option<barpaint::Paint>,
+) -> Option<(Rgba, &'a [Glow<Rgba>])> {
+    let own = match (ink, bare) {
+        (Some(barpaint::Paint::Light), Some(b)) => Some(&b[0]),
+        (Some(barpaint::Paint::Dark), Some(b)) => Some(&b[1]),
+        _ => None,
+    };
+    own.or(band.as_ref()).map(|(c, g)| (*c, g.as_slice()))
 }

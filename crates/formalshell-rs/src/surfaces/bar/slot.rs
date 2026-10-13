@@ -44,6 +44,9 @@ pub struct Slot {
     /// region's room hid it.
     pub rect: IRect,
     pub clip: IRect,
+    /// The band paint this cell's own stretch of wallpaper read, on a
+    /// wingpanel band; none under a strip.
+    pub ink: Option<fs_theme::barpaint::Paint>,
     nodes: Vec<NodeId>,
     pub dirty: bool,
 }
@@ -81,6 +84,7 @@ impl Slot {
             marquee: None,
             rect: IRect::default(),
             clip: IRect::default(),
+            ink: None,
             nodes: Vec::new(),
             dirty: true,
         }

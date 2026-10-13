@@ -1,12 +1,13 @@
 //! The wingpanel band's one reading of the wallpaper: the wallpaper decoded
 //! small and cover-cropped to
-//! the main output, the band's rows read back, three numbers. Sampled on a
+//! the main output, the band's rows read back as a profile along it, three
+//! numbers for the band and three for any stretch of it. Sampled on a
 //! wallpaper or band change and never on a clock; the decode runs on the
 //! pool.
 
 use std::sync::OnceLock;
 
-use fs_theme::barpaint::{self, SAMPLE_WIDTH, Stats};
+use fs_theme::barpaint::{self, Profile, SAMPLE_WIDTH, Stats};
 
 use crate::runtime::Ctx;
 use crate::store;
@@ -24,23 +25,28 @@ pub struct Request {
 pub struct State {
     /// The output the reading was taken on, empty until one was.
     pub source: String,
-    pub stats: Option<Stats>,
+    pub profile: Option<Profile>,
 }
 
-pub struct Diff(pub String, pub Option<Stats>);
+pub struct Diff(pub String, pub Option<Profile>);
 
 impl State {
-    pub fn apply(&mut self, Diff(source, stats): Diff) -> bool {
-        if self.source == source && self.stats == stats {
+    pub fn apply(&mut self, Diff(source, profile): Diff) -> bool {
+        if self.source == source && self.profile == profile {
             return false;
         }
-        (self.source, self.stats) = (source, stats);
+        (self.source, self.profile) = (source, profile);
         true
+    }
+
+    /// The whole band's numbers, none until it was read.
+    pub fn stats(&self) -> Option<Stats> {
+        self.profile.as_ref().map(Profile::stats)
     }
 
     /// The numbers as `bar paint` reports them: an unread band is all zeroes.
     pub fn numbers(&self) -> Stats {
-        self.stats.unwrap_or(Stats { mean: 0.0, std: 0.0, acutance: 0.0, sampled: false })
+        self.stats().unwrap_or(Stats { mean: 0.0, std: 0.0, acutance: 0.0, sampled: false })
     }
 }
 
@@ -54,7 +60,7 @@ pub fn sample(request: Request) {
 
 /// The band's samples off the decoded wallpaper, drawn the way
 /// the desktop crops it: cover, centred, nearest-neighbour.
-fn read(request: &Request) -> Option<Stats> {
+fn read(request: &Request) -> Option<Profile> {
     let img = image::open(&request.wallpaper).ok()?.to_rgba8();
     let (iw, ih) = (img.width() as f64, img.height() as f64);
     let (sw, sh) = request.screen;
@@ -78,7 +84,8 @@ fn read(request: &Request) -> Option<Stats> {
             data.extend_from_slice(&img.get_pixel(px, py).0);
         }
     }
-    Some(barpaint::stats(&data, bw, bh))
+    let along_x = !matches!(request.edge, "left" | "right");
+    Some(Profile::read(&data, bw, bh, along_x))
 }
 
 pub async fn run(ctx: Ctx) {
@@ -94,11 +101,11 @@ pub async fn run(ctx: Ctx) {
         }
         last = Some(request.clone());
         let output = request.output.clone();
-        let stats = if request.wallpaper.is_empty() {
+        let profile = if request.wallpaper.is_empty() {
             None
         } else {
             ctx.pool().run(move || read(&request)).await.flatten()
         };
-        ctx.publish(store::Diff::BarPaint(Diff(output, stats)));
+        ctx.publish(store::Diff::BarPaint(Diff(output, profile)));
     }
 }
