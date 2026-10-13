@@ -1,7 +1,8 @@
-//! `~/.config/hypr/formalshell-chrome.lua` (`shell/Theme/chrome.js`): the
-//! window rounding, whether the compositor blurs behind the shell, and the
-//! gaps, frame and cast the table's `window` role asks for. Not a matugen
-//! template, since none of it comes from the wallpaper.
+//! `~/.config/hypr/formalshell-chrome.lua` (`shell/Theme/chrome.js`) and
+//! its mango twins: the window rounding, whether the compositor blurs
+//! behind the shell, and the gaps, frame and cast the table's `window` role
+//! asks for. Not a matugen template, since none of it comes from the
+//! wallpaper.
 //!
 //! Every value is clamped to the range Hyprland's own option carries
 //! (src/config/values/ConfigValues.cpp, 0.56): a value outside one fails the
@@ -84,25 +85,53 @@ fn field<'a>(map: Option<&'a Value>, key: &str) -> Option<&'a Value> {
     map.and_then(|m| m.get(key))
 }
 
-pub fn hyprland_chrome(chrome: &Chrome) -> String {
+/// The window role's values, each clamped to Hyprland's range, with the
+/// colours still as the table names them.
+struct Window {
+    rounding: i64,
+    blur: bool,
+    gaps_in: i64,
+    gaps_out: i64,
+    border_size: i64,
+    border: (Option<Value>, Option<Value>),
+    shadow: bool,
+    range: i64,
+    power: i64,
+    offset: (i64, i64),
+    shadow_color: (Option<Value>, Option<Value>),
+    backdrop_color: (Option<Value>, Option<Value>),
+}
+
+fn window(chrome: &Chrome) -> Window {
     let focused = chrome.window.clone().map(Value::Object);
     let backdrop = chrome.window_inactive.clone().map(Value::Object);
     let border = field(focused.as_ref(), "border");
     let cast = field(focused.as_ref(), "shadow");
     let backdrop_cast = field(backdrop.as_ref(), "shadow");
     let offset = field(cast, "offset");
+    let pair = |m: Option<&Value>| (field(m, "color").cloned(), field(m, "alpha").cloned());
+    Window {
+        rounding: rounding(chrome.rounding.as_ref()),
+        blur: blur(chrome.blur.as_ref()),
+        gaps_in: int(field(focused.as_ref(), "gapsIn"), 0, 100, 4),
+        gaps_out: int(field(focused.as_ref(), "gapsOut"), 0, 100, 8),
+        border_size: int(field(border, "width"), 0, 20, 1),
+        border: pair(border),
+        shadow: blur(field(cast, "enabled")),
+        range: int(field(cast, "range"), 0, 100, 4),
+        power: int(field(cast, "renderPower"), 1, 4, 3),
+        offset: (int(offset.and_then(|o| o.get(0)), -250, 250, 0), int(offset.and_then(|o| o.get(1)), -250, 250, 0)),
+        shadow_color: pair(cast),
+        backdrop_color: pair(backdrop_cast),
+    }
+}
 
-    let gaps_in = int(field(focused.as_ref(), "gapsIn"), 0, 100, 4);
-    let gaps_out = int(field(focused.as_ref(), "gapsOut"), 0, 100, 8);
-    let border_size = int(field(border, "width"), 0, 20, 1);
-    let border_color = color(field(border, "color"), field(border, "alpha"));
-    let enabled = blur(field(cast, "enabled"));
-    let range = int(field(cast, "range"), 0, 100, 4);
-    let power = int(field(cast, "renderPower"), 1, 4, 3);
-    let ox = int(offset.and_then(|o| o.get(0)), -250, 250, 0);
-    let oy = int(offset.and_then(|o| o.get(1)), -250, 250, 0);
-    let shadow_color = color(field(cast, "color"), field(cast, "alpha"));
-    let backdrop_color = color(field(backdrop_cast, "color"), field(backdrop_cast, "alpha"));
+pub fn hyprland_chrome(chrome: &Chrome) -> String {
+    let w = window(chrome);
+    let hypr = |(name, alpha): &(Option<Value>, Option<Value>)| color(name.as_ref(), alpha.as_ref());
+    let (gaps_in, gaps_out, border_size, enabled, range, power) = (w.gaps_in, w.gaps_out, w.border_size, w.shadow, w.range, w.power);
+    let (ox, oy) = w.offset;
+    let (border_color, shadow_color, backdrop_color) = (hypr(&w.border), hypr(&w.shadow_color), hypr(&w.backdrop_color));
 
     format!(
         "-- Written by the shell (ThemeEngine) into ~/.config/hypr/formalshell-chrome.lua\n\
@@ -123,9 +152,99 @@ pub fn hyprland_chrome(chrome: &Chrome) -> String {
          shadowColor = \"{shadow_color}\",\n  \
          shadowInactiveColor = \"{backdrop_color}\",\n\
          }}\n",
-        rounding(chrome.rounding.as_ref()),
-        blur(chrome.blur.as_ref()),
+        w.rounding, w.blur,
     )
+}
+
+/// `~/.config/mango/formalshell-chrome.conf`: the same window role as mango
+/// 0.18 options (src/config/option_defs.c), numbers only, so it needs no
+/// palette. Hyprland's `gaps_in` is per side where mango's inner gap is the
+/// whole space between two windows, hence twice it. mango has no shadow
+/// falloff, so the blur spans the whole range Hyprland draws over.
+pub fn mango_chrome(chrome: &Chrome) -> String {
+    let w = window(chrome);
+    let flag = |b: bool| u8::from(b);
+    format!(
+        "# Written by the shell (ThemeEngine) into ~/.config/mango/formalshell-chrome.conf\n\
+         # on every theme.radius/theme.blur/theme.preset change, for a mango config\n\
+         # that sources it. The shell asks mango to reload after each write.\n\
+         border_radius={}\n\
+         border_px={}\n\
+         gap_inner_horizontal={inner}\n\
+         gap_inner_vertical={inner}\n\
+         gap_outer_horizontal={outer}\n\
+         gap_outer_vertical={outer}\n\
+         blur={blur}\n\
+         blur_layer={blur}\n\
+         shadows={}\n\
+         shadow_only_floating=0\n\
+         shadows_size={range}\n\
+         shadows_blur={range}\n\
+         shadows_position_x={}\n\
+         shadows_position_y={}\n",
+        w.rounding.min(100),
+        w.border_size,
+        flag(w.shadow),
+        w.offset.0,
+        w.offset.1,
+        inner = w.gaps_in * 2,
+        outer = w.gaps_out,
+        blur = flag(w.blur),
+        range = w.range,
+    )
+}
+
+/// `#rrggbb` or `#rrggbbaa` as mango's `0xRRGGBBAA`.
+fn mango_hex(hex: &str, alpha: Option<String>) -> Option<String> {
+    let digits = hex.strip_prefix('#')?;
+    if !digits.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    match digits.len() {
+        6 => Some(format!("0x{digits}{}", alpha.unwrap_or_else(|| "ff".into()))),
+        8 => Some(format!("0x{digits}")),
+        _ => None,
+    }
+}
+
+/// A literal at its own alpha, a palette role at the palette's; `None` for
+/// a role the palette does not carry, which leaves mango's own value.
+fn mango_color((name, alpha): &(Option<Value>, Option<Value>), palette: &Map<String, Value>) -> Option<String> {
+    let name = match name {
+        None | Some(Value::Null) => return Some("0x00000000".into()),
+        Some(Value::String(s)) => s.as_str(),
+        Some(_) => return None,
+    };
+    match style::literal(name) {
+        Some("transparent") => Some("0x00000000".into()),
+        Some(lit) => mango_hex(lit, Some(byte(alpha.as_ref()))),
+        None => mango_hex(palette.get(name)?.as_str()?, None),
+    }
+}
+
+/// `~/.config/mango/formalshell-colors.conf`: every colour the window role
+/// and the palette give mango, resolved here because a mango config has no
+/// table to look a role up in.
+pub fn mango_colors(chrome: &Chrome, palette: &Map<String, Value>) -> String {
+    let w = window(chrome);
+    let role = |name: &str| (Some(Value::String(name.into())), None);
+    let mut out = String::from(
+        "# Written by the shell (ThemeEngine) into ~/.config/mango/formalshell-colors.conf\n\
+         # on every wallpaper, mode or theme change, for a mango config that sources\n\
+         # it. The shell asks mango to reload after each write.\n",
+    );
+    let lines = [
+        ("focus_color", &w.border),
+        ("border_color", &role("border")),
+        ("urgent_color", &role("destructive")),
+        ("shadows_color", &w.shadow_color),
+    ];
+    for (key, value) in lines {
+        if let Some(c) = mango_color(value, palette) {
+            out.push_str(&format!("{key}={c}\n"));
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -271,5 +390,44 @@ mod tests {
         let wild = raw(json!({ "rounding": 0, "blur": false, "window": { "gapsIn": -5, "gapsOut": 4000 }, "windowInactive": {} }));
         assert!(hyprland_chrome(&wild).contains("gapsIn = 0,\n"));
         assert!(hyprland_chrome(&wild).contains("gapsOut = 100,\n"));
+    }
+
+    #[test]
+    fn mango_takes_the_same_window_as_its_own_options() {
+        let out = mango_chrome(&chrome_for(tables::pantheon(), json!(6), json!(true)));
+        let body: Vec<&str> = out.lines().filter(|l| !l.starts_with('#')).collect();
+        assert_eq!(
+            body,
+            [
+                "border_radius=6",
+                "border_px=1",
+                "gap_inner_horizontal=8",
+                "gap_inner_vertical=8",
+                "gap_outer_horizontal=6",
+                "gap_outer_vertical=6",
+                "blur=1",
+                "blur_layer=1",
+                "shadows=1",
+                "shadow_only_floating=0",
+                "shadows_size=24",
+                "shadows_blur=24",
+                "shadows_position_x=0",
+                "shadows_position_y=6",
+            ]
+        );
+        assert!(mango_chrome(&chrome_for(tables::metamorphosis(), json!(400), json!(false))).contains("border_radius=100\nborder_px=1\n"));
+    }
+
+    #[test]
+    fn mango_colours_resolve_roles_against_the_palette() {
+        let palette: Map<String, Value> = serde_json::from_value(json!({
+            "primary": "#9ecafc", "border": "#42474e80", "destructive": "#ffb4ab"
+        }))
+        .unwrap();
+        let out = mango_colors(&chrome_for(tables::metamorphosis(), json!(10), json!(true)), &palette);
+        let body: Vec<&str> = out.lines().filter(|l| !l.starts_with('#')).collect();
+        assert_eq!(body, ["focus_color=0x9ecafcff", "border_color=0x42474e80", "urgent_color=0xffb4abff", "shadows_color=0x000000ed"]);
+        let none = mango_colors(&raw(json!({ "window": { "border": { "color": "nope" } } })), &Map::new());
+        assert_eq!(none.lines().filter(|l| !l.starts_with('#')).collect::<Vec<_>>(), ["shadows_color=0x00000000"]);
     }
 }

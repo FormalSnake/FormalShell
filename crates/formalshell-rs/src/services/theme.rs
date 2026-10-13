@@ -58,6 +58,7 @@ use serde_json::{Map, Value};
 
 use crate::runtime::Ctx;
 use crate::store;
+use super::compositor::{self, Kind};
 use super::state;
 
 /// What surfaces read: the resolved theme, the palette under it and the
@@ -132,8 +133,9 @@ pub struct Env {
     pub state_dir: PathBuf,
     pub config_dir: PathBuf,
     pub template_dir: PathBuf,
-    /// Hyprland is only asked to reload when the session is one.
-    pub hyprland: bool,
+    /// The compositor asked to reload after a write, when the session is
+    /// the backend's own.
+    pub compositor: Option<Kind>,
     pub matugen: OsString,
     pub hyprctl: OsString,
     pub dconf: OsString,
@@ -151,7 +153,11 @@ impl Env {
             template_dir: var("FS_TEMPLATE_DIR").map_or_else(|| PathBuf::from("crates/fs-theme/templates"), PathBuf::from),
             state_dir: state.join("formalshell"),
             config_dir: config,
-            hyprland: var("HYPRLAND_INSTANCE_SIGNATURE").is_some(),
+            compositor: match compositor::kind() {
+                Kind::Hyprland if var("HYPRLAND_INSTANCE_SIGNATURE").is_some() => Some(Kind::Hyprland),
+                Kind::Mango if var("MANGO_INSTANCE_SIGNATURE").is_some() => Some(Kind::Mango),
+                _ => None,
+            },
             matugen: "matugen".into(),
             hyprctl: "hyprctl".into(),
             dconf: "dconf".into(),
@@ -176,6 +182,13 @@ impl Env {
     }
     pub fn hypr_chrome(&self) -> PathBuf {
         self.config_dir.join("hypr/formalshell-chrome.lua")
+    }
+    /// mango reads `~/.config/mango` whatever XDG_CONFIG_HOME says.
+    pub fn mango_colors(&self) -> PathBuf {
+        self.home.join(".config/mango/formalshell-colors.conf")
+    }
+    pub fn mango_chrome(&self) -> PathBuf {
+        self.home.join(".config/mango/formalshell-chrome.conf")
     }
     /// Where a pinned run stages its rewritten templates, regenerated per run.
     fn pinned_dir(&self) -> PathBuf {
@@ -506,21 +519,52 @@ impl Engine {
         }
     }
 
-    /// The Lua config dofiles both colour files, which Hyprland does not
-    /// watch, so every publish asks for the re-run. One at a time.
-    fn reload_hyprland(&self) {
-        if !self.env.hyprland || self.reloading.get() {
+    /// Neither compositor watches the files its config pulls the colours
+    /// and chrome from, so every publish asks for the re-read. One at a
+    /// time.
+    fn reload_compositor(&self) {
+        let Some(kind) = self.env.compositor else { return };
+        if self.reloading.get() {
             return;
         }
         self.reloading.set(true);
         let reloading = self.reloading.clone();
         let hyprctl = self.env.hyprctl.clone();
         self.ctx.spawn(async move {
-            if !run_status(&hyprctl, &["reload"]).await {
-                warn("hyprctl reload failed");
+            match kind {
+                Kind::Hyprland => {
+                    if !run_status(&hyprctl, &["reload"]).await {
+                        warn("hyprctl reload failed");
+                    }
+                }
+                Kind::Mango => compositor::mango::reload().await,
             }
             reloading.set(false);
         });
+    }
+
+    /// mango's two files, written for any session since they cost nothing:
+    /// its colours resolve the window role's palette roles, so they follow
+    /// both theme.json and the chrome.
+    async fn publish_mango(&self) {
+        let Some(inputs) = self.snapshot() else {
+            return;
+        };
+        let chrome = window_chrome(&inputs.settings);
+        let (env, theme_json) = (self.env.clone(), self.env.theme_json());
+        let result = blocking(&self.ctx, move || {
+            let (palette, _) = read_palette(&theme_json);
+            for (path, wanted) in [(env.mango_chrome(), chrome::mango_chrome(&chrome)), (env.mango_colors(), chrome::mango_colors(&chrome, &palette))] {
+                if !std::fs::read_to_string(&path).is_ok_and(|current| current == wanted) {
+                    publish_file(&path, &wanted)?;
+                }
+            }
+            Ok(())
+        })
+        .await;
+        if let Err(err) = result {
+            warn(format!("failed to write the mango colours and chrome: {err}"));
+        }
     }
 
     /// The chrome a hyprland.lua reads back, outside the matugen queue:
@@ -542,7 +586,8 @@ impl Engine {
         if let Err(err) = result {
             warn(format!("failed to write formalshell-chrome.lua: {err}"));
         }
-        self.reload_hyprland();
+        self.publish_mango().await;
+        self.reload_compositor();
     }
 
     /// Ordinary apps learn light and dark and the GTK theme name from
@@ -598,7 +643,8 @@ impl Engine {
         if let Err(err) = blocking(&self.ctx, move || publish_file(&hypr, &colors)).await {
             warn(format!("failed to write fallback formalshell-colors.lua: {err}"));
         }
-        self.reload_hyprland();
+        self.publish_mango().await;
+        self.reload_compositor();
     }
 
     async fn matugen_run(&self, inputs: &Inputs) -> Result<(), String> {
@@ -708,7 +754,8 @@ impl Engine {
             self.ctx.publish(store::Diff::Theme(Diff::Palette(palette)));
         }
         self.ctx.publish(store::Diff::Theme(Diff::JsonPresent(true)));
-        self.reload_hyprland();
+        self.publish_mango().await;
+        self.reload_compositor();
         Ok(())
     }
 
@@ -783,10 +830,13 @@ impl Engine {
     }
 }
 
+fn window_chrome(settings: &Value) -> chrome::Chrome {
+    Theme::resolve(get(settings), &palette::fallback("dark")).window_chrome()
+}
+
 /// formalshell-chrome.lua for these settings. The palette plays no part.
 fn chrome_text(settings: &Value) -> String {
-    let theme = Theme::resolve(get(settings), &palette::fallback("dark"));
-    chrome::hyprland_chrome(&theme.window_chrome())
+    chrome::hyprland_chrome(&window_chrome(settings))
 }
 
 /// The user's own matugen config verbatim, and every drop-in under
@@ -878,7 +928,7 @@ printf '%s' 'return {{}}' > '{state}/formalshell-colors.lua.tmp'"##,
             state_dir: state,
             config_dir: root.join("home/.config"),
             template_dir: Path::new(env!("CARGO_MANIFEST_DIR")).join("../fs-theme/templates"),
-            hyprland: true,
+            compositor: Some(Kind::Hyprland),
             matugen: shim(&bin, "matugen", &matugen),
             hyprctl: shim(&bin, "hyprctl", &logger("hyprctl")),
             dconf: shim(&bin, "dconf", &logger("dconf")),
@@ -1017,11 +1067,13 @@ printf '%s' 'return {{}}' > '{state}/formalshell-colors.lua.tmp'"##,
         // publish, and dropping the runtime drops them, so the run is held
         // until they have logged.
         let (hypr_colors, hypr_chrome) = (env.hypr_colors(), env.hypr_chrome());
+        let mango_colors = env.mango_colors();
         let (seen, _) = drive(env.clone(), vec![(Duration::ZERO, inputs(json!({}), "", "light"))], |s, _| {
             s.present.contains(&true)
                 && !s.palettes.is_empty()
                 && hypr_colors.exists()
                 && hypr_chrome.exists()
+                && std::fs::read_to_string(&mango_colors).is_ok_and(|t| t.contains("focus_color=0x18181bff"))
                 && log_lines(&log, "dconf").len() >= 2
                 && !log_lines(&log, "hyprctl reload").is_empty()
         });
@@ -1031,6 +1083,7 @@ printf '%s' 'return {{}}' > '{state}/formalshell-colors.lua.tmp'"##,
         assert_eq!(std::fs::read_to_string(env.hypr_colors()).unwrap(), matugen::hyprland_colors(&light));
         let chrome = std::fs::read_to_string(env.hypr_chrome()).unwrap();
         assert!(chrome.contains("rounding = 10,"));
+        assert!(std::fs::read_to_string(env.mango_chrome()).unwrap().contains("\nborder_radius=10\n"));
         assert!(log_lines(&log, "matugen").is_empty());
         let dconf = log_lines(&log, "dconf");
         assert!(dconf.contains(&"dconf write /org/gnome/desktop/interface/color-scheme 'prefer-light'".to_owned()));
