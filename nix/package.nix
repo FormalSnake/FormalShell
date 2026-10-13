@@ -34,8 +34,9 @@ rustCommon.craneLib.buildPackage (rustCommon.commonArgs // {
   # util-linux is here for setpriv: every long-lived child is started under
   # PR_SET_PDEATHSIG, with no fallback when it is missing.
   #
-  # The examples directory carries the Hyprland config the home-manager
-  # module links (binds and layer rules); nothing in the shell reads it.
+  # The examples directory carries the Hyprland and mango configs the
+  # home-manager module links (binds and layer rules); nothing in the shell
+  # reads them.
   postInstall = ''
     mkdir -p $out/share/formalshell
     cp -r --no-preserve=mode ${../crates/fs-theme/templates} $out/share/formalshell/templates

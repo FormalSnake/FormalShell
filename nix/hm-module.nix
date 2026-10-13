@@ -14,6 +14,11 @@ let cfg = config.programs.formalshell; in
       default = true;
       description = "Write ~/.config/hypr/formalshell.lua (binds and layer rules). Add `dofile(os.getenv(\"HOME\") .. \"/.config/hypr/formalshell.lua\")` to your hyprland.lua.";
     };
+    mango.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Write ~/.config/mango/formalshell.conf (binds, the console window rule and the layer rule, sourcing the theme's colours and chrome). Add `source=./formalshell.conf` to your mango config.conf.";
+    };
     settings = lib.mkOption {
       type = (pkgs.formats.json {}).type;
       default = {};
@@ -32,6 +37,9 @@ let cfg = config.programs.formalshell; in
     };
     xdg.configFile."hypr/formalshell.lua" = lib.mkIf cfg.hyprland.enable {
       source = "${cfg.package}/share/formalshell/examples/hyprland/formalshell.lua";
+    };
+    home.file.".config/mango/formalshell.conf" = lib.mkIf cfg.mango.enable {
+      source = "${cfg.package}/share/formalshell/examples/mango/formalshell.conf";
     };
     systemd.user.services.formalshell = lib.mkIf cfg.systemd.enable {
       Unit = { Description = "FormalShell"; PartOf = [ cfg.systemd.target ]; After = [ cfg.systemd.target ]; };
