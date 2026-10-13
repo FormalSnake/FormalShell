@@ -11,9 +11,9 @@
 #            behind showing above it, and nothing below the front card's
 #            bottom edge, since a card behind takes the front one's height.
 #   fan      `notifications expand on`, the rig's stand-in for the pointer
-#            over the pile, fans it out: on every frame of the burst the
-#            front card's own rect is pixel for pixel what it was collapsed
-#            (the card in front neither moves nor resizes while the one
+#            over the pile, fans it out: on every frame of the burst no
+#            pixel of the front card's own rect is more than 1% off what it
+#            was collapsed (the card in front neither moves nor resizes while the one
 #            behind comes forward), and the settled column is both cards a
 #            `panelPadding` apart in the pile's own order, the front one
 #            still last. `expand off` folds it back before the next phase.
@@ -21,8 +21,9 @@
 #            drops back toward the edge while it fades and the older one
 #            comes forward, so some frame in that burst matches neither
 #            settled pile.
-#   rest     with motion back at full speed and the pile still, the toast
-#            surface commits nothing for four seconds (rust only: only the
+#   rest     with motion at full speed and the one card at rest, between
+#            arrive and pile, the toast surface commits nothing for four
+#            seconds (rust only: only the
 #            rust shell logs its commits).
 #
 # The row habit only: the bubble's own arrival is --notify-emerge's. The
@@ -82,6 +83,15 @@ sleep 1
 burst arrive
 sleep 4
 "$grim_bin" "$toast_motion_one_path" > /dev/null 2>&1
+# The rest window runs while the one card is seconds old, well clear of
+# its relative time ticking from "now" to "1m".
+call debug motionScale 100 > /dev/null 2>&1
+sleep 2
+# Two status calls bracket the rest window in the shell's own log.
+call notifications status > "$toast_motion_rest_path" 2>&1
+sleep 4
+call notifications status >> "$toast_motion_rest_path" 2>&1
+call debug motionScale $toast_motion_scale > /dev/null 2>&1
 "$notify_send_bin" -u critical 'Second' 'The card that leaves'
 sleep 9
 "$grim_bin" "$toast_motion_two_path" > /dev/null 2>&1
@@ -97,11 +107,6 @@ burst leave
 sleep 6
 "$grim_bin" "$toast_motion_left_path" > /dev/null 2>&1
 call debug motionScale 100 > /dev/null 2>&1
-sleep 2
-# Two status calls bracket the rest window in the shell's own log.
-call notifications status > "$toast_motion_rest_path" 2>&1
-sleep 4
-call notifications status >> "$toast_motion_rest_path" 2>&1
 EOF
   hypr_exec_once "bash $script"
 }
@@ -168,7 +173,9 @@ leg_toast_motion_assert() {
   for i in $(seq 1 $toast_motion_frames); do
     f="$shot_dir/toast-motion-fan-$i.png"
     [ -f "$f" ] || fail "no screenshot produced at $f"
-    d=$($convert_bin "$f" "$toast_motion_two_path" -crop "$front" +repage -metric AE -compare -format '%[distortion]' info: 2>/dev/null)
+    # Past 1%: the damage a card behind leaves recomposites the front
+    # card's tiles, which can land its antialiased text a value off.
+    d=$($convert_bin "$f" "$toast_motion_two_path" -crop "$front" +repage -fuzz 1% -metric AE -compare -format '%[distortion]' info: 2>/dev/null)
     drift+=" $d"
     [ "$d" = 0 ] || moved=$((moved + 1))
     case $i in 3|8|14) echo "SMOKE_TOAST_MOTION_FAN_$i $f" ;; esac
