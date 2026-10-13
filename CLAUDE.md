@@ -779,10 +779,14 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   `--wallpaper` that a toggle re-runs matugen instead of resetting to the
   fallback palette.
 - `toast_motion.sh` `--toast-motion`: the row toast's own motion at a tenth
-  speed, read off frame bursts: one sticky critical sliding in from past
-  the right edge to its rest, a second stacking in front and then dismissed,
-  with the leaving card holding its place while it fades and some frame
-  matching neither settled pile, and at full speed a still pile committing
+  speed, read off frame bursts: one sticky critical rising out of the bottom
+  edge to its rest on its own column, a second stacking in front with the
+  pile exactly the front card plus a 12px sliver of the one behind and
+  nothing under the front card's bottom edge, `notifications expand on`
+  fanning it out with the front card's own pixels unchanged on every frame
+  and settling two cards 12px apart, then the front one dismissed
+  with some frame matching neither settled pile, and at full speed a still
+  pile committing
   nothing for four seconds. The bubble's arrival is `--notify-emerge`'s.
 - `toggles.sh` `--toggles`: the toggle hub's rows repainting from a `@state:`
   snapshot without the surface moving under them.

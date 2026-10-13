@@ -447,12 +447,12 @@
             "curve": "spatial"
         },
         "arrive": {
-            "duration": "spatial",
-            "curve": "emphasizedDecel"
+            "duration": 400,
+            "curve": [0.25, 0.1, 0.25, 1, 1, 1]
         },
         "restack": {
-            "duration": "spatial",
-            "curve": "spatial"
+            "duration": 400,
+            "curve": [0.25, 0.1, 0.25, 1, 1, 1]
         },
         "switcher": {
             "duration": "effects",

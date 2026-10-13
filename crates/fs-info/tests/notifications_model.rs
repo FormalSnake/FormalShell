@@ -742,8 +742,6 @@ fn position_spec_top_right() {
     assert!(!spec.bottom);
     assert!(!spec.left);
     assert!(spec.right);
-    assert!(spec.newest_first);
-    assert_eq!(spec.slide_sign, 1);
 }
 
 #[test]
@@ -754,8 +752,6 @@ fn position_spec_top_left() {
     assert!(!spec.bottom);
     assert!(spec.left);
     assert!(!spec.right);
-    assert!(spec.newest_first);
-    assert_eq!(spec.slide_sign, -1);
 }
 
 #[test]
@@ -766,8 +762,6 @@ fn position_spec_bottom_right_is_the_default() {
     assert!(spec.bottom);
     assert!(!spec.left);
     assert!(spec.right);
-    assert!(!spec.newest_first);
-    assert_eq!(spec.slide_sign, 1);
     assert_eq!(DEFAULT_POSITION.as_str(), "bottom-right");
 }
 
@@ -779,8 +773,6 @@ fn position_spec_bottom_left() {
     assert!(spec.bottom);
     assert!(spec.left);
     assert!(!spec.right);
-    assert!(!spec.newest_first);
-    assert_eq!(spec.slide_sign, -1);
 }
 
 #[test]

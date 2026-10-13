@@ -520,6 +520,9 @@ mod tests {
         assert_eq!(m.emerge, 500.0);
         assert_eq!(m.restack_stagger, 0.0);
         assert_eq!(m.emerge_curve, tokens::curve("spatial").unwrap());
+        // The toast's own clock is sonner's: 400ms on CSS `ease`, never past rest.
+        assert_eq!((m.arrive, m.restack), (400.0, 400.0));
+        assert_eq!(m.restack_curve, [0.25, 0.1, 0.25, 1.0, 1.0, 1.0]);
 
         let p = Theme::resolve(make_get(json!({ "theme": { "preset": "pantheon" } })), &sentinel()).motion();
         assert_eq!(p.emerge, 150.0);

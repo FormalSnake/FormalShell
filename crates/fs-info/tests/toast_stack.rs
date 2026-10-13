@@ -2,10 +2,10 @@ use std::collections::HashMap;
 
 use fs_info::toast_stack::*;
 
-// At the default scale `peek_inset` is 8, `peek_offset` 4, `gap` 12 and the
+// At the default scale `peek_inset` is 8, `peek_offset` and `gap` 12 and the
 // frame is `popupWidthNarrow` (320).
 const FRAME_WIDTH: f64 = 320.0;
-const PEEK_OFFSET: f64 = 4.0;
+const PEEK_OFFSET: f64 = 12.0;
 const MAX_PEEK_LEVELS: usize = 2;
 const GAP: f64 = 12.0;
 
@@ -56,6 +56,7 @@ fn the_front_card_is_full_width_against_the_anchored_edge() {
     // Bottom-anchored: the front card sits the full peek reserve away from
     // the top of the stack, so both levels behind it can poke out.
     assert_eq!(front.y, MAX_PEEK_LEVELS as f64 * PEEK_OFFSET);
+    assert!(front.visible);
     assert!(front.content_visible);
 }
 
@@ -152,6 +153,40 @@ fn levels_clamp_at_the_peek_limit() {
     assert_eq!(collapsed(&out, "d").y, third.y);
     assert_eq!(collapsed(&out, "e").width, third.width);
     assert!(collapsed(&out, "d").z < third.z);
+    assert!(third.visible);
+    assert!(!collapsed(&out, "d").visible);
+    assert!(!collapsed(&out, "e").visible);
+}
+
+// A card behind takes the front card's height whatever its own, so the
+// sliver past the front card is the offset and nothing else: a taller card
+// behind a short one never shows its bottom under it.
+#[test]
+fn every_level_behind_is_as_tall_as_the_front_card() {
+    let out = layout(&StackParams {
+        collapsed: keys(&["a", "b", "c"]),
+        heights: heights(&[("a", 60.0), ("b", 140.0), ("c", 30.0)]),
+        ..params()
+    });
+    assert_eq!(collapsed(&out, "a").height, 60.0);
+    assert_eq!(collapsed(&out, "b").height, 60.0);
+    assert_eq!(collapsed(&out, "c").height, 60.0);
+    let front = collapsed(&out, "a");
+    for key in ["b", "c"] {
+        let g = collapsed(&out, key);
+        assert!(g.y + g.height <= front.y + front.height, "{key} pokes out past the anchored edge");
+    }
+}
+
+#[test]
+fn an_expanded_card_keeps_its_own_height() {
+    let out = layout(&StackParams {
+        collapsed: keys(&["a", "b"]),
+        expanded: keys(&["a", "b"]),
+        heights: heights(&[("a", 60.0), ("b", 140.0)]),
+        ..params()
+    });
+    assert_eq!(expanded(&out, "b").height, 140.0);
 }
 
 #[test]
@@ -176,16 +211,30 @@ fn a_top_anchor_flips_the_reveal() {
 }
 
 #[test]
-fn the_pile_is_the_front_card_plus_the_peek_reserve() {
-    let out = layout(&StackParams {
+fn the_pile_is_the_front_card_plus_one_offset_per_level_present() {
+    let two = layout(&StackParams {
         collapsed: keys(&["a", "b"]),
         heights: heights(&[("a", 90.0), ("b", 120.0)]),
         ..params()
     });
-    assert_eq!(
-        out.collapsed_height,
-        90.0 + MAX_PEEK_LEVELS as f64 * PEEK_OFFSET
-    );
+    assert_eq!(two.collapsed_height, 90.0 + PEEK_OFFSET);
+    // Bottom-anchored with one level behind it, the front card sits one
+    // offset down and the card behind flush against the top.
+    assert_eq!(collapsed(&two, "a").y, PEEK_OFFSET);
+    assert_eq!(collapsed(&two, "b").y, 0.0);
+    let five = with_collapsed(&["a", "b", "c", "d", "e"]);
+    assert_eq!(five.collapsed_height, MAX_PEEK_LEVELS as f64 * PEEK_OFFSET);
+}
+
+#[test]
+fn a_lone_card_sits_flush_against_the_anchored_edge() {
+    let out = layout(&StackParams {
+        collapsed: keys(&["a"]),
+        heights: heights(&[("a", 90.0)]),
+        ..params()
+    });
+    assert_eq!(collapsed(&out, "a").y, 0.0);
+    assert_eq!(out.collapsed_height, 90.0);
 }
 
 // --- expanded: the plain list -----------------------------------------
@@ -258,7 +307,7 @@ fn a_missing_slot_costs_the_expanded_column_no_height() {
 fn an_empty_stack_has_nothing_in_it() {
     let out = layout(&params());
     assert_eq!(out.expanded_height, 0.0);
-    assert_eq!(out.collapsed_height, MAX_PEEK_LEVELS as f64 * PEEK_OFFSET);
+    assert_eq!(out.collapsed_height, 0.0);
 }
 
 #[test]

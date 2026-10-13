@@ -625,15 +625,6 @@ pub struct PositionSpec {
     pub bottom: bool,
     pub left: bool,
     pub right: bool,
-    /// The newest toast sits nearest the anchored corner. The column always
-    /// lays its children out top-down; a top-anchored window's own top edge
-    /// IS the anchor point, so newest needs to lead the list. A
-    /// bottom-anchored window's bottom edge is the anchor point, which is
-    /// already where the oldest-first order lands its newest (last) entry.
-    pub newest_first: bool,
-    /// Enter/exit slide direction: right-anchored surfaces slide in from the
-    /// right, a left-anchored stack from the left.
-    pub slide_sign: i32,
 }
 
 /// Config-driven popup corner (`notifications.position`, one of the four
@@ -655,8 +646,6 @@ pub fn position_spec(name: Option<&str>) -> PositionSpec {
         bottom: !top,
         left: !right,
         right,
-        newest_first: top,
-        slide_sign: if right { 1 } else { -1 },
     }
 }
 

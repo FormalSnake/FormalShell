@@ -119,6 +119,8 @@ struct Tween {
 pub struct Drawn {
     pub width: f64,
     pub height: f64,
+    /// The last node in paint order, for a caller stacking more after it.
+    pub last: Option<NodeId>,
     pub animating: bool,
     /// The next moment something holding still starts moving (a marquee's hold).
     pub wake: Option<Instant>,
@@ -211,9 +213,11 @@ impl Ui {
         cx.ink = (theme.colors.get("foreground"), theme.colors.get("mutedForeground"));
         let (w, h) = draw::measure(&mut cx, root, rect.width());
         draw::paint(&mut cx, root, Rect::new(rect.x0, rect.y0, rect.x0 + rect.width(), rect.y0 + h), "");
+        let last = cx.last;
         let mut drawn = std::mem::take(&mut cx.drawn);
         drawn.width = w;
         drawn.height = h;
+        drawn.last = last;
         // Whatever was not drawn this time is gone from the screen; a group
         // unseen for a while gives its nodes back.
         let stale: Vec<String> = self.groups.iter().filter(|(_, g)| g.seen != frame).map(|(k, _)| k.clone()).collect();
@@ -235,6 +239,17 @@ impl Ui {
         self.spectra.retain(|_, l| frame - l.seen < 120);
         self.panes.retain(|_, l| frame - l.seen < 120);
         drawn
+    }
+
+    /// Puts every node this surface drew under `transform`. The painters
+    /// compare against an untransformed node, so a caller resets this to
+    /// the identity before `draw` and sets it again after.
+    pub fn set_transform(&self, scene: &mut Scene, transform: vello_cpu::kurbo::Affine) {
+        for g in self.groups.values() {
+            for id in &g.nodes {
+                scene.set_transform(*id, transform);
+            }
+        }
     }
 
     /// Hides everything this surface drew.

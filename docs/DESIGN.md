@@ -257,8 +257,10 @@ height, margins, scale, radius, rotation, an emerge, a morph, a cursor's
 travel. `effectsFast` 150, `effects` 200 and `effectsSlow` 300 pace anything
 with neither: opacity, colour, a progress that only drives alpha. Two names
 sit outside both families, `emphasized` 400 for the workspace pill and
-`emphasizedDecel` for a toast arriving from off screen, which is a curve on
-`spatial`'s clock with no duration of its own. `reveal` 400 is the
+`emphasizedDecel`, a curve with no duration of its own that pantheon's
+bubbles restack on. The row toast keeps sonner's own clock instead, 400 on
+CSS `ease` (the table's `arrive` and `restack`), which never passes rest.
+`reveal` 400 is the
 full-screen fades: the wallpaper and palette crossfades, the lock's blank
 and wake, the screensaver's own enter and exit, on `effectsSlow`'s curve.
 
@@ -459,11 +461,11 @@ travels, while a wrap, a filter reset and a level change snap, since nothing
 connects the two positions. A selection fill (the segmented control, the
 picker's mode tabs) travels the same way on `spatial`. Everything a key
 drives is a retargeting tween, never a restarting animation, so key repeat
-glides. A toast is the carve-out on the way in: it is a surface arriving
-from off screen rather than chrome appearing in place, so it travels its own
-width plus `screenPadding` from the anchored edge on `emphasizedDecel`,
-which decelerates into rest without carrying it back past the edge it came
-from, and it leaves on `spatial`. The workspace pill keeps its own: both its
+glides. A toast is the carve-out: it moves the way sonner's does, rising out
+of the anchored edge by its own height as it fades in and dropping back
+toward it as it fades out (the whole height for the front card, 40% of it
+for one behind), with the pile restacking on the same 400ms `ease`, no
+overshoot, no stagger and no deform. The workspace pill keeps its own: both its
 edges take `emphasized` and the trailing one runs at twice that clock, so
 the leading edge reaches the new slot while the trailing edge is still
 leaving the old one, which is what makes the pill stretch across the gap
@@ -815,8 +817,17 @@ pick from a list (a network, a sink, a station) and a panel is where you
 watch live state, so a device that has both keeps both, and the launcher
 row never grows the panel's controls.
 
-**Toasts** (`formalshell-rs/src/surfaces/toasts.rs`). The sonner stack as
-built. Card chrome; critical is a `destructive` border and icon, not a
+**Toasts** (`formalshell-rs/src/surfaces/toasts.rs`). The sonner stack:
+collapsed, the front card with two levels behind it, each one the whole
+card scaled down by `lg` per side (95% and 90% of a 320 card) about the
+edge its sliver shows from, as tall as the front card and `panelPadding`
+further from the anchored edge, so the sliver is the same whatever the
+card behind holds; deeper cards wait unseen behind the last level.
+Hovering fans it out into the plain column `panelPadding` apart at every
+card's own height, in the pile's own order with the front card still
+against the anchored edge, so the card in front never moves and nothing
+trades places. Card
+chrome; critical is a `destructive` border and icon, not a
 fill. The card's icon slot resolves the notification's image, its app icon,
 the sender's desktop entry, then a `bell`; a picture takes a `radiusSm`
 frame. The surface under the stack is the whole output and holds that size

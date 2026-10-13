@@ -5,15 +5,18 @@
 //! input region is the stack's own rect.
 //!
 //! Collapsed is the depth stack (the front card, two levels peeking behind
-//! it as empty chrome), expanded the plain column, both laid out by
-//! fs-info's `toast_stack`.
+//! it as empty chrome at the front card's height), expanded the plain
+//! column, both laid out by fs-info's `toast_stack`.
 //!
 //! Each group keeps its slot across draws, so a card retargets rather than
 //! snaps: x, y, width and height ride the table's `restack` clock (y behind
 //! its rank's share of `restack.stagger`), presence rides `arrive` in and
-//! `restack` out, and a row slides in from past its screen edge under the
-//! velocity deform. A group that left keeps its slot, its card and its last
-//! place while it fades.
+//! `restack` out. A row moves the way sonner's toast does: it rises out of
+//! the anchored edge by its own height as it fades in, and leaves back
+//! toward that edge as it fades out, the whole height for the card in front
+//! (or any card of the expanded column) and 40% of it for one behind. A
+//! group that left keeps its slot, its card and its last place while it
+//! fades.
 
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
@@ -24,7 +27,7 @@ use fs_theme::theme::Theme;
 use smithay_client_toolkit::shell::WaylandSurface;
 use vello_cpu::kurbo::{Affine, Rect};
 
-use crate::motion::{Animated, Curve, Deform, DeformEdge, EFFECTS};
+use crate::motion::{Animated, Curve, EFFECTS};
 use crate::scene::{Bitmap, IRect, NodeId, Scene};
 use crate::services::notifications::now_ms;
 use crate::store::Store;
@@ -34,8 +37,10 @@ use crate::ui::{self, El, Ink, Type, Ui, Variant, Weight, w};
 
 const MAX_PEEK_LEVELS: usize = 2;
 
-/// The default deform `amount`.
-const DEFORM_AMOUNT: f64 = 0.15;
+/// How far a card behind the front one travels as it leaves, a share of its
+/// height: sonner's `translateY(40%)` for a collapsed toast that is not the
+/// front one.
+const BEHIND_LEAVE: f64 = 0.4;
 
 /// How often the relative times ("2m ago") recompute, off their own clock.
 pub const REL_EVERY: std::time::Duration = std::time::Duration::from_secs(30);
@@ -67,6 +72,12 @@ struct Slot {
     height: Animated,
     /// 0 off the stack, 1 shown: opacity, and the row's slide.
     presence: Animated,
+    /// 0 for a card deeper than the last peek level, which keeps its place
+    /// behind it unseen.
+    visible: Animated,
+    /// The card was in front, or in the expanded column, at its last layout:
+    /// it leaves by its whole height rather than `BEHIND_LEAVE` of it.
+    front: bool,
     /// The card's words over the peek level's bare chrome.
     content: Animated,
     /// The bubble unfolding off its own top edge on `arrive`; 1 at once
@@ -74,9 +85,6 @@ struct Slot {
     reveal: Animated,
     /// The group is gone and the card is fading where it was.
     departing: bool,
-    deform: Deform,
-    deform_running: bool,
-    last_tick: Option<Instant>,
     /// The card's own widgets still crossfading (a button's ink).
     ui_animating: bool,
 }
@@ -87,13 +95,26 @@ impl Slot {
     }
 
     fn animating(&self, now: Instant) -> bool {
-        self.moving(now) || self.content.running(now) || self.reveal.running(now) || !self.deform.at_rest || self.ui_animating
+        self.moving(now) || self.content.running(now) || self.reveal.running(now) || self.visible.running(now) || self.ui_animating
     }
 
     /// Faded out and no longer anything to draw.
     fn gone(&self, now: Instant) -> bool {
         self.departing && !self.presence.running(now)
     }
+}
+
+/// One card's place this frame, worked out before any card paints so each
+/// knows the cards in front of it.
+struct Placed {
+    key: String,
+    fx: f64,
+    fy: f64,
+    fh: f64,
+    matrix: Affine,
+    /// The card as it lands on screen, scaled.
+    drawn: IRect,
+    alpha: f64,
 }
 
 pub struct Toasts {
@@ -222,11 +243,12 @@ impl Toasts {
         let spec = model::position_spec(store.config.str("notifications.position"));
         let groups = model::group_entries(&n.model.popups);
         let by_key: HashMap<String, &Group> = groups.iter().map(|g| (model::group_key(g), g)).collect();
-        let mut chronological: Vec<&Group> = groups.iter().collect();
-        chronological.sort_by_key(|g| g.arrived_at);
         let stack_order: Vec<String> = model::stack_order(&groups).iter().map(|g| model::group_key(g)).collect();
-        let mut column: Vec<String> = chronological.iter().map(|g| model::group_key(g)).collect();
-        if spec.newest_first {
+        // The column fans the pile out in its own order, front card against
+        // the anchored edge, so no card trades places on the way: the column
+        // lays out top-down, which puts a bottom stack's front card last.
+        let mut column = stack_order.clone();
+        if !spec.top {
             column.reverse();
         }
 
@@ -251,8 +273,6 @@ impl Toasts {
         for k in gone {
             if let Some(mut slot) = self.slots.remove(&k) {
                 for id in slot.nodes.drain(..) {
-                    // Damages where the deform last put it, past its bounds.
-                    self.scene.set_transform(id, Affine::IDENTITY);
                     self.scene.remove(id);
                 }
                 slot.ui.hide(&mut self.scene);
@@ -284,7 +304,7 @@ impl Toasts {
         let layout = toast_stack::layout(&StackParams {
             frame_width: width,
             peek_inset: s.lg,
-            peek_offset: s.sm,
+            peek_offset: s.panel_padding,
             max_peek_levels: MAX_PEEK_LEVELS,
             gap: s.panel_padding,
             top: spec.top,
@@ -310,7 +330,7 @@ impl Toasts {
         for k in &stack_order {
             let Some(geom) = layout.by_key.get(k) else { continue };
             let Some(g) = (if expanded { geom.expanded.or(geom.collapsed) } else { geom.collapsed }) else { continue };
-            let h = heights[k];
+            let h = g.height;
             let (gx, gy) = (x0 + g.x, y0 + g.y);
             let content = if g.content_visible { 1.0 } else { 0.0 };
             let slot = self.slots.entry(k.clone()).or_insert_with(|| {
@@ -335,12 +355,11 @@ impl Toasts {
                     width: Animated::new(g.width, restack.1),
                     height: Animated::new(h, restack.1),
                     presence,
+                    visible: Animated::new(1.0, EFFECTS),
+                    front: true,
                     content: Animated::new(content, EFFECTS),
                     reveal,
                     departing: false,
-                    deform: Deform::new(),
-                    deform_running: false,
-                    last_tick: None,
                     ui_animating: false,
                 }
             });
@@ -355,6 +374,8 @@ impl Toasts {
                 slot.height.set(now, h, restack.0);
             }
             slot.content.set(now, content, effects);
+            slot.visible.set(now, if g.visible { 1.0 } else { 0.0 }, effects);
+            slot.front = expanded || g.rank == 0;
             slot.z = g.z;
             slot.el = cards[k].clone();
             slot.critical = by_key[k].urgency == Urgency::Critical;
@@ -364,42 +385,71 @@ impl Toasts {
         // Back to front, so the front card's chrome covers the peeks.
         let mut order: Vec<(i64, String)> = self.slots.iter().map(|(k, sl)| (sl.z, k.clone())).collect();
         order.sort();
-        let mut anchor: Option<NodeId> = None;
-        let edge = if spec.right { DeformEdge::Right } else { DeformEdge::Left };
-        for (_, k) in order {
-            let slot = self.slots.get_mut(&k).expect("ordered from the map");
-            let b = theme.box_style("notification", Some(if slot.critical { "critical" } else { "rest" }));
-            let presence = slot.presence.value(now);
-            let w = slot.width.value(now);
-            // A row travels its own width plus the gap it sits in, in from
-            // past the anchored edge; a bubble unfolds where it lands.
-            let slide = if is_bubble { 0.0 } else { (1.0 - presence) * (w + s.screen_padding) * f64::from(spec.slide_sign) };
-            let (fx, fy, fh) = (slot.x.value(now) + slide, slot.y.value(now), slot.height.value(now));
-
-            let dt = slot.last_tick.map_or(0.0, |t| now.saturating_duration_since(t).as_secs_f64());
-            slot.last_tick = Some(now);
-            let running = !is_bubble && theme.motion_enabled && (slot.moving(now) || !slot.deform.at_rest);
-            if running {
-                if !slot.deform_running {
-                    slot.deform.unsample();
+        // Down for a stack hanging off the bottom edge, up for the top.
+        let toward_edge = if spec.top { -1.0 } else { 1.0 };
+        let placed: Vec<Placed> = order
+            .iter()
+            .map(|(_, k)| {
+                let slot = &self.slots[k];
+                let presence = slot.presence.value(now);
+                let w = slot.width.value(now);
+                let fh = slot.height.value(now);
+                // A row rises out of the anchored edge by its own height and
+                // leaves back toward it; a bubble unfolds where it lands.
+                let travel = if !is_bubble && slot.departing && !slot.front { BEHIND_LEAVE } else { 1.0 };
+                let slide = if is_bubble { 0.0 } else { (1.0 - presence) * fh * travel * toward_edge };
+                // Every card is drawn at the column's full width and scaled
+                // to its level's, words and all, about the edge its sliver
+                // shows from, so a card behind coming forward grows as one
+                // piece rather than its box widening under words already
+                // full width.
+                let fx = slot.x.value(now) + (w - width) / 2.0;
+                let fy = slot.y.value(now) + slide;
+                let sc = (w / width).clamp(0.0, 1.0);
+                let pivot = (fx + width / 2.0, if spec.top { fy + fh } else { fy });
+                let (sw, sh) = (width * sc, fh * sc);
+                let sy = if spec.top { fy + fh - sh } else { fy };
+                let alpha = presence.clamp(0.0, 1.0) * slot.visible.value(now).clamp(0.0, 1.0);
+                Placed {
+                    key: k.clone(),
+                    fx,
+                    fy,
+                    fh,
+                    matrix: Affine::translate(pivot) * Affine::scale(sc) * Affine::translate((-pivot.0, -pivot.1)),
+                    drawn: IRect::new((pivot.0 - sw / 2.0).round() as i32, sy.round() as i32, sw.round() as i32, sh.round() as i32),
+                    alpha,
                 }
-                slot.deform.step_at(dt, (fx, fy, w, fh), DEFORM_AMOUNT, edge);
-            }
-            slot.deform_running = running;
-            let pivot = (if edge == DeformEdge::Right { fx + w } else { fx }, fy + fh / 2.0);
-            let matrix = slot.deform.about(pivot);
+            })
+            .collect();
 
-            let rect = IRect::new(fx.round() as i32, fy.round() as i32, w.round() as i32, fh.round() as i32);
-            slot.rect = rect;
-            let alpha = presence.clamp(0.0, 1.0) as f32;
+        let mut anchor: Option<NodeId> = None;
+        for (i, at) in placed.iter().enumerate() {
+            // A card stops at the edge of the settled card in front of it,
+            // so nothing behind ever shows through that card's edges and
+            // antialiased border: the pile reads as solid cards. One still
+            // fading in or out covers nothing yet.
+            let solid = placed[i + 1..].iter().filter(|f| f.alpha >= 0.999 && !f.drawn.is_empty());
+            let cut = if spec.top { solid.map(|f| f.drawn.bottom()).max() } else { solid.map(|f| f.drawn.y).min() };
+            let slot = self.slots.get_mut(&at.key).expect("ordered from the map");
+            slot.rect = at.drawn;
+            let b = theme.box_style("notification", Some(if slot.critical { "critical" } else { "rest" }));
+            let (fx, fy, fh) = (at.fx, at.fy, at.fh);
+            let rect = IRect::new(fx.round() as i32, fy.round() as i32, width.round() as i32, fh.round() as i32);
+            let alpha = at.alpha as f32;
             let radius = theme.box_radius(&b, rect.h as f64);
             let shown = IRect::new(rect.x, rect.y, rect.w, (rect.h as f64 * slot.reveal.value(now).clamp(0.0, 1.0)).round() as i32);
+            let limit = |r: IRect| match cut {
+                Some(c) if spec.top => {
+                    let top = r.y.max(c);
+                    IRect::new(r.x, top, r.w, (r.bottom() - top).max(0))
+                }
+                Some(c) => IRect::new(r.x, r.y, r.w, (r.h.min(c - r.y)).max(0)),
+                None => r,
+            };
             // The box opens out with the unfold, so its cast opens with it
             // rather than being cut to the card's own rect.
             let reach = fs_theme::style::geometry::cast_pad(&b.casts).ceil() as i32;
-            let around = IRect::new(rect.x - reach, rect.y - reach, rect.w + reach * 2, shown.h + reach * 2);
-            // The painter compares against an untransformed node, and the
-            // deform goes back on once it has laid the box out.
+            let around = limit(IRect::new(rect.x - reach, rect.y - reach, rect.w + reach * 2, shown.h + reach * 2));
             for id in &slot.nodes {
                 self.scene.set_transform(*id, Affine::IDENTITY);
             }
@@ -407,17 +457,22 @@ impl Toasts {
             ui::boxes::paint(&mut p, shown, &b, radius, alpha, 0.0);
             p.finish();
             for id in &slot.nodes {
-                self.scene.set_transform(*id, matrix);
+                self.scene.set_transform(*id, at.matrix);
             }
             anchor = slot.nodes.last().copied().or(anchor);
             let content = slot.content.value(now).clamp(0.0, 1.0) as f32 * alpha;
             if content > 0.0 {
                 slot.ui.motion_scale = 1.0;
                 let pad = s.panel_padding;
-                // Laid out at the card's own width, so a peek level's words
-                // never reflow while its chrome narrows.
                 let inner = Rect::new(fx + pad, fy + pad, fx + width - pad, fy + fh - pad);
-                slot.ui_animating = slot.ui.draw(&slot.el, inner, Some(shown), content, theme, kit, &mut self.scene, now).animating;
+                // The words go right over their own box, never over the
+                // card in front of it, and the next card stacks over them.
+                slot.ui.anchor = anchor;
+                slot.ui.set_transform(&mut self.scene, Affine::IDENTITY);
+                let drawn = slot.ui.draw(&slot.el, inner, Some(limit(shown)), content, theme, kit, &mut self.scene, now);
+                slot.ui.set_transform(&mut self.scene, at.matrix);
+                slot.ui_animating = drawn.animating;
+                anchor = drawn.last.or(anchor);
             } else {
                 slot.ui_animating = false;
                 slot.ui.hide(&mut self.scene);

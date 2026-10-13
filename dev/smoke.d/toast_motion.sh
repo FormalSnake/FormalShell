@@ -3,13 +3,24 @@
 # --toast-motion proves the row toast's own motion, slowed to a
 # tenth (`debug motionScale`) and photographed back to back:
 #
-#   arrive   one sticky critical toast slides in from past the screen's right
-#            edge: some frame has the card's box starting right of where it
-#            rests, and the last one has it at rest.
-#   restack  a second toast stacks in front of it, then `notifications
-#            dismissOne` sends the front one away: the departing card keeps
-#            its place while it fades and the older one closes up behind it,
-#            so some frame in that burst matches neither settled pile.
+#   arrive   one sticky critical toast rises out of the bottom edge the way
+#            sonner's does: some frame has the card's box starting below
+#            where it rests at the same x, and the last one has it at rest.
+#   pile     a second toast stacks in front of it: the pile is the front
+#            card at the first one's rest plus one peek offset of the card
+#            behind showing above it, and nothing below the front card's
+#            bottom edge, since a card behind takes the front one's height.
+#   fan      `notifications expand on`, the rig's stand-in for the pointer
+#            over the pile, fans it out: on every frame of the burst the
+#            front card's own rect is pixel for pixel what it was collapsed
+#            (the card in front neither moves nor resizes while the one
+#            behind comes forward), and the settled column is both cards a
+#            `panelPadding` apart in the pile's own order, the front one
+#            still last. `expand off` folds it back before the next phase.
+#   restack  `notifications dismissOne` then sends the front one away: it
+#            drops back toward the edge while it fades and the older one
+#            comes forward, so some frame in that burst matches neither
+#            settled pile.
 #   rest     with motion back at full speed and the pile still, the toast
 #            surface commits nothing for four seconds (rust only: only the
 #            rust shell logs its commits).
@@ -25,10 +36,14 @@ toast_motion_scale=1000
 toast_motion_frames=24
 toast_motion_frame_gap=0.12
 toast_motion_body_top=60
+# `panelPadding`, the collapsed pile's peek offset.
+toast_motion_peek=12
 toast_motion_scale_path="$shot_dir/toast-motion-scale.txt"
 toast_motion_bare_path="$shot_dir/toast-motion-bare.png"
 toast_motion_one_path="$shot_dir/toast-motion-one.png"
 toast_motion_two_path="$shot_dir/toast-motion-two.png"
+toast_motion_fanned_path="$shot_dir/toast-motion-fanned.png"
+toast_motion_folded_path="$shot_dir/toast-motion-folded.png"
 toast_motion_left_path="$shot_dir/toast-motion-left.png"
 toast_motion_dismiss_path="$shot_dir/toast-motion-dismiss.txt"
 toast_motion_rest_path="$shot_dir/toast-motion-rest.txt"
@@ -45,7 +60,7 @@ leg_toast_motion_validate() {
 }
 
 leg_toast_motion_timing() {
-  leg_timing 50 110
+  leg_timing 80 150
 }
 
 leg_toast_motion_drive() {
@@ -70,6 +85,13 @@ sleep 4
 "$notify_send_bin" -u critical 'Second' 'The card that leaves'
 sleep 9
 "$grim_bin" "$toast_motion_two_path" > /dev/null 2>&1
+call notifications expand on > /dev/null 2>&1
+burst fan
+sleep 4
+"$grim_bin" "$toast_motion_fanned_path" > /dev/null 2>&1
+call notifications expand off > /dev/null 2>&1
+sleep 8
+"$grim_bin" "$toast_motion_folded_path" > /dev/null 2>&1
 call notifications dismissOne > "$toast_motion_dismiss_path" 2>&1
 burst leave
 sleep 6
@@ -114,21 +136,52 @@ leg_toast_motion_assert() {
   [ "${rw:-0}" -ge 200 ] && [ "${rh:-0}" -ge 40 ] || fail "could not measure the resting toast, got '$rest'"
   echo "SMOKE_TOAST_MOTION_REST ${rw}x${rh}+${rx}+${ry}"
 
-  local box w h x y slid=0 last="" xs=""
+  local box w h x y slid=0 last="" ys=""
   for i in $(seq 1 $toast_motion_frames); do
     box=$(toast_motion_box "$shot_dir/toast-motion-arrive-$i.png")
-    [ -n "$box" ] || { xs+=" -"; continue; }
+    [ -n "$box" ] || { ys+=" -"; continue; }
     read -r w h x y <<< "$box"
-    xs+=" $x"
-    if [ "$x" -gt $((rx + 4)) ]; then
+    ys+=" $y"
+    [ "$x" -eq "$rx" ] || fail "an arrival frame had the card off its column (x $x, rest $rx): the row toast moves on y alone"
+    if [ "$y" -gt $((ry + 4)) ]; then
       slid=$((slid + 1))
     fi
     last="$box"
   done
-  echo "SMOKE_TOAST_MOTION_ARRIVE_X$xs rest=$rx"
-  [ "$slid" -gt 0 ] || fail "no arrival frame had the card right of its rest (x$xs, rest $rx): the row toast did not slide in"
+  echo "SMOKE_TOAST_MOTION_ARRIVE_Y$ys rest=$ry"
+  [ "$slid" -gt 0 ] || fail "no arrival frame had the card below its rest (y$ys, rest $ry): the row toast did not rise in"
   read -r w h x y <<< "$last"
-  [ "$x" -eq "$rx" ] || fail "the arrival's last frame was not at rest (x $x, rest $rx)"
+  [ "$x $y" = "$rx $ry" ] || fail "the arrival's last frame was not at rest ($x,$y, rest $rx,$ry)"
+
+  local pile pw ph px py
+  pile=$(toast_motion_box "$toast_motion_two_path")
+  read -r pw ph px py <<< "$pile"
+  echo "SMOKE_TOAST_MOTION_PILE ${pw}x${ph}+${px}+${py}"
+  [ "$px $pw" = "$rx $rw" ] || fail "the pile of two is not the front card's column (box '$pile', rest '$rest')"
+  [ $((py + ph)) -eq $((ry + rh)) ] || fail "the pile's bottom edge moved off the front card's (box '$pile', rest '$rest'): a card behind shows under it"
+  [ "$ph" -eq $((rh + toast_motion_peek)) ] || fail "the pile of two is $ph tall, not the front card's $rh plus one ${toast_motion_peek}px peek"
+
+  local front="${rw}x${rh}+${rx}+${ry}" moved=0 drift="" d
+  for f in "$toast_motion_fanned_path" "$toast_motion_folded_path"; do
+    [ -f "$f" ] || fail "no screenshot produced at $f"
+  done
+  for i in $(seq 1 $toast_motion_frames); do
+    f="$shot_dir/toast-motion-fan-$i.png"
+    [ -f "$f" ] || fail "no screenshot produced at $f"
+    d=$($convert_bin "$f" "$toast_motion_two_path" -crop "$front" +repage -metric AE -compare -format '%[distortion]' info: 2>/dev/null)
+    drift+=" $d"
+    [ "$d" = 0 ] || moved=$((moved + 1))
+    case $i in 3|8|14) echo "SMOKE_TOAST_MOTION_FAN_$i $f" ;; esac
+  done
+  echo "SMOKE_TOAST_MOTION_FAN_FRONT_AE$drift"
+  [ "$moved" -eq 0 ] || fail "the front card's own pixels changed on $moved of $toast_motion_frames frames while the pile fanned out"
+  local fan fw fh fx fy
+  fan=$(toast_motion_box "$toast_motion_fanned_path")
+  read -r fw fh fx fy <<< "$fan"
+  echo "SMOKE_TOAST_MOTION_FANNED ${fw}x${fh}+${fx}+${fy}"
+  [ "$fx $fw" = "$rx $rw" ] && [ $((fy + fh)) -eq $((ry + rh)) ] && [ "$fh" -eq $((rh * 2 + toast_motion_peek)) ] \
+    || fail "the fanned column is not two cards ${toast_motion_peek}px apart ending on the front card's rest (box '$fan', rest '$front')"
+  [ "$(toast_motion_box "$toast_motion_folded_path")" = "$pile" ] || fail "expand off did not fold the column back into the pile of two"
 
   grep -q '^ok$' "$toast_motion_dismiss_path" 2>/dev/null \
     || fail "notifications dismissOne did not answer ok, got: $(cat "$toast_motion_dismiss_path" 2>/dev/null)"

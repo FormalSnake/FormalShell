@@ -2,13 +2,14 @@
 //! modes. The slot pool and animation bookkeeping live with the surface.
 //!
 //! COLLAPSED is the depth stack: the front card at full width, each level
-//! behind it a real card sized narrower by one `peek_inset` per side per
-//! level (never a fractional scale, which rasterizes a 1px border blurry),
-//! horizontally centred on the front card, offset toward the anchored edge by
-//! `peek_offset` so only its edge sliver shows. At most `max_peek_levels`
-//! levels peek; deeper cards take the last level's geometry and sit behind
-//! it. EXPANDED is the plain list: every card full width, `gap` apart, in the
-//! order given.
+//! behind it narrower by one `peek_inset` per side per level, a whole pixel
+//! count so the surface's scale of the card to that width keeps its side
+//! borders on the pixel grid, horizontally centred on the front card, as tall as the front card and
+//! offset away from the anchored edge by `peek_offset`, so exactly that
+//! sliver shows whatever the card behind holds. At most `max_peek_levels`
+//! levels peek; deeper cards take the last level's geometry, sit behind it
+//! and are not `visible`. EXPANDED is the plain list: every card full width
+//! at its own height, `gap` apart, in the order given.
 //!
 //! A `None` key is an entry with no slot of its own: it draws nothing but
 //! still consumes its rank, so the cards around it keep the level they would
@@ -36,9 +37,12 @@ pub struct Geom {
     pub x: f64,
     pub y: f64,
     pub width: f64,
+    pub height: f64,
     pub z: i64,
     pub rank: usize,
     pub content_visible: bool,
+    /// Drawn at all: false for a card deeper than the last peek level.
+    pub visible: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -50,8 +54,8 @@ pub struct SlotGeom {
 #[derive(Clone, Debug)]
 pub struct StackLayout<K> {
     pub by_key: HashMap<K, SlotGeom>,
-    /// Every peek level pokes out past the front card by its own offset, so
-    /// the pile is that much taller than the card in front of it.
+    /// Every level present pokes out past the front card by its own offset,
+    /// so the pile is that much taller than the card in front of it.
     pub collapsed_height: f64,
     pub expanded_height: f64,
 }
@@ -75,6 +79,10 @@ impl<K> Default for StackParams<K> {
 pub fn layout<K: Clone + Eq + Hash>(p: &StackParams<K>) -> StackLayout<K> {
     let mut by_key: HashMap<K, SlotGeom> = HashMap::new();
     let height_of = |key: &K| p.heights.get(key).copied().unwrap_or(0.0);
+    let front_height = p.collapsed.first().and_then(Option::as_ref).map_or(0.0, height_of);
+    // Only the levels with a card on them reserve room, so a lone toast sits
+    // flush against the anchored edge.
+    let levels = p.collapsed.len().saturating_sub(1).min(p.max_peek_levels);
 
     for (r, key) in p.collapsed.iter().enumerate() {
         let Some(key) = key else { continue };
@@ -83,16 +91,14 @@ pub fn layout<K: Clone + Eq + Hash>(p: &StackParams<K>) -> StackLayout<K> {
         by_key.entry(key.clone()).or_default().collapsed = Some(Geom {
             x: inset,
             width: p.frame_width - inset * 2.0,
+            height: if r == 0 { height_of(key) } else { front_height },
             // The reveal recedes away from the anchored edge: that edge
             // already carries the front card flush against it.
-            y: if p.top {
-                level as f64 * p.peek_offset
-            } else {
-                (p.max_peek_levels - level) as f64 * p.peek_offset
-            },
+            y: if p.top { level as f64 * p.peek_offset } else { (levels - level) as f64 * p.peek_offset },
             z: (p.collapsed.len() - r) as i64,
             rank: r,
             content_visible: r == 0,
+            visible: r <= p.max_peek_levels,
         });
     }
 
@@ -113,23 +119,19 @@ pub fn layout<K: Clone + Eq + Hash>(p: &StackParams<K>) -> StackLayout<K> {
         slot.expanded = Some(Geom {
             x: 0.0,
             width: p.frame_width,
+            height: height_of(key),
             y,
             z,
             rank: i,
             content_visible: true,
+            visible: true,
         });
         y += height_of(key) + p.gap;
     }
 
-    let front_height = p
-        .collapsed
-        .first()
-        .and_then(Option::as_ref)
-        .map_or(0.0, height_of);
-
     StackLayout {
         by_key,
-        collapsed_height: front_height + p.max_peek_levels as f64 * p.peek_offset,
+        collapsed_height: front_height + levels as f64 * p.peek_offset,
         expanded_height: if y > 0.0 { y - p.gap } else { 0.0 },
     }
 }
