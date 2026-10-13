@@ -39,6 +39,14 @@ use crate::store;
 const POLL: Duration = Duration::from_secs(30);
 const BACKOFF_MIN: Duration = Duration::from_secs(5);
 const BACKOFF_MAX: Duration = Duration::from_secs(300);
+/// A headphone BlueZ has just reported connected is still bringing up its
+/// audio profiles: an RFCOMM connect then fails with br-connection-busy and
+/// the Fast Pair channel stays silent, for up to ~40s on a CMF Headphone Pro.
+/// The first watch waits SETTLE, and failures inside QUICK_WINDOW of the
+/// connect retry every QUICK rather than on the doubling backoff.
+const SETTLE: Duration = Duration::from_secs(2);
+const QUICK: Duration = Duration::from_secs(2);
+const QUICK_WINDOW: Duration = Duration::from_secs(90);
 
 /// One backend's published state.
 #[derive(Clone, Debug, PartialEq)]
@@ -587,14 +595,16 @@ struct Nothing {
     /// round a refusal.
     unsupported: BTreeMap<String, nothing::Mark>,
     connected: Vec<String>,
+    connected_at: BTreeMap<String, Instant>,
 }
 
 /// The Nothing backend over `nothingctl`. Discovery is `list --json`, run on
 /// acquire and whenever the connected Bluetooth set changes; each device it
 /// reports connected gets one `watch -d <addr>` child while held. A device
 /// nothingctl refuses over its model (exit 3) is left alone until BlueZ sees
-/// it disconnect and connect again; any other exit is retried on a backoff
-/// from 5 s doubling to 5 minutes.
+/// it disconnect and connect again; any other exit is retried every 2 s for
+/// the first 90 s after a connect, then on a backoff from 5 s doubling to 5
+/// minutes.
 async fn run_nothing(ctx: Ctx, rx: Receiver<NEvent>, tx: Sender<NEvent>) {
     let mut s = Nothing { available: true, ..Nothing::default() };
     loop {
@@ -638,6 +648,12 @@ async fn run_nothing(ctx: Ctx, rx: Receiver<NEvent>, tx: Sender<NEvent>) {
                 let connected = connected_key(&devices);
                 if connected != s.connected {
                     s.unsupported = nothing::rearm(&s.unsupported, &connected);
+                    let now = Instant::now();
+                    s.connected_at.retain(|a, _| connected.contains(a));
+                    for a in connected.iter().filter(|a| !s.connected.contains(a)) {
+                        s.connected_at.insert(a.clone(), now);
+                        s.retry.insert(a.clone(), (now + SETTLE, SETTLE));
+                    }
                     s.connected = connected;
                     s.discover(&ctx, &tx);
                 }
@@ -807,7 +823,12 @@ impl Nothing {
         if self.unsupported.contains_key(address) {
             return;
         }
-        let delay = self.retry.get(address).map_or(BACKOFF_MIN, |(_, d)| (*d * 2).min(BACKOFF_MAX));
+        let fresh = self.connected_at.get(address).is_some_and(|at| at.elapsed() < QUICK_WINDOW);
+        let delay = match self.retry.get(address) {
+            _ if fresh => QUICK,
+            Some((_, d)) => (*d * 2).clamp(BACKOFF_MIN, BACKOFF_MAX),
+            None => BACKOFF_MIN,
+        };
         self.retry.insert(address.to_owned(), (Instant::now() + delay, delay));
     }
 }
