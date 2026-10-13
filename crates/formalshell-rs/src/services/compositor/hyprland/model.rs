@@ -3,57 +3,16 @@
 
 use std::collections::{HashMap, HashSet};
 
-use serde::Serialize;
 use serde_json::Value;
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Workspace {
-    pub id: String,
-    pub idx: i64,
-    pub name: String,
-    pub output: String,
-    pub is_active: bool,
-    pub is_focused: bool,
-    pub is_urgent: bool,
-}
+use super::lua::PARK_WORKSPACE;
+use crate::services::compositor::model::{Rect, Snapshot, Window, Workspace};
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize)]
-pub struct Rect {
-    pub x: i64,
-    pub y: i64,
-    pub width: i64,
-    pub height: i64,
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Window {
-    pub id: String,
-    pub title: String,
-    pub app_id: String,
-    pub initial_class: String,
-    pub initial_title: String,
-    pub pid: i64,
-    pub workspace_id: String,
-    pub is_focused: bool,
-    pub is_floating: bool,
-    pub is_urgent: bool,
-    pub rect: Option<Rect>,
-}
-
-/// Everything one refresh learns, before the backend's own bookkeeping
-/// (window order, urgency) is laid over it.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct Snapshot {
-    pub available: bool,
-    pub workspaces: Vec<Workspace>,
-    pub windows: Vec<Window>,
-    pub fullscreen_outputs: Vec<String>,
-    pub focused_window_id: String,
-    pub focused_workspace_id: String,
-    pub focused_output_name: String,
-    /// The focused monitor's `specialWorkspace.name`, "" when none is shown.
+/// One refresh: the shared snapshot and the focused monitor's
+/// `specialWorkspace.name`, "" when none is shown, which only the park
+/// logic reads.
+pub struct Read {
+    pub snapshot: Snapshot,
     pub special_shown: String,
 }
 
@@ -88,7 +47,7 @@ fn pair(v: Option<&Value>) -> Option<(i64, i64)> {
 
 /// The four `j/` answers one refresh reads. `urgent` holds the window ids an
 /// `urgent` event flagged and nothing has cleared since.
-pub fn snapshot(monitors: &str, workspaces: &str, clients: &str, active: &str, urgent: &HashSet<String>) -> Snapshot {
+pub fn snapshot(monitors: &str, workspaces: &str, clients: &str, active: &str, urgent: &HashSet<String>) -> Read {
     let monitors = array(monitors);
     // A populated monitor list is the backend's `available`: the request
     // socket answered with a real session behind it.
@@ -117,6 +76,7 @@ pub fn snapshot(monitors: &str, workspaces: &str, clients: &str, active: &str, u
 
     let mut windows = Vec::new();
     let mut fullscreen: Vec<String> = Vec::new();
+    let (mut parked, mut overlaid) = (Vec::new(), Vec::new());
     for c in array(clients) {
         let Some(id) = c.get("address").and_then(Value::as_str).and_then(address_id) else { continue };
         let focused = id == focused_window;
@@ -126,6 +86,9 @@ pub fn snapshot(monitors: &str, workspaces: &str, clients: &str, active: &str, u
             _ => None,
         };
         let workspace_id = int(c.get("workspace").and_then(|w| w.get("id"))).map(|n| n.to_string()).unwrap_or_default();
+        if string(c.get("workspace").and_then(|w| w.get("name"))) == PARK_WORKSPACE {
+            if special_shown == PARK_WORKSPACE { overlaid.push(id.clone()) } else { parked.push(id.clone()) }
+        }
         let covers = match c.get("fullscreen") {
             Some(Value::Bool(b)) => *b,
             v => int(v).unwrap_or(0) != 0,
@@ -149,6 +112,7 @@ pub fn snapshot(monitors: &str, workspaces: &str, clients: &str, active: &str, u
             rect,
             workspace_id,
             id,
+            toplevel: String::new(),
         });
     }
     fullscreen.sort();
@@ -173,7 +137,7 @@ pub fn snapshot(monitors: &str, workspaces: &str, clients: &str, active: &str, u
         .collect();
     out.sort_by_key(|w| w.idx);
 
-    Snapshot {
+    let snapshot = Snapshot {
         available,
         workspaces: out,
         windows,
@@ -181,39 +145,10 @@ pub fn snapshot(monitors: &str, workspaces: &str, clients: &str, active: &str, u
         focused_window_id: focused_window,
         focused_workspace_id: focused_ws.map(|n| n.to_string()).unwrap_or_default(),
         focused_output_name: focused_output,
-        special_shown,
-    }
-}
-
-/// A toplevel is appended when it is first heard of and never
-/// reorders, so a window keeps its place across refreshes. `order` is the
-/// ids seen so far, oldest first.
-pub fn keep_order(order: &mut Vec<String>, windows: Vec<Window>) -> Vec<Window> {
-    let live: HashSet<&str> = windows.iter().map(|w| w.id.as_str()).collect();
-    order.retain(|id| live.contains(id.as_str()));
-    for w in &windows {
-        if !order.contains(&w.id) {
-            order.push(w.id.clone());
-        }
-    }
-    let mut by_id: HashMap<String, Window> = windows.into_iter().map(|w| (w.id.clone(), w)).collect();
-    order.iter().filter_map(|id| by_id.remove(id)).collect()
-}
-
-/// focus.js `held`: the compositor's focused window, or across a gap where
-/// it reports none (a shell surface took the keyboard) the last one it did,
-/// while that window is still open on the focused workspace.
-pub fn held_focus(focused: &str, remembered: &str, windows: &[Window], focused_workspace: &str) -> String {
-    if !focused.is_empty() {
-        return focused.to_owned();
-    }
-    if remembered.is_empty() {
-        return String::new();
-    }
-    match windows.iter().find(|w| w.id == remembered) {
-        Some(w) if focused_workspace.is_empty() || w.workspace_id == focused_workspace => remembered.to_owned(),
-        _ => String::new(),
-    }
+        parked,
+        overlaid,
+    };
+    Read { snapshot, special_shown }
 }
 
 /// The events after which nothing the backend reports can have changed.
@@ -236,7 +171,7 @@ mod tests {
     #[test]
     fn maps_the_contract() {
         let urgent = HashSet::from(["55d0c1a0".to_string()]);
-        let s = snapshot(MONITORS, WORKSPACES, CLIENTS, ACTIVE, &urgent);
+        let s = snapshot(MONITORS, WORKSPACES, CLIENTS, ACTIVE, &urgent).snapshot;
         assert!(s.available);
         assert_eq!(s.focused_output_name, "Virtual-1");
         assert_eq!(s.focused_workspace_id, "2");
@@ -259,7 +194,7 @@ mod tests {
 
     #[test]
     fn no_session_is_unavailable() {
-        let s = snapshot("", "", "", "", &HashSet::new());
+        let s = snapshot("", "", "", "", &HashSet::new()).snapshot;
         assert!(!s.available);
         assert!(s.workspaces.is_empty() && s.focused_workspace_id.is_empty());
     }
@@ -273,25 +208,14 @@ mod tests {
     }
 
     #[test]
-    fn order_holds_across_refreshes() {
-        let w = |id: &str| Window { id: id.into(), ..Window::default() };
-        let mut order = Vec::new();
-        keep_order(&mut order, vec![w("b"), w("a")]);
-        let next = keep_order(&mut order, vec![w("c"), w("a"), w("b")]);
-        let ids: Vec<&str> = next.iter().map(|w| w.id.as_str()).collect();
-        assert_eq!(ids, ["b", "a", "c"]);
-        let next = keep_order(&mut order, vec![w("c"), w("a")]);
-        assert_eq!(next.iter().map(|w| w.id.as_str()).collect::<Vec<_>>(), ["a", "c"]);
-    }
-
-    #[test]
-    fn held_focus_follows_focus_js() {
-        let windows = vec![Window { id: "a".into(), workspace_id: "1".into(), ..Window::default() }];
-        assert_eq!(held_focus("b", "a", &windows, "1"), "b");
-        assert_eq!(held_focus("", "a", &windows, "1"), "a");
-        assert_eq!(held_focus("", "a", &windows, "2"), "");
-        assert_eq!(held_focus("", "a", &windows, ""), "a");
-        assert_eq!(held_focus("", "gone", &windows, "1"), "");
-        assert_eq!(held_focus("", "", &windows, "1"), "");
+    fn the_console_is_parked_until_its_special_workspace_shows() {
+        let console = r#"[{"address":"0xc0","at":[0,0],"size":[10,10],"workspace":{"id":-98,"name":"special:formalshell-console"},"class":"dev.formalshell.console"}]"#;
+        let hidden = snapshot(MONITORS, WORKSPACES, console, "{}", &HashSet::new());
+        assert_eq!((hidden.snapshot.parked.as_slice(), hidden.snapshot.overlaid.len()), (["c0".to_string()].as_slice(), 0));
+        let shown_monitors = MONITORS.replacen(r#""specialWorkspace":{"id":0,"name":""}"#, r#""specialWorkspace":{"id":-98,"name":"special:formalshell-console"}"#, 1);
+        let shown = snapshot(&shown_monitors, WORKSPACES, console, "{}", &HashSet::new());
+        assert_eq!(shown.special_shown, PARK_WORKSPACE);
+        assert!(shown.snapshot.parked.is_empty());
+        assert_eq!(shown.snapshot.overlaid, ["c0"]);
     }
 }

@@ -15,7 +15,7 @@ use smithay_client_toolkit::shell::wlr_layer::{Anchor, KeyboardInteractivity, La
 use super::App;
 use super::capture::Owner;
 use crate::scene::{Bitmap, Scene};
-use crate::services::{appicon, hyprland};
+use crate::services::{appicon, compositor};
 use crate::surface::Surface;
 use crate::surfaces::switcher::{self, Input, Switcher, model};
 
@@ -43,9 +43,9 @@ impl App {
         self.store.config.bool("switcher.enabled") != Some(false)
     }
 
-    fn switcher_entries(&self) -> Vec<&hyprland::Window> {
+    fn switcher_entries(&self) -> Vec<&compositor::Window> {
         let m = &self.switcher.model;
-        model::entries(&self.store.hyprland.compositor.windows, &m.open_history, &m.open_workspace)
+        model::entries(&self.store.compositor.snapshot.windows, &m.open_history, &m.open_workspace)
     }
 
     fn switcher_probe(&self) {
@@ -84,7 +84,7 @@ impl App {
         }
         m.open_history = m.history().to_vec();
         m.open_workspace = if self.store.config.bool("switcher.currentWorkspace") == Some(true) {
-            self.store.hyprland.compositor.focused_workspace_id.clone()
+            self.store.compositor.snapshot.focused_workspace_id.clone()
         } else {
             String::new()
         };
@@ -95,7 +95,7 @@ impl App {
         m.open = true;
         m.scroll = 0.0;
         m.show_at = Some(now + switcher::SHOW_AFTER);
-        hyprland::send(hyprland::Command::RefreshWindows);
+        compositor::send(compositor::Command::RefreshWindows);
         self.switcher_probe();
         if self.switcher.model.commit_pending.take().is_some() {
             self.switcher_commit_now();
@@ -125,7 +125,7 @@ impl App {
         // and Hyprland hands focus back to where it came from once it lets
         // go: one dispatch after that release, not one either side of it.
         if primed || !shown {
-            hyprland::focus_window(&id);
+            compositor::focus_window(&id);
         } else {
             self.switcher.model.refocus = Some((id, now + switcher::REFOCUS));
         }
@@ -224,8 +224,8 @@ impl App {
     /// The compositor or an icon moved under the card.
     pub fn switcher_changed(&mut self, topic: crate::store::Topic) {
         use crate::store::Topic;
-        if topic == Topic::Hyprland {
-            let id = self.store.hyprland.compositor.focused_window_id.clone();
+        if topic == Topic::Compositor {
+            let id = self.store.compositor.snapshot.focused_window_id.clone();
             self.switcher.model.focused(&id);
             if self.switcher.model.open {
                 self.switcher_probe();
@@ -283,7 +283,7 @@ impl App {
         if m.refocus.as_ref().is_some_and(|r| r.1 <= now) {
             let (id, _) = m.refocus.take().expect("refocus");
             if !m.open {
-                hyprland::focus_window(&id);
+                compositor::focus_window(&id);
             }
         }
         if due(m.show_at) {
@@ -336,8 +336,8 @@ impl App {
         }
         self.switcher.dirty = false;
 
-        let entries: Vec<hyprland::Window> = self.switcher_entries().into_iter().cloned().collect();
-        let refs: Vec<&hyprland::Window> = entries.iter().collect();
+        let entries: Vec<compositor::Window> = self.switcher_entries().into_iter().cloned().collect();
+        let refs: Vec<&compositor::Window> = entries.iter().collect();
         let icon = |key: String| self.store.appicon.by_window.get(&key).and_then(|i| i.image.clone());
         let icons: Vec<(String, Option<Bitmap>, Option<Bitmap>)> = entries
             .iter()

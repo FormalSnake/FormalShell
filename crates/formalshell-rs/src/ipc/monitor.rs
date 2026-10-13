@@ -10,7 +10,7 @@ use fs_system::monitor::gpu::{self, OffloadTools};
 use serde_json::Value as Json;
 
 use super::registry::{Function, Target, Type, Value};
-use crate::services::hyprland;
+use crate::services::compositor;
 use crate::services::icons::data_dirs;
 use crate::services::info::monitor::now_ms;
 use crate::services::info::procs;
@@ -131,7 +131,7 @@ fn launch(app: &mut App, args: &[Value]) -> Value {
             bare = false;
         }
     }
-    hyprland::spawn(&argv);
+    compositor::spawn(&argv);
     let mut reply = format!("ok: launched '{id}' on {} ({}): {}", target.record.card.card, target.name, argv.join(" "));
     if entry.terminal && bare {
         reply.push_str(" [runInTerminal, but console.command is not set: spawned bare]");

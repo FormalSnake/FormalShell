@@ -28,7 +28,7 @@ use smithay_client_toolkit::shell::wlr_layer::Layer;
 
 use super::{App, Owner};
 use crate::services::devices::earbuds;
-use crate::services::hyprland;
+use crate::services::compositor;
 use crate::surfaces::headset;
 use crate::surfaces::popup::Popup;
 
@@ -83,14 +83,14 @@ impl Shown {
     fn hold(&mut self) {
         if !std::mem::replace(&mut self.held, true) {
             earbuds::acquire();
-            hyprland::escape_bind(ESCAPE, Some(&dismiss_argv()));
+            compositor::escape_bind(ESCAPE, Some(&dismiss_argv()));
         }
     }
 
     fn release(&mut self) {
         if std::mem::take(&mut self.held) {
             earbuds::release();
-            hyprland::escape_bind(ESCAPE, None);
+            compositor::escape_bind(ESCAPE, None);
         }
     }
 }

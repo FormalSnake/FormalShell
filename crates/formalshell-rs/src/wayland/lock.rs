@@ -32,7 +32,7 @@ use super::App;
 use crate::motion::{Animated, EFFECTS, EFFECTS_SLOW, Kind as Clock, SPATIAL};
 use crate::scene::Bitmap;
 use crate::surface::Ignore;
-use crate::services::hyprland;
+use crate::services::compositor;
 use crate::surface::Surface;
 use crate::store::Topic;
 use crate::surfaces::lock::{self as view, NowPlaying, Shared, TKey, View};
@@ -201,7 +201,7 @@ impl App {
         let argv = command(self);
         if let Some(bin) = argv.first() {
             if on_path(bin) {
-                hyprland::spawn(&argv);
+                compositor::spawn(&argv);
                 return "ok".into();
             }
             eprintln!("LockService: lock.command {bin} is not on PATH, the built-in lock is used instead");

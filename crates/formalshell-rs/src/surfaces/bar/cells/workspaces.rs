@@ -18,7 +18,7 @@ use crate::motion::{Animated, EFFECTS, EFFECTS_SLOW, EMPHASIZED, PULSE_MS, breat
 use crate::scene::IRect;
 use crate::services::appicon::{self, Icon};
 use crate::services::herdr;
-use crate::services::hyprland::{Window, Workspace};
+use crate::services::compositor::{Window, Workspace};
 use crate::store::Topic;
 use crate::surfaces::bar::cell::{Action, Button, Cell, Custom, Env, Ink, Kit, Look, Painter, View};
 use crate::text::{Family, TextStyle};
@@ -245,7 +245,7 @@ impl Workspaces {
         if s.current && s.is_focused {
             return Action::None;
         }
-        if s.id.is_empty() { Action::WorkspaceAt(s.idx) } else { Action::Workspace(s.id.clone()) }
+        if s.id.is_empty() { Action::WorkspaceAt(s.idx, self.output.clone()) } else { Action::Workspace(s.id.clone()) }
     }
 
     /// Where each part of a chip starts along it: the label, every icon and
@@ -346,7 +346,7 @@ impl Workspaces {
 
 impl Cell for Workspaces {
     fn reads(&self) -> &'static [Topic] {
-        &[Topic::Hyprland, Topic::Config, Topic::Herdr, Topic::AppIcon]
+        &[Topic::Compositor, Topic::Config, Topic::Herdr, Topic::AppIcon]
     }
 
     fn read(&mut self, env: &Env) -> bool {
@@ -354,7 +354,7 @@ impl Cell for Workspaces {
         let max_icons = int(env, "workspaces.maxIcons", 1, 20, MAX_ICONS) as usize;
         let show_apps = env.store.config.str("workspaces.showApps").unwrap_or(SHOW_APPS).to_owned();
         let agents = env.store.config.bool("workspaces.agents") != Some(false);
-        let c = &env.store.hyprland.compositor;
+        let c = &env.store.compositor.snapshot;
         let rows: Vec<workspaces::Workspace> = c.workspaces.iter().map(workspace).collect();
         let windows: Vec<workspaces::Window> = c.windows.iter().map(window).collect();
         let slots = workspaces::slots(&rows, &windows, env.output, SlotOpts { persistent, max_icons });
@@ -761,6 +761,7 @@ mod tests {
     fn cell() -> Workspaces {
         let mut c = Workspaces { icon_size: 10.0, pad_x: 6.0, xs: 2.0, ..Workspaces::default() };
         c.slots = vec![slot(1, "1", true, &[]), slot(2, "2", false, &["a", "b"]), slot(3, "", false, &[])];
+        c.output = "o".into();
         let chip = |start: f64, icons: usize| Chip {
             start,
             extent: 40.0,
@@ -783,7 +784,7 @@ mod tests {
         let store = Store::default();
         let mut c = cell();
         assert_eq!(c.wheel(false, &env(&store)), Action::Workspace("2".into()));
-        assert_eq!(c.wheel(true, &env(&store)), Action::WorkspaceAt(3));
+        assert_eq!(c.wheel(true, &env(&store)), Action::WorkspaceAt(3, "o".into()));
     }
 
     #[test]
@@ -794,7 +795,7 @@ mod tests {
         assert_eq!(c.click(Button::Left, (65.0, 5.0), &env(&store)), Action::Window("a".into()));
         assert_eq!(c.click(Button::Left, (77.0, 5.0), &env(&store)), Action::Window("b".into()));
         assert_eq!(c.click(Button::Left, (47.0, 5.0), &env(&store)), Action::Workspace("2".into()));
-        assert_eq!(c.click(Button::Left, (90.0, 5.0), &env(&store)), Action::WorkspaceAt(3));
+        assert_eq!(c.click(Button::Left, (90.0, 5.0), &env(&store)), Action::WorkspaceAt(3, "o".into()));
         assert_eq!(c.click(Button::Left, (42.0, 5.0), &env(&store)), Action::None);
         assert_eq!(c.click(Button::Right, (65.0, 5.0), &env(&store)), Action::None);
     }

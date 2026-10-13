@@ -1,7 +1,7 @@
 //! Surfaces/Switcher/switcher.js: the switcher's list, its cursor and its
 //! grid, pure.
 
-use crate::services::hyprland::model::{Rect, Window};
+use crate::services::compositor::model::{Rect, Window};
 
 /// Gala's order: the most recently focused first, then the compositor's
 /// own order for windows nothing has focused this session. Special

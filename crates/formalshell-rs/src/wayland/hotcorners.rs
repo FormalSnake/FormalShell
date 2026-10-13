@@ -23,7 +23,7 @@ use smithay_client_toolkit::shell::wlr_layer::{Anchor, KeyboardInteractivity, La
 
 use super::App;
 use super::lock::LockMsg;
-use crate::services::hyprland;
+use crate::services::compositor;
 use crate::surface::Ignore;
 
 const NAMESPACE: &str = "formalshell:hotcorner";
@@ -90,7 +90,7 @@ impl App {
         // Down while a fullscreen window covers the output, so its scanout
         // is free and a corner cannot fire mid-game.
         let hide = self.store.config.bool("fullscreen.hideChrome").unwrap_or(true);
-        let covered = &self.store.hyprland.compositor.fullscreen_outputs;
+        let covered = &self.store.compositor.snapshot.fullscreen_outputs;
         let windows: Vec<_> =
             corners::windows(&config, &names).into_iter().filter(|w| !(hide && covered.contains(&w.screen))).collect();
         let key: Vec<(String, Corner, String, i64)> =
@@ -234,10 +234,7 @@ impl App {
         let action = action.to_owned();
         rt.service(move |ctx| {
             ctx.spawn(async move {
-                let pos = hyprland::request("j/cursorpos").await.ok().and_then(|s| {
-                    let v: serde_json::Value = serde_json::from_str(&s).ok()?;
-                    Some((v.get("x")?.as_f64()?, v.get("y")?.as_f64()?))
-                });
+                let pos = compositor::cursor_pos().await;
                 let _ = tx.send(LockMsg::ActionEnded { action, at, cursor: pos });
             });
         });

@@ -11,7 +11,7 @@ use serde_json::json;
 
 use super::{Act, App, notify, notify_with, now, runtime_dir, slurp_run, spawn, SLURP_REGION};
 use crate::services::capture::{Exit, Job, Run};
-use crate::services::hyprland::{self, Command};
+use crate::services::compositor::{self, Command};
 use crate::services::recording;
 use crate::store::Topic;
 
@@ -351,7 +351,7 @@ fn setup_audio(app: &mut App) {
 
 fn launch(app: &mut App, device: String) {
     let output = if app.capture.rec.pending_output.is_empty() {
-        app.store.hyprland.compositor.focused_output_name.clone()
+        app.store.compositor.snapshot.focused_output_name.clone()
     } else {
         app.capture.rec.pending_output.clone()
     };
@@ -408,7 +408,7 @@ fn webcam_region(app: &App) -> Option<model::Region> {
     if !r.pending_geometry.is_empty() {
         return model::region_from_geometry(&r.pending_geometry);
     }
-    let name = if r.pending_output.is_empty() { app.store.hyprland.compositor.focused_output_name.clone() } else { r.pending_output.clone() };
+    let name = if r.pending_output.is_empty() { app.store.compositor.snapshot.focused_output_name.clone() } else { r.pending_output.clone() };
     app.capture_screens()
         .into_iter()
         .find(|s| s.name == name)
@@ -421,7 +421,7 @@ fn start_webcam(app: &mut App, device: &str) {
     r.webcam_gave_up = false;
     r.webcam_placed = false;
     r.webcam_window.clear();
-    hyprland::spawn(&model::webcam_argv(device, WEBCAM_APP_ID));
+    compositor::spawn(&model::webcam_argv(device, WEBCAM_APP_ID));
     let g = app.capture.generation();
     app.capture.rec.webcam_map = Some(g);
     webcam_map_poll(app, g);
@@ -434,7 +434,7 @@ fn webcam_map_poll(app: &mut App, g: u64) {
         }
         let r = &mut app.capture.rec;
         r.webcam_attempts += 1;
-        let win = app.store.hyprland.compositor.windows.iter().find(|w| w.app_id == WEBCAM_APP_ID).map(|w| w.id.clone());
+        let win = app.store.compositor.snapshot.windows.iter().find(|w| w.app_id == WEBCAM_APP_ID).map(|w| w.id.clone());
         let action = model::webcam_map_poll_action(
             win.is_some(),
             r.webcam_attempts,
@@ -448,7 +448,7 @@ fn webcam_map_poll(app: &mut App, g: u64) {
                 r.webcam_map = None;
                 r.webcam_window = id.clone();
                 r.webcam_attempts = 0;
-                hyprland::send(Command::FloatWindow(id));
+                compositor::send(Command::FloatWindow(id));
                 let s = app.capture.generation();
                 app.capture.rec.webcam_settle = Some(s);
                 webcam_settle_poll(app, s);
@@ -458,7 +458,7 @@ fn webcam_map_poll(app: &mut App, g: u64) {
                 r.webcam_map = None;
                 r.webcam_gave_up = false;
                 eprintln!("RecordingService: webcam mapped after the timeout; closing the straggler");
-                hyprland::close_window(&win.unwrap_or_default());
+                compositor::close_window(&win.unwrap_or_default());
                 return;
             }
             model::MapPollAction::GiveUp => {
@@ -486,13 +486,13 @@ fn webcam_settle_poll(app: &mut App, g: u64) {
         }
         app.capture.rec.webcam_attempts += 1;
         let id = app.capture.rec.webcam_window.clone();
-        let rect = app.store.hyprland.compositor.windows.iter().find(|w| w.id == id).and_then(|w| w.rect);
+        let rect = app.store.compositor.snapshot.windows.iter().find(|w| w.id == id).and_then(|w| w.rect);
         let r = &mut app.capture.rec;
         let t = r.webcam_target.unwrap_or(model::WebcamGeometry { width: 0.0, height: 0.0, x: 0.0, y: 0.0 });
         if rect.is_some() && !r.webcam_placed {
             r.webcam_placed = true;
             r.webcam_attempts = 0;
-            hyprland::send(Command::PlaceFloatingWindow { id, x: t.x, y: t.y, width: t.width, height: t.height });
+            compositor::send(Command::PlaceFloatingWindow { id, x: t.x, y: t.y, width: t.width, height: t.height });
             webcam_settle_poll(app, g);
             return;
         }
@@ -522,7 +522,7 @@ fn cleanup_webcam(app: &mut App) {
     if r.webcam_window.is_empty() {
         return;
     }
-    hyprland::close_window(&r.webcam_window);
+    compositor::close_window(&r.webcam_window);
     r.webcam_window.clear();
 }
 

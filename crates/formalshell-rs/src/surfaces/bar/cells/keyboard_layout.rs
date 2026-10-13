@@ -15,11 +15,11 @@ pub struct KeyboardLayout {
 
 impl Cell for KeyboardLayout {
     fn reads(&self) -> &'static [Topic] {
-        &[Topic::Hyprland]
+        &[Topic::Compositor]
     }
 
     fn read(&mut self, env: &Env) -> bool {
-        let h = &env.store.hyprland;
+        let h = &env.store.compositor;
         let layout = h.keyboard_answered.then(|| h.keyboard.clone());
         let label = env.store.config.bool("bar.widgets.keyboardLayout.showLabel").unwrap_or(true);
         let changed = layout != self.layout || label != self.label;

@@ -163,7 +163,7 @@ impl App {
 
     /// The live bar onto the focused output, when it is elsewhere and free.
     pub(super) fn follow_focus(&mut self) {
-        let focused = &self.store.hyprland.compositor.focused_output_name;
+        let focused = &self.store.compositor.snapshot.focused_output_name;
         if focused.is_empty() || *focused == self.bar.output {
             return;
         }

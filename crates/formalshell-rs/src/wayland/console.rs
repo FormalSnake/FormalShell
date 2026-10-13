@@ -4,10 +4,13 @@
 //! the compositor, never stored, so a restarted shell adopts the console
 //! already running.
 //!
+//! The special workspace is Hyprland's `special:formalshell-console` and
+//! mango's tag 0, the only special tag it has.
+//!
 //! The two waits poll because nothing signals them: a freshly spawned
-//! window carries no id this shell knows until `j/clients` is read again,
-//! and Hyprland sends no event when a resize lands. Both are bounded and
-//! run only while a show is in flight.
+//! window carries no id this shell knows until the compositor reports it
+//! again, and Hyprland sends no event when a resize lands. Both are bounded
+//! and run only while a show is in flight.
 
 use std::time::Duration;
 
@@ -17,7 +20,7 @@ use fs_chrome::types::Edge;
 use serde_json::{Value as Json, json};
 
 use super::App;
-use crate::services::hyprland::{self, Command};
+use crate::services::compositor::{self, Command};
 
 const TICK: Duration = Duration::from_millis(100);
 const DEFAULT_APP_ID: &str = "dev.formalshell.console";
@@ -90,17 +93,17 @@ impl App {
     }
 
     fn console_window_id(&self, app_id: &str) -> String {
-        let windows = &self.store.hyprland.compositor.windows;
+        let windows = &self.store.compositor.snapshot.windows;
         windows.iter().find(|w| w.app_id == app_id).map(|w| w.id.clone()).unwrap_or_default()
     }
 
     fn console_available(&self) -> bool {
-        self.store.hyprland.compositor.available
+        self.store.compositor.snapshot.available
     }
 
     fn console_showing(&self) -> bool {
         let id = self.console_window_id(&self.console_app_id());
-        !id.is_empty() && !hyprland::is_window_parked(&self.store.hyprland, &id)
+        !id.is_empty() && !compositor::is_window_parked(&self.store.compositor, &id)
     }
 
     pub fn console_status(&self) -> String {
@@ -140,7 +143,7 @@ impl App {
         self.console.spawning = true;
         self.console.await_app_id = self.console_app_id();
         self.console.attempts = 0;
-        hyprland::spawn(&argv);
+        compositor::spawn(&argv);
         self.console_tick();
     }
 
@@ -170,7 +173,7 @@ impl App {
         self.console.spawning = true;
         self.console.await_app_id = run_id;
         self.console.attempts = 0;
-        hyprland::spawn(&spawn);
+        compositor::spawn(&spawn);
         self.console_tick();
     }
 
@@ -180,12 +183,12 @@ impl App {
             return;
         }
         self.console.placing = None;
-        hyprland::send(Command::ParkWindow(id));
+        compositor::send(Command::ParkWindow(id));
     }
 
     /// The focused output's logical box, or the first one's.
     fn console_screen(&self) -> Option<(f64, f64, f64, f64)> {
-        let focused = &self.store.hyprland.compositor.focused_output_name;
+        let focused = &self.store.compositor.snapshot.focused_output_name;
         let infos: Vec<_> = self.outputs.outputs().filter_map(|o| self.outputs.info(&o)).collect();
         let info = infos.iter().find(|i| i.name.as_deref() == Some(focused.as_str())).or(infos.first())?;
         let (x, y) = info.logical_position.unwrap_or((0, 0));
@@ -210,8 +213,8 @@ impl App {
             eprintln!("console: no output to place the console on");
             return;
         };
-        let was_parked = hyprland::is_window_parked(&self.store.hyprland, &id);
-        hyprland::send(Command::FloatWindow(id.clone()));
+        let was_parked = compositor::is_window_parked(&self.store.compositor, &id);
+        compositor::send(Command::FloatWindow(id.clone()));
         self.console.attempts = 0;
         self.console.placing = Some(Placing { id, target, placed: false, placed_at: 0, was_parked });
         self.console_tick();
@@ -235,7 +238,7 @@ impl App {
 
     /// One tick of whichever wait is running; false once neither is.
     fn console_step(&mut self) -> bool {
-        hyprland::send(Command::RefreshWindows);
+        compositor::send(Command::RefreshWindows);
         self.console.attempts += 1;
         let attempts = self.console.attempts;
         if self.console.spawning {
@@ -253,7 +256,7 @@ impl App {
             return true;
         }
         let Some(p) = &self.console.placing else { return false };
-        let Some(win) = self.store.hyprland.window(&p.id) else {
+        let Some(win) = self.store.compositor.window(&p.id) else {
             if attempts >= 20 {
                 self.console.placing = None;
                 eprintln!("console: the console window went away while being placed");
@@ -263,13 +266,13 @@ impl App {
         };
         let rect = win.rect;
         let p = self.console.placing.as_mut().expect("placing");
-        // Hyprland's dispatchers are absolute, so a backend with no rect
+        // The placement is absolute, so a backend with no rect
         // still gets placed after half a second rather than never.
         if !p.placed && (rect.is_some() || attempts >= 5) {
             p.placed = true;
             p.placed_at = attempts;
             let t = p.target;
-            hyprland::send(Command::PlaceFloatingWindow {
+            compositor::send(Command::PlaceFloatingWindow {
                 id: p.id.clone(),
                 x: t.x as f64,
                 y: t.y as f64,
@@ -286,9 +289,9 @@ impl App {
             }
             let p = self.console.placing.take().expect("placing");
             if p.was_parked {
-                hyprland::send(Command::UnparkWindow(p.id.clone()));
+                compositor::send(Command::UnparkWindow(p.id.clone()));
             }
-            hyprland::focus_window(&p.id);
+            compositor::focus_window(&p.id);
             return false;
         }
         true

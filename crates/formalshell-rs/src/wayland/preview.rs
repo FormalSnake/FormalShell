@@ -12,7 +12,7 @@ use serde_json::{Value, json};
 
 use super::App;
 use super::capture::Owner;
-use crate::services::{appicon, hyprland};
+use crate::services::{appicon, compositor};
 use crate::surfaces::panel::workspace_preview::{self as card, Shared, WorkspacePreview};
 
 /// The cell's hover delay before a card opens, and the card's grace once the
@@ -77,11 +77,11 @@ impl App {
         if self.preview_up() {
             self.close_panels();
         }
-        hyprland::send(hyprland::Command::RefreshWindows);
+        compositor::send(compositor::Command::RefreshWindows);
         let queries: Vec<appicon::Query> = self
             .store
-            .hyprland
             .compositor
+            .snapshot
             .windows
             .iter()
             .filter(|w| w.workspace_id == chip.id)
@@ -219,10 +219,10 @@ impl App {
 
     /// The workspace the card shows became the one on screen.
     pub fn preview_changed(&mut self, topic: crate::store::Topic) {
-        if topic != crate::store::Topic::Hyprland {
+        if topic != crate::store::Topic::Compositor {
             return;
         }
-        let focused = &self.store.hyprland.compositor.focused_workspace_id;
+        let focused = &self.store.compositor.snapshot.focused_workspace_id;
         if self.preview_up() && self.peek.open.as_ref().is_some_and(|o| !o.0.is_empty() && o.0 == *focused) {
             self.preview_close();
         }

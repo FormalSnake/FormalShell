@@ -25,7 +25,7 @@ use fs_chrome::types::Rect;
 
 use super::{Effect, Panel, View};
 use crate::scene::Bitmap;
-use crate::services::hyprland;
+use crate::services::compositor;
 use crate::store::Topic;
 use crate::surfaces::bar::cells::workspaces::window;
 use crate::ui::el::{Pic, Tile};
@@ -73,13 +73,13 @@ impl WorkspacePreview {
         Self { workspace_id, idx, label, from_pointer, shared }
     }
 
-    fn windows<'a>(&self, v: &View<'a>) -> Vec<&'a hyprland::Window> {
-        v.store.hyprland.compositor.windows.iter().filter(|w| w.workspace_id == self.workspace_id).collect()
+    fn windows<'a>(&self, v: &View<'a>) -> Vec<&'a compositor::Window> {
+        v.store.compositor.snapshot.windows.iter().filter(|w| w.workspace_id == self.workspace_id).collect()
     }
 
     fn focus(&self, id: &str, fx: &mut Effect) {
         if !id.is_empty() {
-            hyprland::focus_window(id);
+            compositor::focus_window(id);
             fx.close = true;
         }
     }
@@ -99,7 +99,7 @@ impl Panel for WorkspacePreview {
     }
 
     fn reads(&self) -> &'static [Topic] {
-        &[Topic::Hyprland, Topic::AppIcon]
+        &[Topic::Compositor, Topic::AppIcon]
     }
 
     fn width(&self, v: &View) -> f64 {

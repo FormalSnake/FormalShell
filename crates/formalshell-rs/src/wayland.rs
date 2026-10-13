@@ -49,7 +49,7 @@ use smithay_client_toolkit::{delegate_dispatch2, delegate_registry, registry_han
 use crate::ipc;
 use crate::runtime::{Msg, Runtime};
 use crate::scene::{IRect, NodeId};
-use crate::services::{barpaint, commands, devices, hyprland, info, media, nightlight, overnight, theme, tray};
+use crate::services::{barpaint, commands, devices, compositor, info, media, nightlight, overnight, theme, tray};
 use crate::store::{Store, Topic};
 use crate::surface::{PixelSurface, Pixels, Surface};
 use crate::surfaces;
@@ -459,7 +459,7 @@ impl App {
 
     fn hidden_on(&self, output: &str) -> bool {
         let hide = self.store.config.bool("fullscreen.hideChrome").unwrap_or(true);
-        hide && self.store.hyprland.compositor.fullscreen_outputs.iter().any(|o| o == output)
+        hide && self.store.compositor.snapshot.fullscreen_outputs.iter().any(|o| o == output)
     }
 
     /// The bar's window and the frame's zones as the config and the
@@ -626,7 +626,7 @@ impl App {
     /// with them.
     pub fn refresh_bar(&mut self, topic: Option<Topic>) {
         let now = Instant::now();
-        if matches!(topic, None | Some(Topic::Hyprland) | Some(Topic::Config)) {
+        if matches!(topic, None | Some(Topic::Compositor) | Some(Topic::Config)) {
             if self.chrome_hidden() != self.bar.hidden {
                 self.place_chrome();
             }
@@ -1386,9 +1386,9 @@ impl App {
                 let open = self.overflow_open() != Some(region);
                 self.set_overflow(region, open);
             }
-            Action::Workspace(id) => hyprland::focus_workspace(&id),
-            Action::WorkspaceAt(idx) => hyprland::focus_workspace_at(idx),
-            Action::Window(id) => hyprland::focus_window(&id),
+            Action::Workspace(id) => compositor::focus_workspace(&id),
+            Action::WorkspaceAt(idx, output) => compositor::focus_workspace_at(idx, &output),
+            Action::Window(id) => compositor::focus_window(&id),
             Action::Device(op) => {
                 if let Some(rt) = &self.runtime {
                     rt.service(move |ctx| devices::run(ctx, op));

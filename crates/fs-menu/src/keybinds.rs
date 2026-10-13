@@ -1,5 +1,7 @@
-//! Compositor keybinds as launcher rows (keybinds.js), off `hyprctl binds`,
-//! with Hyprland's own sourced files and submaps already expanded.
+//! Compositor keybinds as launcher rows (keybinds.js): Hyprland's from
+//! `hyprctl binds`, with its sourced files and submaps already expanded,
+//! and mango's from the `bind*=` lines of its config, which its backend
+//! walks with the `source=` files in place.
 
 use crate::node::{Kind, Node};
 
@@ -104,6 +106,57 @@ pub fn parse_hyprland_binds(text: &str) -> Vec<Bind> {
     out
 }
 
+/// mango's own modifier names, any case; anything else (a `code:` keycode)
+/// stays in the chord but names no modifier.
+fn mango_mod(token: &str) -> Option<&'static str> {
+    match token.to_ascii_lowercase().as_str() {
+        "super" | "logo" | "mod4" => Some("SUPER"),
+        "ctrl" | "control" => Some("CTRL"),
+        "alt" | "mod1" => Some("ALT"),
+        "shift" => Some("SHIFT"),
+        _ => None,
+    }
+}
+
+/// One `bind[slrpc]*=MODS,KEY,FUNC,ARGS...` line of a mango config, after
+/// its variables are expanded; `key_mode` is the mode the lines above set.
+/// `None` for any other line.
+pub fn parse_mango_bind(key: &str, value: &str, key_mode: &str) -> Option<Bind> {
+    let flags = key.trim().strip_prefix("bind")?;
+    if !flags.chars().all(|c| "slrpc".contains(c)) {
+        return None;
+    }
+    let mut parts = value.splitn(4, ',').map(str::trim);
+    let (mods_text, key, action) = (parts.next()?, parts.next()?, parts.next()?);
+    if key.is_empty() || action.is_empty() {
+        return None;
+    }
+    let args = parts.next().unwrap_or("");
+    let mut mods = Vec::new();
+    let mut chord: Vec<String> = Vec::new();
+    for token in mods_text.split('+').map(str::trim).filter(|t| !t.is_empty() && !t.eq_ignore_ascii_case("none")) {
+        match mango_mod(token) {
+            Some(name) => {
+                mods.push(name);
+                chord.push(name.to_owned());
+            }
+            None => chord.push(token.to_owned()),
+        }
+    }
+    chord.push(key.to_owned());
+    let submap = if key_mode == "default" { String::new() } else { key_mode.to_owned() };
+    Some(Bind {
+        chord: chord.join("+"),
+        mods,
+        key: key.to_owned(),
+        action: action.to_owned(),
+        args: if args.is_empty() { Vec::new() } else { vec![args.to_owned()] },
+        title: String::new(),
+        submap,
+        catchall: false,
+    })
+}
+
 pub fn describe_action(bind: &Bind) -> String {
     let mut parts = vec![bind.action.clone()];
     parts.extend(bind.args.iter().cloned());
@@ -182,23 +235,21 @@ fn note_row(id: &str, label: &str, desc: &str) -> Node {
 }
 
 pub fn no_binds_row() -> Node {
-    note_row("keybinds.nobinds", "No binds", "no binds in the hyprland config")
+    note_row("keybinds.nobinds", "No binds", "no binds in the compositor config")
 }
 
 pub fn failed_row() -> Node {
-    note_row("keybinds.failed", "Binds unavailable", "hyprctl binds failed")
+    note_row("keybinds.failed", "Binds unavailable", "the compositor's binds could not be read")
 }
 
-/// Rows for the keybinds route: `None` before `hyprctl binds` has
-/// answered, `Some(Err(()))` when it failed, else its stdout.
-pub fn rows_for(reply: Option<Result<&str, ()>>, query: &str) -> Vec<Node> {
+/// Rows for the keybinds route: `None` before the compositor has
+/// answered, `Some(Err(()))` when it failed, else its binds.
+pub fn rows_for(reply: Option<Result<&[Bind], ()>>, query: &str) -> Vec<Node> {
     match reply {
         None => Vec::new(),
         Some(Err(())) => vec![failed_row()],
-        Some(Ok(text)) => {
-            let binds = parse_hyprland_binds(text);
-            if binds.is_empty() { vec![no_binds_row()] } else { rows(&binds, query) }
-        }
+        Some(Ok([])) => vec![no_binds_row()],
+        Some(Ok(binds)) => rows(binds, query),
     }
 }
 
@@ -253,7 +304,24 @@ mod tests {
     fn end_states() {
         assert!(rows_for(None, "").is_empty());
         assert_eq!(rows_for(Some(Err(())), "")[0].id, "keybinds.failed");
-        assert_eq!(rows_for(Some(Ok("")), "")[0].id, "keybinds.nobinds");
-        assert_eq!(rows_for(Some(Ok(TABLE)), "").len(), 3);
+        assert_eq!(rows_for(Some(Ok(&parse_hyprland_binds(""))), "")[0].id, "keybinds.nobinds");
+        assert_eq!(rows_for(Some(Ok(&parse_hyprland_binds(TABLE))), "").len(), 3);
+    }
+
+    #[test]
+    fn mango_bind_lines() {
+        let b = parse_mango_bind("bind", "SUPER+shift, Return ,spawn,foot -e sh -c 'a,b'", "default").unwrap();
+        assert_eq!(b.chord, "SUPER+SHIFT+Return");
+        assert_eq!(b.mods, ["SUPER", "SHIFT"]);
+        assert_eq!(describe_action(&b), "spawn foot -e sh -c 'a,b'");
+        assert_eq!(b.submap, "");
+        let b = parse_mango_bind("bindl", "NONE,XF86AudioMute,spawn,wpctl", "resize").unwrap();
+        assert_eq!((b.chord.as_str(), b.submap.as_str()), ("XF86AudioMute", "resize"));
+        let b = parse_mango_bind("bind", "code:64+alt,code:24,killclient", "default").unwrap();
+        assert_eq!((b.chord.as_str(), b.mods.as_slice()), ("code:64+ALT+code:24", ["ALT"].as_slice()));
+        assert!(b.args.is_empty());
+        assert!(parse_mango_bind("mousebind", "SUPER,btn_left,moveresize,curmove", "default").is_none());
+        assert!(parse_mango_bind("bindx", "SUPER,a,killclient", "default").is_none());
+        assert!(parse_mango_bind("bind", "SUPER,a", "default").is_none());
     }
 }

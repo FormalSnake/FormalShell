@@ -4,7 +4,7 @@
 
 use crate::services::{
     appicon, barpaint, brightness, caffeinate, capture, clipboard, clipssh, clock, commands, config, devices, display, herdr,
-    hyprland, info, lights, localsend, lyrics, media, menu, mirror, nightlight, notifications, picker, plugins, recording, screensaver, state, theme, tray,
+    compositor, info, lights, localsend, lyrics, media, menu, mirror, nightlight, notifications, picker, plugins, recording, screensaver, state, theme, tray,
     visualizer, wallpaper,
 };
 
@@ -12,7 +12,7 @@ use crate::services::{
 pub struct Store {
     pub clock: clock::State,
     pub config: config::State,
-    pub hyprland: hyprland::State,
+    pub compositor: compositor::State,
     pub state: state::State,
     pub theme: theme::State,
     pub media: media::State,
@@ -51,7 +51,7 @@ pub struct Store {
 pub enum Diff {
     Clock(clock::Diff),
     Config(config::Diff),
-    Hyprland(hyprland::Diff),
+    Compositor(compositor::Diff),
     State(state::Diff),
     Theme(theme::Diff),
     Media(media::Diff),
@@ -90,7 +90,7 @@ pub enum Diff {
 pub enum Topic {
     Clock,
     Config,
-    Hyprland,
+    Compositor,
     State,
     Theme,
     Media,
@@ -141,7 +141,7 @@ impl Store {
             Diff::Clock(d) => self.clock.apply(d).then_some(Topic::Clock),
             Diff::Config(d) => self.config.apply(d).then_some(Topic::Config),
             Diff::State(d) => self.state.apply(d).then_some(Topic::State),
-            Diff::Hyprland(d) => self.hyprland.apply(d).then_some(Topic::Hyprland),
+            Diff::Compositor(d) => self.compositor.apply(d).then_some(Topic::Compositor),
             Diff::Theme(d) => self.theme.apply(d).then_some(Topic::Theme),
             Diff::Media(d) => self.media.apply(d).then_some(Topic::Media),
             Diff::Lyrics(d) => self.lyrics.apply(d).then_some(Topic::Lyrics),

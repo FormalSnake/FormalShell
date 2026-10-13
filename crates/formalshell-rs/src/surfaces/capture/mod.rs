@@ -204,8 +204,8 @@ fn config_secs(app: &App, key: &str) -> f64 {
 }
 
 pub fn cands(app: &App) -> Cands {
-    let windows = &app.store.hyprland.compositor.windows;
-    Cands::new(&app.capture_screens(), windows, &app.store.hyprland.compositor.focused_output_name)
+    let windows = &app.store.compositor.snapshot.windows;
+    Cands::new(&app.capture_screens(), windows, &app.store.compositor.snapshot.focused_output_name)
 }
 
 // ---- screenshot ----------------------------------------------------------
@@ -458,7 +458,7 @@ pub fn picker_open(app: &mut App, mode: &str) -> String {
     p.cursor = -1;
     p.capturing = false;
     p.frames.clear();
-    crate::services::hyprland::send(crate::services::hyprland::Command::RefreshWindows);
+    crate::services::compositor::send(crate::services::compositor::Command::RefreshWindows);
     if mode == "fullscreen" {
         let c = cands(app);
         let Some(r) = c.focused_output_rect().and_then(|o| o.rect) else { return "error: no focused output".into() };

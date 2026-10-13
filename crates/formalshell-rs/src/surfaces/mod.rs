@@ -25,7 +25,7 @@ use crate::wayland::{App, theme_inputs};
 
 pub fn changed(app: &mut App, topic: Topic) {
     app.lock_changed(topic);
-    if matches!(topic, Topic::Hyprland | Topic::State | Topic::Display | Topic::Config) {
+    if matches!(topic, Topic::Compositor | Topic::State | Topic::Display | Topic::Config) {
         crate::services::display::reconcile(&app.store);
     }
     app.switcher_changed(topic);
@@ -43,6 +43,11 @@ pub fn changed(app: &mut App, topic: Topic) {
                 alias: c.str("localsend.alias").unwrap_or("").to_owned(),
                 dir: c.str("localsend.dir").unwrap_or("").to_owned(),
             });
+            let names = match c.get("compositor.workspaceNames") {
+                Some(serde_json::Value::Array(items)) => items.iter().map(|v| v.as_str().unwrap_or_default().to_owned()).collect(),
+                _ => Vec::new(),
+            };
+            crate::services::compositor::send(crate::services::compositor::Command::WorkspaceNames(names));
             let settings = app.store.config.settings().clone();
             if app.store.theme.apply(theme::Diff::Settings(settings)) {
                 changed(app, Topic::Theme);

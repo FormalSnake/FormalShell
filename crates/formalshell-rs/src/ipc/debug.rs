@@ -48,8 +48,8 @@ pub fn rect(r: &IRect) -> serde_json::Value {
 /// the compositor block, the settings, the bar, its join, the frame and the
 /// chrome numbers. Every other key waits for the service behind it.
 fn dump(app: &mut App, _: &[Value]) -> Value {
-    let h = &app.store.hyprland;
-    let c = &h.compositor;
+    let h = &app.store.compositor;
+    let c = &h.snapshot;
     let edge = app.bar.edge();
     let thickness = app.bar.thickness();
     let frame = app.bar.frame_thickness() as i32;
@@ -87,7 +87,7 @@ fn dump(app: &mut App, _: &[Value]) -> Value {
         .collect();
     let phone = &app.store.info.iphone;
     let dump = json!({
-        "compositor": "hyprland",
+        "compositor": crate::services::compositor::kind().as_str(),
         "available": c.available,
         "workspaces": c.workspaces,
         "windows": c.windows,

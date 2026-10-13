@@ -42,10 +42,6 @@ pub fn spawn(argv: &[String]) -> String {
     format!("hl.dsp.exec_cmd({})", string(&cmd.join(" ")))
 }
 
-pub fn dpms(on: bool) -> String {
-    format!("hl.dsp.dpms({{ action = \"{}\" }})", if on { "enable" } else { "disable" })
-}
-
 pub fn float_window(id: &str) -> String {
     format!("hl.dsp.window.float({{ window = {}, action = \"set\" }})", string(&selector(id)))
 }
@@ -96,7 +92,6 @@ mod tests {
             spawn(&["foot".into(), "-e".into(), "it's".into()]),
             r#"hl.dsp.exec_cmd("'foot' '-e' 'it'\\''s'")"#
         );
-        assert_eq!(dpms(false), "hl.dsp.dpms({ action = \"disable\" })");
         assert_eq!(
             park_window("ab"),
             "hl.dsp.window.move({ window = \"address:0xab\", workspace = \"special:formalshell-console\", follow = false })"

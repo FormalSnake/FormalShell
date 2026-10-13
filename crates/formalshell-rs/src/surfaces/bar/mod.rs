@@ -336,7 +336,7 @@ impl Bar {
             }
         }
         if relayout {
-            self.read(store, Some(Topic::Hyprland), now);
+            self.read(store, Some(Topic::Compositor), now);
         }
         redraw
     }
@@ -370,7 +370,7 @@ impl Bar {
         let paint = self.style.wingpanel.then(|| {
             let pin_raw = store.config.str("bar.paint").map(str::to_owned).or_else(|| theme.habit("paint").and_then(Value::as_str).map(str::to_owned));
             let pin = barpaint::pin(pin_raw.as_deref()).as_str();
-            let fullscreen = store.hyprland.compositor.fullscreen_outputs.contains(&self.output);
+            let fullscreen = store.compositor.snapshot.fullscreen_outputs.contains(&self.output);
             let stats = store.bar_paint.stats;
             let paint = barpaint::decide(stats.as_ref(), &theme.colors.mode, fullscreen, Some(pin));
             PaintState { paint, pin, fullscreen }

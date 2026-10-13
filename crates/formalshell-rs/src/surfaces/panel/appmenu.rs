@@ -10,7 +10,7 @@
 
 use super::{Effect, Panel, View};
 use crate::services::appicon::{self, Action, Entry};
-use crate::services::hyprland::{self, model::Window};
+use crate::services::compositor::{self, model::Window};
 use crate::store::{Store, Topic};
 use crate::ui::{El, Event, Ink, Weight, w};
 
@@ -31,10 +31,10 @@ struct Subject {
 /// Held focus, not raw: opening this panel takes keyboard focus off the
 /// very window it describes.
 fn subject(store: &Store) -> Option<Subject> {
-    let h = &store.hyprland;
+    let h = &store.compositor;
     let window = h.window(&h.held_focused_window_id())?.clone();
     let icon = store.appicon.by_window.get(PROBE);
-    let windows = h.compositor.windows.iter().filter(|x| !window.app_id.is_empty() && x.app_id == window.app_id).cloned().collect();
+    let windows = h.snapshot.windows.iter().filter(|x| !window.app_id.is_empty() && x.app_id == window.app_id).cloned().collect();
     Some(Subject { entry: icon.and_then(|i| i.entry.clone()), image: icon.and_then(|i| i.image.clone()), window, windows })
 }
 
@@ -48,7 +48,7 @@ fn launch(entry: &Entry, action: &Action) {
     };
     let _ = entry;
     if !argv.is_empty() {
-        hyprland::spawn(&argv);
+        compositor::spawn(&argv);
     }
 }
 
@@ -66,11 +66,11 @@ impl Panel for AppMenu {
     }
 
     fn reads(&self) -> &'static [Topic] {
-        &[Topic::Hyprland, Topic::AppIcon]
+        &[Topic::Compositor, Topic::AppIcon]
     }
 
     fn start(&mut self, fx: &mut Effect) {
-        let h = &fx.store.hyprland;
+        let h = &fx.store.compositor;
         let Some(win) = h.window(&h.held_focused_window_id()) else { return };
         let size = (fx.store.theme.theme.space.xxl * 2.0).round() as u32;
         appicon::probe(
@@ -170,11 +170,11 @@ impl Panel for AppMenu {
             }
         } else if let Some(i) = stop.strip_prefix("window:").and_then(|i| i.parse::<usize>().ok()) {
             if let Some(win) = sub.windows.get(i) {
-                hyprland::focus_window(&win.id);
+                compositor::focus_window(&win.id);
                 fx.close = true;
             }
         } else if stop == "close-window" {
-            hyprland::close_window(&sub.window.id);
+            compositor::close_window(&sub.window.id);
             fx.close = true;
         }
     }

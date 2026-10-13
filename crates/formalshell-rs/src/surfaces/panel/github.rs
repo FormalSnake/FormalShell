@@ -7,7 +7,7 @@
 //! list a "None" row, never stale or invented rows.
 
 use super::{Effect, Panel, View};
-use crate::services::hyprland;
+use crate::services::compositor;
 use crate::services::info::github::{Poll, Row};
 use crate::services::info::kick;
 use crate::services::wants::{Source, Want};
@@ -25,7 +25,7 @@ impl Github {
 }
 
 fn open(url: &str, fx: &mut Effect) {
-    hyprland::spawn(&["xdg-open".to_owned(), url.to_owned()]);
+    compositor::spawn(&["xdg-open".to_owned(), url.to_owned()]);
     fx.close = true;
 }
 

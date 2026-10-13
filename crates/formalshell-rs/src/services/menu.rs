@@ -15,6 +15,7 @@ use std::sync::{Arc, OnceLock};
 use std::time::{Duration, SystemTime};
 
 use fs_menu::frecency::Record;
+use fs_menu::keybinds::Bind;
 use fs_menu::model::{build_tree, entries_from_value, parse_jsonc};
 use fs_menu::node::{DesktopEntry, Entries, Kind, Node, Tree};
 use fs_menu::providers::{self, CustomPowerButton};
@@ -53,8 +54,9 @@ pub struct State {
     /// Decoded app icons by `iconSource` path, `None` where the file did
     /// not decode.
     pub icons: HashMap<String, Option<Bitmap>>,
-    /// `hyprctl binds`: `None` until it answered, `Err` when it failed.
-    pub binds: Option<Result<Arc<str>, ()>>,
+    /// The compositor's binds: `None` until it answered, `Err` when it
+    /// failed.
+    pub binds: Option<Result<Arc<[Bind]>, ()>>,
     pub emoji: Option<Arc<fs_menu::providers::EmojiIndex>>,
     /// Each desktop entry's `Exec` argv by entry id.
     pub exec: HashMap<String, Vec<String>>,
@@ -65,7 +67,7 @@ pub enum Diff {
     Source(String, Vec<Node>),
     Cond { id: String, when: bool, ok: bool },
     Icons(Vec<(String, Option<Bitmap>)>),
-    Binds(Result<Arc<str>, ()>),
+    Binds(Result<Arc<[Bind]>, ()>),
     Emoji(Arc<fs_menu::providers::EmojiIndex>),
     Exec(HashMap<String, Vec<String>>),
 }
@@ -240,7 +242,7 @@ pub async fn run(ctx: Ctx) {
             Ask::Binds => {
                 let c = ctx.clone();
                 ctx.spawn(async move {
-                    let reply = super::hyprland::request("binds").await.map(|t| Arc::<str>::from(t)).map_err(|_| ());
+                    let reply = super::compositor::binds().await.map(Arc::<[Bind]>::from);
                     c.publish(store::Diff::Menu(Diff::Binds(reply)));
                 });
             }
@@ -250,7 +252,7 @@ pub async fn run(ctx: Ctx) {
                 }
             }
             Ask::Spawn(command) => {
-                super::hyprland::spawn(&proc::argv(&["sh", "-c", &command]));
+                super::compositor::spawn(&proc::argv(&["sh", "-c", &command]));
             }
         }
     }

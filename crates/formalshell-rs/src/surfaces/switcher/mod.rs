@@ -19,7 +19,7 @@ use serde_json::{Value, json};
 
 use crate::motion::{Animated, Curve};
 use crate::scene::{Bitmap, IRect, NodeId, Paint, Scene};
-use crate::services::hyprland::model::Window;
+use crate::services::compositor::model::Window;
 use crate::surfaces::bar::cell::{Kit, Painter};
 use crate::text::{Family, ShapedText, TextStyle};
 use crate::ui::boxes;

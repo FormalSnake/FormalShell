@@ -1,14 +1,9 @@
-//! The compositor backend on Hyprland's two raw
-//! sockets: `.socket.sock` answers one request per connection,
+//! The Hyprland backend on its two raw sockets: `.socket.sock` answers one request per connection,
 //! `.socket2.sock` streams `EVENT>>DATA` lines. Every write is an `hl.*`
 //! Lua call, a dispatcher sent as `dispatch` and a monitor rule as `eval`.
 //!
 //! An event only marks the model dirty; one refresh re-reads it, so a burst
 //! of events in one turn costs one round of requests.
-
-// The whole contract lands here at once; its callers are the bar cells,
-// panels and launcher routes R2 onward ports.
-#![allow(dead_code)]
 
 mod lua;
 pub mod model;
@@ -19,194 +14,23 @@ use std::io;
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::sync::OnceLock;
 use std::time::Duration;
 
 use async_io::{Async, Timer};
+use fs_menu::keybinds::{self, Bind};
 use futures_lite::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, StreamExt, io::BufReader};
 use fs_system::compositor::keyboard::{self, Layout};
-use fs_system::display::outputs::{self, Color, Output, RuleOverrides};
+use fs_system::display::outputs::{self, Output, RuleOverrides};
 
+use super::model::{self as common, Snapshot};
+use super::{Command, Diff, OutputsState};
 use crate::runtime::Ctx;
 use crate::store;
-pub use model::{Snapshot, Window, Workspace};
 
 /// The wait before the next attempt at a socket that is gone, doubling up
 /// to the ceiling while it stays gone.
 const RETRY_FIRST: Duration = Duration::from_millis(250);
 const RETRY_MAX: Duration = Duration::from_secs(5);
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum OutputsState {
-    Unknown,
-    Ok,
-    Failed,
-}
-
-impl OutputsState {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            OutputsState::Unknown => "unknown",
-            OutputsState::Ok => "ok",
-            OutputsState::Failed => "failed",
-        }
-    }
-}
-
-pub struct State {
-    pub compositor: Snapshot,
-    /// The last window the compositor reported focused, for focus.js's hold.
-    pub remembered_focused_id: String,
-    pub outputs: Vec<Output>,
-    pub outputs_state: OutputsState,
-    pub keyboard: Layout,
-    /// False until the first answer (or failure) of the layout query, so a
-    /// cell can tell "not asked yet" from "cannot be asked".
-    pub keyboard_answered: bool,
-    /// Counts `configreloaded`, the contract's `configReloaded` signal.
-    pub config_reloads: u64,
-}
-
-impl Default for State {
-    fn default() -> Self {
-        Self {
-            compositor: Snapshot::default(),
-            remembered_focused_id: String::new(),
-            outputs: Vec::new(),
-            outputs_state: OutputsState::Unknown,
-            keyboard: keyboard::unavailable(),
-            keyboard_answered: false,
-            config_reloads: 0,
-        }
-    }
-}
-
-pub enum Diff {
-    Compositor(Snapshot),
-    Outputs(Vec<Output>, OutputsState),
-    Keyboard(Layout),
-    ConfigReloaded,
-}
-
-impl State {
-    pub fn apply(&mut self, diff: Diff) -> bool {
-        match diff {
-            Diff::Compositor(snapshot) => {
-                if self.compositor == snapshot {
-                    return false;
-                }
-                if !snapshot.focused_window_id.is_empty() {
-                    self.remembered_focused_id = snapshot.focused_window_id.clone();
-                }
-                self.compositor = snapshot;
-            }
-            Diff::Outputs(rows, state) => {
-                if self.outputs == rows && self.outputs_state == state {
-                    return false;
-                }
-                (self.outputs, self.outputs_state) = (rows, state);
-            }
-            Diff::Keyboard(layout) => {
-                let first = !std::mem::replace(&mut self.keyboard_answered, true);
-                if self.keyboard == layout && !first {
-                    return false;
-                }
-                self.keyboard = layout;
-            }
-            Diff::ConfigReloaded => self.config_reloads += 1,
-        }
-        true
-    }
-
-    pub fn held_focused_window_id(&self) -> String {
-        let c = &self.compositor;
-        model::held_focus(&c.focused_window_id, &self.remembered_focused_id, &c.windows, &c.focused_workspace_id)
-    }
-
-    pub fn window(&self, id: &str) -> Option<&Window> {
-        self.compositor.windows.iter().find(|w| w.id == id)
-    }
-}
-
-/// The writes, queued from any thread and run in order on the service
-/// thread against the backend's own latest model.
-pub enum Command {
-    Dispatch(String),
-    /// A config call (a bind) rather than a dispatcher.
-    Eval(String),
-    FloatWindow(String),
-    PlaceFloatingWindow { id: String, x: f64, y: f64, width: f64, height: f64 },
-    ParkWindow(String),
-    UnparkWindow(String),
-    RefreshWindows,
-    RefreshOutputs,
-    SetOutputEnabled(String, bool),
-    SetOutputScale(String, f64),
-    SetOutputMirror(String, String),
-    SetOutputColor(String, Color),
-}
-
-static COMMANDS: OnceLock<async_channel::Sender<Command>> = OnceLock::new();
-
-/// Dropped when the service has not started.
-pub fn send(command: Command) {
-    if let Some(tx) = COMMANDS.get() {
-        let _ = tx.try_send(command);
-    }
-}
-
-pub fn focus_workspace(id: &str) {
-    send(Command::Dispatch(lua::focus_workspace(id)));
-}
-
-/// By `idx`, for a persistent slot Hyprland has no workspace for yet: its
-/// `workspace` dispatcher creates one.
-pub fn focus_workspace_at(idx: i64) {
-    if idx >= 1 {
-        focus_workspace(&idx.to_string());
-    }
-}
-
-pub fn focus_window(id: &str) {
-    send(Command::Dispatch(lua::focus_window(id)));
-}
-
-pub fn close_window(id: &str) {
-    send(Command::Dispatch(lua::close_window(id)));
-}
-
-pub fn spawn(argv: &[String]) {
-    send(Command::Dispatch(lua::spawn(argv)));
-}
-
-/// While `argv` is some, a plain Escape runs it without being taken from
-/// the focused app; none removes the bind. `global` names it in Lua.
-pub fn escape_bind(global: &str, argv: Option<&[String]>) {
-    send(Command::Eval(match argv {
-        Some(argv) => lua::bind_escape(global, argv),
-        None => lua::unbind(global),
-    }));
-}
-
-pub fn power_off_monitors() {
-    send(Command::Dispatch(lua::dpms(false)));
-}
-
-pub fn power_on_monitors() {
-    send(Command::Dispatch(lua::dpms(true)));
-}
-
-/// On the special workspace and not on screen, or on another workspace than
-/// the focused one. A window the backend has never heard of counts as
-/// parked, so a console toggle asks for it to be brought here.
-pub fn is_window_parked(state: &State, id: &str) -> bool {
-    let c = &state.compositor;
-    match state.window(id) {
-        None => true,
-        Some(w) if w.workspace_id.parse::<i64>().is_ok_and(|n| n < 0) => c.special_shown != lua::PARK_WORKSPACE,
-        Some(w) => w.workspace_id != c.focused_workspace_id,
-    }
-}
 
 fn socket_dir() -> io::Result<PathBuf> {
     let runtime = std::env::var_os("XDG_RUNTIME_DIR")
@@ -216,7 +40,7 @@ fn socket_dir() -> io::Result<PathBuf> {
     Ok(PathBuf::from(runtime).join("hypr").join(sig))
 }
 
-pub async fn request(command: &str) -> io::Result<String> {
+async fn request(command: &str) -> io::Result<String> {
     let mut stream = Async::<UnixStream>::connect(socket_dir()?.join(".socket.sock")).await?;
     stream.write_all(command.as_bytes()).await?;
     let mut out = String::new();
@@ -224,10 +48,21 @@ pub async fn request(command: &str) -> io::Result<String> {
     Ok(out)
 }
 
+pub async fn binds() -> Result<Vec<Bind>, ()> {
+    request("binds").await.map(|text| keybinds::parse_hyprland_binds(&text)).map_err(|_| ())
+}
+
+pub async fn cursor_pos() -> Option<(f64, f64)> {
+    let text = request("j/cursorpos").await.ok()?;
+    let v: serde_json::Value = serde_json::from_str(&text).ok()?;
+    Some((v.get("x")?.as_f64()?, v.get("y")?.as_f64()?))
+}
+
 /// What the tasks share, all on the one service thread.
 #[derive(Default)]
 struct Backend {
     snapshot: Snapshot,
+    special_shown: String,
     order: Vec<String>,
     urgent: HashSet<String>,
     outputs: Vec<Output>,
@@ -236,15 +71,13 @@ struct Backend {
 
 type Shared = Rc<RefCell<Backend>>;
 
-pub async fn run(ctx: Ctx) {
+pub async fn run(ctx: Ctx, rx: async_channel::Receiver<Command>) {
     if let Err(err) = socket_dir() {
         eprintln!("hyprland: {err}");
         return;
     }
     let shared: Shared = Rc::default();
     let (dirty_tx, dirty_rx) = async_channel::bounded::<()>(1);
-    let (tx, rx) = async_channel::unbounded();
-    let _ = COMMANDS.set(tx);
 
     ctx.spawn(refresher(ctx.clone(), shared.clone(), dirty_rx));
     ctx.spawn(commands(ctx.clone(), shared.clone(), rx, dirty_tx.clone()));
@@ -295,11 +128,11 @@ async fn events(ctx: Ctx, shared: Shared, dirty: async_channel::Sender<()>) {
                     let next = shared.borrow().keyboard.as_ref().map(|k| keyboard::apply_active_layout(k, data));
                     if let Some(layout) = next {
                         shared.borrow_mut().keyboard = Some(layout.clone());
-                        ctx.publish(store::Diff::Hyprland(Diff::Keyboard(layout)));
+                        ctx.publish(store::Diff::Compositor(Diff::Keyboard(layout)));
                     }
                 }
                 "configreloaded" => {
-                    ctx.publish(store::Diff::Hyprland(Diff::ConfigReloaded));
+                    ctx.publish(store::Diff::Compositor(Diff::ConfigReloaded));
                     refresh_outputs(&ctx, &shared).await;
                     refresh_keyboard(&ctx, &shared).await;
                 }
@@ -316,7 +149,7 @@ async fn events(ctx: Ctx, shared: Shared, dirty: async_channel::Sender<()>) {
         // Gone until it answers again: the honest unavailable state, not
         // the last model it reported.
         shared.borrow_mut().snapshot = Snapshot::default();
-        ctx.publish(store::Diff::Hyprland(Diff::Compositor(Snapshot::default())));
+        ctx.publish(store::Diff::Compositor(Diff::Snapshot(Snapshot::default())));
     }
 }
 
@@ -343,14 +176,16 @@ async fn refresh_compositor(ctx: &Ctx, shared: &Shared) {
     };
     let snapshot = {
         let mut b = shared.borrow_mut();
-        let mut snapshot = model::snapshot(&monitors, &workspaces, &clients, &active, &b.urgent);
-        snapshot.windows = model::keep_order(&mut b.order, snapshot.windows);
+        let read = model::snapshot(&monitors, &workspaces, &clients, &active, &b.urgent);
+        let mut snapshot = read.snapshot;
+        b.special_shown = read.special_shown;
+        snapshot.windows = common::keep_order(&mut b.order, snapshot.windows);
         let live: HashSet<&str> = snapshot.windows.iter().filter(|w| w.is_urgent).map(|w| w.id.as_str()).collect();
         b.urgent.retain(|id| live.contains(id.as_str()));
         b.snapshot = snapshot.clone();
         snapshot
     };
-    ctx.publish(store::Diff::Hyprland(Diff::Compositor(snapshot)));
+    ctx.publish(store::Diff::Compositor(Diff::Snapshot(snapshot)));
 }
 
 /// `monitors all`: the only enumeration that lists a disabled output, which
@@ -365,7 +200,7 @@ async fn refresh_outputs(ctx: &Ctx, shared: &Shared) {
     };
     crate::services::display::outputs_changed(ctx, &rows);
     shared.borrow_mut().outputs = rows.clone();
-    ctx.publish(store::Diff::Hyprland(Diff::Outputs(rows, state)));
+    ctx.publish(store::Diff::Compositor(Diff::Outputs(rows, state)));
 }
 
 async fn refresh_keyboard(ctx: &Ctx, shared: &Shared) {
@@ -374,7 +209,7 @@ async fn refresh_keyboard(ctx: &Ctx, shared: &Shared) {
         Err(_) => keyboard::unavailable(),
     };
     shared.borrow_mut().keyboard = Some(layout.clone());
-    ctx.publish(store::Diff::Hyprland(Diff::Keyboard(layout)));
+    ctx.publish(store::Diff::Compositor(Diff::Keyboard(layout)));
 }
 
 async fn dispatch(lua: &str) {
@@ -411,8 +246,21 @@ async fn commands(
 ) {
     while let Ok(command) = rx.recv().await {
         match command {
-            Command::Dispatch(lua) => dispatch(&lua).await,
-            Command::Eval(lua) => eval(&ctx, &lua).await,
+            Command::FocusWorkspace(id) => dispatch(&lua::focus_workspace(&id)).await,
+            // Hyprland's `workspace` dispatcher makes the workspace on the
+            // focused monitor; it has no per-output slots.
+            Command::FocusWorkspaceAt { idx, .. } => dispatch(&lua::focus_workspace(&idx.to_string())).await,
+            Command::FocusWindow(id) => dispatch(&lua::focus_window(&id)).await,
+            Command::CloseWindow(id) => dispatch(&lua::close_window(&id)).await,
+            Command::Spawn(argv) => dispatch(&lua::spawn(&argv)).await,
+            Command::EscapeBind { name, argv } => {
+                let lua = match argv {
+                    Some(argv) => lua::bind_escape(name, &argv),
+                    None => lua::unbind(name),
+                };
+                eval(&ctx, &lua).await;
+            }
+            Command::WorkspaceNames(_) => {}
             Command::FloatWindow(id) => {
                 let floating = shared.borrow().snapshot.windows.iter().any(|w| w.id == id && w.is_floating);
                 if !floating {
@@ -464,16 +312,14 @@ async fn commands(
 /// The console lives on its special workspace for good; showing it is the
 /// compositor's own toggle of that workspace. `show` false parks it.
 async fn park(ctx: &Ctx, shared: &Shared, id: &str, show: bool) {
-    let on_special = shared
-        .borrow()
-        .snapshot
-        .windows
-        .iter()
-        .any(|w| w.id == id && w.workspace_id.parse::<i64>().is_ok_and(|n| n < 0));
+    let on_special = {
+        let b = shared.borrow();
+        b.snapshot.parked.iter().chain(&b.snapshot.overlaid).any(|w| w == id)
+    };
     if !on_special {
         dispatch(&lua::park_window(id)).await;
     }
-    let shown = shared.borrow().snapshot.special_shown == lua::PARK_WORKSPACE;
+    let shown = shared.borrow().special_shown == lua::PARK_WORKSPACE;
     if shown != show {
         dispatch(&lua::toggle_special()).await;
         refresh_compositor(ctx, shared).await;

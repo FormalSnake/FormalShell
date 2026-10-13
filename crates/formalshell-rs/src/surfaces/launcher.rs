@@ -28,7 +28,7 @@ use crate::motion::{Animated, Kind as Clock};
 use crate::scene::{IRect, NodeId};
 use crate::scroll::{Touchpad, Travel};
 use crate::services::menu::{self as index, Ask};
-use crate::services::{hyprland, state};
+use crate::services::{compositor, state};
 use crate::store::Store;
 use crate::surfaces::bar::cell::{Kit, Painter};
 use crate::surfaces::modal::Modal;
@@ -677,7 +677,7 @@ impl Model {
                 store.menu.emoji.as_ref().map_or_else(Vec::new, |e| e.rows(eq, paste, &uses, None))
             }
             Mode::Menu if level == Some("keybinds") || keys_q.is_some() => {
-                let reply = store.menu.binds.as_ref().map(|r| r.as_ref().map(|t| &**t).map_err(|_| ()));
+                let reply = store.menu.binds.as_ref().map(|r| r.as_deref().map_err(|_| ()));
                 fs_menu::keybinds::rows_for(reply, keys_q.unwrap_or(q))
             }
             Mode::Menu if level == Some("radio.search") || radio_q.is_some() => radio_search_rows(store, radio_q.unwrap_or(q)),
@@ -1332,18 +1332,18 @@ impl Model {
             NodeKind::App => {
                 let Some(entry) = node.entry.clone() else { return Out::None };
                 let windows: Vec<fs_menu::appmatch::Window> = store
-                    .hyprland
                     .compositor
+                    .snapshot
                     .windows
                     .iter()
                     .map(|w| fs_menu::appmatch::Window { id: w.id.clone(), app_id: w.app_id.clone(), ..Default::default() })
                     .collect();
                 let matches = fs_menu::appmatch::match_windows(Some(&entry), &windows);
-                let target = fs_menu::appmatch::next_window(&matches, &store.hyprland.compositor.focused_window_id);
+                let target = fs_menu::appmatch::next_window(&matches, &store.compositor.snapshot.focused_window_id);
                 if !target.is_empty() {
-                    hyprland::focus_window(&target);
+                    compositor::focus_window(&target);
                 } else if let Some(argv) = index::launch_argv(&store.menu, &entry.id) {
-                    hyprland::spawn(&argv);
+                    compositor::spawn(&argv);
                 }
                 record_launch(store, &entry.id);
                 self.close();
@@ -1468,7 +1468,7 @@ impl Model {
         }
         if let Some(kq) = fs_menu::keybinds::trigger_query(q) {
             index::ask(Ask::Binds);
-            let reply = store.menu.binds.as_ref().map(|r| r.as_ref().map(|t| &**t).map_err(|_| ()));
+            let reply = store.menu.binds.as_ref().map(|r| r.as_deref().map_err(|_| ()));
             return Value::Array(
                 fs_menu::keybinds::rows_for(reply, kq)
                     .iter()

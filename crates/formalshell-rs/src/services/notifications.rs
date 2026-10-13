@@ -378,7 +378,7 @@ impl State {
     pub fn invoke_action(&mut self, id: &str, key: &str) {
         if id.starts_with("local-") {
             if let Some(a) = self.local_commands.get(id).and_then(|acts| acts.iter().find(|a| a.key == key)) {
-                super::hyprland::spawn(&a.argv);
+                super::compositor::spawn(&a.argv);
                 return;
             }
             self.local_invoked.push((id.to_owned(), key.to_owned()));

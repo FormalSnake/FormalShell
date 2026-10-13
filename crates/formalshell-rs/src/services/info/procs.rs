@@ -17,7 +17,7 @@ use serde_json::{Value, json};
 use super::monitor::now_ms;
 use super::{changed, idle, kicked, settings};
 use crate::runtime::Ctx;
-use crate::services::hyprland;
+use crate::services::compositor;
 use crate::services::proc;
 use crate::services::wants::Source;
 use crate::store;
@@ -249,7 +249,7 @@ async fn restart_task(ctx: &Ctx, pid: u64) {
             return fail(&format!("still running {}s after TERM, nothing re-run", RESTART_TIMEOUT.as_secs()));
         }
     }
-    hyprland::spawn(&procs::respawn_command(&args, &cwd));
+    compositor::spawn(&procs::respawn_command(&args, &cwd));
     finish(ctx, pid, "RESTART", true, &format!("re-ran {}", args[0]));
 }
 

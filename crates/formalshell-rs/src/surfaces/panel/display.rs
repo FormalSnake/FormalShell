@@ -17,10 +17,10 @@ use fs_system::display::outputs::{self, Output};
 
 use super::{Effect, Panel, View};
 use crate::services::display::{self, Brightness};
-use crate::services::hyprland::{self, Command};
+use crate::services::compositor::{self, Command};
 use crate::services::wants::{Source, Want};
 use crate::store::{Store, Topic};
-use crate::services::hyprland::OutputsState;
+use crate::services::compositor::OutputsState;
 use crate::ui::{El, Event, Ink, Type, What, w};
 
 /// The brightness step, the wheel's and the keyboard's.
@@ -37,7 +37,7 @@ impl Display {
 }
 
 fn sorted(store: &Store) -> Vec<Output> {
-    outputs::sort_outputs(&store.hyprland.outputs)
+    outputs::sort_outputs(&store.compositor.outputs)
 }
 
 fn hdr_names(store: &Store, rows: &[Output]) -> Vec<String> {
@@ -45,7 +45,7 @@ fn hdr_names(store: &Store, rows: &[Output]) -> Vec<String> {
 }
 
 fn focused(store: &Store) -> &str {
-    &store.hyprland.compositor.focused_output_name
+    &store.compositor.snapshot.focused_output_name
 }
 
 fn mirror_actionable(store: &Store, rows: &[Output]) -> bool {
@@ -54,16 +54,16 @@ fn mirror_actionable(store: &Store, rows: &[Output]) -> bool {
 
 fn set_scale(row: &Output, scale: f64) {
     if outputs::quantize_scale(scale) != outputs::quantize_scale(row.scale) {
-        hyprland::send(Command::SetOutputScale(row.name.clone(), scale));
+        compositor::send(Command::SetOutputScale(row.name.clone(), scale));
     }
 }
 
 fn toggle_output(rows: &[Output], name: &str) {
-    if !display::config_available() || !outputs::can_toggle(rows, name) {
+    if !display::enable_available() || !outputs::can_toggle(rows, name) {
         return;
     }
     if let Some(row) = outputs::find_output(rows, name) {
-        hyprland::send(Command::SetOutputEnabled(name.to_owned(), !row.enabled));
+        compositor::send(Command::SetOutputEnabled(name.to_owned(), !row.enabled));
     }
 }
 
@@ -75,14 +75,14 @@ fn set_mirror(store: &Store, rows: &[Output], on: bool) {
     }
     if !on {
         for name in outputs::mirrored_names(rows) {
-            hyprland::send(Command::SetOutputMirror(name, String::new()));
+            compositor::send(Command::SetOutputMirror(name, String::new()));
         }
         return;
     }
     let plan = outputs::mirror_plan(rows, focused(store));
     if plan.ok {
         for target in plan.targets {
-            hyprland::send(Command::SetOutputMirror(target, plan.primary.clone()));
+            compositor::send(Command::SetOutputMirror(target, plan.primary.clone()));
         }
     }
 }
@@ -111,7 +111,7 @@ fn output_row(v: &View, rows: &[Output], row: &Output, main: &str) -> El {
     if configurable {
         head.push(w::value(outputs::format_scale(row.scale)));
     }
-    let toggles = display::config_available() && outputs::can_toggle(rows, &row.name);
+    let toggles = display::enable_available() && outputs::can_toggle(rows, &row.name);
     head.push(w::switch(row.enabled).enabled(toggles).on(format!("enable:{}", row.name)));
 
     let mut lines = vec![w::row(s.icon_gap, head).fill()];
@@ -173,7 +173,7 @@ impl Panel for Display {
     }
 
     fn reads(&self) -> &'static [Topic] {
-        &[Topic::Hyprland, Topic::Display, Topic::State, Topic::Config]
+        &[Topic::Compositor, Topic::Display, Topic::State, Topic::Config]
     }
 
     fn body(&self, v: &View) -> El {
@@ -196,7 +196,7 @@ impl Panel for Display {
         }
 
         if rows.is_empty() {
-            let text = match store.hyprland.outputs_state {
+            let text = match store.compositor.outputs_state {
                 OutputsState::Failed => "Cannot read outputs",
                 OutputsState::Ok => "No outputs",
                 OutputsState::Unknown => "Loading",

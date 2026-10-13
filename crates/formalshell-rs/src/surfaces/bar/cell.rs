@@ -39,8 +39,9 @@ pub enum Action {
     /// Open or close the chevron's second bar for its region.
     Overflow(Region),
     Workspace(String),
-    /// A persistent placeholder has no id: the workspace by ordinal.
-    WorkspaceAt(i64),
+    /// A persistent placeholder has no id: the workspace by ordinal, on
+    /// the cell's output.
+    WorkspaceAt(i64, String),
     Window(String),
     /// A click on one tray item; `offset` is that item's centre along the
     /// strip from the cell's own centre, for a menu to hang under it.

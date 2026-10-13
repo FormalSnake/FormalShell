@@ -82,7 +82,7 @@ pub struct Cands {
 }
 
 impl Cands {
-    pub fn new(screens: &[Screen], windows: &[crate::services::hyprland::model::Window], focused_output: &str) -> Self {
+    pub fn new(screens: &[Screen], windows: &[crate::services::compositor::model::Window], focused_output: &str) -> Self {
         let outputs = screens
             .iter()
             .map(|s| Entry { kind: EntryKind::Output, label: s.name.clone(), sublabel: String::new(), window_id: String::new(), rect: Some(s.rect) })
@@ -317,7 +317,7 @@ impl Picker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::services::hyprland::model::{Rect, Window};
+    use crate::services::compositor::model::{Rect, Window};
 
     fn win(id: &str, title: &str, rect: Option<(i64, i64, i64, i64)>) -> Window {
         Window {

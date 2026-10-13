@@ -6,7 +6,7 @@ use fs_system::display::outputs;
 
 use super::registry::{Function, Target, Type, Value};
 use crate::services::display;
-use crate::services::hyprland::{self, Command};
+use crate::services::compositor::{self, Command};
 use crate::wayland::App;
 
 fn text(s: impl Into<String>) -> Value {
@@ -49,7 +49,11 @@ fn refuse(app: &App, output: &str) -> Option<Value> {
     if !display::config_available() {
         return Some(text("no compositor"));
     }
-    if outputs::find_output(&app.store.hyprland.outputs, output).is_none() {
+    unknown(app, output)
+}
+
+fn unknown(app: &App, output: &str) -> Option<Value> {
+    if outputs::find_output(&app.store.compositor.outputs, output).is_none() {
         return Some(text(format!("unknown output: {output}")));
     }
     None
@@ -60,7 +64,7 @@ fn scale(app: &mut App, args: &[Value]) -> Value {
     if let Some(no) = refuse(app, output) {
         return no;
     }
-    hyprland::send(Command::SetOutputScale(output.to_owned(), args[1].real()));
+    compositor::send(Command::SetOutputScale(output.to_owned(), args[1].real()));
     text("ok")
 }
 
@@ -73,23 +77,26 @@ fn mirror(app: &mut App, args: &[Value]) -> Value {
     if let Some(no) = refuse(app, output) {
         return no;
     }
-    hyprland::send(Command::SetOutputMirror(output.to_owned(), args[1].str().to_owned()));
+    compositor::send(Command::SetOutputMirror(output.to_owned(), args[1].str().to_owned()));
     text("ok")
 }
 
 fn enable(app: &mut App, args: &[Value]) -> Value {
     let output = args[0].str();
-    if let Some(no) = refuse(app, output) {
+    if !display::enable_available() {
+        return text("no compositor");
+    }
+    if let Some(no) = unknown(app, output) {
         return no;
     }
-    hyprland::send(Command::SetOutputEnabled(output.to_owned(), args[1].bool()));
+    compositor::send(Command::SetOutputEnabled(output.to_owned(), args[1].bool()));
     text("ok")
 }
 
 /// `delta` percent on the focused output: its backlight on a laptop's own
 /// panel, DDC on a monitor.
 fn brightness_step(app: &mut App, args: &[Value]) -> Value {
-    let output = app.store.hyprland.compositor.focused_output_name.clone();
+    let output = app.store.compositor.snapshot.focused_output_name.clone();
     match app.brightness_step(&output, args[0].int().into()) {
         Ok(()) => text("ok"),
         Err(why) => text(why),

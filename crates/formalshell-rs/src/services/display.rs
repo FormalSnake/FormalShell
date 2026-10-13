@@ -27,7 +27,7 @@ use fs_system::monitor::gpu;
 use serde_json::Value;
 
 use crate::runtime::Ctx;
-use crate::services::hyprland::{self, Command};
+use crate::services::compositor::{self, Command};
 use crate::services::state::{self, Field};
 use crate::store::{self, Store};
 
@@ -457,20 +457,28 @@ pub async fn run(ctx: Ctx) {
         publish(&ctx, Diff::Cards(cards));
     }
     loop {
-        hyprland::send(Command::RefreshOutputs);
+        compositor::send(Command::RefreshOutputs);
         Timer::after(REFRESH).await;
     }
 }
 
 // HDR, answered on the UI thread.
 
-/// Whether output config can be sent: a compositor to talk to.
+/// Whether output config can be sent: a Hyprland to take monitor rules.
+/// mango has no runtime scale, mirror or colour mode, so its outputs are
+/// read only.
 pub fn config_available() -> bool {
-    std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some()
+    compositor::kind() == compositor::Kind::Hyprland && std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some()
+}
+
+/// Whether an output can be switched on and off: Hyprland's monitor rule,
+/// or mango's `enable_monitor` and `disable_monitor`.
+pub fn enable_available() -> bool {
+    config_available() || (compositor::kind() == compositor::Kind::Mango && std::env::var_os("MANGO_INSTANCE_SIGNATURE").is_some())
 }
 
 fn rows(store: &Store) -> &[Output] {
-    &store.hyprland.outputs
+    &store.compositor.outputs
 }
 
 /// The SDR level while HDR is on; at 1.0 SDR windows read dim next to the
@@ -498,7 +506,7 @@ pub fn hdr_on(store: &Store, name: &str) -> bool {
 }
 
 fn apply(name: &str, color: outputs::Color) {
-    hyprland::send(Command::SetOutputColor(name.to_owned(), color));
+    compositor::send(Command::SetOutputColor(name.to_owned(), color));
 }
 
 /// Sets HDR on an output: "ok" or why nothing was done.
@@ -634,7 +642,7 @@ pub fn reconcile(store: &Store) {
     if !store.state.loaded {
         return;
     }
-    let reloads = store.hyprland.config_reloads;
+    let reloads = store.compositor.config_reloads;
     TRIED.with_borrow_mut(|tried| {
         if RELOADS.with_borrow(|r| *r != reloads) {
             RELOADS.with_borrow_mut(|r| *r = reloads);
@@ -654,7 +662,7 @@ pub fn reconcile(store: &Store) {
 pub fn main_output(store: &Store) -> String {
     let names: Vec<String> = rows(store).iter().filter(|r| r.enabled).map(|r| r.name.clone()).collect();
     let prio = store.config.get("display.outputPriority").cloned().unwrap_or(Value::Array(Vec::new()));
-    priority::resolve_main_output(&names, &priority::priority_list(&prio), &store.hyprland.compositor.focused_output_name, "")
+    priority::resolve_main_output(&names, &priority::priority_list(&prio), &store.compositor.snapshot.focused_output_name, "")
 }
 
 #[cfg(test)]

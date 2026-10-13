@@ -27,11 +27,11 @@ struct Held {
 
 impl Cell for ActiveWindow {
     fn reads(&self) -> &'static [Topic] {
-        &[Topic::Hyprland, Topic::AppIcon]
+        &[Topic::Compositor, Topic::AppIcon]
     }
 
     fn read(&mut self, env: &Env) -> bool {
-        let h = &env.store.hyprland;
+        let h = &env.store.compositor;
         let held = h.held_focused_window_id();
         let Some(w) = h.window(&held) else {
             let changed = self.window.is_some();

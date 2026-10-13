@@ -57,9 +57,9 @@ fn metrics(v: &View) -> Vec<Metric> {
 }
 
 fn main_output(v: &View) -> String {
-    let names: Vec<String> = v.store.hyprland.outputs.iter().filter(|o| o.enabled).map(|o| o.name.clone()).collect();
+    let names: Vec<String> = v.store.compositor.outputs.iter().filter(|o| o.enabled).map(|o| o.name.clone()).collect();
     let list = priority::priority_list(v.store.config.get("display.outputPriority").unwrap_or(&serde_json::Value::Null));
-    priority::resolve_main_output(&names, &list, &v.store.hyprland.compositor.focused_output_name, "")
+    priority::resolve_main_output(&names, &list, &v.store.compositor.snapshot.focused_output_name, "")
 }
 
 impl Panel for Monitor {
@@ -76,7 +76,7 @@ impl Panel for Monitor {
     }
 
     fn reads(&self) -> &'static [Topic] {
-        &[Topic::Info, Topic::Hyprland, Topic::Config]
+        &[Topic::Info, Topic::Compositor, Topic::Config]
     }
 
     fn width(&self, v: &View) -> f64 {
