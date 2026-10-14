@@ -73,6 +73,24 @@ pub(super) fn elided(cx: &mut Cx, s: &str, font: &Font, max: f64) -> ShapedText 
 /// `text` broken on spaces to lines no wider than `max`, newlines kept, the
 /// last line that fits `lines` ending in an ellipsis when words are left.
 fn wrapped(cx: &mut Cx, text: &str, font: &Font, max: f64, lines: usize) -> Vec<ShapedText> {
+    let st = style(cx, font);
+    let key = super::WrapKey { text: text.to_owned(), style: format!("{st:?}"), max: max.to_bits(), lines };
+    let frame = cx.ui.frame;
+    if let Some(w) = cx.ui.wraps.get_mut(&key) {
+        w.seen = frame;
+        if let Some(seen) = &mut cx.kit.seen
+            && !seen.contains(&st)
+        {
+            seen.push(st);
+        }
+        return w.lines.clone();
+    }
+    let lines = wrap_now(cx, text, font, max, lines);
+    cx.ui.wraps.insert(key, super::Wrapped { lines: lines.clone(), seen: frame });
+    lines
+}
+
+fn wrap_now(cx: &mut Cx, text: &str, font: &Font, max: f64, lines: usize) -> Vec<ShapedText> {
     let mut out: Vec<String> = Vec::new();
     for para in text.split('\n') {
         let mut line = String::new();

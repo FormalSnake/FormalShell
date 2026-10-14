@@ -126,6 +126,19 @@ pub struct Drawn {
     pub wake: Option<Instant>,
 }
 
+#[derive(Hash, PartialEq, Eq)]
+struct WrapKey {
+    text: String,
+    style: String,
+    max: u64,
+    lines: usize,
+}
+
+struct Wrapped {
+    lines: Vec<crate::text::ShapedText>,
+    seen: u64,
+}
+
 /// Everything that persists for one surface between draws.
 pub struct Ui {
     groups: HashMap<String, Group>,
@@ -133,6 +146,10 @@ pub struct Ui {
     panes: HashMap<String, lyrics::Pane>,
     tweens: HashMap<String, Tween>,
     births: HashMap<String, Instant>,
+    /// Each paragraph's lines by text, style, width and line cap. Wrapping
+    /// shapes every word prefix, so a long list of them overran the shaper's
+    /// cache and reshaped all of it on every frame.
+    wraps: HashMap<WrapKey, Wrapped>,
     frame: u64,
     /// Nodes this surface adds go after this one in paint order.
     pub anchor: Option<NodeId>,
@@ -163,6 +180,7 @@ impl Ui {
             panes: HashMap::new(),
             tweens: HashMap::new(),
             births: HashMap::new(),
+            wraps: HashMap::new(),
             frame: 0,
             anchor,
             hits: Vec::new(),
@@ -238,6 +256,7 @@ impl Ui {
         self.tweens.retain(|_, t| frame - t.seen < 120);
         self.spectra.retain(|_, l| frame - l.seen < 120);
         self.panes.retain(|_, l| frame - l.seen < 120);
+        self.wraps.retain(|_, w| frame - w.seen < 120);
         drawn
     }
 
