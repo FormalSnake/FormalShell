@@ -15,10 +15,14 @@
 # phone's side. The agent is only registered while advertising, the window
 # the user opened to pair.
 #
+# The busy patch retries the mode changes that end pairing. BlueZ answers
+# Busy while the controller settles the fresh bond, and giving up there left
+# the adapter discoverable and pairable with the agent still registered.
+#
 # The reconnect patch keeps a connectable, non-discoverable advert up while a
-# bonded phone's LE link is down. The iPhone reconnects ANCS and AMS only to
+# bonded phone's GATT link is down. The iPhone reconnects ANCS and AMS only to
 # a bonded peripheral it sees advertising, and pairing turns the advert off
-# when it ends, so any LE drop otherwise stayed down until the next pairing.
+# when it ends, so a dropped link otherwise stayed down until the next pairing.
 { lib, python3, fetchFromGitHub, fetchpatch }:
 
 python3.pkgs.buildPythonApplication rec {
@@ -39,6 +43,7 @@ python3.pkgs.buildPythonApplication rec {
       hash = "sha256-PKHnQ9/412aMVdznqwQ2KDPgufDWLfbqFgexu4dvBwc=";
     })
     ./ancs4linux-authorize.patch
+    ./ancs4linux-busy.patch
     ./ancs4linux-reconnect.patch
   ];
 

@@ -11,10 +11,10 @@
 # which is what a phone that is not GATT-ready yet produces right after the
 # bridge sees it connect.
 #
-# The bond patch makes `listen` report connected off the LE bearer alone
-# (BlueZ keeps Device1.Connected true over a BR/EDR audio link with LE down,
-# where ANCS and AMS cannot reach the phone, so that bearer goes out as
-# `linked` on its own), reports a phone BlueZ still
+# The bond patch makes `listen` report connected only while the GATT link is
+# up (an iPhone serves ANCS over LE or BR/EDR, and BlueZ keeps
+# Device1.Connected true over an audio link whose ATT channel is down, so
+# that goes out as `linked` on its own), reports a phone BlueZ still
 # holds a bond for while it is not connected, and gives `pair` a `--forget`
 # that drops that one device's keys before advertising: a phone that forgot
 # this machine fails every new pairing while BlueZ holds the old ones.

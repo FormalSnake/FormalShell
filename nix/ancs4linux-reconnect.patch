@@ -18,7 +18,7 @@
  
 --- /dev/null
 +++ b/ancs4linux/advertising/reconnect.py
-@@ -0,0 +1,107 @@
+@@ -0,0 +1,103 @@
 +import logging
 +from typing import Any, Callable, Set
 +
@@ -34,14 +34,14 @@
 +
 +class ReconnectAdvertiser:
 +    """Keeps a connectable advert up on every adapter holding a bond with a
-+    phone whose LE link is down.
++    phone whose GATT link is down.
 +
-+    The iPhone is the LE central for ANCS and AMS, so after the link drops it
-+    only comes back by connecting to a bonded peripheral it sees advertising.
-+    BlueZ keeps Device1.Connected true over a BR/EDR audio link, so the LE
-+    bearer is read on its own. The adapter's own Discoverable and Pairable are
-+    left alone and no agent is registered: only a phone holding the keys gets
-+    back in.
++    The iPhone opens the GATT link ANCS and AMS ride on, so once it drops the
++    phone only comes back by connecting to a bonded peripheral it sees
++    advertising. Device1.Connected stays true over an A2DP or HFP link whose
++    ATT channel is down, so ServicesResolved is read with it. The adapter's
++    own Discoverable and Pairable are left alone and no agent is registered:
++    only a phone holding the keys gets back in.
 +    """
 +
 +    ADDRESS = ObjPath("/reconnect")
@@ -83,11 +83,7 @@
 +            icon = device["Icon"].unpack() if "Icon" in device else ""
 +            if ANCS_SERVICE not in uuids and icon != "phone":
 +                continue
-+            bearer = services.get("org.bluez.Bearer.LE1")
-+            if bearer is not None and "Connected" in bearer:
-+                up = bearer["Connected"].unpack()
-+            else:
-+                up = device["Connected"].unpack()
++            up = device["Connected"].unpack() and device["ServicesResolved"].unpack()
 +            adapter = device["Adapter"].unpack()
 +            if not up and adapter in powered:
 +                wanted.add(adapter)

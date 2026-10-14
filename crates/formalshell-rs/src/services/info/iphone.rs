@@ -197,7 +197,14 @@ impl Session {
                     self.state.bond_address.clear();
                 }
             }
-            Event::Error { message } => self.state.last_error = message,
+            Event::Error { message } => {
+                // The pair run failed before it advertised.
+                if self.state.advertising && self.advertising_hci.is_empty() {
+                    self.state.advertising = false;
+                    self.saw_unpaired = false;
+                }
+                self.state.last_error = message;
+            }
         }
         self.state != before
     }
@@ -435,6 +442,12 @@ fn handle(ctx: &Ctx, session: &mut Session, cmd: Cmd, inbox: &(async_channel::Se
                 argv.extend(["--forget".to_owned(), session.state.bond_address.clone()]);
             }
             ctx.spawn(run_child(argv, inbox.0.clone(), false));
+            // Advertising from the press on, not from the bridge's line: a
+            // second EnableAdvertising while the first is still settling
+            // tears it down and fails the mode change with Busy.
+            session.state.advertising = true;
+            session.pair_generation += 1;
+            session.restart_timer = true;
             true
         }
     }
@@ -543,6 +556,17 @@ mod tests {
         s.event(iphone::parse_event(r#"{"type":"status","observer":true,"paired":false,"address":""}"#).unwrap());
         s.event(iphone::parse_event(r#"{"type":"status","observer":true,"paired":true,"address":"AA"}"#).unwrap());
         assert!(s.finish_pairing);
+    }
+
+    #[test]
+    fn a_pair_run_failing_before_it_advertises_ends_pairing() {
+        let mut s = Session::default();
+        s.state.advertising = true;
+        s.event(iphone::parse_event(r#"{"type":"error","message":"Busy"}"#).unwrap());
+        assert!(!s.state.advertising);
+        s.event(iphone::parse_event(r#"{"type":"advertising","hci":"hci0","name":"x"}"#).unwrap());
+        s.event(iphone::parse_event(r#"{"type":"error","message":"later"}"#).unwrap());
+        assert!(s.state.advertising, "an error once advertising is up leaves the window open");
     }
 
     #[test]

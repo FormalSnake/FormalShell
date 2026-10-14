@@ -87,9 +87,9 @@ pub struct Notification {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Status {
     pub observer: bool,
-    /// Over LE, the only bearer ANCS and AMS ride.
+    /// The GATT link ANCS and AMS ride is up, over LE or BR/EDR.
     pub connected: bool,
-    /// Over any bearer: a BR/EDR audio link with LE down still counts.
+    /// Any link at all: an audio link with GATT down still counts.
     pub linked: bool,
     pub paired: bool,
     pub address: String,

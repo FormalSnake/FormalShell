@@ -1,28 +1,26 @@
 --- a/bin/omarchy-iphone-bridge
 +++ b/bin/omarchy-iphone-bridge
-@@ -134,8 +134,20 @@
+@@ -134,8 +134,18 @@
          return -1
  
  
-+def le_connected(interfaces, device):
-+    """ANCS and AMS ride the LE link only. BlueZ 5.81+ reports each bearer on
-+    its own, and Device1.Connected stays true over a BR/EDR link (A2DP, HFP)
-+    with LE down, where every GATT call answers "Not connected".
++def gatt_connected(device):
++    """ANCS and AMS need a live GATT link, which an iPhone serves over LE or
++    over BR/EDR. Device1.Connected stays true over an A2DP or HFP link whose
++    ATT channel is down, where every GATT call answers "Not connected";
++    ServicesResolved drops with that channel.
 +    """
-+    bearer = interfaces.get("org.bluez.Bearer.LE1")
-+    if bearer is not None:
-+        return bool(bearer.get("Connected"))
-+    return bool(device.get("Connected"))
++    return bool(device.get("Connected")) and bool(device.get("ServicesResolved"))
 +
 +
  def connected_phone(bus):
 -    """Return {name, address, battery} for a connected ANCS device, else None."""
 +    """Return {name, address, battery, connected, linked, paired} for the ANCS phone
-+    BlueZ knows, connected over LE first, then one only bonded, else None."""
++    BlueZ knows, GATT-connected first, then one only bonded, else None."""
      try:
          reply = bus.call_sync(
              "org.bluez",
-@@ -152,24 +164,38 @@
+@@ -152,24 +162,38 @@
          return None
  
      objects = reply.unpack()[0]
@@ -35,7 +33,7 @@
 +        if not device:
              continue
 -        info = {
-+        connected = le_connected(interfaces, device)
++        connected = gatt_connected(device)
 +        paired = bool(device.get("Paired"))
 +        if not connected and not paired:
 +            continue
@@ -73,7 +71,7 @@
  
  
  # --------------------------------------------------------------------------
-@@ -238,7 +264,8 @@
+@@ -238,7 +262,8 @@
  
      # Daemon availability, so the bar can say "not running" instead of lying
      # with a silent empty list.
@@ -83,7 +81,7 @@
  
      def daemon_installed():
          return any(
-@@ -251,7 +278,10 @@
+@@ -251,7 +276,10 @@
              "type": "status",
              "observer": state["observer"],
              "connected": state["connected"],
@@ -94,7 +92,7 @@
              "battery": state["battery"],
              "installed": daemon_installed(),
          })
-@@ -263,7 +293,10 @@
+@@ -263,7 +291,10 @@
      def on_name_lost(_conn, _name):
          state["observer"] = False
          state["connected"] = False
@@ -105,7 +103,7 @@
          state["battery"] = -1
          push_status()
  
-@@ -273,15 +306,20 @@
+@@ -273,15 +304,20 @@
      )
  
      def poll_connection():
@@ -135,7 +133,7 @@
              push_status()
          return True
  
-@@ -370,6 +408,38 @@
+@@ -370,6 +406,38 @@
      return 0
  
  
@@ -174,7 +172,7 @@
  def cmd_pair(args):
      """Advertise over BLE so the iPhone can find and pair with this machine."""
      bus = system_bus()
-@@ -382,6 +452,8 @@
+@@ -382,6 +450,8 @@
              emit({"type": "error", "message": "No Bluetooth LE adapter found"})
              return 1
          address = args.hci or adapters[0]
@@ -183,7 +181,7 @@
          bus.call_sync(
              ADVERTISING, OBJ_PATH, ADVERTISING, "EnableAdvertising",
              GLib.Variant("(ss)", (address, args.name)),
-@@ -427,6 +499,7 @@
+@@ -427,6 +497,7 @@
      p_pair = sub.add_parser("pair")
      p_pair.add_argument("--name", default="Omarchy")
      p_pair.add_argument("--hci", default="")

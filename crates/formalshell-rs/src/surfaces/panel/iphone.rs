@@ -184,7 +184,7 @@ impl Panel for Iphone {
             } else if pairing {
                 "Advertising for pairing"
             } else if stale_bond && st.linked {
-                "Waiting for the phone to reconnect over Bluetooth LE"
+                "Waiting for the phone to reconnect"
             } else if stale_bond {
                 "Paired here, not on the phone? Pair again"
             } else {
