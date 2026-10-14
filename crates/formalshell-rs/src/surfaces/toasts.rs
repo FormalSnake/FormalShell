@@ -202,10 +202,13 @@ fn bubble(theme: &Theme, g: &Group, now: i64, picture: Option<Bitmap>, hovered: 
     };
     let mark = if e.source == "iphone" { mark.badge("smartphone") } else { mark };
     let mut head = vec![w::section_label(s, &e.app_name, None, false), w::caption(meta).mono().fill()];
-    // The stand-in holds the button's whole box: a row's `space` takes width
-    // alone, so the header would grow by the button's height on hover.
-    let close = w::row(0.0, Vec::new()).width(ui::Size::Px(slot)).height(slot);
-    head.push(if hovered { w::icon_button("x").on("close") } else { close });
+    // A bare caption-sized glyph rather than an icon button: the button is
+    // `controlHeight` tall, so the header grew by it on hover.
+    head.push(if hovered {
+        w::icon("x").size(Type::Caption).ink(Ink::Muted).width(ui::Size::Px(slot)).on("close")
+    } else {
+        w::space(slot)
+    });
     let mut words = vec![w::row(s.icon_gap, head), w::para(e.summary.clone(), Type::Body, Weight::Semibold, Ink::Fg, 2)];
     let body = model::sanitize_body(&e.body, &e.app_name, &e.app_icon);
     if !body.is_empty() {
