@@ -96,6 +96,7 @@ pub fn changed(app: &mut App, topic: Topic) {
             app.refresh_bar(Some(topic));
         }
         Topic::Clipboard => {
+            app.field_paste();
             app.launcher_clipboard();
             app.launcher_inputs();
         }

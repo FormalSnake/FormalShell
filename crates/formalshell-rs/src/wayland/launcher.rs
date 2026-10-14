@@ -946,12 +946,23 @@ impl App {
         };
         let text = event.utf8.as_deref().filter(|t| t.chars().all(|c| c as u32 >= 0x20 && c != '\u{7f}') && !t.is_empty());
         self.resolve_launcher();
-        let out = self.launcher.key(&self.store, key, self.mods, repeat, text);
+        let out = self.launcher.key(&self.store, key, super::field_key(event.keysym), self.mods, repeat, text);
         if self.launcher.on_mirror() {
             self.launcher_mirror();
         }
         self.launcher_resolve = true;
         self.launcher_out(out);
+        true
+    }
+
+    /// The clipboard's text into the query, while the launcher is up.
+    pub(super) fn launcher_paste(&mut self, text: &str) -> bool {
+        if !self.launcher.open || self.launch.as_ref().is_none_or(|w| !w.shown.modal.open) {
+            return false;
+        }
+        self.resolve_launcher();
+        self.launcher.paste(&self.store, text);
+        self.launcher_resolve = true;
         true
     }
 
@@ -996,7 +1007,7 @@ impl App {
                         self.picker_variant(light);
                     }
                     Some("back") => {
-                        let out = self.launcher.key(&self.store, nav::Key::Escape, nav::Modifiers::default(), false, None);
+                        let out = self.launcher.key(&self.store, nav::Key::Escape, fs_menu::field::Key::Other, nav::Modifiers::default(), false, None);
                         self.launcher_out(out);
                     }
                     Some("primary") => {

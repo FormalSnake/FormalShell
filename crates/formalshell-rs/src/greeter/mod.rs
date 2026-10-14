@@ -39,6 +39,7 @@ use smithay_client_toolkit::shell::wlr_layer::{
 };
 use smithay_client_toolkit::shm::{Shm, ShmHandler};
 use smithay_client_toolkit::{delegate_dispatch2, delegate_registry, registry_handlers};
+use fs_menu::field::Field;
 use zeroize::Zeroizing;
 
 use crate::render::Renderer;
@@ -68,12 +69,12 @@ struct Greeter {
     qh: QueueHandle<Self>,
     handle: LoopHandle<'static, Greeter>,
     keyboard: Option<wl_keyboard::WlKeyboard>,
-    ctrl: bool,
+    mods: fs_menu::nav::Modifiers,
     outs: Vec<Out>,
     theme: Theme,
     kit: Kit,
     convo: Conversation,
-    field: Zeroizing<String>,
+    field: Field<Zeroizing<String>>,
     /// The worker's end of the socket; None with no greetd to talk to.
     greetd: Option<mpsc::Sender<Request>>,
     dirty: bool,
@@ -186,7 +187,7 @@ pub fn main(args: &[String]) {
         qh: qh.clone(),
         handle: handle.clone(),
         keyboard: None,
-        ctrl: false,
+        mods: fs_menu::nav::Modifiers::default(),
         outs: Vec::new(),
         kit: Kit::new(&theme),
         theme,
@@ -213,8 +214,13 @@ pub fn main(args: &[String]) {
 }
 
 /// A typed secret's buffer, sized so typing never reallocates.
-fn field() -> Zeroizing<String> {
+fn buffer() -> Zeroizing<String> {
     Zeroizing::new(String::with_capacity(256))
+}
+
+/// Masked or not, nothing is copied out of the greeter's field.
+fn field() -> Field<Zeroizing<String>> {
+    Field::new(buffer()).secret()
 }
 
 impl Greeter {
@@ -250,18 +256,14 @@ impl Greeter {
         let enabled = self.greetd.is_some() && self.convo.input_enabled();
         match event.keysym {
             Keysym::Return | Keysym::KP_Enter if enabled => {
-                let text = std::mem::replace(&mut self.field, field());
+                let text = self.field.replace(buffer());
                 let step = self.convo.submit(text);
                 self.step(step);
             }
             Keysym::Escape => self.field = field(),
-            Keysym::u | Keysym::U if self.ctrl => self.field = field(),
-            Keysym::BackSpace => {
-                self.field.pop();
-            }
-            _ if enabled && !self.ctrl => {
-                if let Some(t) = event.utf8.as_deref().filter(|t| t.chars().all(|c| c as u32 >= 0x20 && c != '\u{7f}')) {
-                    self.field.push_str(t);
+            sym if enabled => {
+                if self.field.key(crate::wayland::field_key(sym), self.mods, event.utf8.as_deref()) == fs_menu::field::Outcome::Pass {
+                    return;
                 }
             }
             _ => return,
@@ -317,9 +319,9 @@ impl Greeter {
 }
 
 /// The column every output draws, from the conversation as it stands.
-fn shared<'a>(convo: &'a Conversation, field: &str, available: bool) -> Shared<'a> {
+fn shared<'a>(convo: &'a Conversation, field: &Field<Zeroizing<String>>, available: bool) -> Shared<'a> {
     let masked = convo.masked();
-    let text = if masked { "\u{2022}".repeat(field.chars().count()) } else { field.to_owned() };
+    let text = if masked { "\u{2022}".repeat(field.text().chars().count()) } else { field.text().to_owned() };
     Shared {
         now: Local::now(),
         prompt: Prompt {
@@ -328,6 +330,7 @@ fn shared<'a>(convo: &'a Conversation, field: &str, available: bool) -> Shared<'
             label: convo.label(),
             unavailable: if available { "" } else { NO_SOCKET },
             enabled: available && convo.input_enabled(),
+            caret: field.caret_chars(),
         },
         error: &convo.error,
         has_wallpaper: false,
@@ -374,7 +377,7 @@ fn shots(dir: &Path, settings: &Value, env: &theme::Env) {
         ];
         for (name, convo, typed, available) in states {
             let mut view = View::new(w, h);
-            view.draw(&shared(convo, typed, available), &theme, &mut kit, Instant::now());
+            view.draw(&shared(convo, &Field::new(Zeroizing::new(typed.to_owned())), available), &theme, &mut kit, Instant::now());
             let mut r = Renderer::new(w as u16, h as u16);
             r.render(&view.scene, IRect::new(0, 0, w, h));
             let rgba: Vec<u8> = r.canvas().data().iter().flat_map(|p| [p.r, p.g, p.b, p.a]).collect();
@@ -456,7 +459,7 @@ impl KeyboardHandler for Greeter {
     fn release_key(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, _: KeyEvent) {}
 
     fn update_modifiers(&mut self, _: &Connection, _: &QueueHandle<Self>, _: &wl_keyboard::WlKeyboard, _: u32, m: Modifiers, _: RawModifiers, _: u32) {
-        self.ctrl = m.ctrl;
+        self.mods = fs_menu::nav::Modifiers { ctrl: m.ctrl, shift: m.shift, alt: m.alt };
     }
 }
 

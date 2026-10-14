@@ -248,6 +248,7 @@ pub fn measure(cx: &mut Cx, el: &El, avail: f64) -> (f64, f64) {
             let seg = segment_width(cx, options);
             (seg * options.len() as f64 + s.xxs * 2.0, s.control_height)
         }
+        Kind::Edit { size, .. } => (inner, shape(cx, "Ag", &Font { size: *size, weight: Weight::Normal, mono: false }).line_height() as f64),
         Kind::Input { error, .. } => {
             let extra = match error {
                 Some(e) if !e.is_empty() => s.xs + shape(cx, e, &Font { size: Type::Caption, weight: Weight::Normal, mono: false }).line_height() as f64,
@@ -280,7 +281,7 @@ pub fn measure(cx: &mut Cx, el: &El, avail: f64) -> (f64, f64) {
         }
     };
     let w = match el.kind {
-        Kind::Grid { .. } | Kind::Track { .. } | Kind::Input { .. } | Kind::Sparkline(_) | Kind::Matrix { .. } | Kind::Flow(_) | Kind::Lyrics(_) => avail,
+        Kind::Grid { .. } | Kind::Track { .. } | Kind::Input { .. } | Kind::Edit { .. } | Kind::Sparkline(_) | Kind::Matrix { .. } | Kind::Flow(_) | Kind::Lyrics(_) => avail,
         _ => width_of(el, avail, nw + ps + pe),
     };
     (w, el.height.unwrap_or(nh) + pt + pb)
@@ -560,7 +561,24 @@ fn paint_body(cx: &mut Cx, el: &El, rect: Rect, path: &str) {
             group(cx, el, inner, options, *index, *exclusive, *cursor_index, *wrap, path, stop_key)
         }
         Kind::Segmented { options, index } => segmented(cx, el, inner, options, *index, path, stop_key),
-        Kind::Input { text, placeholder, focused, error } => input(cx, inner, text, placeholder, *focused, error.as_deref(), path),
+        Kind::Input { text, placeholder, focused, error, caret } => {
+            let end = text.chars().count();
+            let caret = focused.then(|| caret.unwrap_or((end, end)));
+            input(cx, inner, text, placeholder, caret, error.as_deref(), path)
+        }
+        Kind::Edit { text, placeholder, caret, size } => {
+            let font = Font { size: *size, weight: Weight::Normal, mono: false };
+            let room = irect(inner);
+            let line = line_parts(cx, text, placeholder, Some(*caret), &font, room.w);
+            let ty = room.y + (room.h - line.shown.line_height()) / 2;
+            let t = cx.theme;
+            let alpha = cx.alpha;
+            let mut p = cx.painter(path);
+            paint_line(&mut p, t, &line, (room.x, ty), room, alpha);
+            let last = p.last();
+            p.finish();
+            cx.done(last);
+        }
         Kind::Separator { vertical, bleed, .. } => {
             let b = cx.theme.box_style("separator", None);
             let bw = cx.theme.border_width;
@@ -991,7 +1009,9 @@ fn segmented(cx: &mut Cx, el: &El, r: Rect, options: &[String], index: usize, pa
     }
 }
 
-fn input(cx: &mut Cx, r: Rect, text: &str, placeholder: &str, focused: bool, error: Option<&str>, path: &str) {
+/// `caret` is none on an unfocused field.
+fn input(cx: &mut Cx, r: Rect, text: &str, placeholder: &str, caret: Option<(usize, usize)>, error: Option<&str>, path: &str) {
+    let focused = caret.is_some();
     let t = cx.theme;
     let s = t.space.clone();
     let state = if error.is_some() { "error" } else if focused { "focus" } else { "rest" };
@@ -1006,35 +1026,90 @@ fn input(cx: &mut Cx, r: Rect, text: &str, placeholder: &str, focused: bool, err
     let ring_a = cx.tween(&format!("{path}.ring"), if focused { 1.0 } else { 0.0 }, Clock::Effects) as f32;
     let body = Font { size: Type::Body, weight: Weight::Normal, mono: false };
     let inner_w = (frame.w as f64 - s.control_padding_x * 2.0).max(0.0);
-    let shown = if text.is_empty() { elided(cx, placeholder, &body, inner_w) } else { shape(cx, text, &body) };
-    let ink = if text.is_empty() { t.colors.get("mutedForeground") } else { t.colors.get("foreground") };
+    let line = line_parts(cx, text, placeholder, caret, &body, inner_w as i32);
     let err = error.filter(|e| !e.is_empty()).map(|e| shape(cx, e, &Font { size: Type::Caption, weight: Weight::Normal, mono: false }));
     let destructive = t.colors.get("destructive");
     let alpha = cx.alpha;
     let tx = frame.x + s.control_padding_x as i32;
-    let ty = frame.y + (frame.h - shown.line_height()) / 2;
+    let ty = frame.y + (frame.h - line.shown.line_height()) / 2;
     let mut p = cx.painter(path);
     if let Some(ring) = focus_ring.filter(|_| ring_a > 0.0) {
         let sp = ring.spread.round() as i32;
         p.rect(IRect::new(frame.x - sp, frame.y - sp, frame.w + sp * 2, frame.h + sp * 2), ring.color.with_alpha(ring.color.a * ring_a * alpha), (radius + ring.spread) as f32);
     }
     boxes::paint(&mut p, frame, &b, radius, alpha, 0.0);
-    let clip = IRect::new(tx, frame.y, inner_w as i32, frame.h);
-    let (w, h) = shown.box_size();
-    let bounds = IRect::new(tx - text::PAD, ty - text::PAD, w, h);
-    let clip = Some(p.clip.map_or(clip, |c| c.intersect(&clip)));
-    p.text_in(&shown, bounds, Affine::IDENTITY, clip, ink.with_alpha(ink.a * alpha), &[]);
-    if focused {
-        // The caret holds still rather than blinking: a blink is a clock.
-        let at = if text.is_empty() { tx } else { tx + shown.width };
-        p.rect(IRect::new(at.min(tx + inner_w as i32), ty, 1, shown.line_height()), t.colors.get("foreground").with_alpha(alpha), 0.0);
-    }
+    paint_line(&mut p, t, &line, (tx, ty), IRect::new(tx, frame.y, inner_w as i32, frame.h), alpha);
     if let Some(e) = &err {
         p.text(e, (frame.x, frame.bottom() + s.xs as i32), destructive.with_alpha(destructive.a * alpha), &[]);
     }
     let last = p.last();
     p.finish();
     cx.done(last);
+}
+
+/// One field's line, shaped: the text or its placeholder, the caret's x
+/// along it, the selection's span, and how far it scrolls left so the caret
+/// stays in a room `room` wide. No caret is an unfocused field.
+struct LineParts {
+    shown: ShapedText,
+    empty: bool,
+    caret: Option<i32>,
+    selection: Option<(i32, i32)>,
+    scroll: i32,
+}
+
+fn line_parts(cx: &mut Cx, text: &str, placeholder: &str, caret: Option<(usize, usize)>, font: &Font, room: i32) -> LineParts {
+    let empty = text.is_empty();
+    let caret_w = cx.theme.border_width.max(1.0) as i32;
+    if empty {
+        let gap = if caret.is_some() { caret_w } else { 0 };
+        let shown = elided(cx, placeholder, font, f64::from((room - gap).max(0)));
+        return LineParts { shown, empty, caret: caret.map(|_| 0), selection: None, scroll: 0 };
+    }
+    let shown = shape(cx, text, font);
+    let Some((at, anchor)) = caret else {
+        return LineParts { shown, empty, caret: None, selection: None, scroll: 0 };
+    };
+    let whole = shown.width;
+    let mut x_at = |n: usize| match text.char_indices().nth(n) {
+        Some((0, _)) => 0,
+        Some((b, _)) => shape(cx, &text[..b], font).width,
+        None => whole,
+    };
+    let x = x_at(at);
+    let other = if anchor == at { x } else { x_at(anchor) };
+    let scroll = (x + caret_w - room).max(0);
+    LineParts { shown, empty, caret: Some(x), selection: (other != x).then(|| (x.min(other), x.max(other))), scroll }
+}
+
+/// The line at `at`, cut to `room`: the selection's fill behind the text it
+/// covers, that text in `primaryForeground`, and the caret, which holds
+/// still rather than blinking (a blink is a clock) and steps aside while
+/// anything is selected.
+fn paint_line(p: &mut crate::surfaces::bar::cell::Painter, t: &fs_theme::theme::Theme, line: &LineParts, at: (i32, i32), room: IRect, alpha: f32) {
+    let caret_w = t.border_width.max(1.0) as i32;
+    let h = line.shown.line_height();
+    let x0 = at.0 - line.scroll;
+    let clip = p.clip.map_or(room, |c| c.intersect(&room));
+    let (w, bh) = line.shown.box_size();
+    let pad = if line.empty && line.caret.is_some() { caret_w } else { 0 };
+    let bounds = IRect::new(x0 + pad - text::PAD, at.1 - text::PAD, w, bh);
+    let ink = if line.empty { t.colors.get("mutedForeground") } else { t.colors.get("foreground") };
+    let sel = line.selection.map(|(a, b)| IRect::new(x0 + a, at.1, b - a, h));
+    if let Some(r) = sel {
+        let style = t.box_style("input.selection", None);
+        let fill = style.fill;
+        p.shape_in(r, Paint::Rect { fill: fill.with_alpha(fill.a * alpha), radius: t.box_radius(&style, f64::from(h)) as f32 }, clip);
+    }
+    p.text_in(&line.shown, bounds, Affine::IDENTITY, Some(clip), ink.with_alpha(ink.a * alpha), &[]);
+    if let Some(r) = sel {
+        let on = t.colors.get("primaryForeground");
+        p.text_in(&line.shown, bounds, Affine::IDENTITY, Some(clip.intersect(&r)), on.with_alpha(on.a * alpha), &[]);
+    }
+    if let Some(x) = line.caret.filter(|_| sel.is_none()) {
+        let cx = (x0 + x).min(room.x + room.w - caret_w);
+        p.rect(IRect::new(cx, at.1, caret_w, h), t.colors.get("foreground").with_alpha(alpha), 0.0);
+    }
 }
 
 fn marquee(cx: &mut Cx, r: Rect, text: &str, ink: Ink, path: &str) {

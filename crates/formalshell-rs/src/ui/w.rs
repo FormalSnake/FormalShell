@@ -3,6 +3,7 @@
 //! Tokens come from `Space`; nothing here writes a literal size.
 
 use fs_chrome::types::Edge;
+use fs_menu::field::{Buffer, Field};
 use fs_theme::color::Rgba;
 use fs_theme::tokens::Space;
 
@@ -159,7 +160,22 @@ pub fn segmented(options: Vec<String>, index: usize) -> El {
 }
 
 pub fn input(text: &str, placeholder: &str, focused: bool, error: Option<&str>) -> El {
-    El::new(Kind::Input { text: text.into(), placeholder: placeholder.into(), focused, error: error.map(str::to_owned) })
+    El::new(Kind::Input { text: text.into(), placeholder: placeholder.into(), focused, error: error.map(str::to_owned), caret: None })
+}
+
+/// What a field shows: one dot per char of a secret one.
+pub fn shown<S: Buffer>(f: &Field<S>) -> String {
+    if f.secret { "\u{2022}".repeat(f.text().chars().count()) } else { f.text().to_owned() }
+}
+
+/// An input over a [`Field`], its caret and selection where the field has them.
+pub fn field<S: Buffer>(f: &Field<S>, placeholder: &str, focused: bool, error: Option<&str>) -> El {
+    input(&shown(f), placeholder, focused, error).caret(f.caret_chars())
+}
+
+/// A field's line with no frame, at `size`.
+pub fn edit<S: Buffer>(f: &Field<S>, placeholder: &str, size: Type) -> El {
+    El::new(Kind::Edit { text: shown(f), placeholder: placeholder.into(), caret: f.caret_chars(), size })
 }
 
 pub fn separator() -> El {

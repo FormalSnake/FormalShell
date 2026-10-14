@@ -141,7 +141,7 @@ impl Shown {
             vec![
                 w::text("Radio Atlas").size(Type::Title).weight(Weight::Semibold),
                 w::spacer(),
-                w::row(0.0, vec![w::input(&a.search, "Search station, country, or genre", a.editing, None).fill().on("search")]).width(Size::Px(field_w)),
+                w::row(0.0, vec![w::field(&a.search, "Search station, country, or genre", a.editing, None).fill().on("search")]).width(Size::Px(field_w)),
                 w::icon_button("shuffle").tip("Tune randomly").on("shuffle"),
                 w::icon_button("circle-help")
                     .variant(if a.help { Variant::Selected } else { Variant::Ghost })

@@ -24,6 +24,11 @@
 # view itself holds its current item and which row id its own model has
 # there. A re-rank used to move the view's current item without moving the
 # cursor, which put the fill on one row and Enter on another.
+#
+# The field is typed into on real keys: a word, Ctrl+A selecting all of it
+# (menu-selected.png has the selection fill), a second word replacing it,
+# then Shift+Home and Backspace emptying it, each read off `menu status`'s
+# `query`, `caret` and `selection`.
 leg_menu_flag="--menu"
 leg_menu_order=20
 leg_menu_needs="jq wtype"
@@ -45,6 +50,7 @@ menu_status_search_path="$shot_dir/menu-status-search.json"
 menu_status_emoji_path="$shot_dir/menu-status-emoji.json"
 menu_down_path="$shot_dir/menu-down.png"
 menu_status_down_path="$shot_dir/menu-status-down.json"
+menu_selected_path="$shot_dir/menu-selected.png"
 
 menu_app_dir="$iso_home/.local/share/applications"
 
@@ -66,11 +72,11 @@ leg_menu_fixture() {
 }
 
 leg_menu_timing() {
-  # menu-finish.sh's own read-back lands 20s after menu_t0, so the session
+  # menu-finish.sh's own read-back lands 25s after menu_t0, so the session
   # has to outlive that, not just the screenshot.
   local t0
   t0=$(menu_t0)
-  leg_timing $((21 + t0 - 3)) $((53 + t0 - 3)) 4
+  leg_timing $((26 + t0 - 3)) $((58 + t0 - 3)) 4
 }
 
 leg_menu_drive() {
@@ -108,6 +114,22 @@ sleep 1
 "$grim_bin" "$menu_search_path" > /dev/null 2>&1
 $ipc call menu status > "$menu_status_search_path" 2>&1
 sleep 1
+$ipc call menu summon "" > /dev/null 2>&1
+sleep 1
+"$wtype_bin" fire
+sleep 0.6
+$ipc call menu status > "$shot_dir/menu-status-typed.json" 2>&1
+"$wtype_bin" -M ctrl -k a -m ctrl
+sleep 0.6
+"$grim_bin" "$menu_selected_path" > /dev/null 2>&1
+$ipc call menu status > "$shot_dir/menu-status-selected.json" 2>&1
+"$wtype_bin" term
+sleep 0.6
+$ipc call menu status > "$shot_dir/menu-status-replaced.json" 2>&1
+"$wtype_bin" -M shift -k Home -m shift
+"$wtype_bin" -k BackSpace
+sleep 0.6
+$ipc call menu status > "$shot_dir/menu-status-emptied.json" 2>&1
 $ipc call menu summon emoji > /dev/null 2>&1
 sleep 1
 $ipc call menu filter smiling > /dev/null 2>&1
@@ -124,7 +146,7 @@ EOF
   local menu_finish_script="$shot_dir/menu-finish.sh"
   write_script "$menu_finish_script" <<EOF
 #!/usr/bin/env bash
-sleep $((t0 + 19))
+sleep $((t0 + 24))
 $ipc call menu close > /dev/null 2>&1
 sleep 1
 cat "$iso_home/.local/state/formalshell/menu-selection.txt" > "$selection_path" 2>&1
@@ -250,6 +272,18 @@ leg_menu_assert() {
     fail "a root query for 'e' grouped into ${search_sections:-0} heading(s), got: $(cat "$menu_status_search_path")"
   fi
   menu_cursor_agrees "$menu_status_search_path" "root query"
+  # The field on real keys: typed, selected whole, replaced, emptied.
+  "$jq_bin" -e '.query == "fire" and .caret == 4 and (.selection | not)' "$shot_dir/menu-status-typed.json" > /dev/null 2>&1 \
+    || fail "typing 'fire' did not land in the query: $(cat "$shot_dir/menu-status-typed.json")"
+  "$jq_bin" -e '.query == "fire" and .selection' "$shot_dir/menu-status-selected.json" > /dev/null 2>&1 \
+    || fail "Ctrl+A did not select the query: $(cat "$shot_dir/menu-status-selected.json")"
+  [ -f "$menu_selected_path" ] || fail "no menu-selected screenshot produced"
+  echo "SMOKE_MENU_SELECTED $menu_selected_path"
+  "$jq_bin" -e '.query == "term" and .caret == 4 and (.selection | not)' "$shot_dir/menu-status-replaced.json" > /dev/null 2>&1 \
+    || fail "typing over the Ctrl+A selection did not replace it: $(cat "$shot_dir/menu-status-replaced.json")"
+  "$jq_bin" -e '.query == "" and .caret == 0 and .isOpen' "$shot_dir/menu-status-emptied.json" > /dev/null 2>&1 \
+    || fail "Shift+Home then Backspace did not empty the query: $(cat "$shot_dir/menu-status-emptied.json")"
+  echo "SMOKE_MENU_FIELD fire, Ctrl+A, term, Shift+Home and Backspace"
   if [ ! -s "$menu_status_emoji_path" ]; then
     fail "no emoji menu status produced"
   fi

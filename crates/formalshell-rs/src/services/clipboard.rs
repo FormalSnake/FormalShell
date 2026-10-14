@@ -52,6 +52,8 @@ pub struct State {
     pub captured: bool,
     /// The split pane's picture: the capture, the box it was fitted to.
     pub preview: Option<(String, (u32, u32), Option<Bitmap>)>,
+    /// What [`Cmd::Paste`] read, for the field holding the keyboard to take.
+    pub pasted: Option<String>,
 }
 
 pub enum Diff {
@@ -59,6 +61,7 @@ pub enum Diff {
     Captured,
     Preview(String, (u32, u32), Option<Bitmap>),
     Thumbs((u32, u32), Vec<(String, Option<Bitmap>)>),
+    Pasted(String),
 }
 
 impl State {
@@ -71,6 +74,7 @@ impl State {
                 self.items = items;
             }
             Diff::Captured => self.captured = true,
+            Diff::Pasted(text) => self.pasted = Some(text),
             Diff::Preview(path, size, bitmap) => self.preview = Some((path, size, bitmap)),
             Diff::Thumbs(size, list) => {
                 if size != self.thumb_box {
@@ -90,7 +94,12 @@ impl State {
 }
 
 pub enum Cmd {
+    /// A history entry, by id, back on the clipboard.
     Copy(String),
+    /// Text a field copied or cut.
+    SetText(String),
+    /// The clipboard's text, read for a field, lands as [`Diff::Pasted`].
+    Paste,
     Remove(String),
     Clear,
     /// Decode these captures' `fit` thumbnails into a `(w, h)` box.
@@ -245,6 +254,20 @@ pub async fn run(ctx: Ctx) {
                         proc::capture(&argv, Duration::from_secs(10)).await;
                     });
                 }
+            }
+            Event::Cmd(Cmd::SetText(text)) => {
+                ctx.spawn(async move {
+                    proc::capture_exit(&proc::argv(&["wl-copy", "--", &text]), Duration::from_secs(10)).await;
+                });
+            }
+            Event::Cmd(Cmd::Paste) => {
+                let c = ctx.clone();
+                ctx.spawn(async move {
+                    let done = proc::capture(&proc::argv(&["wl-paste", "--no-newline", "--type", "text"]), Duration::from_secs(5)).await;
+                    if done.code == 0 && !done.stdout.is_empty() {
+                        c.publish(store::Diff::Clipboard(Diff::Pasted(done.stdout)));
+                    }
+                });
             }
             Event::Cmd(Cmd::Remove(id)) => {
                 let r = history::remove(&state(&items), &id);

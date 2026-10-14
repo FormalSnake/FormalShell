@@ -14,7 +14,10 @@ use std::time::{Duration, Instant};
 
 use fs_media::radio::model::{self as rm, EstimateCache};
 use fs_media::radio::stations::Station;
+use fs_menu::field::{self, Outcome};
+use fs_menu::nav::Modifiers;
 
+use crate::services::clipboard;
 use crate::services::radio::{self, Ask, Cmd, Reply};
 use globe::Globe;
 
@@ -87,7 +90,7 @@ pub struct Atlas {
     misses: u32,
     expanding: bool,
     pub expand_at: Option<Instant>,
-    pub search: String,
+    pub search: field::Field,
     pub editing: bool,
     pub search_at: Option<Instant>,
     countries_asked: bool,
@@ -126,7 +129,7 @@ impl Default for Atlas {
             misses: 0,
             expanding: false,
             expand_at: None,
-            search: String::new(),
+            search: field::Field::default(),
             editing: false,
             search_at: None,
             countries_asked: false,
@@ -253,7 +256,7 @@ impl Atlas {
     }
 
     fn set_search_text(&mut self, text: &str) {
-        self.search = text.to_owned();
+        self.search.set(text);
     }
 
     pub fn highlight_station_country(&mut self, station: Option<&Station>, focus: bool) {
@@ -431,7 +434,7 @@ impl Atlas {
     }
 
     pub fn search_now(&mut self, r: &radio::State) {
-        let query = self.search.trim().to_owned();
+        let query = self.search.text().trim().to_owned();
         if !self.preview_search(r, &query) {
             return;
         }
@@ -441,11 +444,11 @@ impl Atlas {
 
     /// The field's text changed (Input.onTextChanged).
     fn search_edited(&mut self, r: &radio::State, now: Instant) {
-        if self.search.encode_utf16().count() > 128 {
-            let cut: String = String::from_utf16_lossy(&self.search.encode_utf16().take(128).collect::<Vec<_>>());
-            self.search = cut;
+        if self.search.text().encode_utf16().count() > 128 {
+            let cut: String = String::from_utf16_lossy(&self.search.text().encode_utf16().take(128).collect::<Vec<_>>());
+            self.search.set(&cut);
         }
-        let text = self.search.clone();
+        let text = self.search.text().to_owned();
         if self.preview_search(r, &text) {
             self.search_at = Some(now + SEARCH_DEBOUNCE);
         }
@@ -558,7 +561,7 @@ impl Atlas {
         match self.mode {
             Mode::Favorites => "No favorites yet. Select a station and press F.".into(),
             Mode::Recent => "No listening history yet.".into(),
-            Mode::Search => format!("No stations match \u{201c}{}\u{201d}.", self.search.trim()),
+            Mode::Search => format!("No stations match \u{201c}{}\u{201d}.", self.search.text().trim()),
             Mode::Cliamp => "No cliamp channels found.".into(),
             Mode::Country => {
                 format!("No working stations found in {}.", if self.active_name.is_empty() { "this country" } else { &self.active_name })
@@ -683,9 +686,36 @@ impl Atlas {
         }
     }
 
+    /// A key into the open search field, with what it types.
+    pub fn edit(&mut self, r: &radio::State, key: field::Key, mods: Modifiers, text: Option<&str>, now: Instant) {
+        self.dirty = true;
+        match self.search.key(key, mods, text) {
+            Outcome::Edited => self.search_edited(r, now),
+            Outcome::Copy(t) => clipboard::command(clipboard::Cmd::SetText(t)),
+            Outcome::Cut(t) => {
+                clipboard::command(clipboard::Cmd::SetText(t));
+                self.search_edited(r, now);
+            }
+            Outcome::Paste => clipboard::command(clipboard::Cmd::Paste),
+            Outcome::Pass | Outcome::Held => {}
+        }
+    }
+
+    /// The clipboard's text into the search field, when it is open.
+    pub fn paste(&mut self, r: &radio::State, text: &str, now: Instant) -> bool {
+        if !self.editing {
+            return false;
+        }
+        self.dirty = true;
+        if self.search.paste(text) {
+            self.search_edited(r, now);
+        }
+        true
+    }
+
     /// True when the key was taken; `close` set
     /// when it asked the overlay to close.
-    pub fn key(&mut self, r: &radio::State, key: Key, now: Instant, close: &mut bool) -> bool {
+    pub fn key(&mut self, r: &radio::State, key: Key, close: &mut bool) -> bool {
         self.dirty = true;
         let help_key = matches!(&key, Key::Text(t) if t == "?");
         if self.editing {
@@ -700,19 +730,6 @@ impl Atlas {
                 Key::Enter => {
                     self.search_at = None;
                     self.search_now(r);
-                }
-                Key::Backspace => {
-                    if self.search.pop().is_some() {
-                        self.search_edited(r, now);
-                    }
-                }
-                Key::Space => {
-                    self.search.push(' ');
-                    self.search_edited(r, now);
-                }
-                Key::Text(t) => {
-                    self.search.push_str(&t);
-                    self.search_edited(r, now);
                 }
                 _ => return false,
             }

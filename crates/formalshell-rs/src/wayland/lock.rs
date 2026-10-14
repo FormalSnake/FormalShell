@@ -26,13 +26,14 @@ use smithay_client_toolkit::seat::keyboard::{KeyEvent, Keysym};
 use smithay_client_toolkit::session_lock::{
     SessionLock, SessionLockHandler, SessionLockState, SessionLockSurface, SessionLockSurfaceConfigure,
 };
+use fs_menu::field::Field;
 use zeroize::Zeroizing;
 
 use super::App;
 use crate::motion::{Animated, EFFECTS, EFFECTS_SLOW, Kind as Clock, SPATIAL};
 use crate::scene::Bitmap;
 use crate::surface::Ignore;
-use crate::services::compositor;
+use crate::services::{clipboard, compositor};
 use crate::surface::Surface;
 use crate::store::Topic;
 use crate::surfaces::lock::{self as view, NowPlaying, Shared, TKey, View};
@@ -82,7 +83,7 @@ pub struct Lock {
     /// The compositor's word that every output is covered.
     pub secure: bool,
     outs: Vec<Out>,
-    password: Zeroizing<String>,
+    password: Field<Zeroizing<String>>,
     pub error: String,
     checking: bool,
     attempt: u64,
@@ -381,7 +382,7 @@ impl App {
             return;
         }
         let Some(tx) = self.lock.tx.clone() else { return };
-        let password = std::mem::replace(&mut self.lock.password, field());
+        let password = self.lock.password.replace(buffer());
         self.lock.error.clear();
         self.lock.checking = true;
         self.lock.attempt += 1;
@@ -505,6 +506,17 @@ impl App {
         });
     }
 
+    /// The clipboard's text into the password field. True while locked.
+    pub(super) fn lock_paste(&mut self, text: &str) -> bool {
+        if self.lock.session.is_none() {
+            return false;
+        }
+        if !self.lock.checking && self.lock.password.paste(text) {
+            self.lock.dirty = true;
+        }
+        true
+    }
+
     /// Every key while locked is the lock's. True when it took the key.
     pub(super) fn lock_key(&mut self, event: &KeyEvent) -> bool {
         if self.lock.session.is_none() {
@@ -520,12 +532,12 @@ impl App {
         match event.keysym {
             Keysym::Return | Keysym::KP_Enter => self.submit_password(),
             Keysym::Escape => self.lock.password = field(),
-            Keysym::BackSpace => {
-                self.lock.password.pop();
-            }
-            _ if !self.lock.checking => {
-                if let Some(t) = event.utf8.as_deref().filter(|t| t.chars().all(|c| c as u32 >= 0x20 && c != '\u{7f}')) {
-                    self.lock.password.push_str(t);
+            // A secret field hands nothing out, so a paste is all that can
+            // come back from it.
+            sym if !self.lock.checking => {
+                let out = self.lock.password.key(super::field_key(sym), self.mods, event.utf8.as_deref());
+                if out == fs_menu::field::Outcome::Paste {
+                    clipboard::command(clipboard::Cmd::Paste);
                 }
             }
             _ => {}
@@ -566,7 +578,7 @@ impl App {
         let has_wallpaper = !self.store.state.data.wallpaper.is_empty();
         let shared = Shared {
             now: Local::now(),
-            prompt: view::Prompt::password(self.lock.password.chars().count(), !self.lock.checking),
+            prompt: view::Prompt::password(self.lock.password.text().chars().count(), self.lock.password.caret_chars(), !self.lock.checking),
             error: &self.lock.error,
             has_wallpaper,
             backdrop: self.lock.backdrop.as_ref(),
@@ -715,8 +727,13 @@ impl App {
 
 /// A typed secret's buffer, sized up front so typing never reallocates and
 /// leaves an unwiped copy behind.
-pub(super) fn field() -> Zeroizing<String> {
+pub(super) fn buffer() -> Zeroizing<String> {
     Zeroizing::new(String::with_capacity(256))
+}
+
+/// An empty masked field over a fresh [`buffer`].
+pub(super) fn field() -> Field<Zeroizing<String>> {
+    Field::new(buffer()).secret()
 }
 
 /// Seconds on CLOCK_BOOTTIME.

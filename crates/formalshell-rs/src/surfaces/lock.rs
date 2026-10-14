@@ -62,12 +62,14 @@ pub struct Prompt<'a> {
     /// Non-empty replaces the field with this message.
     pub unavailable: &'a str,
     pub enabled: bool,
+    /// The caret and the selection's other end, as char counts.
+    pub caret: (usize, usize),
 }
 
 impl Prompt<'_> {
     /// The lock's: a masked password and nothing over it.
-    pub fn password(dots: usize, enabled: bool) -> Self {
-        Self { text: "\u{2022}".repeat(dots), placeholder: "Password", label: "", unavailable: "", enabled }
+    pub fn password(dots: usize, caret: (usize, usize), enabled: bool) -> Self {
+        Self { text: "\u{2022}".repeat(dots), placeholder: "Password", label: "", unavailable: "", enabled, caret }
     }
 }
 
@@ -179,7 +181,7 @@ impl View {
             if !pr.label.is_empty() {
                 block.push(w::section_label(space, pr.label, None, false).centred());
             }
-            block.push(w::input(&pr.text, pr.placeholder, pr.enabled, error).width(Size::Px(space.popup_width_narrow)).enabled(pr.enabled));
+            block.push(w::input(&pr.text, pr.placeholder, pr.enabled, error).caret(pr.caret).width(Size::Px(space.popup_width_narrow)).enabled(pr.enabled));
         } else {
             block.push(w::text(pr.unavailable).size(Type::BodySmall).ink(Ink::Muted).centred());
         }
@@ -455,7 +457,7 @@ mod tests {
         let mut corner = |wake: f32| {
             let shared = Shared {
                 now: Local::now(),
-                prompt: Prompt::password(0, true),
+                prompt: Prompt::password(0, (0, 0), true),
                 error: "",
                 has_wallpaper: true,
                 backdrop: Some(&white),
@@ -490,7 +492,7 @@ mod tests {
         let mut corner = |backdrop: Option<&Bitmap>, has_wallpaper: bool, wake: f32| {
             let shared = Shared {
                 now: Local::now(),
-                prompt: Prompt::password(0, true),
+                prompt: Prompt::password(0, (0, 0), true),
                 error: "",
                 has_wallpaper,
                 backdrop,

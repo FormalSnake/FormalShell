@@ -577,6 +577,16 @@ impl Host {
         }
     }
 
+    /// The clipboard's text into the field holding the keyboard.
+    pub fn paste(&mut self, text: String, store: &Store, runtime: Option<&Runtime>) -> Out {
+        if !self.open || !self.module.editing() {
+            return Out::None;
+        }
+        let mut fx = Self::effect(store, runtime);
+        self.module.edit(Edit::Paste(text), &mut fx);
+        fx.out()
+    }
+
     /// One key.
     pub fn key(&mut self, name: Key, store: &Store, runtime: Option<&Runtime>) -> Out {
         if !self.open {
@@ -589,9 +599,8 @@ impl Host {
                 Key::Escape => Edit::Cancel,
                 Key::Tab(_) => Edit::Tab,
                 Key::Activate => Edit::Submit,
-                Key::Back => Edit::Back,
-                Key::Text(t) => Edit::Insert(t),
-                Key::Move(..) => return Out::None,
+                Key::Edit(k, mods, t) => Edit::Key(k, mods, t),
+                Key::Back | Key::Text(_) | Key::Move(..) => return Out::None,
             };
             self.module.edit(edit, &mut fx);
             return fx.out();
@@ -611,7 +620,7 @@ impl Host {
                 self.cursor.keyed = true;
             }
             Key::Move(dx, dy) => self.move_cursor(dx, dy, &mut fx),
-            Key::Back => {}
+            Key::Back | Key::Edit(..) => {}
             Key::Activate => {
                 if let Some(k) = stop.filter(|_| !self.body.stops.is_empty()) {
                     self.module.activate(&k, &mut fx);
@@ -859,4 +868,6 @@ pub enum Key {
     Activate,
     Back,
     Text(String),
+    /// A key into the field that holds the keyboard, with what it types.
+    Edit(fs_menu::field::Key, fs_menu::nav::Modifiers, Option<String>),
 }

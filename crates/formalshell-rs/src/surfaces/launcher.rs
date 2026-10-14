@@ -16,6 +16,7 @@
 
 use std::time::Instant;
 
+use fs_menu::field;
 use fs_menu::model::{self, Mode, SectionCtx};
 use fs_menu::nav::{self, Dir, KeyAction, KeyCtx, KeyMode};
 use fs_menu::node::{Kind as NodeKind, Node};
@@ -28,7 +29,7 @@ use crate::motion::{Animated, Kind as Clock};
 use crate::scene::{IRect, NodeId};
 use crate::scroll::{Touchpad, Travel};
 use crate::services::menu::{self as index, Ask};
-use crate::services::{compositor, state};
+use crate::services::{clipboard, compositor, state};
 use crate::store::Store;
 use crate::surfaces::bar::cell::{Kit, Painter};
 use crate::surfaces::modal::Modal;
@@ -88,11 +89,10 @@ pub struct Model {
     pub open: bool,
     pub mode: Mode,
     pub level: Option<String>,
-    pub query: String,
+    pub query: field::Field,
     select_prompt: String,
     select_options: Vec<String>,
     select_token: String,
-    input_secret: bool,
     // What `resolve` committed.
     pub rows: Vec<Node>,
     sections: Vec<String>,
@@ -231,11 +231,10 @@ impl Default for Model {
             open: false,
             mode: Mode::Menu,
             level: None,
-            query: String::new(),
+            query: field::Field::default(),
             select_prompt: String::new(),
             select_options: Vec::new(),
             select_token: String::new(),
-            input_secret: false,
             resolved: Vec::new(),
             rows: Vec::new(),
             sections: Vec::new(),
@@ -620,7 +619,7 @@ impl Model {
     /// The level and its rows, resolved over the warm index.
     fn resolve_rows(&self, store: &Store) -> (View, Vec<Node>, usize, Option<Node>, bool, String) {
         let menu = self.mode == Mode::Menu;
-        let q = self.query.as_str();
+        let q = self.query.text();
         let level = self.level.as_deref();
         let nodes = store.menu.nodes();
         let cond = &store.menu.cond;
@@ -1076,6 +1075,9 @@ impl Model {
             "viewHeight": self.body_h.round() as i64,
             "wheelStep": self.wheel_step().round() as i64,
             "placeholder": self.placeholder(store),
+            "query": w::shown(&self.query),
+            "caret": self.query.caret_chars().0,
+            "selection": self.query.selection().is_some(),
             "sections": self.section_names(),
             "view": self.view.name(),
             "columns": self.columns(),
@@ -1119,7 +1121,7 @@ impl Model {
             };
         }
         self.enter_level(store, target);
-        self.query = prefill;
+        self.query.set(&prefill);
         self.open = true;
         self.key.clear();
     }
@@ -1159,7 +1161,7 @@ impl Model {
     pub fn open_input(&mut self, prompt: &str, token: &str, secret: bool) {
         self.begin_selection();
         self.mode = Mode::Input;
-        self.input_secret = secret;
+        self.query.secret = secret;
         self.select_prompt = prompt.into();
         self.select_options.clear();
         self.select_token = token.into();
@@ -1197,15 +1199,15 @@ impl Model {
             payload.get("value").and_then(Value::as_str).map(str::to_owned),
             payload.get("cancelled").and_then(Value::as_bool).unwrap_or(false),
         ));
-        let filed = if self.input_secret { json!({"token": token, "cancelled": true, "secret": true}) } else { payload };
+        let filed = if self.query.secret { json!({"token": token, "cancelled": true, "secret": true}) } else { payload };
         let path = selection_path();
         if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
         let _ = std::fs::write(&path, filed.to_string());
-        if self.input_secret {
+        if self.query.secret {
             self.query.clear();
-            self.input_secret = false;
+            self.query.secret = false;
         }
     }
 
@@ -1274,10 +1276,22 @@ impl Model {
     }
 
     pub fn set_query(&mut self, store: &Store, text: &str) {
-        self.query = text.into();
+        self.query.set(text);
+        self.query_changed(store);
+    }
+
+    /// The clipboard's text into the query.
+    pub fn paste(&mut self, store: &Store, text: &str) {
+        if self.query.paste(text) {
+            self.query_changed(store);
+            self.dirty = true;
+        }
+    }
+
+    fn query_changed(&mut self, store: &Store) {
         self.confirm.clear();
         self.monitor_armed = None;
-        if self.mode == Mode::Menu && fs_menu::providers::emoji_trigger_query(text).is_some() && store.menu.emoji.is_none() {
+        if self.mode == Mode::Menu && fs_menu::providers::emoji_trigger_query(self.query.text()).is_some() && store.menu.emoji.is_none() {
             index::ask(Ask::Emoji);
         }
     }
@@ -1380,8 +1394,8 @@ impl Model {
         self.activate(store, index)
     }
 
-    /// One key, through `nav::key_action`, or into the field.
-    pub fn key(&mut self, store: &Store, key: nav::Key, mods: nav::Modifiers, repeat: bool, text: Option<&str>) -> Out {
+    /// One key, through `nav::key_action`, or into the field as `edit`.
+    pub fn key(&mut self, store: &Store, key: nav::Key, edit: field::Key, mods: nav::Modifiers, repeat: bool, text: Option<&str>) -> Out {
         if self.on_mirror() && matches!(key, nav::Key::Tab | nav::Key::Return | nav::Key::Enter) {
             self.mirror_cycle(store, 1);
             return Out::None;
@@ -1397,22 +1411,16 @@ impl Model {
         let action = nav::key_action(key, mods, repeat, &ctx);
         let out = match action {
             KeyAction::Pass => {
-                match (key, text) {
-                    (nav::Key::Backspace, _) => {
-                        let mut q = self.query.clone();
-                        if mods.ctrl {
-                            let t = q.trim_end().len();
-                            q.truncate(q[..t].rfind(char::is_whitespace).map_or(0, |i| i + 1));
-                        } else {
-                            q.pop();
-                        }
-                        self.set_query(store, &q);
+                match self.query.key(edit, mods, text) {
+                    field::Outcome::Pass => return Out::None,
+                    field::Outcome::Held => {}
+                    field::Outcome::Edited => self.query_changed(store),
+                    field::Outcome::Copy(t) => clipboard::command(clipboard::Cmd::SetText(t)),
+                    field::Outcome::Cut(t) => {
+                        clipboard::command(clipboard::Cmd::SetText(t));
+                        self.query_changed(store);
                     }
-                    (_, Some(t)) if !mods.ctrl && !mods.alt => {
-                        let q = format!("{}{t}", self.query);
-                        self.set_query(store, &q);
-                    }
-                    _ => return Out::None,
+                    field::Outcome::Paste => clipboard::command(clipboard::Cmd::Paste),
                 }
                 Out::None
             }
@@ -1427,7 +1435,7 @@ impl Model {
             KeyAction::Activate => self.activate(store, self.cursor),
             KeyAction::ActivateAlternate => self.activate_alternate(store, self.cursor),
             KeyAction::Submit => {
-                let q = self.query.clone();
+                let q = self.query.text().to_owned();
                 self.complete_select(&q);
                 Out::Close
             }
@@ -1752,7 +1760,7 @@ impl Shown {
 
         // The header band.
         let head_rect = Rect::new(fx + pad, fy + pad, fx + pad + inner_w, fy + pad + s.control_height);
-        let head = header(m, store, theme, kit, inner_w);
+        let head = header(m, store, theme);
         let d = self.head.draw(&head, head_rect, Some(clip), alpha, theme, kit, scene, now);
         if d.animating {
             self.wake = Some(now);
@@ -1787,7 +1795,7 @@ impl Shown {
         let mut p = Painter::new(scene, &mut self.sel_nodes, Some(body_clip)).after(Some(self.sel_anchor));
         match stop {
             Some(st) => {
-                let on = (m.level.clone(), m.query.clone());
+                let on = (m.level.clone(), m.query.text().to_owned());
                 let travels = self.sel_on.as_ref() == Some(&on) && (m.travels || !m.from_keys);
                 let local = [st.rect.x as f64 - origin.0, st.rect.y as f64 - origin.1, st.rect.w as f64, st.rect.h as f64];
                 let ms = Clock::SpatialFast.ms(theme) * self.scale;
@@ -1886,7 +1894,7 @@ impl Shown {
     }
 }
 
-fn header(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, width: f64) -> El {
+fn header(m: &Model, store: &Store, theme: &Theme) -> El {
     let s = &theme.space;
     let mut parts = Vec::new();
     let in_level = m.mode == Mode::Menu && m.level.is_some();
@@ -1897,32 +1905,11 @@ fn header(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, width: f64) ->
     } else {
         parts.push(w::space(s.sm + s.control_padding_x));
     }
-    let shown = if m.mode == Mode::Input && m.input_secret { "\u{2022}".repeat(m.query.chars().count()) } else { m.query.clone() };
-    let field = if shown.is_empty() {
-        w::text(m.placeholder(store)).size(Type::Subtitle).ink(Ink::Muted).elide()
-    } else {
-        w::text(shown.clone()).size(Type::Subtitle).elide()
-    };
-    let text_w = if shown.is_empty() { 0.0 } else { ui::measure(&w::text(shown).size(Type::Subtitle), width, theme, kit).0 };
-    let line = ui::measure(&w::text("Ag").size(Type::Subtitle), width, theme, kit).1;
-    let caret = w::swatch(theme.colors.get("foreground"), theme.border_width.max(1.0), line, 0.0);
-    let caret = El { kind: match caret.kind { ui::el::Kind::Swatch { color, w, h, radius, .. } => ui::el::Kind::Swatch { color, w, h, radius, border: false }, k => k }, ..caret };
-    if shown_is_empty(m) {
-        parts.push(caret);
-        parts.push(field.pad_start(0.0));
-    } else {
-        parts.push(field.width(Size::Px(text_w)));
-        parts.push(caret);
-        parts.push(w::space(0.0).fill());
-    }
+    parts.push(w::edit(&m.query, &m.placeholder(store), Type::Subtitle));
     parts.push(w::space(s.icon_gap));
     parts.push(w::icon_button("x").tip("Close").on("close"));
     parts.push(w::space(s.sm));
     w::row(0.0, parts).fill()
-}
-
-fn shown_is_empty(m: &Model) -> bool {
-    m.query.is_empty()
 }
 
 fn footer(m: &Model, store: &Store, theme: &Theme) -> El {
@@ -1982,7 +1969,7 @@ fn body_el(m: &Model, store: &Store, theme: &Theme, kit: &mut Kit, scroll: f64, 
         let title = match &m.empty {
             Some(n) => n.label.clone(),
             None if m.mode == Mode::Input => String::new(),
-            None if !m.query.is_empty() => format!("No results for \u{201C}{}\u{201D}", m.query),
+            None if !m.query.is_empty() => format!("No results for \u{201C}{}\u{201D}", m.query.text()),
             None => "No results".into(),
         };
         let mut col = vec![w::space((view_h / 2.0 - s.control_height).max(0.0)), w::text(title).ink(Ink::Muted).centred()];

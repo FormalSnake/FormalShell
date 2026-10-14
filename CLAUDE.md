@@ -468,7 +468,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   on (`viewCursor`). Then real arrow keys on a two-row grid of twelve
   staged apps: one Down from a fresh open scrolls nothing, and four Downs
   into the rows under the grid and four Ups back each leave the cursor's
-  item whole inside the viewport (`viewCursor.top`/`bottom`).
+  item whole inside the viewport (`viewCursor.top`/`bottom`). Then the
+  field on real keys, read off `menu status`'s `query`, `caret` and
+  `selection`: a word typed, Ctrl+A selecting it (photographed), a second
+  word replacing it, and Shift+Home then Backspace emptying it.
 - `menu_budget.sh` `--menu-budget`: the rewrite spec's launcher budget off the
   shell's own commit log, the bar's badge spinning throughout five `menu
   toggle` opens: toggle to the launcher's first commit under 50 ms (read
@@ -625,7 +628,10 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   placing its own bar cell, no `bar` key involved.
 - `polkit.sh` `--polkit`: a real `pkexec` conversation through the shell's
   agent, the prompt, the error state and pkexec's own exit code, with the
-  card's own open off the top line sampled at a tenth speed first.
+  card's own open off the top line sampled at a tenth speed first. Before
+  the real password, junk typed, selected with Ctrl+A (photographed over
+  the dots) and deleted with one Backspace, which pkexec's exit 0 proves
+  left the field empty.
 - `power.sh` `--power`: the launcher's Shutdown and Reboot rows, which
   call logind over D-Bus with interactive auth (`services/power.rs`), with a
   second user's login session open on seat0 so logind answers

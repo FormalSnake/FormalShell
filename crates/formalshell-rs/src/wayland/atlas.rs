@@ -211,6 +211,11 @@ impl App {
         if !self.atlas.model.open || self.atlas.win.as_ref().is_none_or(|w| !w.shown.modal.open) {
             return false;
         }
+        if self.atlas.model.editing && !matches!(event.keysym, Keysym::Escape | Keysym::Up | Keysym::Down | Keysym::Return | Keysym::KP_Enter) {
+            let r = self.store.media.radio.clone();
+            self.atlas.model.edit(&r, super::field_key(event.keysym), self.mods, event.utf8.as_deref(), Instant::now());
+            return true;
+        }
         let key = match event.keysym {
             Keysym::Escape => Key::Escape,
             Keysym::Up => Key::Up,
@@ -225,11 +230,20 @@ impl App {
         };
         let r = self.store.media.radio.clone();
         let mut close = false;
-        self.atlas.model.key(&r, key, Instant::now(), &mut close);
+        self.atlas.model.key(&r, key, &mut close);
         if close {
             self.atlas_close();
         }
         true
+    }
+
+    /// The clipboard's text into the search field, when it holds the keyboard.
+    pub(super) fn atlas_paste(&mut self, text: &str) -> bool {
+        if !self.atlas.model.open {
+            return false;
+        }
+        let r = self.store.media.radio.clone();
+        self.atlas.model.paste(&r, text, Instant::now())
     }
 
     /// The pointer over the atlas's window. True when it took the event.

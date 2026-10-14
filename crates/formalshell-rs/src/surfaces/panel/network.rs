@@ -8,8 +8,10 @@
 //! speed test (`network::Hold`).
 
 use fs_devices::network::speedtest;
+use fs_menu::field;
 
 use super::{Edit, Effect, Panel, View};
+use crate::services::clipboard;
 use crate::services::devices::{self, network as net};
 use crate::store::Topic;
 use crate::ui::{El, Event, Ink, Type, Variant, Weight, What, w};
@@ -28,8 +30,8 @@ pub struct Network {
     hold: Option<net::Hold>,
     /// The SSID whose prompt is open.
     prompt: Option<String>,
-    identity: String,
-    password: String,
+    identity: field::Field,
+    password: field::Field,
     field: Option<Field>,
     /// The "Known networks" disclosure, closed on every open.
     known_open: bool,
@@ -49,6 +51,7 @@ impl Network {
             self.identity.clear();
             self.password.clear();
         }
+        self.password.secret = true;
         self.prompt = Some(ssid.to_owned());
         self.field = Some(if enterprise { Field::Identity } else { Field::Password });
     }
@@ -93,9 +96,9 @@ impl Network {
                 self.field = Some(Field::Identity);
                 return;
             }
-            net::Secret::Eap { identity: self.identity.clone(), password: self.password.clone() }
+            net::Secret::Eap { identity: self.identity.text().to_owned(), password: self.password.text().to_owned() }
         } else {
-            net::Secret::Psk(self.password.clone())
+            net::Secret::Psk(self.password.text().to_owned())
         };
         fx.service(move |ctx| net::connect(ctx, ssid, secret));
     }
@@ -172,11 +175,11 @@ impl Network {
         if self.prompt_for(n).is_some_and(|p| p.ssid == r.ssid) {
             let mut fields = Vec::new();
             if r.enterprise {
-                fields.push(w::input(&self.identity, "Identity (user@domain)", self.field == Some(Field::Identity), None).key("identity"));
+                fields.push(w::field(&self.identity, "Identity (user@domain)", self.field == Some(Field::Identity), None).key("identity"));
             }
-            let masked: String = std::iter::repeat_n(MASK, self.password.chars().count()).collect();
+            let masked: String = std::iter::repeat_n(MASK, self.password.text().chars().count()).collect();
             let error = n.failure.as_ref().filter(|f| failed && mine(&f.ssid)).map(|f| f.text.as_str());
-            fields.push(w::input(&masked, "Passphrase", self.field == Some(Field::Password), error).key("passphrase"));
+            fields.push(w::input(&masked, "Passphrase", self.field == Some(Field::Password), error).caret(self.password.caret_chars()).key("passphrase"));
             parts.push(w::column(s.xs, fields));
         }
         w::cell(w::column(s.xs, parts).fill()).ghost().interactive().stop(key).on(format!("row:{}", r.ssid))
@@ -428,9 +431,13 @@ impl Panel for Network {
         let field = self.field.unwrap_or(Field::Password);
         let text = if field == Field::Identity { &mut self.identity } else { &mut self.password };
         match e {
-            Edit::Insert(t) => text.push_str(&t),
-            Edit::Back => {
-                text.pop();
+            Edit::Key(k, mods, t) => match text.key(k, mods, t.as_deref()) {
+                field::Outcome::Copy(t) | field::Outcome::Cut(t) => clipboard::command(clipboard::Cmd::SetText(t)),
+                field::Outcome::Paste => clipboard::command(clipboard::Cmd::Paste),
+                _ => {}
+            },
+            Edit::Paste(t) => {
+                text.paste(&t);
             }
             Edit::Tab if enterprise => {
                 self.field = Some(if field == Field::Identity { Field::Password } else { Field::Identity });

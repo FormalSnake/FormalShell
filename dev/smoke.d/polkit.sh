@@ -14,6 +14,11 @@
 #
 # The open itself is photographed on the way in, at a tenth speed, before the
 # scale goes back and the conversation proper starts.
+#
+# Before the real password, junk is typed, selected with Ctrl+A
+# (polkit-selected.png has the selection over the dots) and deleted with one
+# Backspace: pkexec only exits 0 if that left the field empty for the real
+# password to go into alone.
 leg_polkit_flag="--polkit"
 leg_polkit_order=280
 leg_polkit_vm_only="it registers the shell as the polkit agent and authenticates a real pkexec"
@@ -21,6 +26,7 @@ leg_polkit_needs="pkexec wtype convert"
 
 polkit_active_path="$shot_dir/polkit-active.png"
 polkit_error_path="$shot_dir/polkit-error.png"
+polkit_selected_path="$shot_dir/polkit-selected.png"
 polkit_rc_path="$shot_dir/polkit-rc.txt"
 polkit_stderr_path="$shot_dir/polkit-stderr.txt"
 polkit_debug_path="$shot_dir/polkit-debug.log"
@@ -68,7 +74,7 @@ leg_polkit_fixture() {
 leg_polkit_timing() {
   local t0
   t0=$(polkit_t0)
-  # The script's own sleeps sum to t0+27; the `wait` past that blocks for
+  # The script's own sleeps sum to t0+29; the `wait` past that blocks for
   # however long the socket-activated polkit-agent-helper conversation takes
   # to resolve, and a first-ever activation in this session is the slow path.
   leg_timing $((t0 + 35)) $((t0 + 66))
@@ -107,6 +113,13 @@ sleep 10
 "$grim_bin" "$polkit_error_path" > /dev/null 2>&1
 log error-screenshot
 sleep 1
+"$wtype_bin" "junk-to-select"
+"$wtype_bin" -M ctrl -k a -m ctrl
+sleep 1
+"$grim_bin" "$polkit_selected_path" > /dev/null 2>&1
+"$wtype_bin" -k BackSpace
+log junk-selected-and-deleted
+sleep 1
 "$wtype_bin" "formalshell-test"
 "$wtype_bin" -k Return
 log real-password-typed
@@ -130,6 +143,8 @@ leg_polkit_assert() {
   echo "SMOKE_POLKIT_ACTIVE $polkit_active_path"
   [ -f "$polkit_error_path" ] || fail "no polkit-error screenshot produced"
   echo "SMOKE_POLKIT_ERROR $polkit_error_path"
+  [ -f "$polkit_selected_path" ] || fail "no polkit-selected screenshot produced"
+  echo "SMOKE_POLKIT_SELECTED $polkit_selected_path"
   if [ ! -s "$polkit_rc_path" ] || ! grep -q "^0$" "$polkit_rc_path"; then
     fail "pkexec true did not exit 0 after real authentication. Got: $(cat "$polkit_rc_path" 2>/dev/null); stderr: $(cat "$polkit_stderr_path" 2>/dev/null); debug: $(cat "$polkit_debug_path" 2>/dev/null)"
   fi

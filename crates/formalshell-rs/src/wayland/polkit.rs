@@ -11,11 +11,13 @@ use smithay_client_toolkit::seat::keyboard::{KeyEvent, Keysym};
 use smithay_client_toolkit::shell::WaylandSurface;
 use smithay_client_toolkit::shell::wlr_layer::{Layer, LayerSurface};
 use vello_cpu::kurbo::Rect;
+use fs_menu::field::{Field, Outcome};
 use zeroize::Zeroizing;
 
 use super::App;
-use super::lock::{LockMsg, field};
+use super::lock::{LockMsg, buffer, field};
 use crate::scene::{Bitmap, IRect, NodeId};
+use crate::services::clipboard;
 use crate::services::polkit::{self, Cmd, Event};
 use crate::surfaces::bar::cell::Painter;
 use crate::surfaces::modal::{Modal, Part};
@@ -40,7 +42,7 @@ pub struct Dialog {
     asked: bool,
     submitted: bool,
     error: bool,
-    text: Zeroizing<String>,
+    text: Field<Zeroizing<String>>,
     dirty: bool,
 }
 
@@ -152,6 +154,16 @@ impl App {
         self.polkit.as_ref().map_or_else(Vec::new, |d| d.modal.joins().collect())
     }
 
+    /// The clipboard's text into the dialog's field, while it holds the
+    /// keyboard.
+    pub(super) fn polkit_paste(&mut self, text: &str) -> bool {
+        let Some(d) = self.polkit.as_mut().filter(|d| d.modal.open) else { return false };
+        if d.asked && !d.submitted && d.text.paste(text) {
+            d.dirty = true;
+        }
+        true
+    }
+
     /// The dialog's keys while it holds the keyboard.
     pub(super) fn polkit_key(&mut self, event: &KeyEvent) -> bool {
         let Some(d) = self.polkit.as_mut().filter(|d| d.modal.open) else { return false };
@@ -163,15 +175,15 @@ impl App {
             }
             Keysym::Return | Keysym::KP_Enter if enabled => {
                 (d.submitted, d.error) = (true, false);
-                let answer = std::mem::replace(&mut d.text, field());
+                let answer = d.text.replace(buffer());
                 polkit::send(Cmd::Submit(answer));
             }
-            Keysym::BackSpace if enabled => {
-                d.text.pop();
-            }
-            _ if enabled => {
-                if let Some(t) = event.utf8.as_deref().filter(|t| t.chars().all(|c| c as u32 >= 0x20 && c != '\u{7f}')) {
-                    d.text.push_str(t);
+            sym if enabled => {
+                d.text.secret = !d.echo;
+                match d.text.key(super::field_key(sym), self.mods, event.utf8.as_deref()) {
+                    Outcome::Copy(t) | Outcome::Cut(t) => clipboard::command(clipboard::Cmd::SetText(t)),
+                    Outcome::Paste => clipboard::command(clipboard::Cmd::Paste),
+                    _ => {}
                 }
             }
             _ => {}
@@ -207,7 +219,7 @@ impl App {
         let (w, h) = (d.modal.card.scene.size.w, d.modal.card.scene.size.h);
         let inner = s.popup_width_narrow;
         let enabled = d.asked && !d.submitted;
-        let shown = if d.echo { d.text.to_string() } else { "\u{2022}".repeat(d.text.chars().count()) };
+        let shown = if d.echo { d.text.text().to_owned() } else { "\u{2022}".repeat(d.text.text().chars().count()) };
         let placeholder = if d.submitted {
             "Checking".to_owned()
         } else if d.prompt.trim().is_empty() {
@@ -235,7 +247,7 @@ impl App {
             avatar_row = Some(rows.len());
             rows.push(w::column(s.row_gap, vec![w::section_label(s, "Identity", None, false), line]));
         }
-        rows.push(w::input(&shown, &placeholder, enabled, d.error.then_some("Wrong password")).width(Size::Px(inner)).enabled(enabled));
+        rows.push(w::input(&shown, &placeholder, enabled, d.error.then_some("Wrong password")).caret(d.text.caret_chars()).width(Size::Px(inner)).enabled(enabled));
         let cancel = w::button("Cancel").variant(Variant::Outline);
         let auth = w::button("Authenticate").enabled(enabled);
         let buttons = w::row(s.control_gap, vec![cancel, auth]);

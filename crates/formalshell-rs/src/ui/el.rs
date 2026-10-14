@@ -210,7 +210,12 @@ pub enum Kind {
     /// `wrap`: rows of equal buttons when every whole label cannot fit one.
     Group { options: Vec<Opt>, index: usize, exclusive: bool, cursor_index: usize, wrap: bool },
     Segmented { options: Vec<String>, index: usize },
-    Input { text: String, placeholder: String, focused: bool, error: Option<String> },
+    /// `caret`: the caret and the selection's other end as char counts
+    /// into `text`; none puts the caret at its end.
+    Input { text: String, placeholder: String, focused: bool, error: Option<String>, caret: Option<(usize, usize)> },
+    /// The same line with no frame of its own, at `size` (the launcher's
+    /// query, whose header is the frame).
+    Edit { text: String, placeholder: String, caret: (usize, usize), size: Type },
     Separator { vertical: bool, inset: f64, bleed: f64 },
     Keycap { key: String },
     Swatch { color: Rgba, w: f64, h: f64, radius: f64, border: bool },
@@ -282,7 +287,7 @@ impl El {
             Kind::Column { .. } | Kind::Separator { vertical: false, .. } | Kind::Track { .. } | Kind::Group { .. } => Size::Fill,
             Kind::Cell { state, .. } if !state.chip => Size::Fill,
             Kind::Strip { size, .. } => Size::Px(size.0),
-            Kind::Input { .. } | Kind::Para { .. } | Kind::Matrix { .. } | Kind::Lyrics(_) => Size::Fill,
+            Kind::Input { .. } | Kind::Edit { .. } | Kind::Para { .. } | Kind::Matrix { .. } | Kind::Lyrics(_) => Size::Fill,
             _ => Size::Hug,
         };
         Self { kind, width, pad: [0.0; 4], key: None, stop: false, on: None, tip: None, centred: false, top: false, mid: false, gauge: None, pulse: false, swap: None, badge: None, fade: None, height: None }
@@ -381,6 +386,14 @@ impl El {
 
     pub fn mid(mut self) -> Self {
         self.mid = true;
+        self
+    }
+
+    /// The caret and the selection's other end, as char counts.
+    pub fn caret(mut self, at: (usize, usize)) -> Self {
+        if let Kind::Input { caret, .. } = &mut self.kind {
+            *caret = Some(at);
+        }
         self
     }
 

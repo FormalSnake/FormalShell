@@ -2012,7 +2012,13 @@ impl App {
         }
         let editing = self.panel.as_ref().is_some_and(|h| h.editing());
         let key = match event.keysym {
-            Keysym::space if editing => Key::Text(" ".into()),
+            Keysym::Escape | Keysym::Tab | Keysym::ISO_Left_Tab | Keysym::Return | Keysym::KP_Enter if editing => match event.keysym {
+                Keysym::Escape => Key::Escape,
+                Keysym::Tab => Key::Tab(1),
+                Keysym::ISO_Left_Tab => Key::Tab(-1),
+                _ => Key::Activate,
+            },
+            sym if editing => Key::Edit(field_key(sym), self.mods, event.utf8),
             Keysym::BackSpace => Key::Back,
             Keysym::Escape => Key::Escape,
             Keysym::Tab => Key::Tab(1),
@@ -2031,6 +2037,20 @@ impl App {
         let out = h.key(key, &self.store, self.runtime.as_ref());
         self.panel_dirty = true;
         self.panel_out(out);
+    }
+
+    /// The clipboard's text read for a Ctrl+V, into whichever field holds
+    /// the keyboard now, in the order keys reach them.
+    pub(crate) fn field_paste(&mut self) {
+        let Some(text) = self.store.clipboard.pasted.take() else { return };
+        if self.lock_paste(&text) || self.polkit_paste(&text) || self.atlas_paste(&text) || self.launcher_paste(&text) {
+            return;
+        }
+        if let Some(h) = self.panel.as_mut().filter(|h| h.editing()) {
+            let out = h.paste(text, &self.store, self.runtime.as_ref());
+            self.panel_dirty = true;
+            self.panel_out(out);
+        }
     }
 
     /// What an input to the open panel asked of the shell outside it.
@@ -2442,4 +2462,18 @@ pub fn theme_inputs(app: &App) {
         mode_override: theme::parse_override(&state.data.mode_override),
         location,
     });
+}
+
+/// A key as a text field reads it.
+pub(crate) fn field_key(sym: Keysym) -> fs_menu::field::Key {
+    use fs_menu::field::Key as F;
+    match sym {
+        Keysym::Left | Keysym::KP_Left => F::Left,
+        Keysym::Right | Keysym::KP_Right => F::Right,
+        Keysym::Home | Keysym::KP_Home => F::Home,
+        Keysym::End | Keysym::KP_End => F::End,
+        Keysym::BackSpace => F::Backspace,
+        Keysym::Delete | Keysym::KP_Delete => F::Delete,
+        sym => sym.key_char().filter(char::is_ascii_alphabetic).map_or(F::Other, |c| F::Letter(c.to_ascii_lowercase())),
+    }
 }

@@ -12,6 +12,7 @@ indexmap = { version = "2", features = ["serde"] }
 regex = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
+zeroize = "1.8"
 
 [dev-dependencies]
 percent-encoding = "2"

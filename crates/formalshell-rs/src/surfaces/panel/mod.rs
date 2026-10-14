@@ -62,8 +62,10 @@ pub struct View<'a> {
 /// A key reaching an inline text field.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Edit {
-    Insert(String),
-    Back,
+    /// For the field's own [`fs_menu::field::Field::key`].
+    Key(fs_menu::field::Key, fs_menu::nav::Modifiers, Option<String>),
+    /// The clipboard's text, read for an earlier Ctrl+V.
+    Paste(String),
     Tab,
     Submit,
     Cancel,
