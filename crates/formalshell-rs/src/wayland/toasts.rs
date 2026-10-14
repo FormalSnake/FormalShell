@@ -8,6 +8,8 @@ use fs_chrome::types::Edge;
 use smithay_client_toolkit::shell::wlr_layer::{Anchor, Layer};
 
 use super::App;
+use crate::motion::Kind;
+use crate::scroll::Travel;
 use crate::services::notifications::now_ms;
 use crate::store::Topic;
 use crate::surface::Surface;
@@ -153,8 +155,25 @@ impl App {
 
     pub(crate) fn release_toasts(&mut self, x: f64, y: f64) {
         let Some(t) = &mut self.toasts else { return };
+        let act = t.release(x, y);
+        self.toast_act(act);
+    }
+
+    /// One axis frame over the stack: a finger's horizontal travel swipes
+    /// the card under it, and a wheel does nothing here.
+    pub(crate) fn swipe_toasts(&mut self, x: f64, y: f64, along: Travel, lift: Option<u32>) {
+        let ms = Kind::Spatial.ms(&self.store.theme.theme) * self.motion_scale;
+        let Some(t) = &mut self.toasts else { return };
+        let (moved, act) = t.swipe(x, y, along, lift, ms, Instant::now());
+        if moved {
+            self.toasts_dirty = true;
+        }
+        self.toast_act(act);
+    }
+
+    fn toast_act(&mut self, act: Act) {
         let n = &mut self.store.notifications;
-        match t.release(x, y) {
+        match act {
             Act::None => return,
             Act::Dismiss(ids) => n.dismiss_popup_group(&ids),
             Act::Action(id, key) => {

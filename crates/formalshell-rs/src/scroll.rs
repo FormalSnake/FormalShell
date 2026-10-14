@@ -174,6 +174,45 @@ struct Bounce {
     v: f64,
 }
 
+/// The fingers' speed by event time, never the loop's: motion the
+/// compositor coalesced lands in one loop turn.
+#[derive(Default)]
+pub struct Velocity {
+    samples: VecDeque<(u32, f64)>,
+    travelled: f64,
+}
+
+impl Velocity {
+    pub fn push(&mut self, time: u32, px: f64) {
+        while self.samples.front().is_some_and(|&(t, _)| time.wrapping_sub(t) > WINDOW_MS * 2) {
+            self.samples.pop_front();
+        }
+        self.travelled += px;
+        self.samples.push_back((time, self.travelled));
+    }
+
+    /// The speed a lift at `time` carries, in pixels a second: the travel
+    /// over the window before it, spread over the time up to the lift so
+    /// fingers slowing into it carry less, and nothing once they had
+    /// stopped.
+    pub fn at_lift(&self, time: u32) -> f64 {
+        let Some(&(last_t, last)) = self.samples.back() else { return 0.0 };
+        if time.wrapping_sub(last_t) > STOPPED_MS {
+            return 0.0;
+        }
+        let Some(&(first_t, first)) = self.samples.iter().find(|&&(t, _)| time.wrapping_sub(t) <= WINDOW_MS) else {
+            return 0.0;
+        };
+        let span = f64::from(time.wrapping_sub(first_t).max(MIN_SPAN_MS)) / 1000.0;
+        (last - first) / span
+    }
+
+    pub fn clear(&mut self) {
+        self.samples.clear();
+        self.travelled = 0.0;
+    }
+}
+
 /// A touchpad gesture over a scroll area: the stretch it pulls past either
 /// end while the fingers are down, springing back on the spatial clock
 /// once they lift, and the coast a flick carries on with after the lift.
@@ -185,10 +224,7 @@ pub struct Touchpad {
     shown: Animated,
     bounce: Option<Bounce>,
     coast: Option<Coast>,
-    /// The fingers' travel so far by event time, never the loop's: motion
-    /// the compositor coalesced lands in one loop turn.
-    samples: VecDeque<(u32, f64)>,
-    travelled: f64,
+    velocity: Velocity,
 }
 
 impl Touchpad {
@@ -199,8 +235,7 @@ impl Touchpad {
             shown: Animated::new(0.0, Kind::SpatialFast.curve()),
             bounce: None,
             coast: None,
-            samples: VecDeque::new(),
-            travelled: 0.0,
+            velocity: Velocity::default(),
         }
     }
 
@@ -216,11 +251,7 @@ impl Touchpad {
             self.bounce = None;
             self.shown.jump(shown);
         }
-        while self.samples.front().is_some_and(|&(t, _)| time.wrapping_sub(t) > WINDOW_MS * 2) {
-            self.samples.pop_front();
-        }
-        self.travelled += px;
-        self.samples.push_back((time, self.travelled));
+        self.velocity.push(time, px);
         // Fingers back on the pad mid spring take it from where it is.
         if self.pull == 0.0 {
             let shown = self.shown.value(now);
@@ -254,31 +285,14 @@ impl Touchpad {
         offset
     }
 
-    /// The speed a lift at `time` carries, in content pixels a second: the
-    /// travel over the window before it, spread over the time up to the
-    /// lift so fingers slowing into it carry less, and nothing once they
-    /// had stopped.
-    fn lift_speed(&self, time: u32) -> f64 {
-        let Some(&(last_t, last)) = self.samples.back() else { return 0.0 };
-        if time.wrapping_sub(last_t) > STOPPED_MS {
-            return 0.0;
-        }
-        let Some(&(first_t, first)) = self.samples.iter().find(|&&(t, _)| time.wrapping_sub(t) <= WINDOW_MS) else {
-            return 0.0;
-        };
-        let span = f64::from(time.wrapping_sub(first_t).max(MIN_SPAN_MS)) / 1000.0;
-        (last - first) / span
-    }
-
     /// The fingers lifted at event `time` over `offset`: a stretch springs
     /// back to the end over `ms`, and a flick with nothing stretched coasts
     /// on, `slow` times slower than real (the debug motion scale), into a
     /// bounce off an end it reaches. With motion off (`ms` 0) nothing
     /// coasts.
     pub fn release(&mut self, now: Instant, time: u32, offset: f64, max: f64, ms: f64, slow: f64) {
-        let speed = self.lift_speed(time);
-        self.samples.clear();
-        self.travelled = 0.0;
+        let speed = self.velocity.at_lift(time);
+        self.velocity.clear();
         let stretched = self.pull != 0.0 || self.value(now) != 0.0;
         self.pull = 0.0;
         if self.shown.target() != 0.0 {
@@ -321,8 +335,7 @@ impl Touchpad {
         self.pull = 0.0;
         self.coast = None;
         self.bounce = None;
-        self.samples.clear();
-        self.travelled = 0.0;
+        self.velocity.clear();
         self.shown.jump(0.0);
     }
 
@@ -505,6 +518,26 @@ mod tests {
         assert!(s.tick(now + ms(50), 5000.0).is_some());
         assert_eq!(s.tick(now + ms(66), 3000.0), None);
         assert!(!s.running(now + ms(66)));
+    }
+
+    #[test]
+    fn the_lift_speed_reads_the_window_before_it_and_nothing_once_stopped() {
+        let mut v = Velocity::default();
+        for i in 0..6 {
+            v.push(1000 + i * 10, 5.0);
+        }
+        // 25px over the 50ms from the first sample to the lift.
+        assert!((v.at_lift(1050) - 500.0).abs() < 1e-9, "{}", v.at_lift(1050));
+        assert_eq!(v.at_lift(1050 + STOPPED_MS + 1), 0.0);
+        // Only the window before the lift counts.
+        let mut v = Velocity::default();
+        v.push(0, 1000.0);
+        for i in 0..5 {
+            v.push(200 + i * 10, -2.0);
+        }
+        assert!(v.at_lift(240) < 0.0);
+        v.clear();
+        assert_eq!(v.at_lift(240), 0.0);
     }
 
     #[test]

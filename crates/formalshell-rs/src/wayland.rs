@@ -1902,6 +1902,12 @@ impl App {
                         self.panel_dirty = true;
                         continue;
                     }
+                    if owner == Some(Owner::Toasts) {
+                        let finger = source == Some(wl_pointer::AxisSource::Finger);
+                        let lift = ((horizontal.stop || vertical.stop) && finger).then_some(time);
+                        self.swipe_toasts(x, y, crate::scroll::travel(&horizontal, source, time), lift);
+                        continue;
+                    }
                     let (v, h) = (notches(&vertical), notches(&horizontal));
                     if v == 0.0 && h == 0.0 {
                         continue;

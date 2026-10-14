@@ -17,6 +17,11 @@
 //! (or any card of the expanded column) and 40% of it for one behind. A
 //! group that left keeps its slot, its card and its last place while it
 //! fades.
+//!
+//! A two-finger horizontal swipe over a card carries it along x, sonner's
+//! swipe: toward the stack's own edge it follows the fingers, the other way
+//! it pulls against the rubber band, and the lift either sends it on off
+//! that edge or springs it back.
 
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
@@ -27,8 +32,9 @@ use fs_theme::theme::Theme;
 use smithay_client_toolkit::shell::WaylandSurface;
 use vello_cpu::kurbo::{Affine, Rect};
 
-use crate::motion::{Animated, Curve, EFFECTS};
+use crate::motion::{Animated, Curve, EFFECTS, Kind};
 use crate::scene::{Bitmap, IRect, NodeId, Scene};
+use crate::scroll::{self, Travel, Velocity};
 use crate::services::notifications::now_ms;
 use crate::store::Store;
 use crate::surface::Surface;
@@ -41,6 +47,32 @@ const MAX_PEEK_LEVELS: usize = 2;
 /// height: sonner's `translateY(40%)` for a collapsed toast that is not the
 /// front one.
 const BEHIND_LEAVE: f64 = 0.4;
+
+/// sonner's SWIPE_THRESHOLD: the travel past which a lift dismisses.
+const SWIPE_DISTANCE: f64 = 45.0;
+/// sonner's 0.11px/ms: a flick this fast dismisses however short it was.
+const SWIPE_SPEED: f64 = 110.0;
+
+/// A lift with the card `dx` off its place (the fingers' travel, not the
+/// drawn stretch) at `speed` px/s, both along x: whether it goes. `dir` is
+/// the stack's own edge, 1 right and -1 left.
+fn swipe_dismisses(dx: f64, speed: f64, dir: f64) -> bool {
+    dx * dir >= SWIPE_DISTANCE || speed * dir > SWIPE_SPEED
+}
+
+/// The drawn offset for `pull` px of finger travel: one for one toward the
+/// stack's edge, the rubber band against it.
+fn swipe_shown(pull: f64, dir: f64, width: f64) -> f64 {
+    if pull * dir >= 0.0 { pull } else { scroll::rubber(pull, width) }
+}
+
+/// The swipe under way: the card it took at its first frame and the
+/// fingers' travel since, in card pixels.
+struct Swipe {
+    key: String,
+    pull: f64,
+    velocity: Velocity,
+}
 
 /// How often the relative times ("2m ago") recompute, off their own clock.
 pub const REL_EVERY: std::time::Duration = std::time::Duration::from_secs(30);
@@ -87,11 +119,14 @@ struct Slot {
     departing: bool,
     /// The card's own widgets still crossfading (a button's ink).
     ui_animating: bool,
+    /// The swipe's offset along x: under the fingers, springing back to 0,
+    /// or carrying on off the edge.
+    dx: Animated,
 }
 
 impl Slot {
     fn moving(&self, now: Instant) -> bool {
-        [&self.x, &self.y, &self.width, &self.height, &self.presence].iter().any(|a| a.running(now))
+        [&self.x, &self.y, &self.width, &self.height, &self.presence, &self.dx].iter().any(|a| a.running(now))
     }
 
     fn animating(&self, now: Instant) -> bool {
@@ -115,6 +150,8 @@ struct Placed {
     /// The card as it lands on screen, scaled.
     drawn: IRect,
     alpha: f64,
+    /// Off its place along x, so its edge covers nothing behind it.
+    shifted: bool,
 }
 
 pub struct Toasts {
@@ -132,6 +169,9 @@ pub struct Toasts {
     pub rel_at: Instant,
     /// The last draw ran with a clock still running.
     pub was_animating: bool,
+    swipe: Option<Swipe>,
+    /// The stack hangs off the right edge.
+    right: bool,
 }
 
 /// Where the stack hangs: the bar's own edge cleared, `screenPadding` in.
@@ -235,6 +275,8 @@ impl Toasts {
             fitted: HashMap::new(),
             rel_at: Instant::now(),
             was_animating: false,
+            swipe: None,
+            right: true,
         }
     }
 
@@ -247,6 +289,7 @@ impl Toasts {
         let s = &theme.space;
         let n = &store.notifications;
         let spec = model::position_spec(store.config.str("notifications.position"));
+        self.right = spec.right;
         let groups = model::group_entries(&n.model.popups);
         let by_key: HashMap<String, &Group> = groups.iter().map(|g| (model::group_key(g), g)).collect();
         let stack_order: Vec<String> = model::stack_order(&groups).iter().map(|g| model::group_key(g)).collect();
@@ -367,6 +410,7 @@ impl Toasts {
                     reveal,
                     departing: false,
                     ui_animating: false,
+                    dx: Animated::new(0.0, Kind::Spatial.curve()),
                 }
             });
             slot.x.set(now, gx, restack.0);
@@ -402,20 +446,29 @@ impl Toasts {
                 let fh = slot.height.value(now);
                 // A row rises out of the anchored edge by its own height and
                 // leaves back toward it; a bubble unfolds where it lands.
-                let travel = if !is_bubble && slot.departing && !slot.front { BEHIND_LEAVE } else { 1.0 };
+                let dx = slot.dx.value(now);
+                // A card swiped away leaves along x alone.
+                let travel = if slot.dx.target() != 0.0 {
+                    0.0
+                } else if !is_bubble && slot.departing && !slot.front {
+                    BEHIND_LEAVE
+                } else {
+                    1.0
+                };
                 let slide = if is_bubble { 0.0 } else { (1.0 - presence) * fh * travel * toward_edge };
                 // Every card is drawn at the column's full width and scaled
                 // to its level's, words and all, about the edge its sliver
                 // shows from, so a card behind coming forward grows as one
                 // piece rather than its box widening under words already
                 // full width.
-                let fx = slot.x.value(now) + (w - width) / 2.0;
+                let fx = slot.x.value(now) + (w - width) / 2.0 + dx;
                 let fy = slot.y.value(now) + slide;
                 let sc = (w / width).clamp(0.0, 1.0);
                 let pivot = (fx + width / 2.0, if spec.top { fy + fh } else { fy });
                 let (sw, sh) = (width * sc, fh * sc);
                 let sy = if spec.top { fy + fh - sh } else { fy };
-                let alpha = presence.clamp(0.0, 1.0) * slot.visible.value(now).clamp(0.0, 1.0);
+                let swiped = (1.0 - dx.abs() / width).clamp(0.0, 1.0);
+                let alpha = presence.clamp(0.0, 1.0) * slot.visible.value(now).clamp(0.0, 1.0) * swiped;
                 Placed {
                     key: k.clone(),
                     fx,
@@ -424,6 +477,7 @@ impl Toasts {
                     matrix: Affine::translate(pivot) * Affine::scale(sc) * Affine::translate((-pivot.0, -pivot.1)),
                     drawn: IRect::new((pivot.0 - sw / 2.0).round() as i32, sy.round() as i32, sw.round() as i32, sh.round() as i32),
                     alpha,
+                    shifted: dx != 0.0,
                 }
             })
             .collect();
@@ -434,7 +488,7 @@ impl Toasts {
             // so nothing behind ever shows through that card's edges and
             // antialiased border: the pile reads as solid cards. One still
             // fading in or out covers nothing yet.
-            let solid = placed[i + 1..].iter().filter(|f| f.alpha >= 0.999 && !f.drawn.is_empty());
+            let solid = placed[i + 1..].iter().filter(|f| f.alpha >= 0.999 && !f.shifted && !f.drawn.is_empty());
             let cut = if spec.top { solid.map(|f| f.drawn.bottom()).max() } else { solid.map(|f| f.drawn.y).min() };
             let slot = self.slots.get_mut(&at.key).expect("ordered from the map");
             slot.rect = at.drawn;
@@ -563,6 +617,49 @@ impl Toasts {
         }
     }
 
+    /// One axis frame over the stack: `along` is its horizontal travel,
+    /// `lift` the event time of a finger's axis_stop on either axis. Only a
+    /// finger's horizontal travel moves a card, and a lift sends it on or
+    /// back over `ms` (the spatial clock, motion scale applied). Returns
+    /// whether anything moved, and the group a lift sends away.
+    pub fn swipe(&mut self, x: f64, y: f64, along: Travel, lift: Option<u32>, ms: f64, now: Instant) -> (bool, Act) {
+        let dir = if self.right { 1.0 } else { -1.0 };
+        let Travel::Pixels { px, finger: true, time } = along else {
+            return match lift {
+                Some(time) => self.lift(time, dir, ms, now),
+                None => (false, Act::None),
+            };
+        };
+        if self.swipe.is_none() {
+            let Some((key, _)) = self.hit(x, y) else { return (false, Act::None) };
+            // Fingers back on a card mid spring take it from where it is.
+            let at = self.slots.get(&key).map_or(0.0, |s| s.dx.value(now));
+            let pull = if at * dir > 0.0 { at } else { 0.0 };
+            self.swipe = Some(Swipe { key, pull, velocity: Velocity::default() });
+        }
+        let Some(sw) = &mut self.swipe else { return (false, Act::None) };
+        let Some(slot) = self.slots.get_mut(&sw.key).filter(|s| !s.departing) else {
+            self.swipe = None;
+            return (false, Act::None);
+        };
+        // The card follows a scroll area's content under the same values.
+        sw.pull -= px;
+        sw.velocity.push(time, -px);
+        slot.dx.jump(swipe_shown(sw.pull, dir, slot.width.value(now)));
+        (true, Act::None)
+    }
+
+    fn lift(&mut self, time: u32, dir: f64, ms: f64, now: Instant) -> (bool, Act) {
+        let Some(sw) = self.swipe.take() else { return (false, Act::None) };
+        let Some(slot) = self.slots.get_mut(&sw.key).filter(|s| !s.departing) else { return (false, Act::None) };
+        if swipe_dismisses(sw.pull, sw.velocity.at_lift(time), dir) {
+            slot.dx.set(now, dir * slot.width.value(now), ms);
+            return (true, Act::Dismiss(slot.members.clone()));
+        }
+        slot.dx.set(now, 0.0, ms);
+        (true, Act::None)
+    }
+
     pub fn animating(&self, now: Instant) -> bool {
         !self.surface.mapped || self.slots.values().any(|s| s.animating(now))
     }
@@ -608,6 +705,27 @@ mod tests {
             walk(&bubble(&theme, &group(source, ""), 0, None, false), &mut |e| badges += usize::from(e.badge.is_some()));
             assert_eq!(badges, usize::from(marked), "bubble, source {source:?}");
         }
+    }
+
+    #[test]
+    fn a_lift_dismisses_past_the_threshold_or_on_a_flick_toward_the_edge() {
+        for dir in [1.0, -1.0] {
+            assert!(swipe_dismisses(45.0 * dir, 0.0, dir));
+            assert!(!swipe_dismisses(44.0 * dir, 0.0, dir));
+            assert!(swipe_dismisses(10.0 * dir, 111.0 * dir, dir));
+            assert!(!swipe_dismisses(10.0 * dir, 100.0 * dir, dir));
+            // The wrong way never goes, however far or fast.
+            assert!(!swipe_dismisses(-200.0 * dir, -900.0 * dir, dir));
+        }
+    }
+
+    #[test]
+    fn the_card_follows_toward_its_edge_and_resists_the_other_way() {
+        assert_eq!(swipe_shown(60.0, 1.0, 360.0), 60.0);
+        assert_eq!(swipe_shown(-60.0, -1.0, 360.0), -60.0);
+        let back = swipe_shown(-60.0, 1.0, 360.0);
+        assert!(back < 0.0 && back > -40.0, "{back}");
+        assert!(swipe_shown(-600.0, 1.0, 360.0) > -40.0);
     }
 
     #[test]

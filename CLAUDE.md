@@ -788,6 +788,14 @@ detail; `dev/smoke.d/README.md` is the file contract. What each proves:
   with some frame matching neither settled pile, and at full speed a still
   pile committing
   nothing for four seconds. The bubble's arrival is `--notify-emerge`'s.
+- `toast_swipe.sh` `--toast-swipe`: one sticky critical toast swiped by
+  two fingers off `dev/vpointer.py` (`hfinger`, `hlift`) with the pointer
+  parked on it: ~22px slowly carrying the card right mid-gesture and
+  springing it back onto its place on the lift, one popup left; ~67px
+  lifted with no speed left dismissing it (sonner's 45px); a fresh card
+  flicked ~17px in 16ms dismissed on its speed (sonner's 110 px/s); and a
+  sideways wheel notch over a third one moving and dismissing nothing,
+  read off `notifications status` and the card's left edge in each frame.
 - `toggles.sh` `--toggles`: the toggle hub's rows repainting from a `@state:`
   snapshot without the surface moving under them.
 - `tooltip.sh` `--tooltip`: rides `--panel <name>`; the tooltip surface

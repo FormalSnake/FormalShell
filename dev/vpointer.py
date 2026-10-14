@@ -4,10 +4,12 @@ cannot do (its `pointer click` presses and releases in one go), and a
 two-finger touchpad scroll, which wlrctl cannot do either (its `pointer
 scroll` carries no axis_source, so Hyprland reads it as a wheel).
 
-    vpointer.py down | up | move DX DY | finger DY | lift | wait MS ...
+    vpointer.py down | up | move DX DY | finger DY | hfinger DX | lift | hlift | wait MS ...
 
 `finger DY` is one vertical axis frame of DY pixels with axis_source
-finger; `lift` is the axis_stop a touchpad sends when the fingers leave it.
+finger, `hfinger DX` the same on the horizontal axis; `lift` is the
+axis_stop a touchpad sends when the fingers leave it, `hlift` the
+horizontal axis's.
 
 Steps run in order on one virtual pointer. Every event carries the
 monotonic clock in milliseconds as its time, the way a real device's
@@ -23,6 +25,7 @@ import time
 
 BTN_LEFT = 0x110
 AXIS_VERTICAL = 0
+AXIS_HORIZONTAL = 1
 SOURCE_FINGER = 1
 
 
@@ -116,15 +119,17 @@ def main(steps):
             w.send(pointer, 0, struct.pack("<I", stamp()) + fixed(dx) + fixed(dy))
             w.send(pointer, 4)
             i += 3
-        elif step == "finger":
+        elif step in ("finger", "hfinger"):
             # Hyprland's axis request resets the pending event's source, so
             # axis_source has to follow it inside the frame.
-            w.send(pointer, 3, struct.pack("<II", stamp(), AXIS_VERTICAL) + fixed(float(steps[i + 1])))
+            axis = AXIS_VERTICAL if step == "finger" else AXIS_HORIZONTAL
+            w.send(pointer, 3, struct.pack("<II", stamp(), axis) + fixed(float(steps[i + 1])))
             w.send(pointer, 5, struct.pack("<I", SOURCE_FINGER))
             w.send(pointer, 4)
             i += 2
-        elif step == "lift":
-            w.send(pointer, 6, struct.pack("<II", stamp(), AXIS_VERTICAL))
+        elif step in ("lift", "hlift"):
+            axis = AXIS_VERTICAL if step == "lift" else AXIS_HORIZONTAL
+            w.send(pointer, 6, struct.pack("<II", stamp(), axis))
             w.send(pointer, 5, struct.pack("<I", SOURCE_FINGER))
             w.send(pointer, 4)
             i += 1
