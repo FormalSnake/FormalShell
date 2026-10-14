@@ -76,6 +76,7 @@ pub struct Notification {
     pub important: bool,
     pub preexisting: bool,
     pub session: i64,
+    /// Epoch seconds, the phone's own when ANCS sent one.
     pub ts: f64,
 }
 
@@ -86,7 +87,10 @@ pub struct Notification {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Status {
     pub observer: bool,
+    /// Over LE, the only bearer ANCS and AMS ride.
     pub connected: bool,
+    /// Over any bearer: a BR/EDR audio link with LE down still counts.
+    pub linked: bool,
     pub paired: bool,
     pub address: String,
     pub device_name: String,
@@ -170,6 +174,7 @@ pub fn parse_event(line: &str) -> Option<Event> {
             Some(Event::Status(Status {
                 observer: is_true(&raw, "observer"),
                 connected: is_true(&raw, "connected"),
+                linked: is_true(&raw, "linked"),
                 paired: is_true(&raw, "paired"),
                 address: s(&raw, "address").to_uppercase(),
                 device_name: s(&raw, "deviceName"),
@@ -211,9 +216,10 @@ pub fn explain_error(message: &str) -> String {
 
 /// Whether `pair` has to drop BlueZ's bond first: BlueZ holds one for the
 /// phone but it is not connected, which is what a phone that forgot this
-/// laptop looks like from here. A connected phone keeps its bond.
+/// laptop looks like from here. A phone still linked over any bearer is
+/// using that bond, so it keeps it.
 pub fn forget_before_pair(status: Option<&Status>) -> bool {
-    status.is_some_and(|s| s.paired && !s.connected && !s.address.is_empty())
+    status.is_some_and(|s| s.paired && !s.connected && !s.linked && !s.address.is_empty())
 }
 
 /// Newest first, one row per id, capped. ANCS resends an id when the phone
@@ -902,12 +908,14 @@ mod tests {
     // nix/iphone-bridge-bond.patch's status: a bond BlueZ holds while LE is down.
     #[test]
     fn parse_status_bond() {
-        let e = status(r#"{"type":"status","observer":true,"connected":false,"paired":true,"deviceName":"FormalPhone","address":"10:7d:c8:a5:3b:42","battery":-1}"#);
+        let e = status(r#"{"type":"status","observer":true,"connected":false,"linked":true,"paired":true,"deviceName":"FormalPhone","address":"10:7d:c8:a5:3b:42","battery":-1}"#);
         assert!(!e.connected);
+        assert!(e.linked);
         assert!(e.paired);
         assert_eq!(e.address, "10:7D:C8:A5:3B:42");
         let old = status(r#"{"type":"status","observer":true,"connected":true}"#);
         assert!(!old.paired);
+        assert!(!old.linked);
         assert_eq!(old.address, "");
         assert_eq!(
             parse_event(r#"{"type":"forgot","address":"10:7d:c8:a5:3b:42"}"#),
@@ -920,6 +928,8 @@ mod tests {
         let st = |paired, connected, address: &str| Status { paired, connected, address: address.into(), ..Default::default() };
         assert!(forget_before_pair(Some(&st(true, false, "10:7D:C8:A5:3B:42"))));
         assert!(!forget_before_pair(Some(&st(true, true, "10:7D:C8:A5:3B:42"))));
+        let linked = Status { paired: true, linked: true, address: "10:7D:C8:A5:3B:42".into(), ..Default::default() };
+        assert!(!forget_before_pair(Some(&linked)));
         assert!(!forget_before_pair(Some(&st(false, false, ""))));
         assert!(!forget_before_pair(Some(&st(true, false, ""))));
         assert!(!forget_before_pair(None));

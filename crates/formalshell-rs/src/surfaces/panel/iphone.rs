@@ -69,7 +69,7 @@ fn row(v: &View, entry: &Notification, ruled: bool, now: i64) -> El {
     let body = if entry.subtitle.is_empty() { entry.body.clone() } else { format!("{}\n{}", entry.subtitle, entry.body) };
     let mut head = vec![w::icon(iphone::app_icon(&entry.bundle_id, entry.category)).ink(Ink::Dim), w::section_label(s, &entry.app_name, None, false)];
     if entry.ts > 0.0 {
-        head.push(w::value(rel_time(now, entry.ts as i64)).size(Type::Caption).ink(Ink::Muted));
+        head.push(w::value(rel_time(now, (entry.ts * 1000.0) as i64)).size(Type::Caption).ink(Ink::Muted));
     }
     let mut col = Vec::new();
     if ruled {
@@ -183,6 +183,8 @@ impl Panel for Iphone {
                 "Check this matches the code on your iPhone"
             } else if pairing {
                 "Advertising for pairing"
+            } else if stale_bond && st.linked {
+                "Waiting for the phone to reconnect over Bluetooth LE"
             } else if stale_bond {
                 "Paired here, not on the phone? Pair again"
             } else {

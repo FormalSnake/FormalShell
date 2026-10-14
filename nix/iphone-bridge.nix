@@ -13,7 +13,8 @@
 #
 # The bond patch makes `listen` report connected off the LE bearer alone
 # (BlueZ keeps Device1.Connected true over a BR/EDR audio link with LE down,
-# where ANCS and AMS cannot reach the phone), reports a phone BlueZ still
+# where ANCS and AMS cannot reach the phone, so that bearer goes out as
+# `linked` on its own), reports a phone BlueZ still
 # holds a bond for while it is not connected, and gives `pair` a `--forget`
 # that drops that one device's keys before advertising: a phone that forgot
 # this machine fails every new pairing while BlueZ holds the old ones.

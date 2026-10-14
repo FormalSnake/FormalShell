@@ -50,6 +50,8 @@ pub struct State {
     /// is connected.
     pub bonded: bool,
     pub bond_address: String,
+    /// Linked over any bearer, LE or not.
+    pub linked: bool,
     /// Newest first, the bridge's own record per notification, including
     /// ones the Focus verdict kept out of the centre.
     pub recent: Vec<Notification>,
@@ -125,6 +127,7 @@ impl Session {
                 self.state.connected = s.connected;
                 self.state.bonded = s.paired;
                 self.state.bond_address = s.address;
+                self.state.linked = s.linked;
                 self.state.device_name = s.device_name;
                 self.state.battery = (s.connected && s.battery >= 0.0).then_some(s.battery / 100.0);
                 if s.observer {
@@ -424,6 +427,7 @@ fn handle(ctx: &Ctx, session: &mut Session, cmd: Cmd, inbox: &(async_channel::Se
             let status = iphone::Status {
                 paired: session.state.bonded,
                 connected: session.state.connected,
+                linked: session.state.linked,
                 address: session.state.bond_address.clone(),
                 ..iphone::Status::default()
             };

@@ -14,6 +14,11 @@
 # can mark the phone trusted, and a rejection there fails the pairing on the
 # phone's side. The agent is only registered while advertising, the window
 # the user opened to pair.
+#
+# The reconnect patch keeps a connectable, non-discoverable advert up while a
+# bonded phone's LE link is down. The iPhone reconnects ANCS and AMS only to
+# a bonded peripheral it sees advertising, and pairing turns the advert off
+# when it ends, so any LE drop otherwise stayed down until the next pairing.
 { lib, python3, fetchFromGitHub, fetchpatch }:
 
 python3.pkgs.buildPythonApplication rec {
@@ -34,6 +39,7 @@ python3.pkgs.buildPythonApplication rec {
       hash = "sha256-PKHnQ9/412aMVdznqwQ2KDPgufDWLfbqFgexu4dvBwc=";
     })
     ./ancs4linux-authorize.patch
+    ./ancs4linux-reconnect.patch
   ];
 
   build-system = [ python3.pkgs.hatchling ];

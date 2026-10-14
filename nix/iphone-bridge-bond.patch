@@ -17,12 +17,12 @@
 +
  def connected_phone(bus):
 -    """Return {name, address, battery} for a connected ANCS device, else None."""
-+    """Return {name, address, battery, connected, paired} for the ANCS phone
++    """Return {name, address, battery, connected, linked, paired} for the ANCS phone
 +    BlueZ knows, connected over LE first, then one only bonded, else None."""
      try:
          reply = bus.call_sync(
              "org.bluez",
-@@ -152,24 +164,37 @@
+@@ -152,24 +164,38 @@
          return None
  
      objects = reply.unpack()[0]
@@ -35,22 +35,12 @@
 +        if not device:
              continue
 -        info = {
--            "name": device.get("Alias") or device.get("Name") or "iPhone",
--            "address": device.get("Address", ""),
--            "battery": device_battery(interfaces),
--        }
 +        connected = le_connected(interfaces, device)
 +        paired = bool(device.get("Paired"))
 +        if not connected and not paired:
 +            continue
-         uuids = [str(u).lower() for u in device.get("UUIDs", [])]
--        if ANCS_UUID in uuids:
--            return info
-         # Some iPhones only advertise ANCS after the GATT client subscribes.
--        # Remember an Apple-looking device as a weaker signal.
--        if device.get("Icon") == "phone":
--            fallback = info
--    return fallback
++        uuids = [str(u).lower() for u in device.get("UUIDs", [])]
++        # Some iPhones only advertise ANCS after the GATT client subscribes.
 +        # An Apple-looking device is the weaker signal.
 +        if ANCS_UUID in uuids:
 +            rank = 2
@@ -63,47 +53,59 @@
 +            continue
 +        best_rank = rank
 +        best = {
-+            "name": device.get("Alias") or device.get("Name") or "iPhone",
-+            "address": device.get("Address", ""),
+             "name": device.get("Alias") or device.get("Name") or "iPhone",
+             "address": device.get("Address", ""),
+-            "battery": device_battery(interfaces),
 +            "battery": device_battery(interfaces) if connected else -1,
 +            "connected": connected,
++            "linked": bool(device.get("Connected")),
 +            "paired": paired,
-+        }
+         }
+-        uuids = [str(u).lower() for u in device.get("UUIDs", [])]
+-        if ANCS_UUID in uuids:
+-            return info
+-        # Some iPhones only advertise ANCS after the GATT client subscribes.
+-        # Remember an Apple-looking device as a weaker signal.
+-        if device.get("Icon") == "phone":
+-            fallback = info
+-    return fallback
 +    return best
  
  
  # --------------------------------------------------------------------------
-@@ -238,7 +263,8 @@
+@@ -238,7 +264,8 @@
  
      # Daemon availability, so the bar can say "not running" instead of lying
      # with a silent empty list.
 -    state = {"observer": False, "connected": False, "deviceName": "", "battery": -1}
-+    state = {"observer": False, "connected": False, "paired": False,
++    state = {"observer": False, "connected": False, "linked": False, "paired": False,
 +             "deviceName": "", "address": "", "battery": -1}
  
      def daemon_installed():
          return any(
-@@ -251,7 +277,9 @@
+@@ -251,7 +278,10 @@
              "type": "status",
              "observer": state["observer"],
              "connected": state["connected"],
++            "linked": state["linked"],
 +            "paired": state["paired"],
              "deviceName": state["deviceName"],
 +            "address": state["address"],
              "battery": state["battery"],
              "installed": daemon_installed(),
          })
-@@ -263,7 +291,9 @@
+@@ -263,7 +293,10 @@
      def on_name_lost(_conn, _name):
          state["observer"] = False
          state["connected"] = False
++        state["linked"] = False
 +        state["paired"] = False
          state["deviceName"] = ""
 +        state["address"] = ""
          state["battery"] = -1
          push_status()
  
-@@ -273,15 +303,19 @@
+@@ -273,15 +306,20 @@
      )
  
      def poll_connection():
@@ -118,10 +120,11 @@
 -            state["battery"] = battery
 +        phone = connected_phone(bus) or {
 +            "name": "", "address": "", "battery": -1,
-+            "connected": False, "paired": False,
++            "connected": False, "linked": False, "paired": False,
 +        }
 +        fresh = {
 +            "connected": phone["connected"],
++            "linked": phone["linked"],
 +            "paired": phone["paired"],
 +            "deviceName": phone["name"],
 +            "address": phone["address"],
@@ -132,7 +135,7 @@
              push_status()
          return True
  
-@@ -370,6 +404,38 @@
+@@ -370,6 +408,38 @@
      return 0
  
  
@@ -171,7 +174,7 @@
  def cmd_pair(args):
      """Advertise over BLE so the iPhone can find and pair with this machine."""
      bus = system_bus()
-@@ -382,6 +448,8 @@
+@@ -382,6 +452,8 @@
              emit({"type": "error", "message": "No Bluetooth LE adapter found"})
              return 1
          address = args.hci or adapters[0]
@@ -180,7 +183,7 @@
          bus.call_sync(
              ADVERTISING, OBJ_PATH, ADVERTISING, "EnableAdvertising",
              GLib.Variant("(ss)", (address, args.name)),
-@@ -427,6 +495,7 @@
+@@ -427,6 +499,7 @@
      p_pair = sub.add_parser("pair")
      p_pair.add_argument("--name", default="Omarchy")
      p_pair.add_argument("--hci", default="")
