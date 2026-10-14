@@ -144,7 +144,10 @@ impl Session {
             Event::History(items) => {
                 self.known = items.iter().map(|n| n.id).collect();
                 let block = block_list();
-                let mut kept: Vec<Notification> = items.into_iter().filter(|n| !iphone::is_blocked(n, &block)).collect();
+                // The bridge appends every resend of an id to its history file,
+                // oldest first, so the last record per id is the live one.
+                let mut seen = HashSet::new();
+                let mut kept: Vec<Notification> = items.into_iter().rev().filter(|n| seen.insert(n.id) && !iphone::is_blocked(n, &block)).collect();
                 kept.sort_by(|a, b| b.ts.total_cmp(&a.ts));
                 kept.truncate(HISTORY_LIMIT);
                 self.state.recent = kept;
@@ -556,6 +559,14 @@ mod tests {
         s.event(iphone::parse_event(r#"{"type":"status","observer":true,"paired":false,"address":""}"#).unwrap());
         s.event(iphone::parse_event(r#"{"type":"status","observer":true,"paired":true,"address":"AA"}"#).unwrap());
         assert!(s.finish_pairing);
+    }
+
+    #[test]
+    fn history_keeps_the_last_record_per_id() {
+        let mut s = Session::default();
+        s.event(iphone::parse_event(r#"{"type":"history","items":[{"id":1,"title":"old","ts":10},{"id":2,"title":"b","ts":11},{"id":1,"title":"new","ts":12}]}"#).unwrap());
+        let titles: Vec<&str> = s.state.recent.iter().map(|n| n.title.as_str()).collect();
+        assert_eq!(titles, ["new", "b"]);
     }
 
     #[test]

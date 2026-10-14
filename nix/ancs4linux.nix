@@ -19,6 +19,10 @@
 # Busy while the controller settles the fresh bond, and giving up there left
 # the adapter discoverable and pairable with the agent still registered.
 #
+# The resubscribe patch disconnects the old GATT proxies' handlers before a
+# resubscribe. Each fresh bond or reconnect swaps the proxies, and the stale
+# ones kept delivering, so every notification arrived once per resubscribe.
+#
 # The reconnect patch keeps a connectable, non-discoverable advert up while a
 # bonded phone's GATT link is down. The iPhone reconnects ANCS and AMS only to
 # a bonded peripheral it sees advertising, and pairing turns the advert off
@@ -45,6 +49,7 @@ python3.pkgs.buildPythonApplication rec {
     ./ancs4linux-authorize.patch
     ./ancs4linux-busy.patch
     ./ancs4linux-reconnect.patch
+    ./ancs4linux-resubscribe.patch
   ];
 
   build-system = [ python3.pkgs.hatchling ];
