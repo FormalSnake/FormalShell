@@ -13,12 +13,27 @@ use super::{Effect, Panel, View};
 use crate::services::notifications::{Diff, Op, now_ms};
 use crate::store::{self, Topic};
 use crate::ui::el::Kind;
-use crate::ui::{El, Event, Ink, Type, Variant, Weight, w};
+use crate::ui::{El, Event, Ink, Type, Variant, Weight, What, w};
 
 pub const ID: &str = "notifications-center";
 
+const FILTERS: [&str; 3] = ["All", "This PC", "iPhone"];
+
+/// Which source the list shows, an index into [`FILTERS`].
 #[derive(Default)]
-pub struct Center;
+pub struct Center {
+    filter: usize,
+}
+
+impl Center {
+    fn shows(&self, g: &Group) -> bool {
+        match self.filter {
+            1 => g.entry.source != "iphone",
+            2 => g.entry.source == "iphone",
+            _ => true,
+        }
+    }
+}
 
 fn send(fx: &Effect, op: Op) {
     fx.service(move |ctx| ctx.publish(store::Diff::Notifications(Diff::Op(op))));
@@ -123,11 +138,18 @@ impl Panel for Center {
         let s = &v.theme.space;
         let now = now_ms();
         let (pending, seen) = sections(v);
-        if pending.is_empty() && seen.is_empty() {
-            return w::column(0.0, vec![w::section_label(s, "No notifications", None, false)]);
-        }
-        let m = &v.store.notifications.model;
+        let phone = pending.iter().chain(&seen).any(|g| g.entry.source == "iphone");
         let mut out = Vec::new();
+        if phone || self.filter != 0 {
+            out.push(w::segmented(FILTERS.iter().map(|f| (*f).to_owned()).collect(), self.filter).on("filter").stop("filter"));
+        }
+        let pending: Vec<Group> = pending.into_iter().filter(|g| self.shows(g)).collect();
+        let seen: Vec<Group> = seen.into_iter().filter(|g| self.shows(g)).collect();
+        if pending.is_empty() && seen.is_empty() {
+            out.push(w::section_label(s, "No notifications", None, false));
+            return w::column(s.section_gap, out);
+        }
+        let count = |rows: &[Group]| rows.iter().map(|g| g.count).sum::<usize>();
         let mut section = |title: &str, count: usize, rows: &[Group], unread: bool| {
             let mut col = vec![w::section_label(s, title, Some(count), false)];
             for (i, g) in rows.iter().enumerate() {
@@ -139,10 +161,10 @@ impl Panel for Center {
             out.push(w::column(s.row_gap, col));
         };
         if !pending.is_empty() {
-            section("Pending", m.pending.len(), &pending, true);
+            section("Pending", count(&pending), &pending, true);
         }
         if !seen.is_empty() {
-            section("Seen", m.past.len(), &seen, false);
+            section("Seen", count(&seen), &seen, false);
         }
         w::column(s.section_gap, out)
     }
@@ -150,6 +172,11 @@ impl Panel for Center {
     fn event(&mut self, ev: &Event, fx: &mut Effect) {
         let on = ev.on.as_str();
         match on {
+            "filter" => {
+                if let What::Pick(i) = ev.what {
+                    self.filter = i.min(FILTERS.len() - 1);
+                }
+            }
             "dnd" => send(fx, Op::SetDnd(!fx.store.notifications.model.dnd)),
             "clear" => send(fx, Op::ClearHistory),
             _ => {
@@ -172,6 +199,7 @@ impl Panel for Center {
 
     fn activate(&mut self, stop: &str, fx: &mut Effect) {
         match stop {
+            "filter" => self.filter = (self.filter + 1) % FILTERS.len(),
             "dnd" => send(fx, Op::SetDnd(!fx.store.notifications.model.dnd)),
             "clear" => send(fx, Op::ClearHistory),
             key => activate_row(fx, key),

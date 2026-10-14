@@ -150,6 +150,10 @@ pub struct Ui {
     /// shapes every word prefix, so a long list of them overran the shaper's
     /// cache and reshaped all of it on every frame.
     wraps: HashMap<WrapKey, Wrapped>,
+    /// Container sizes by element and width, for this draw only: painting a
+    /// column measures each child again, and each of those measures its own
+    /// children again, so a long list cost its size squared.
+    measured: HashMap<(usize, u64), (f64, f64)>,
     frame: u64,
     /// Nodes this surface adds go after this one in paint order.
     pub anchor: Option<NodeId>,
@@ -181,6 +185,7 @@ impl Ui {
             tweens: HashMap::new(),
             births: HashMap::new(),
             wraps: HashMap::new(),
+            measured: HashMap::new(),
             frame: 0,
             anchor,
             hits: Vec::new(),
@@ -210,6 +215,7 @@ impl Ui {
         now: Instant,
     ) -> Drawn {
         self.frame += 1;
+        self.measured.clear();
         self.hits.clear();
         self.stops.clear();
         let frame = self.frame;

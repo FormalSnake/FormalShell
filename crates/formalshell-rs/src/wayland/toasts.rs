@@ -74,7 +74,7 @@ impl App {
                 anchor: Some(0.0),
                 target: None,
             };
-            self.open_host_at(Box::new(center::Center), place, now);
+            self.open_host_at(Box::new(center::Center::default()), place, now);
         }
         self.tick_notifications();
         "ok"

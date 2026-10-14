@@ -176,6 +176,21 @@ fn row_widths(cx: &mut Cx, children: &[El], inner: f64, gap: f64) -> Vec<f64> {
 
 /// (width, height) at `avail` wide.
 pub fn measure(cx: &mut Cx, el: &El, avail: f64) -> (f64, f64) {
+    // Containers only: they live as long as the tree being drawn, where a
+    // separator painted from a temporary could reuse a freed address.
+    if !matches!(el.kind, Kind::Column { .. } | Kind::Row { .. } | Kind::Grid { .. }) {
+        return measure_now(cx, el, avail);
+    }
+    let key = (el as *const El as usize, avail.to_bits());
+    if let Some(&m) = cx.ui.measured.get(&key) {
+        return m;
+    }
+    let m = measure_now(cx, el, avail);
+    cx.ui.measured.insert(key, m);
+    m
+}
+
+fn measure_now(cx: &mut Cx, el: &El, avail: f64) -> (f64, f64) {
     let s = cx.theme.space.clone();
     let [ps, pt, pe, pb] = el.pad;
     let inner = (avail - ps - pe).max(0.0);

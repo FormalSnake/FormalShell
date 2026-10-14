@@ -2,19 +2,15 @@
 //! (no bridge on PATH, a bridge whose daemon is not running, a daemon with
 //! no phone bonded, which offers Pair with the code the phone shows), then
 //! the phone itself, the Focus line worded as an inference (ANCS carries no
-//! Focus state, only the `silent` flag a Focus intercept sets), Recent with
-//! each notification's phone-side actions and a dismiss synced back to the
-//! phone, and the phone's own now-playing with its three transport buttons.
+//! Focus state, only the `silent` flag a Focus intercept sets), and the
+//! phone's own now-playing with its three transport buttons. The phone's
+//! notifications live in the notification centre with the desktop's.
 //!
-//! The cursor walks Recent by notification id, so a row arriving mid-session
-//! never slides the highlight onto another notification. Enter fires a row's
-//! positive action, `x` dismisses it, and the transport group and the Pair
-//! button are stops of their own; Left and Right step the group's option.
+//! The transport group and the Pair button are stops of their own; Left and
+//! Right step the group's option.
 
 use std::cell::Cell;
 
-use fs_devices::iphone::{self, Notification};
-use fs_info::notifications::rel_time;
 
 use super::{Effect, Panel, View};
 use crate::services::ams;
@@ -41,10 +37,6 @@ impl Default for Iphone {
     }
 }
 
-fn now_ms() -> i64 {
-    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_millis() as i64)
-}
-
 /// The service's error, else the Apple Media Service's own (the two share
 /// one line, as IphoneService.lastError does).
 pub fn last_error(store: &Store) -> String {
@@ -56,41 +48,6 @@ fn press(index: usize) {
     if let Some((_, verb)) = TRANSPORT.get(index) {
         ams::command(verb);
     }
-}
-
-fn row(v: &View, entry: &Notification, ruled: bool, now: i64) -> El {
-    let s = &v.theme.space;
-    let summary = if !entry.title.is_empty() {
-        entry.title.clone()
-    } else {
-        let label = iphone::category_label(entry.category);
-        if label.is_empty() { entry.app_name.clone() } else { label.to_owned() }
-    };
-    let body = if entry.subtitle.is_empty() { entry.body.clone() } else { format!("{}\n{}", entry.subtitle, entry.body) };
-    let mut head = vec![w::icon(iphone::app_icon(&entry.bundle_id, entry.category)).ink(Ink::Dim), w::section_label(s, &entry.app_name, None, false)];
-    if entry.ts > 0.0 {
-        head.push(w::value(rel_time(now, (entry.ts * 1000.0) as i64)).size(Type::Caption).ink(Ink::Muted));
-    }
-    let mut col = Vec::new();
-    if ruled {
-        col.push(w::separator());
-    }
-    col.push(w::row(s.icon_gap, vec![w::row(s.icon_gap, head).fill(), w::icon_button("x").on(format!("dismiss:{}", entry.id))]).fill());
-    col.push(w::para(summary, Type::Body, Weight::Medium, Ink::Fg, 2));
-    if !body.trim().is_empty() {
-        col.push(w::para(body, Type::BodySmall, Weight::Normal, Ink::Dim, 2));
-    }
-    let mut actions = Vec::new();
-    if !entry.positive_action.is_empty() {
-        actions.push(w::button(&entry.positive_action).variant(Variant::Outline).on(format!("pos:{}", entry.id)));
-    }
-    if !entry.negative_action.is_empty() {
-        actions.push(w::button(&entry.negative_action).variant(Variant::Outline).on(format!("neg:{}", entry.id)));
-    }
-    if !actions.is_empty() {
-        col.push(w::row(s.sm, actions).pad(0.0, 0.0, 0.0, s.row_gap));
-    }
-    w::cell(w::column(s.xxs, col)).ghost().interactive().stop(format!("n:{}", entry.id))
 }
 
 impl Panel for Iphone {
@@ -112,13 +69,6 @@ impl Panel for Iphone {
 
     fn opened(&mut self) {
         service::command(Cmd::MarkRead);
-    }
-
-    fn actions(&self, v: &View) -> Vec<El> {
-        if v.store.info.iphone.recent.is_empty() {
-            return Vec::new();
-        }
-        vec![w::icon_button("trash").tip("Clear all").on("clear").key("clear")]
     }
 
     fn steps(&self) -> bool {
@@ -207,16 +157,6 @@ impl Panel for Iphone {
                 ],
             ));
         }
-        if connected || no_phone {
-            let now = now_ms();
-            let mut list = vec![w::section_label(s, "Recent", Some(st.recent.len()), true)];
-            if st.recent.is_empty() {
-                list.push(w::section_label(s, "None", None, true));
-            }
-            let rows = st.recent.iter().enumerate().map(|(i, e)| row(v, e, i > 0, now)).collect();
-            list.push(w::column(0.0, rows));
-            parts.push(w::column(s.row_gap, list));
-        }
         if connected {
             let mut np = vec![w::section_label(s, "Now playing", None, true)];
             if !now_playing {
@@ -251,35 +191,19 @@ impl Panel for Iphone {
         w::column(s.section_gap, parts)
     }
 
-    fn event(&mut self, ev: &Event, fx: &mut Effect) {
-        let id = |prefix: &str| ev.on.strip_prefix(prefix).and_then(|i| i.parse::<i64>().ok());
-        if let Some(id) = id("dismiss:") {
-            service::command(Cmd::Dismiss(id));
-        } else if let Some(id) = id("pos:") {
-            service::command(Cmd::Invoke { id, positive: true });
-        } else if let Some(id) = id("neg:") {
-            service::command(Cmd::Invoke { id, positive: false });
-        } else {
-            match (ev.on.as_str(), &ev.what) {
-                ("clear", _) => service::command(Cmd::Clear),
-                ("pair", _) => service::command(Cmd::Pair),
-                ("np", What::Pick(i)) => {
-                    self.np_index = *i;
-                    press(*i);
-                }
-                _ => {}
+    fn event(&mut self, ev: &Event, _: &mut Effect) {
+        match (ev.on.as_str(), &ev.what) {
+            ("pair", _) => service::command(Cmd::Pair),
+            ("np", What::Pick(i)) => {
+                self.np_index = *i;
+                press(*i);
             }
+            _ => {}
         }
-        let _ = fx;
     }
 
-    fn activate(&mut self, stop: &str, fx: &mut Effect) {
-        if let Some(id) = stop.strip_prefix("n:").and_then(|i| i.parse::<i64>().ok()) {
-            let positive = fx.store.info.iphone.recent.iter().find(|e| e.id == id).is_some_and(|e| !e.positive_action.is_empty());
-            if positive {
-                service::command(Cmd::Invoke { id, positive: true });
-            }
-        } else if stop == "np" {
+    fn activate(&mut self, stop: &str, _: &mut Effect) {
+        if stop == "np" {
             press(self.np_index);
         } else if stop == "pair" {
             service::command(Cmd::Pair);
@@ -289,12 +213,6 @@ impl Panel for Iphone {
     fn step(&mut self, stop: &str, direction: i32, _: &mut Effect) {
         if stop == "np" {
             self.np_index = (self.np_index as i32 + direction).clamp(0, TRANSPORT.len() as i32 - 1) as usize;
-        }
-    }
-
-    fn delete(&mut self, stop: &str, _: &mut Effect) {
-        if let Some(id) = stop.strip_prefix("n:").and_then(|i| i.parse::<i64>().ok()) {
-            service::command(Cmd::Dismiss(id));
         }
     }
 }
