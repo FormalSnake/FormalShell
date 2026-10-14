@@ -202,7 +202,10 @@ fn bubble(theme: &Theme, g: &Group, now: i64, picture: Option<Bitmap>, hovered: 
     };
     let mark = if e.source == "iphone" { mark.badge("smartphone") } else { mark };
     let mut head = vec![w::section_label(s, &e.app_name, None, false), w::caption(meta).mono().fill()];
-    head.push(if hovered { w::icon_button("x").on("close") } else { w::space(s.control_height) });
+    // The stand-in holds the button's whole box: a row's `space` takes width
+    // alone, so the header would grow by the button's height on hover.
+    let close = w::row(0.0, Vec::new()).width(ui::Size::Px(slot)).height(slot);
+    head.push(if hovered { w::icon_button("x").on("close") } else { close });
     let mut words = vec![w::row(s.icon_gap, head), w::para(e.summary.clone(), Type::Body, Weight::Semibold, Ink::Fg, 2)];
     let body = model::sanitize_body(&e.body, &e.app_name, &e.app_icon);
     if !body.is_empty() {
@@ -602,6 +605,15 @@ mod tests {
             walk(&bubble(&theme, &group(source, ""), 0, None, false), &mut |e| badges += usize::from(e.badge.is_some()));
             assert_eq!(badges, usize::from(marked), "bubble, source {source:?}");
         }
+    }
+
+    #[test]
+    fn a_bubble_keeps_its_height_when_the_close_button_shows() {
+        let theme = theme();
+        let mut kit = Kit::new(&theme);
+        let g = group("", "some body");
+        let h = |hovered, kit: &mut Kit| ui::measure(&bubble(&theme, &g, 0, None, hovered), 300.0, &theme, kit).1;
+        assert_eq!(h(false, &mut kit), h(true, &mut kit));
     }
 
     #[test]
