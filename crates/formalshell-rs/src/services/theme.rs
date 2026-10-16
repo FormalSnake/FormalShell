@@ -450,6 +450,11 @@ impl Engine {
         self.ctx.publish(store::Diff::Theme(Diff::JsonPresent(present)));
         if !present {
             let _ = self.retheme.try_send(());
+        } else if let Some(inputs) = self.snapshot() {
+            // Another session (Plasma's gtkconfig) rewrites color-scheme to
+            // its own theme's mode, and a present theme.json skips the
+            // retheme that would assert ours.
+            self.sync_system_scheme(&inputs);
         }
         self.publish_chrome().await;
         self.apply_mode_key();
@@ -1089,6 +1094,22 @@ printf '%s' 'return {{}}' > '{state}/formalshell-colors.lua.tmp'"##,
         assert!(dconf.contains(&"dconf write /org/gnome/desktop/interface/color-scheme 'prefer-light'".to_owned()));
         assert!(dconf.contains(&"dconf write /org/gnome/desktop/interface/gtk-theme 'adw-gtk3'".to_owned()));
         assert!(!log_lines(&log, "hyprctl reload").is_empty());
+    }
+
+    /// A theme.json left from the last login skips the retheme, but the
+    /// system scheme is still asserted over whatever another session wrote.
+    #[test]
+    fn present_theme_json_still_asserts_the_system_scheme() {
+        let (env, log) = rig("present");
+        std::fs::create_dir_all(&env.state_dir).unwrap();
+        std::fs::write(env.theme_json(), r#"{"mode":"dark"}"#).unwrap();
+        drive(env, vec![(Duration::ZERO, inputs(json!({}), "/wall.png", "dark"))], |_, _| {
+            log_lines(&log, "dconf").len() >= 2
+        });
+        assert!(log_lines(&log, "matugen").is_empty());
+        let dconf = log_lines(&log, "dconf");
+        assert!(dconf.contains(&"dconf write /org/gnome/desktop/interface/color-scheme 'prefer-dark'".to_owned()));
+        assert!(dconf.contains(&"dconf write /org/gnome/desktop/interface/gtk-theme 'adw-gtk3-dark'".to_owned()));
     }
 
     /// A wallpaper: the probe reads rank 0 off stderr and the real run pins
